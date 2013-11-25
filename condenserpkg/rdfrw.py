@@ -1,0 +1,138 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+#  rdfrw.py
+#
+#  Copyright 2013 nougmanoff <stsouko@live.ru>
+#  This file is part of condenser.
+#
+#  condenser is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+
+import numpy
+
+
+def main():
+    print "модуль чтения и записи RDF файлов."
+    return 0
+
+
+class Rdfrw(object):
+    def __init__(self, fileToread, fileTowrite, coordtype): #инициализация
+        self.__fileTowrite = fileTowrite
+        self.__fileToread = fileToread
+        self.__coordtype = coordtype
+
+    def readdata(
+            self): #парсер RDF файлов. возвращает пакет данных вида [{'substrats':substrats, 'products':products, 'molecules':{'номер':{'atomlist':atomlist, 'bondmatrix':matrix}}}]
+        datapack = []
+        try:
+            f = open(self.__fileToread)
+        except IOError:
+            print 'incorrect inputfile name.'
+            return False
+        lines = [line.rstrip() for line in f]
+        f.close()
+        if lines[0] != "$RDFILE 1": # на всякий случай перепроверим входной файл. вдруг хрень.
+            print 'incorrect inputfile.'
+            return False
+        else:
+            stepR = 3 #первая строка для поиска реакций
+            try:
+                while True:
+                    ir = lines.index("$RXN", stepR) #вхождение в реакцию
+                    im = ir + 5 # в спецификации такой отступ
+                    #получим данные по количеству реагентов и продуктов
+                    substrats, products, stepM = int(lines[ir + 4][0:3]), int(lines[ir + 4][3:6]), 0
+                    molecules = {}
+                    meta = {}
+                    for mol in range(substrats + products):
+                        im = lines.index("$MOL", im + stepM)
+                        #число атомов и связей в молекуле
+                        numbOfatoms, numbOfbonds = int(lines[im + 4][0:3]), int(lines[im + 4][3:6])
+                        stepM = 5 + numbOfbonds + numbOfatoms
+                        atomlist = []
+                        matrix = numpy.zeros((numbOfatoms, numbOfatoms), dtype=int)
+                        dublets = {}
+                        for ia in range(im + 5, im + 5 + numbOfatoms):
+                            atomlist += [dict(element=lines[ia][31:33].strip(), izotop=lines[ia][34:36].strip(),
+                                              charge=lines[ia][38:39], map=int(lines[ia][60:63].strip()),
+                                              mark=lines[ia][51:54].strip(),
+                                              x=float(lines[ia][0:10]),
+                                              y=float(lines[ia][10:20]),
+                                              z=float(lines[ia][20:30]))]
+                        for iab in range(im + 5 + numbOfatoms,
+                                         im + 5 + numbOfatoms + numbOfbonds): #формируем матрицу связей атомов.
+                            bond = [int(lines[iab][0:3]) - 1, int(lines[iab][3:6]) - 1, int(lines[iab][6:9])]
+                            matrix[bond[1], bond[0]] = matrix[bond[0], bond[1]] = bond[2]
+                            dublets[(bond[0], bond[1])] = bond[2]
+                        molecules[mol] = dict(atomlist=atomlist, bondmatrix=matrix, dublets=dublets)
+                    stepR = im + stepM
+                    while "M  END" not in lines[stepR]:
+                        stepR += 1
+                    try:
+                        mi = stepR + 1
+                        while "$DTYPE" in lines[mi].strip():
+                            meta[lines[mi][7:].strip()] = lines[mi + 1][7:].strip()
+                            stepR = mi
+                            mi += 2
+                    except:
+                        pass
+                    datapack += [dict(substrats=substrats, products=products, molecules=molecules, meta=meta)]
+            except ValueError:
+                if not datapack:
+                    print 'incorrect inputfile.'
+                    return False
+                else:
+                    return datapack
+
+    def writedata(self, datapack):
+        try:
+            fw = open(self.__fileTowrite, 'w')
+        except IOError:
+            print 'error write to file.'
+            return False
+        for data in datapack:
+            fw.write(
+                "\n  SDF generated by condenser. author - nougmanoff\n\n%3s%3s  0  0  0  0            999 V2000\n" % (
+                    len(data['substrats']['maps']), len(data['substrats']['diff'])))
+            for i, j in zip(data['substrats']['maps'], data['products']['maps']): #перебираем построчно исходный файл
+                if self.__coordtype == 3:
+                    i['x2'], i['y2'], i['z2'] = j['x'] * 100, j['y'] * 100, j['z'] * 100
+                    i['x'] *= 100
+                    i['y'] *= 100
+                    i['z'] *= 100
+                    fw.write(
+                        "%(x)5d%(x2)5d%(y)5d%(y2)5d%(z)5d%(z2)5d %(element)-3s%(izotop)2s%(charge)3s  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % i)
+                elif self.__coordtype == 2:
+                    i['x2'], i['y2'], i['z2'] = j['x'], j['y'], j['z']
+                    fw.write(
+                        "%(x2)10.4f%(y2)10.4f%(z2)10.4f %(element)-3s%(izotop)2s%(charge)3s  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % i)
+                else:
+                    fw.write(
+                        "%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s%(izotop)2s%(charge)3s  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % i)
+            for i in data['substrats']['diff']:
+                fw.write("%3s%3s%3s  0  0  0  0\n" % i)
+            fw.write("M  END\n")
+            for i in data['substrats']['meta'].items():
+                fw.write(">  <%s>\n%s\n" % i)
+            fw.write("$$$$\n")
+        fw.close()
+        return True
+
+
+if __name__ == '__main__':
+    main()
