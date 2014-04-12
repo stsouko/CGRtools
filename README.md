@@ -35,6 +35,6 @@ optional arguments:
                         1 - reagents or
 
                         2 - products or
-                        
+
                         3 - both (changed spec of MOL)
 

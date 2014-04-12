@@ -68,8 +68,8 @@ class Rdfrw(object):
                         matrix = numpy.zeros((numbOfatoms, numbOfatoms), dtype=int)
                         dublets = {}
                         for ia in range(im + 5, im + 5 + numbOfatoms):
-                            atomlist += [dict(element=lines[ia][31:33].strip(), izotop=lines[ia][34:36].strip(),
-                                              charge=lines[ia][38:39], map=int(lines[ia][60:63].strip()),
+                            atomlist += [dict(element=lines[ia][31:34].strip(), izotop=lines[ia][34:36].strip(),
+                                              charge=int(lines[ia][38:39]), map=int(lines[ia][60:63]),
                                               mark=lines[ia][51:54].strip(),
                                               x=float(lines[ia][0:10]),
                                               y=float(lines[ia][10:20]),
@@ -77,8 +77,10 @@ class Rdfrw(object):
                         for iab in range(im + 5 + numbOfatoms,
                                          im + 5 + numbOfatoms + numbOfbonds): #формируем матрицу связей атомов.
                             bond = [int(lines[iab][0:3]) - 1, int(lines[iab][3:6]) - 1, int(lines[iab][6:9])]
+
                             matrix[bond[1], bond[0]] = matrix[bond[0], bond[1]] = bond[2]
                             dublets[(bond[0], bond[1])] = bond[2]
+
                         molecules[mol] = dict(atomlist=atomlist, bondmatrix=matrix, dublets=dublets)
                     stepR = im + stepM
                     while "M  END" not in lines[stepR]:

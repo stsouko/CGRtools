@@ -1,8 +1,9 @@
 from distutils.core import setup
+from condenserpkg.version import version
 
 setup(
     name='condenser',
-    version='1.0',
+    version=version(),
     packages=['condenserpkg'],
     url='https://github.com/stsouko/condenser',
     license='GPLv2',

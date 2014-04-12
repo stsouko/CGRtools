@@ -33,8 +33,9 @@ def main():
 
 
 class Condenser(object):
-    def __init__(self):
+    def __init__(self, charge):
         self.__matrix = {}
+        self.__charge = charge
 
     def calc(self, data):
         self.__creatematrix(data) #подготовка матриц
@@ -61,7 +62,7 @@ class Condenser(object):
 
     def __sortmatrix(self):
         length = len(self.__matrix['substrats']['maps'])
-        for j in ['substrats', 'products']:
+        for j in ('substrats', 'products'):
             tmp = numpy.empty((length, length), dtype=int)
             for i in range(length):
                 tmp[int(self.__matrix[j]['maps'][i]['map']) - 1, :] = self.__matrix[j]['bondmatrix'][i, :]
@@ -69,14 +70,46 @@ class Condenser(object):
                 self.__matrix[j]['bondmatrix'][:, int(self.__matrix[j]['maps'][i]['map']) - 1] = tmp[:, i]
             self.__matrix[j]['maps'].sort(key=lambda a: int(a['map']))
 
-    __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84},
-             1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14},
-             2: {0: 28, 1: 21, 2: 2, 3: 23, 4: 24},
-             3: {0: 38, 1: 31, 2: 32, 3: 3, 4: 34},
-             4: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4}}
+    __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84, 5: 85, 6: 86, 7: 87},
+             1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14, 5: 15, 6: 16, 7: 17},
+             2: {0: 28, 1: 21, 2: 2, 3: 23, 4: 24, 5: 25, 6: 26, 7: 27},
+             3: {0: 38, 1: 31, 2: 32, 3: 3, 4: 34, 5: 35, 6: 36, 7: 37},
+             4: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 5: 45, 6: 46, 7: 47},
+             5: {0: 58, 1: 51, 2: 52, 3: 53, 4: 54, 5: 5, 6: 56, 7: 57},
+             6: {0: 68, 1: 61, 2: 62, 3: 63, 4: 64, 5: 65, 6: 6, 7: 67},
+             7: {0: 78, 1: 71, 2: 72, 3: 73, 4: 74, 5: 75, 6: 76, 7: 7}}
+
+    def __chdiffpseudo(self, length):
+        for i in xrange(length):
+            s = self.__matrix['substrats']['maps'][i]['charge']
+            p = self.__matrix['products']['maps'][i]['charge']
+            self.__matrix['substrats']['maps'][i]['charge'] = str(self.__cgr[s][p])
+
+    def __chdiffreal(self, length):
+        for i in xrange(length):
+            s = int(self.__matrix['substrats']['maps'][i]['element'])
+            p = int(self.__matrix['products']['maps'][i]['element'])
+            self.__matrix['substrats']['maps'][i]['element'] = str(p - s)
+
+    def __chreplacereal(self, length):
+        for i in xrange(length):
+            self.__matrix['substrats']['maps'][i]['element'] = self.__matrix['products']['maps'][i]['element']
+
+    def __chreplacepseudo(self, length):
+        for i in xrange(length):
+            self.__matrix['substrats']['maps'][i]['charge'] = self.__matrix['products']['maps'][i]['charge']
 
     def __scan(self):
         length = len(self.__matrix['substrats']['maps'])
+        if self.__charge in (4, 6, 7):
+            self.__chreplacereal(length)
+        if self.__charge in (5, 6, 8):
+            self.__chreplacepseudo(length)
+        if self.__charge in (2, 3, 8):
+            self.__chdiffreal(length)
+        if self.__charge in (1, 3, 7):
+            self.__chdiffpseudo(length)
+
         for i in xrange(length - 1):
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \

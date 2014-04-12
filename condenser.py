@@ -26,27 +26,32 @@ import argparse
 
 from condenserpkg.rdfrw import Rdfrw
 from condenserpkg.func import Condenser
-
+from condenserpkg.version import version
 
 def main():
     rawopts = argparse.ArgumentParser(description="CGR generator", epilog="created by stsouko")
-    rawopts.add_argument("--version", "-v", action="version", version="1.0", default=False)
+    rawopts.add_argument("--version", "-v", action="version", version=version(), default=False)
     rawopts.add_argument("--input", "-i", type=str, default="input.rdf", help="RDF inputfile")
     rawopts.add_argument("--output", "-o", type=str, default="output.sdf", help="SDF outputfile")
-    rawopts.add_argument("--coords", "-c", type=int, default=1, help="write to SDF coordinates of: 1 - reagents "
-                                                                     "or 2 - products or 3 - both (changed spec of MOL)")
+    rawopts.add_argument("--coords", "-c", type=int, default=1, help="write to SDF coordinates of: 1 - reagents, "
+                                                                     " 2 - products, 3 - both (changed spec of MOL)")
+    rawopts.add_argument("--charge", "-g", type=int, default=0,
+                         help="charge data modifier: 1 - add changed pseudocharges,"
+                              " 2 - add charge diff (only changed spec of MOL), "
+                              "3 - both 1 and 2, 4 - use products charges (only changed spec of MOL),"
+                              " 5 - use products pseudocharges, 6 - both 4 and 5, 7 - 1 and 4, 8 - 2 and 5")
     options = vars(rawopts.parse_args())
 
     rw = Rdfrw(options['input'], options['output'], options['coords'])
     result = []
-    con = Condenser()
+    con = Condenser(options['charge'])
     parseddata = rw.readdata()
     if parseddata:
         for num, data in enumerate(parseddata):
             try:
                 result += [con.calc(data)]
             except:
-                print 'reaction %d consist errors' % (num+1)
+                print 'reaction %d consist errors' % (num + 1)
                 continue
         print '%d from %d reactions condensed' % (len(result), len(parseddata))
         if rw.writedata(result):
