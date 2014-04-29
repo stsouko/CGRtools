@@ -33,42 +33,105 @@ def main():
 
 
 class Condenser(object):
-    def __init__(self, charge):
+    def __init__(self, charge, type):
         self.__matrix = {}
         self.__charge = charge
+        self.__cgrtype = type
 
     def calc(self, data):
-        self.__creatematrix(data) #подготовка матриц
+        self.__data = data
+        self.__creatematrix()  #подготовка матриц
         self.__matrix['substrats']['meta'] = data['meta']
         self.__scan()
         return copy.deepcopy(self.__matrix)
 
-    def __creatematrix(self, data):
-        for j in [(0, data['substrats'], 'substrats'),
-                  (data['substrats'], data['substrats'] + data['products'], 'products')]:
-            atomlist = []
-            for i in range(j[0], j[1]): #объединим атомы в 1 список. и создадим пустую матрицу.
-                atomlist += data['molecules'][i]['atomlist']
-            length = len(atomlist)
-            tempMatrix = {'bondmatrix': numpy.zeros((length, length), dtype=int), 'maps': atomlist, 'diff': []}
-            step = 0
-            for i in range(j[0], j[1]):
-                matrixlength = len(data['molecules'][i]['atomlist'])
-                bonds = data['molecules'][i]['bondmatrix']
-                tempMatrix['bondmatrix'][step:step + matrixlength, step:step + matrixlength] = bonds
-                step += matrixlength
-            self.__matrix[j[2]] = tempMatrix
-        self.__sortmatrix()
+    def __creatematrix(self):
+        if self.__cgrtype == 1:
+            self.__getmatrix(range(0, self.__data['substrats']), 'substrats')
+            self.__matrix['products'] = self.__matrix['substrats']
+        elif self.__cgrtype == 2:
+            self.__getmatrix(range(self.__data['substrats'], self.__data['substrats'] + self.__data['products']),
+                             'products')
+            self.__matrix['substrats'] = self.__matrix['products']
+        elif self.__cgrtype == 0:
+            self.__getmatrix(range(0, self.__data['substrats']), 'substrats')
+            self.__getmatrix(range(self.__data['substrats'], self.__data['substrats'] + self.__data['products']),
+                             'products')
+            self.__sortmatrix()
+        elif 10 < self.__cgrtype < 20:
+            self.__getmatrix(range(self.__cgrtype - 11, self.__cgrtype - 10), 'substrats')
+            self.__matrix['products'] = self.__matrix['substrats']
+        elif 20 < self.__cgrtype < 30:
+            self.__getmatrix(range(self.__data['substrats'] + self.__cgrtype - 21,
+                                   self.__data['substrats'] + self.__cgrtype - 20), 'products')
+            self.__matrix['substrats'] = self.__matrix['products']
+        elif -20 < self.__cgrtype < -10:
+            self.__getmatrix(set(range(0, self.__data['substrats'])) - {-self.__cgrtype - 11}, 'substrats')
+            self.__matrix['products'] = self.__matrix['substrats']
+        elif -30 < self.__cgrtype < -20:
+            self.__getmatrix(
+                set(range(self.__data['substrats'], self.__data['substrats'] + self.__data['products'])) - {
+                    self.__data['substrats'] - self.__cgrtype - 21}, 'products')
+            self.__matrix['substrats'] = self.__matrix['products']
+
+    def __getmatrix(self, mollist, category):
+        atomlist = []
+        #объединим атомы в 1 список. и создадим пустую матрицу.
+        for i in mollist:
+            atomlist += self.__data['molecules'][i]['atomlist']
+        length = len(atomlist)
+        self.__length = length
+        tempMatrix = {'bondmatrix': numpy.zeros((length, length), dtype=int), 'maps': atomlist, 'diff': []}
+        step = 0
+        for i in mollist:
+            matrixlength = len(self.__data['molecules'][i]['atomlist'])
+            bonds = self.__data['molecules'][i]['bondmatrix']
+            tempMatrix['bondmatrix'][step:step + matrixlength, step:step + matrixlength] = bonds
+            step += matrixlength
+        self.__matrix[category] = tempMatrix
 
     def __sortmatrix(self):
-        length = len(self.__matrix['substrats']['maps'])
+
+        maps = {'substrats': [int(x['map']) for x in self.__matrix['substrats']['maps']],
+                'products': [int(x['map']) for x in self.__matrix['products']['maps']]}
+
+        length = max((max(maps['products']), max(maps['substrats'])))
+        self.__length = length
+
         for j in ('substrats', 'products'):
-            tmp = numpy.empty((length, length), dtype=int)
+            tmp = numpy.zeros((length, length), dtype=int)
+
+            shape = self.__matrix[j]['bondmatrix'].shape[0]
+            for i in xrange(len(maps[j])):
+                tmp[maps[j][i] - 1, 0:shape] = self.__matrix[j]['bondmatrix'][i, :]
+            self.__matrix[j]['bondmatrix'] = numpy.zeros((length, length), dtype=int)
+            for i in xrange(len(maps[j])):
+                self.__matrix[j]['bondmatrix'][:, maps[j][i] - 1] = tmp[:, i]
+
+            atomlist = [0] * length
+            for i in self.__matrix[j]['maps']:
+                atomlist[i['map']-1] = i
+            self.__matrix[j]['maps'] = atomlist
+
+        if 0 in self.__matrix['substrats']['maps']:
+            lostlist = []
             for i in range(length):
-                tmp[int(self.__matrix[j]['maps'][i]['map']) - 1, :] = self.__matrix[j]['bondmatrix'][i, :]
+                if self.__matrix['substrats']['maps'][i] == 0:
+                    self.__matrix['substrats']['maps'][i] = self.__matrix['products']['maps'][i]
+                    lostlist.append(i)
+            self.__repmatrix(lostlist, 'products', 'substrats')
+        if 0 in self.__matrix['products']['maps']:
+            lostlist = []
             for i in range(length):
-                self.__matrix[j]['bondmatrix'][:, int(self.__matrix[j]['maps'][i]['map']) - 1] = tmp[:, i]
-            self.__matrix[j]['maps'].sort(key=lambda a: int(a['map']))
+                if self.__matrix['products']['maps'][i] == 0:
+                    self.__matrix['products']['maps'][i] = self.__matrix['substrats']['maps'][i]
+                    lostlist.append(i)
+            self.__repmatrix(lostlist, 'substrats', 'products')
+
+    def __repmatrix(self, lost, s, t):
+        for i in lost:
+            for j in lost:
+                self.__matrix[t]['bondmatrix'][i, j] = self.__matrix[s]['bondmatrix'][i, j]
 
     __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84, 5: 85, 6: 86, 7: 87},
              1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14, 5: 15, 6: 16, 7: 17},
@@ -100,7 +163,7 @@ class Condenser(object):
             self.__matrix['substrats']['maps'][i]['charge'] = self.__matrix['products']['maps'][i]['charge']
 
     def __scan(self):
-        length = len(self.__matrix['substrats']['maps'])
+        length = self.__length
         if self.__charge in (4, 6, 7):
             self.__chreplacereal(length)
         if self.__charge in (5, 6, 8):

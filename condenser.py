@@ -28,11 +28,16 @@ from condenserpkg.rdfrw import Rdfrw
 from condenserpkg.func import Condenser
 from condenserpkg.version import version
 
+
 def main():
     rawopts = argparse.ArgumentParser(description="CGR generator", epilog="created by stsouko")
     rawopts.add_argument("--version", "-v", action="version", version=version(), default=False)
     rawopts.add_argument("--input", "-i", type=str, default="input.rdf", help="RDF inputfile")
     rawopts.add_argument("--output", "-o", type=str, default="output.sdf", help="SDF outputfile")
+    rawopts.add_argument("--type", "-t", type=int, default=0, help="graph type: 0 - CGR, 1 - reagents only, "
+                                                                   "2 - products only, 11+ - reagent 1,2 or later, "
+                                                                   "21+ - product 1,2… (e.g. 22 - second product) "
+                                                                   "-11+ or -21+ - exclude reagent or product")
     rawopts.add_argument("--coords", "-c", type=int, default=1, help="write to SDF coordinates of: 1 - reagents, "
                                                                      " 2 - products, 3 - both (changed spec of MOL)")
     rawopts.add_argument("--charge", "-g", type=int, default=0,
@@ -44,7 +49,15 @@ def main():
 
     rw = Rdfrw(options['input'], options['output'], options['coords'])
     result = []
-    con = Condenser(options['charge'])
+    if options['type'] > 29 or options['type'] < -29 or 2 < options['type'] < 11 or -11 < options['type'] < 0 or \
+                    options['type'] in (20, -20):
+        print ('USE CORRECT TYPE, MAZAFAKA')
+        return 0
+    if options['charge'] > 8 or options['charge'] < 0:
+        print ('USE CORRECT charge parameter, MAZAFAKA')
+        return 0
+
+    con = Condenser(options['charge'], options['type'])
     parseddata = rw.readdata()
     if parseddata:
         for num, data in enumerate(parseddata):
