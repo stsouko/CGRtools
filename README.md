@@ -11,30 +11,8 @@ DOI: 10.1007/s10822-005-9008-0
 
 usage
 =====
-condenser [-h] [--version] [--input INPUT] [--output OUTPUT]
-                 [--coords COORDS]
+condenser [-h]
 
-optional arguments:
+  -h, --help            show help message and exit
 
-  -h, --help            show this help message and exit
-
-  --version, -v         show program's version number and exit
-
-  --input INPUT, -i INPUT
-
-                        RDF inputfile
-
-  --output OUTPUT, -o OUTPUT
-
-                        SDF outputfile
-
-  --coords COORDS, -c COORDS
-
-                        write to SDF coordinates of:
-
-                        1 - reagents or
-
-                        2 - products or
-
-                        3 - both (changed spec of MOL)
 

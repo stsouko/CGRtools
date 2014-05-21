@@ -3,20 +3,20 @@
 #
 #  rdfrw.py
 #
-#  Copyright 2013 nougmanoff <stsouko@live.ru>
+#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of condenser.
 #
 #  condenser is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation; either version 2 of the License, or
+#  it under the terms of the GNU Affero General Public License as published by
+#  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
 #
 #  This program is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
+#  GNU Affero General Public License for more details.
 #
-#  You should have received a copy of the GNU General Public License
+#  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
@@ -26,7 +26,7 @@ import numpy
 
 
 def main():
-    print "модуль чтения и записи RDF файлов."
+    print "This file is part of condenser."
     return 0
 
 
@@ -36,18 +36,18 @@ class Rdfrw(object):
         self.__fileToread = fileToread
         self.__coordtype = coordtype
 
-    def readdata(
-            self): #парсер RDF файлов. возвращает пакет данных вида [{'substrats':substrats, 'products':products, 'molecules':{'номер':{'atomlist':atomlist, 'bondmatrix':matrix}}}]
+    def readdata(self):
+        #парсер RDF файлов. возвращает пакет данных вида [{'substrats':substrats, 'products':products, 'molecules':{'номер':{'atomlist':atomlist, 'bondmatrix':matrix}}}]
         datapack = []
         try:
             f = open(self.__fileToread)
         except IOError:
-            print 'incorrect inputfile name.'
+            print("error: inputfile don't exist")
             return False
         lines = [line.rstrip() for line in f]
         f.close()
         if lines[0] != "$RDFILE 1": # на всякий случай перепроверим входной файл. вдруг хрень.
-            print 'incorrect inputfile.'
+            print("errror: incorrect inputfile")
             return False
         else:
             stepR = 3 #первая строка для поиска реакций

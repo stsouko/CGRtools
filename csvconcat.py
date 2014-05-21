@@ -28,7 +28,7 @@ from condenserpkg.rdfrw import Rdfrw
 
 
 def filechk(filelist):
-    if os.path.exists(filelist['rdf']) and os.path.exists(filelist['csv']):
+    if (os.path.exists(filelist['rdf']) or os.path.exists(filelist['sdf'])) and os.path.exists(filelist['csv']):
         if os.path.exists(filelist['header']):
             return filelist
         elif os.path.exists(filelist['csv'][:-3] + 'hdr'):
@@ -69,10 +69,28 @@ def parser(rdfmeta, headlist, csvlist):
     return head
 
 
+def parseSDF(file):
+    with open(file) as f:
+        meta = []
+        a = 0
+        for i in f:
+            if "M  END" in i:
+                buf = {}
+            if ">  <" in i:
+                a = i.strip()[4:-1]
+            elif a:
+                buf[a] = i.strip()
+                a = 0
+            elif "$$$$" in i:
+                meta.append({'meta': buf})
+    return meta
+
+
 def main():
     rawopts = argparse.ArgumentParser(description="fragmentor csv refactor", epilog="created by stsouko")
     rawopts.add_argument("--version", "-v", action="version", version="0.1", default=False)
     rawopts.add_argument("--rdf", "-r", type=str, default="input.rdf", help="RDF inputfile")
+    rawopts.add_argument("--sdf", "-s", type=str, default="input.sdf", help="SDF inputfile")
     rawopts.add_argument("--csv", "-c", type=str, default="input.csv", help="CSV inputfile")
     rawopts.add_argument("--header", "-d", type=str, default="input.hdr", help="HDR inputfile")
     rawopts.add_argument("--output", "-o", type=str, default="output.csv", help="CSV outputfile")
@@ -86,12 +104,12 @@ def main():
         except IOError:
             print("error: can't write to outfile")
             return 1
-        rdf = Rdfrw(files['rdf'], '')
-        if rdf:
-            parsedrdf = rdf.readdata()
+        if os.path.exists(files['sdf']):
+            parsedrdf = parseSDF(files['sdf'])
         else:
-            print("error in rdf")
-            return 1
+            rdf = Rdfrw(files['rdf'], '')
+            parsedrdf = rdf.readdata()
+
         lines = parser(parsedrdf, open(files['header']), open(files['csv']))
         out.write('\n'.join(lines))
         return 0
