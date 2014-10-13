@@ -24,10 +24,11 @@
 
 import argparse
 
-from condenserpkg.rdfrw import Rdfrw
 from condenserpkg.func import Condenser
 from condenserpkg.version import version
 from condenserpkg.RDFread import RDFread
+from condenserpkg.SDFwrite import SDFwrite
+
 
 def main():
     rawopts = argparse.ArgumentParser(description="CGR generator", epilog="created by stsouko")
@@ -48,9 +49,8 @@ def main():
     rawopts.add_argument("--repare", "-r", type=int, default=0, help="repair disbalanced reactions")
 
     options = vars(rawopts.parse_args())
-
-    rw = Rdfrw(options['input'], options['output'], options['coords'])
     inputdata = RDFread(options['input'])
+    outputdata = SDFwrite(options['output'], options['coords'])
     result = []
     if options['type'] > 29 or options['type'] < -29 or 2 < options['type'] < 11 or -11 < options['type'] < 0 or \
                     options['type'] in (20, -20):
@@ -61,17 +61,25 @@ def main():
         return 0
 
     con = Condenser(options['charge'], options['type'], options['repare'])
-    parseddata = rw.readdata()
-    if parseddata:
-        for num, data in enumerate(parseddata):
+    #parseddata = rw.readdata()
+    err = 0
+    if inputdata.chkRDF():
+        for num, data in enumerate(inputdata.readdata()):
+            if num % 1000 == 0:
+                print "reaction: %d" % (num + 1)
+            #result += [con.calc(data)]
             try:
-                result += [con.calc(data)]
+                outputdata.writedata(con.calc(data))
             except:
+                print con.calc(data)
+                err += 1
                 print 'reaction %d consist errors' % (num + 1)
-                continue
-        print '%d from %d reactions condensed' % (len(result), len(parseddata))
-        if rw.writedata(result):
-            print ('successfully done')
+        outputdata.close()
+        print '%d from %d reactions condensed' % (num + 1 - err, num + 1)
+        #if rw.writedata(result):
+        #    print ('successfully done')
+    else:
+        print ('incorrect inputfile')
     return 0
 
 

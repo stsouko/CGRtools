@@ -48,21 +48,6 @@ class Condenser(object):
         self.__scan()
         return copy.deepcopy(self.__matrix)
 
-    def reactmap(self, data):
-        self.__moltorepare = False
-        #костыль для ароматизированных связей. конденсер не любит наш хак с полуторной свзью.
-        for i in data['molecules'].values():
-            numpy.putmask(i['bondmatrix'], i['bondmatrix']==1.5, [4])
-        self.__data = data
-        self.__creatematrix()  #подготовка матриц
-        self.__scan()
-        return self.__fitness()
-
-    __reacthack = {0: 0, 1: 1, 2: 2, 3: 3, 4: 1.5, 8: 0}
-
-    def __fitness(self):
-        return 2 * sum([abs(self.__reacthack[i[2] % 10] - self.__reacthack[i[2] / 10]) for i in self.__matrix['substrats']['diff'] if i[2] > 10])
-
     def __creatematrix(self):
         if self.__cgrtype == 1:
             self.__getmatrix(self.__data['substrats'], 'substrats')
@@ -114,7 +99,7 @@ class Condenser(object):
             atomlist += i['atomlist']
         length = len(atomlist)
         self.__length = length
-        tempMatrix = {'bondmatrix': numpy.zeros((length, length), dtype=float), 'atomlist': atomlist}
+        tempMatrix = {'bondmatrix': numpy.zeros((length, length), dtype=float), 'maps': atomlist, 'diff': []}
         step = 0
         for i in data:
             matrixlength = len(i['atomlist'])
@@ -145,12 +130,12 @@ class Condenser(object):
             self.__length = length
 
         for j in ('substrats', 'products'):
-            tmp = numpy.zeros((self.__length, self.__length), dtype=int)
+            tmp = numpy.zeros((self.__length, self.__length), dtype=float)
 
             shape = self.__matrix[j]['bondmatrix'].shape[0]
             for i in xrange(len(maps[j])):
                 tmp[maps[j][i] - 1, 0:shape] = self.__matrix[j]['bondmatrix'][i, :]
-            self.__matrix[j]['bondmatrix'] = numpy.zeros((self.__length, self.__length), dtype=int)
+            self.__matrix[j]['bondmatrix'] = numpy.zeros((self.__length, self.__length), dtype=float)
             for i in xrange(len(maps[j])):
                 self.__matrix[j]['bondmatrix'][:, maps[j][i] - 1] = tmp[:, i]
 
@@ -169,6 +154,7 @@ class Condenser(object):
             self.__moltorepare = True
             self.__searchlost('products', 'substrats')
         if 0 in self.__matrix['products']['maps']:
+            self.__moltocharge = True
             self.__searchlost('substrats', 'products')
 
     def __searchlost(self, s, t):
@@ -185,14 +171,15 @@ class Condenser(object):
             for j in lostlist:
                 self.__matrix[t]['bondmatrix'][i, j] = self.__matrix[s]['bondmatrix'][i, j]
 
-    __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84, 5: 85, 6: 86, 7: 87},
-             1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14, 5: 15, 6: 16, 7: 17},
-             2: {0: 28, 1: 21, 2: 2, 3: 23, 4: 24, 5: 25, 6: 26, 7: 27},
-             3: {0: 38, 1: 31, 2: 32, 3: 3, 4: 34, 5: 35, 6: 36, 7: 37},
-             4: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 5: 45, 6: 46, 7: 47},
-             5: {0: 58, 1: 51, 2: 52, 3: 53, 4: 54, 5: 5, 6: 56, 7: 57},
-             6: {0: 68, 1: 61, 2: 62, 3: 63, 4: 64, 5: 65, 6: 6, 7: 67},
-             7: {0: 78, 1: 71, 2: 72, 3: 73, 4: 74, 5: 75, 6: 76, 7: 7}}
+    __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84, 1.5: 84, 5: 85, 6: 86, 7: 87},
+             1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14, 1.5: 14, 5: 15, 6: 16, 7: 17},
+             2: {0: 28, 1: 21, 2: 2, 3: 23, 4: 24, 1.5: 24, 5: 25, 6: 26, 7: 27},
+             3: {0: 38, 1: 31, 2: 32, 3: 3, 4: 34, 1.5: 34, 5: 35, 6: 36, 7: 37},
+             4: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 1.5: 4, 5: 45, 6: 46, 7: 47},
+             1.5: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 1.5: 4, 5: 45, 6: 46, 7: 47},
+             5: {0: 58, 1: 51, 2: 52, 3: 53, 4: 54, 1.5: 54, 5: 5, 6: 56, 7: 57},
+             6: {0: 68, 1: 61, 2: 62, 3: 63, 4: 64, 1.5: 64, 5: 65, 6: 6, 7: 67},
+             7: {0: 78, 1: 71, 2: 72, 3: 73, 4: 74, 1.5: 74, 5: 75, 6: 76, 7: 7}}
 
     def __chdiffpseudo(self, length):
         for i in xrange(length):
@@ -228,9 +215,10 @@ class Condenser(object):
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
                     connections[i][j] = connections[j][i] = diff
 
+        self.__connections = copy.deepcopy(connections)
+
         if self.__repare and self.__moltorepare:
             groups = defaultdict(list)
-            self.__connections = copy.deepcopy(connections)
             backup = copy.deepcopy(self.__matrix)
             atomlist = set(range(length))
             self.__smiless = {}
@@ -254,8 +242,10 @@ class Condenser(object):
                     if (w + 1, x + 1, z) not in diff:
                         diff += [(x + 1, w + 1, z)]
             self.__matrix['substrats']['diff'] = diff
-            #место для зарядового балансировщика!!!
-        if self.__repare:
+
+        #место для зарядового балансировщика!!!
+        if self.__repare and self.__moltocharge:
+            print self.__connections
             self.__chargebalancer()
 
         if self.__charge in (4, 6, 7):
@@ -275,7 +265,9 @@ class Condenser(object):
                 sub = list(self.__reactcenteratoms([i], i))
                 atoms.extend(sub)
                 if len(sub) > 1:
+                    #локализовали реакционный центр. осталось раскидать электроны.
                     print '%', sub
+
                     for x in sub:
                         print x, self.__matrix['substrats']['maps'][x]['charge'], self.__matrix['products']['maps'][x]['charge']
                     pass
@@ -304,9 +296,9 @@ class Condenser(object):
             target = None
             if len(j) > 1:
                 for fragment in j:
-                    for substrat in range(0, self.__data['substrats']):
+                    for substrat in self.__data['substrats']:
                         #print fragment, set([int(x['map']) - 1 for x in self.__data['molecules'][substrat]['atomlist']]).intersection(fragment)
-                        if set([int(x['map']) - 1 for x in self.__data['molecules'][substrat]['atomlist']]).intersection(fragment):
+                        if set([int(x['map']) - 1 for x in substrat['atomlist']]).intersection(fragment):
                             target = fragment
                             #print '!', target
                             self.__target = self.__smiless[tuple(target)]
@@ -315,6 +307,7 @@ class Condenser(object):
                 if not target:
                     #print "@"
                     continue
+                #print target
                 for fragment in j:
                     if fragment == target:
                         continue

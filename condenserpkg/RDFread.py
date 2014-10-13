@@ -52,7 +52,7 @@ class RDFread(object):
     def chkRDF(self):
         try:
             f = open(self.__RDFfile)
-            if "$RDFILE 1" in f.next():
+            if "$RDFILE 1" in f.readline():
                 return True
             else:
                 return False
