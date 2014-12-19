@@ -46,7 +46,7 @@ class RDFread(object):
         charge = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}  # формат записи зарядов в MDL
         bondSumm = matrix.sum(axis=0)  #посчитаем число связей у каждого атома.
         for i in range(len(atomlist)):  #найдем число несвязанных электронов для каждого атома.
-            lonepaire = table[atomlist[i]['element']] - bondSumm[i] + matrix[i, i] / 2 - charge[atomlist[i]['charge']]
+            lonepaire = table[atomlist[i]['element']] - bondSumm[i] - charge[atomlist[i]['charge']]
             matrix[i][i] += lonepaire if lonepaire > 0 else 0
 
     def chkRDF(self):
@@ -90,7 +90,7 @@ class RDFread(object):
                         failkey = False
                         reaction = None
                 elif "$MOL" in line[0:4]:
-                    molecule = {'atomlist': {}, 'bondmatrix': None, 'bondlist': []}
+                    molecule = {'atomlist': {}, 'bondmatrix': None, 'bondlist': [], 'DAT': {}}
                     im = n + 4
                     pnum = 0
                 elif n == im:
@@ -103,13 +103,12 @@ class RDFread(object):
                         failkey = False
                         reaction = None
                 elif n <= atomcount:
-                    if line[31:33].strip() != "H":
-                        molecule['atomlist'][pnum] = dict(element=line[31:34].strip(), izotop=line[34:36].strip(),
-                                                          charge=int(line[38:39]), map=int(line[60:63]),
-                                                          mark=line[51:54].strip(),
-                                                          x=float(line[0:10]),
-                                                          y=float(line[10:20]),
-                                                          z=float(line[20:30]))
+                    molecule['atomlist'][pnum] = dict(element=line[31:34].strip(), izotop=line[34:36].strip(),
+                                                      charge=int(line[38:39]), map=int(line[60:63]),
+                                                      mark=line[51:54].strip(),
+                                                      x=float(line[0:10]),
+                                                      y=float(line[10:20]),
+                                                      z=float(line[20:30]))
                     pnum += 1
                 elif n <= bondcount:
                     try:
@@ -127,6 +126,22 @@ class RDFread(object):
                     except:
                         failkey = False
                         reaction = None
+                elif n > bondcount and "M  END" not in line:
+                    if 'M  STY' in line:
+                        for i in range(int(line[8])):
+                            if 'DAT' in line[10 + 8 * i:17 + 8*i]:
+                                molecule['DAT'][int(line[10 + 8 * i:13 + 8*i])] = []
+                    if 'M  SAL' in line:
+                        if int(line[7:10]) in molecule['DAT']:
+                            key = []
+                            for i in range(int(line[10:13])):
+                                key.append(int(line[14 + 4 * i:17 + 4*i]))
+                            molecule['DAT'][int(line[7:10])] = [key]
+                    if 'M  SDT' in line and int(line[7:10]) in molecule['DAT']:
+                        if 'stereo' not in line:
+                             molecule['DAT'].pop([int(line[7:10])])
+                    if 'M  SED' in line and int(line[7:10]) in molecule['DAT']:
+                        molecule['DAT'][int(line[7:10])].append(line[10:].strip())
                 elif "M  END" in line:
                     molecule['atomlist'] = molecule['atomlist'].values()
                     try:

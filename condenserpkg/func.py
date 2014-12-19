@@ -93,13 +93,17 @@ class Condenser(object):
         постройка матриц связности
         '''
         atomlist = []
+        dat = []
         #объединим атомы в 1 список. и создадим пустую матрицу.
         for i in data:
-            #self.__mols[role].append(range(len(atomlist), len(atomlist) + len(i['atomlist'])))
+            for j in i['DAT'].values():
+                dat.append([[x + len(atomlist) for x in j[0]], j[1]])
             atomlist += i['atomlist']
+
         length = len(atomlist)
         self.__length = length
-        tempMatrix = {'bondmatrix': numpy.zeros((length, length), dtype=float), 'maps': atomlist, 'diff': []}
+        tempMatrix = dict(bondmatrix=numpy.zeros((length, length), dtype=float), maps=atomlist, diff=[], stereo=dat,
+                          bondstereo=[])
         step = 0
         for i in data:
             matrixlength = len(i['atomlist'])
@@ -117,7 +121,7 @@ class Condenser(object):
                 'products': [int(x['map']) for x in self.__matrix['products']['maps']]}
 
         length = max((max(maps['products']), max(maps['substrats'])))
-        lose = sorted(list(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats'])))[::-1]
+        lose = sorted(list(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats'])), reverse=True)
         if lose:
             for k in maps.keys():
                 for i in lose:
@@ -140,11 +144,19 @@ class Condenser(object):
                 self.__matrix[j]['bondmatrix'][:, maps[j][i] - 1] = tmp[:, i]
 
             atomlist = [0] * self.__length
-            for i, k in zip(self.__matrix[j]['maps'], maps[j]):
-                i['map'] = k
-                atomlist[k - 1] = i
+            dat = {}
+            for i, k in enumerate(zip(self.__matrix[j]['maps'], maps[j])):
+                k[0]['map'] = k[1]
+                atomlist[k[1] - 1] = k[0]
+                dat[i + 1] = k[1] - 1
             self.__matrix[j]['maps'] = atomlist
 
+            for x in self.__matrix[j]['stereo']:
+                newdat = []
+                for y in x[0]:
+                    newdat.append(dat[y])
+                x[0] = newdat
+            print self.__matrix[j]['stereo']
         if 0 in self.__matrix['substrats']['maps']:
             '''
             метод восстановления используется только для недостающих атомов реагентов.
@@ -201,22 +213,34 @@ class Condenser(object):
         for i in xrange(length):
             self.__matrix['substrats']['maps'][i]['charge'] = self.__matrix['products']['maps'][i]['charge']
 
+    def __getStereo(self, target, i):
+        for x in self.__matrix[target]['stereo']:
+            if x[0] == i:
+                return x[1]
+        return ''
+
     def __scan(self):
         length = self.__length
 
         connections = {x: {} for x in range(length)}
 
         for i in xrange(length - 1):
+            stereo = self.__getStereo('substrats', [i]) + self.__getStereo('products', [i])
+            if stereo:
+                self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo)]
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \
                                 self.__matrix['products']['bondmatrix'][i][j] != 0:
                     diff = self.__cgr[self.__matrix['substrats']['bondmatrix'][i][j]][
                         self.__matrix['products']['bondmatrix'][i][j]]
+                    stereo = self.__getStereo('substrats', [i, j]) + self.__getStereo('products', [i, j])
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
+                    if stereo:
+                        self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo)]
                     connections[i][j] = connections[j][i] = diff
 
         self.__connections = copy.deepcopy(connections)
-
+        print self.__matrix['substrats']['bondstereo']
         if self.__repare and self.__moltorepare:
             groups = defaultdict(list)
             backup = copy.deepcopy(self.__matrix)
