@@ -71,7 +71,6 @@ def main():
             try:
                 outputdata.writedata(con.calc(data))
             except:
-                print con.calc(data)
                 err += 1
                 print 'reaction %d consist errors' % (num + 1)
         outputdata.close()

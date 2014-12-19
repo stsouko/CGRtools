@@ -53,6 +53,11 @@ class SDFwrite(object):
             if maxy < m:
                 maxy = m
 
+            if i['charge'] > 10:
+                print i
+                data['substrats']['bondstereo'].append([i['map'], i['charge'], 'dyncharge'])
+                i['charge'] = 0
+
             if self.__coordtype == 3:
                 i['x2'], i['y2'], i['z2'] = j['x'] * 100, j['y'] * 100, j['z'] * 100
                 i['x'] *= 100
@@ -68,7 +73,12 @@ class SDFwrite(object):
                 self.__fileTowrite.write(
                     "%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s%(izotop)2s%(charge)3s  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % i)
         for i in data['substrats']['diff']:
-            self.__fileTowrite.write("%3s%3s%3s  0  0  0  0\n" % i)
+            if i[2] > 10:
+                i = list(i)
+                data['substrats']['bondstereo'].append(i + ['dynbond'])
+
+                i[2] = 8
+            self.__fileTowrite.write("%3s%3s%3s  0  0  0  0\n" % tuple(i))
 
         if data['substrats']['bondstereo']:
             for j in xrange(1000):
@@ -80,19 +90,15 @@ class SDFwrite(object):
                 else:
                     break
             for i, j in enumerate(data['substrats']['bondstereo']):
-                self.__fileTowrite.write('M  SAL %3d%3d %s\n' % (i + 1, len(j) - 1, ' '.join(['%3d' % x for x in j[:-1]])))
-                self.__fileTowrite.write('M  SDT %3d stereo\n' % (i + 1))
+                self.__fileTowrite.write('M  SAL %3d%3d %s\n' % (i + 1, len(j) - 2, ' '.join(['%3d' % x for x in j[:-2]])))
+                self.__fileTowrite.write('M  SDT %3d %s\n' % (i + 1, j[-1]))
                 self.__fileTowrite.write('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i + 1, minx, maxy - i * .3))
-                self.__fileTowrite.write('M  SED %3d %s\n' % (i + 1, j[-1]))
+                self.__fileTowrite.write('M  SED %3d %s\n' % (i + 1, j[-2]))
 
         self.__fileTowrite.write("M  END\n")
         for i in data['substrats']['meta'].items():
             self.__fileTowrite.write(">  <%s>\n%s\n" % i)
         self.__fileTowrite.write("$$$$\n")
-
-
-#        self.close()
-#        return True
 
 
 if __name__ == '__main__':

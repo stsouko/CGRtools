@@ -197,7 +197,7 @@ class Condenser(object):
         for i in xrange(length):
             s = self.__matrix['substrats']['maps'][i]['charge']
             p = self.__matrix['products']['maps'][i]['charge']
-            self.__matrix['substrats']['maps'][i]['charge'] = str(self.__cgr[s][p])
+            self.__matrix['substrats']['maps'][i]['charge'] = self.__cgr[s][p]
 
     def __chdiffreal(self, length):
         for i in xrange(length):
@@ -227,7 +227,7 @@ class Condenser(object):
         for i in xrange(length - 1):
             stereo = self.__getStereo('substrats', [i]) + self.__getStereo('products', [i])
             if stereo:
-                self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo)]
+                self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \
                                 self.__matrix['products']['bondmatrix'][i][j] != 0:
@@ -236,7 +236,7 @@ class Condenser(object):
                     stereo = self.__getStereo('substrats', [i, j]) + self.__getStereo('products', [i, j])
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
                     if stereo:
-                        self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo)]
+                        self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
                     connections[i][j] = connections[j][i] = diff
 
         self.__connections = copy.deepcopy(connections)
