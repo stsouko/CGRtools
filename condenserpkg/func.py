@@ -121,6 +121,18 @@ class Condenser(object):
                 'products': [int(x['map']) for x in self.__matrix['products']['maps']]}
 
         length = max((max(maps['products']), max(maps['substrats'])))
+
+        for j in ('substrats', 'products'):
+            if 0 in maps[j]:
+                nmaps = []
+                for x in maps[j]:
+                    if x:
+                        nmaps.append(x)
+                    else:
+                        length += 1
+                        nmaps.append(length)
+                maps[j] = nmaps
+
         lose = sorted(list(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats'])), reverse=True)
         if lose:
             for k in maps.keys():
@@ -156,7 +168,7 @@ class Condenser(object):
                 for y in x[0]:
                     newdat.append(dat[y])
                 x[0] = newdat
-            print self.__matrix[j]['stereo']
+
         if 0 in self.__matrix['substrats']['maps']:
             '''
             метод восстановления используется только для недостающих атомов реагентов.
@@ -240,7 +252,7 @@ class Condenser(object):
                     connections[i][j] = connections[j][i] = diff
 
         self.__connections = copy.deepcopy(connections)
-        print self.__matrix['substrats']['bondstereo']
+
         if self.__repare and self.__moltorepare:
             groups = defaultdict(list)
             backup = copy.deepcopy(self.__matrix)

@@ -32,9 +32,10 @@ def main():
 
 
 class SDFwrite(object):
-    def __init__(self, fileTowrite, coordtype): #инициализация
+    def __init__(self, fileTowrite, coordtype, fformat): #инициализация
         self.__coordtype = coordtype
         self.__fileTowrite = open(fileTowrite, 'w')
+        self.__format = fformat
 
     def close(self):
         self.__fileTowrite.close()
@@ -53,8 +54,7 @@ class SDFwrite(object):
             if maxy < m:
                 maxy = m
 
-            if i['charge'] > 10:
-                print i
+            if i['charge'] > 10 and self.__format:
                 data['substrats']['bondstereo'].append([i['map'], i['charge'], 'dyncharge'])
                 i['charge'] = 0
 
@@ -73,7 +73,7 @@ class SDFwrite(object):
                 self.__fileTowrite.write(
                     "%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s%(izotop)2s%(charge)3s  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % i)
         for i in data['substrats']['diff']:
-            if i[2] > 10:
+            if i[2] > 10 and self.__format:
                 i = list(i)
                 data['substrats']['bondstereo'].append(i + ['dynbond'])
 
@@ -84,7 +84,6 @@ class SDFwrite(object):
             for j in xrange(1000):
                 sty = data['substrats']['bondstereo'][j * 8:j * 8 + 8]
                 if sty:
-                    print sty
                     stydat = ' '.join(['%3d DAT' % (x+1) for x in range(len(sty))])
                     self.__fileTowrite.write('M  STY  %d %s\n' % (len(sty), stydat))
                 else:

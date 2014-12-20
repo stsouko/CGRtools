@@ -46,11 +46,12 @@ def main():
                               " 2 - add charge diff (only changed spec of MOL), "
                               "3 - both 1 and 2, 4 - use products charges (only changed spec of MOL),"
                               " 5 - use products formal charges, 6 - both 4 and 5, 7 - 1 and 4, 8 - 2 and 5")
-    rawopts.add_argument("--repare", "-r", type=int, default=0, help="repair disbalanced reactions")
+    rawopts.add_argument("--repare", "-r", action='store_true', help="repair disbalanced reactions")
+    rawopts.add_argument("--format", "-f", action='store_false', help="use old format of CGR SDF")
 
     options = vars(rawopts.parse_args())
     inputdata = RDFread(options['input'])
-    outputdata = SDFwrite(options['output'], options['coords'])
+    outputdata = SDFwrite(options['output'], options['coords'], options['format'])
     result = []
     if options['type'] > 29 or options['type'] < -29 or 2 < options['type'] < 11 or -11 < options['type'] < 0 or \
                     options['type'] in (20, -20):
