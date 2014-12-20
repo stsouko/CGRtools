@@ -5,8 +5,8 @@
 # This file is part of FEAR (Fix Errors in Automapped Reactions).
 #
 # FEAR is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU Affero General Public License as published by
-#  the Free Software Foundation; either version 3 of the License, or
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
 #
 #  This program is distributed in the hope that it will be useful,
@@ -90,60 +90,56 @@ class RDFread(object):
                         failkey = False
                         reaction = None
                 elif "$MOL" in line[0:4]:
-                    molecule = {'atomlist': {}, 'bondmatrix': None, 'bondlist': [], 'DAT': {}}
+                    molecule = {'atomlist': [], 'bondmatrix': None, 'bondlist': [], 'DAT': {}}
                     im = n + 4
-                    pnum = 0
                 elif n == im:
                     try:
                         atomcount = int(line[0:3]) + im
                         bondcount = int(line[3:6]) + atomcount
-                        if atomcount == bondcount:
-                            molecule['bondmatrix'] = numpy.zeros((1, 1), dtype=float)
+
+                        molecule['bondmatrix'] = numpy.zeros((int(line[0:3]), int(line[0:3])), dtype=float)
                     except:
                         failkey = False
                         reaction = None
                 elif n <= atomcount:
-                    molecule['atomlist'][pnum] = dict(element=line[31:34].strip(), izotop=line[34:36].strip(),
-                                                      charge=int(line[38:39]), map=int(line[60:63]),
-                                                      mark=line[51:54].strip(),
-                                                      x=float(line[0:10]),
-                                                      y=float(line[10:20]),
-                                                      z=float(line[20:30]))
-                    pnum += 1
+                    molecule['atomlist'].append(dict(element=line[31:34].strip(), izotop=line[34:36].strip(),
+                                                     charge=int(line[38:39]), map=int(line[60:63]),
+                                                     mark=line[51:54].strip(),
+                                                     x=float(line[0:10]),
+                                                     y=float(line[10:20]),
+                                                     z=float(line[20:30])))
                 elif n <= bondcount:
                     try:
-                        if molecule['bondmatrix'] is None:
-                            mlen = len(molecule['atomlist'])
-                            molecule['bondmatrix'] = numpy.zeros((mlen, mlen), dtype=float)
                         a1, a2 = int(line[0:3]) - 1, int(line[3:6]) - 1
-                        if a1 in molecule['atomlist'] and a2 in molecule['atomlist']:
-                            molecule['bondmatrix'][a1, a2] = molecule['bondmatrix'][a2, a1] = self.__aromatize[int(line[6:9])]
-                            molecule['bondlist'].append((a1 + 1, a2 + 1, int(line[6:9]), int(line[9:12])))
-                        elif a1 in molecule['atomlist']:
-                            molecule['bondmatrix'][a1, a1] += 2
-                        else:
-                            molecule['bondmatrix'][a2, a2] += 2
+                        molecule['bondmatrix'][a1, a2] = molecule['bondmatrix'][a2, a1] = self.__aromatize[int(line[6:9])]
+                        molecule['bondlist'].append((a1 + 1, a2 + 1, int(line[6:9]), int(line[9:12])))
                     except:
                         failkey = False
                         reaction = None
+
                 elif n > bondcount and "M  END" not in line:
                     if 'M  STY' in line:
                         for i in range(int(line[8])):
-                            if 'DAT' in line[10 + 8 * i:17 + 8*i]:
-                                molecule['DAT'][int(line[10 + 8 * i:13 + 8*i])] = []
-                    if 'M  SAL' in line:
+                            if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
+                                molecule['DAT'][int(line[10 + 8 * i:13 + 8 * i])] = []
+                    elif 'M  SAL' in line:
                         if int(line[7:10]) in molecule['DAT']:
                             key = []
                             for i in range(int(line[10:13])):
-                                key.append(int(line[14 + 4 * i:17 + 4*i]))
+                                key.append(int(line[14 + 4 * i:17 + 4 * i]))
                             molecule['DAT'][int(line[7:10])] = [key]
-                    if 'M  SDT' in line and int(line[7:10]) in molecule['DAT']:
+                    elif 'M  SDT' in line and int(line[7:10]) in molecule['DAT']:
                         if 'stereo' not in line:
-                             molecule['DAT'].pop([int(line[7:10])])
-                    if 'M  SED' in line and int(line[7:10]) in molecule['DAT']:
+                            molecule['DAT'].pop(int(line[7:10]))
+                    elif 'M  SED' in line and int(line[7:10]) in molecule['DAT']:
                         molecule['DAT'][int(line[7:10])].append(line[10:].strip())
+
+                    if '$DTYPE' in line:
+                        meta = line[7:].strip()
+                    elif '$RFMT' not in line and meta:
+                        reaction['meta'][meta] += line.strip("$DATUM").strip() + ' '
+
                 elif "M  END" in line:
-                    molecule['atomlist'] = molecule['atomlist'].values()
                     try:
                         self.__postProc(molecule['atomlist'], molecule['bondmatrix'])
                         if len(reaction['substrats']) < substrats:
@@ -153,10 +149,7 @@ class RDFread(object):
                     except:
                         failkey = False
                         reaction = None
-                elif '$DTYPE' in line:
-                    meta = line[7:].strip()
-                elif '$RFMT' not in line and meta:
-                    reaction['meta'][meta] += line.strip("$DATUM").strip() + ' '
+
             else:
                 if reaction:
                     yield reaction

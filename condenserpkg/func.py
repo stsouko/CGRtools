@@ -227,7 +227,7 @@ class Condenser(object):
 
     def __getStereo(self, target, i):
         for x in self.__matrix[target]['stereo']:
-            if x[0] == i:
+            if sorted(x[0]) == i:
                 return x[1]
         return ''
 
@@ -237,7 +237,8 @@ class Condenser(object):
         connections = {x: {} for x in range(length)}
 
         for i in xrange(length - 1):
-            stereo = self.__getStereo('substrats', [i]) + self.__getStereo('products', [i])
+            a, b = self.__getStereo('substrats', [i]), self.__getStereo('products', [i])
+            stereo = a if a == b else a + b
             if stereo:
                 self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
             for j in xrange(i + 1, length):
@@ -245,7 +246,8 @@ class Condenser(object):
                                 self.__matrix['products']['bondmatrix'][i][j] != 0:
                     diff = self.__cgr[self.__matrix['substrats']['bondmatrix'][i][j]][
                         self.__matrix['products']['bondmatrix'][i][j]]
-                    stereo = self.__getStereo('substrats', [i, j]) + self.__getStereo('products', [i, j])
+                    a, b = self.__getStereo('substrats', [i, j]), self.__getStereo('products', [i, j])
+                    stereo = a if a == b else a + b
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
                     if stereo:
                         self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
