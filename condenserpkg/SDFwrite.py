@@ -84,7 +84,7 @@ class SDFwrite(object):
             for j in xrange(1000):
                 sty = data['substrats']['bondstereo'][j * 8:j * 8 + 8]
                 if sty:
-                    stydat = ' '.join(['%3d DAT' % (x+1) for x in range(len(sty))])
+                    stydat = ' '.join(['%3d DAT' % (x + 1 + j * 8) for x in range(len(sty))])
                     self.__fileTowrite.write('M  STY  %d %s\n' % (len(sty), stydat))
                 else:
                     break

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-#  func.py
+# func.py
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of condenser.
 #
 #  condenser is free software; you can redistribute it and/or modify
@@ -33,10 +33,11 @@ def main():
 
 
 class Condenser(object):
-    def __init__(self, charge, type, repare):
+    def __init__(self, charge, type, repare, stereo):
         self.__matrix = {}
         self.__charge = charge
         self.__cgrtype = type
+        self.__stereo = stereo
         self.__repare = repare
         self.__replace = replace()
 
@@ -64,14 +65,14 @@ class Condenser(object):
                 mols = self.__data['substrats'][self.__cgrtype - 11]
             except:
                 mols = self.__data['substrats'][-1]
-            self.__getmatrix(mols, 'substrats')
+            self.__getmatrix([mols], 'substrats')
             self.__matrix['products'] = self.__matrix['substrats']
         elif 20 < self.__cgrtype < 30:
             try:
                 mols = self.__data['products'][self.__cgrtype - 21]
             except:
                 mols = self.__data['products'][-1]
-            self.__getmatrix(mols, 'products')
+            self.__getmatrix([mols], 'products')
             self.__matrix['substrats'] = self.__matrix['products']
         elif -20 < self.__cgrtype < -10:
             try:
@@ -113,10 +114,10 @@ class Condenser(object):
         self.__matrix[category] = tempMatrix
 
     def __sortmatrix(self):
-        '''
+        """
         атомы отсортировываются по порядку. для атомов представленных только в продуктах или реагентах достраивается
         симметричная матрица с разрывом в месте стыка с основной молекулой.
-        '''
+        """
         maps = {'substrats': [int(x['map']) for x in self.__matrix['substrats']['maps']],
                 'products': [int(x['map']) for x in self.__matrix['products']['maps']]}
 
@@ -133,7 +134,8 @@ class Condenser(object):
                         nmaps.append(length)
                 maps[j] = nmaps
 
-        lose = sorted(list(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats'])), reverse=True)
+        lose = sorted(list(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats'])),
+                      reverse=True)
         if lose:
             for k in maps.keys():
                 for i in lose:
@@ -169,6 +171,8 @@ class Condenser(object):
                     newdat.append(dat[y])
                 x[0] = newdat
 
+        self.__lostlist = dict.fromkeys(('products', 'substrats'))
+
         if 0 in self.__matrix['substrats']['maps']:
             '''
             метод восстановления используется только для недостающих атомов реагентов.
@@ -178,19 +182,21 @@ class Condenser(object):
             self.__moltorepare = True
             self.__searchlost('products', 'substrats')
         if 0 in self.__matrix['products']['maps']:
-            self.__moltocharge = True
+            self.__moltocharge = False
             self.__searchlost('substrats', 'products')
 
     def __searchlost(self, s, t):
-        '''
+        """
         внедрение в матрицу продуктов/субстратов атомов из субстратов/продуктов
-        '''
+        """
         lostlist = []
         for i in xrange(self.__length):
             if self.__matrix[t]['maps'][i] == 0:
                 self.__matrix[t]['maps'][i] = self.__matrix[s]['maps'][i]
                 #print s, self.__matrix[s]['maps'][i]
                 lostlist.append(i)
+        # надо сохранить список несбалансированных атомов. и когда их нельзя сбалансировать за счет списывания у многостадийных реакций, то надо внести фиктивные атомы итд.
+        self.__lostlist[t] = lostlist
         for i in lostlist:
             for j in lostlist:
                 self.__matrix[t]['bondmatrix'][i, j] = self.__matrix[s]['bondmatrix'][i, j]
@@ -229,17 +235,22 @@ class Condenser(object):
         for x in self.__matrix[target]['stereo']:
             if sorted(x[0]) == i:
                 return x[1]
-        return ''
+        return 'A'
 
     def __scan(self):
         length = self.__length
-
         connections = {x: {} for x in range(length)}
 
         for i in xrange(length - 1):
             a, b = self.__getStereo('substrats', [i]), self.__getStereo('products', [i])
-            stereo = a if a == b else a + b
-            if stereo:
+            if a == b:
+                if a != 'A':
+                    stereo = a
+                else:
+                    stereo = ''
+            else:
+                stereo = a + b
+            if stereo and self.__stereo:
                 self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \
@@ -247,15 +258,21 @@ class Condenser(object):
                     diff = self.__cgr[self.__matrix['substrats']['bondmatrix'][i][j]][
                         self.__matrix['products']['bondmatrix'][i][j]]
                     a, b = self.__getStereo('substrats', [i, j]), self.__getStereo('products', [i, j])
-                    stereo = a if a == b else a + b
+                    if a == b:
+                        if a != 'A':
+                            stereo = a
+                        else:
+                            stereo = ''
+                    else:
+                        stereo = a + b
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
-                    if stereo:
+                    if stereo and self.__stereo:
                         self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
                     connections[i][j] = connections[j][i] = diff
 
         self.__connections = copy.deepcopy(connections)
 
-        if self.__repare and self.__moltorepare:
+        if self.__repare and (self.__moltorepare or self.__moltocharge):
             groups = defaultdict(list)
             backup = copy.deepcopy(self.__matrix)
             atomlist = set(range(length))
@@ -268,23 +285,25 @@ class Condenser(object):
                 #print block, smiles
                 groups[tuple(sorted(smiles.values()))].append(block)
                 self.__smiless[tuple(block)] = smiles
-            #print groups
-            try:
-                self.__balancer(groups)
-            except:
-                self.__connections = connections
-                self.__matrix = backup
+            #сначала попробуем восстановить инфу о продуктах. это позволит для многостадийных реакций лучше восстановить баланс.
+            if self.__moltocharge:
+                try:
+                    self.__chargebalancer()
+                except:
+                    self.__connections = connections
+                    self.__matrix = backup
+            if self.__moltorepare:
+                try:
+                    self.__balancer(groups)
+                except:
+                    self.__connections = connections
+                    self.__matrix = backup
             diff = []
             for x, y in self.__connections.items():
                 for w, z in y.items():
                     if (w + 1, x + 1, z) not in diff:
                         diff += [(x + 1, w + 1, z)]
             self.__matrix['substrats']['diff'] = diff
-
-        #место для зарядового балансировщика!!!
-        if self.__repare and self.__moltocharge:
-            print self.__connections
-            self.__chargebalancer()
 
         if self.__charge in (4, 6, 7):
             self.__chreplacereal(length)
@@ -307,7 +326,8 @@ class Condenser(object):
                     print '%', sub
 
                     for x in sub:
-                        print x, self.__matrix['substrats']['maps'][x]['charge'], self.__matrix['products']['maps'][x]['charge']
+                        print x, self.__matrix['substrats']['maps'][x]['charge'], self.__matrix['products']['maps'][x][
+                            'charge']
                     pass
 
     def __reactcenteratoms(self, trace, inter):
@@ -364,7 +384,7 @@ class Condenser(object):
         '''
         #print '_+', target, fragment
         #self.__fragment.pop(fragment)
-        titerlist = set(self.__connections[target]) #.difference(trace)
+        titerlist = set(self.__connections[target])  #.difference(trace)
         # if len(titerlist) == 1 and self.__connections[target][list(titerlist)[0]] % 10 == 8:
         #     print '*'
         #     return 0
@@ -378,7 +398,9 @@ class Condenser(object):
             if j not in (81, 82, 83, 84, 85, 86, 87):
                 if self.__target.get(i):
                     #print self.__target[i], next(key for key, val in self.__fragment.items() if val == self.__target[i])
-                    fi = next((key for key in self.__connections[fragment] if self.__fragment.get(key) == self.__target[i] and key not in trace), next((key for key, val in self.__fragment.items() if val == self.__target[i]), None))
+                    fi = next((key for key in self.__connections[fragment] if
+                               self.__fragment.get(key) == self.__target[i] and key not in trace),
+                              next((key for key, val in self.__fragment.items() if val == self.__target[i]), None))
                     #print "#", target, i, fragment, fi, j
                     self.__connections[fragment][fi] = self.__connections[fi][fragment] = j
                     trace += self.__builder(i, fi, trace + [target, fragment])
@@ -443,7 +465,8 @@ class Condenser(object):
         while self.__accept(newweights, length):
             weights = copy.copy(newweights)
             for k, i in enumerate(sub):
-                l = sum([weights[x] * self.__matrix['products']['bondmatrix'][i][x] for x in self.__connections[i].keys()])
+                l = sum(
+                    [weights[x] * self.__matrix['products']['bondmatrix'][i][x] for x in self.__connections[i].keys()])
                 newweights[i] += l
         return {x: y for x, y in newweights.items() if x in sub}
 
