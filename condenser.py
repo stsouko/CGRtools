@@ -43,11 +43,11 @@ def main():
                                                                      " 2 - products, 3 - both (changed spec of MOL)")
     rawopts.add_argument("--charge", "-g", type=int, default=0,
                          help="charge data modifier: 0 - use reagents (formal) charges, 1 - add changed formal charges,"
-                              " 2 - add charge diff (only changed spec of MOL), "
-                              "3 - both 1 and 2, 4 - use products charges (only changed spec of MOL),"
+                              " 2 - add charge diff (only changed spec of MOL)[deprecated], "
+                              "3 - both 1 and 2, 4 - use products charges (only changed spec of MOL)[deprecated],"
                               " 5 - use products formal charges, 6 - both 4 and 5, 7 - 1 and 4, 8 - 2 and 5")
     rawopts.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
-    rawopts.add_argument("--repare", "-r", action='store_true', help="repair disbalanced reactions")
+    rawopts.add_argument("--repare", "-r", action='store_true', help="repair disbalanced reactions [experimental]")
     rawopts.add_argument("--format", "-f", action='store_false', help="use old format of CGR SDF")
 
     options = vars(rawopts.parse_args())
