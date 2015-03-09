@@ -53,7 +53,7 @@ def main():
     options = vars(rawopts.parse_args())
     inputdata = RDFread(options['input'])
     outputdata = SDFwrite(options['output'], options['coords'], options['format'])
-    result = []
+
     if options['type'] > 29 or options['type'] < -29 or 2 < options['type'] < 11 or -11 < options['type'] < 0 or \
                     options['type'] in (20, -20):
         print ('USE CORRECT TYPE, MAZAFAKA')
@@ -65,11 +65,12 @@ def main():
     con = Condenser(options['charge'], options['type'], options['repare'], options['stereo'])
     #parseddata = rw.readdata()
     err = 0
+    num = -1
     if inputdata.chkRDF():
         for num, data in enumerate(inputdata.readdata()):
             if num % 1000 == 0:
                 print "reaction: %d" % (num + 1)
-            #result += [con.calc(data)]
+            #print con.calc(data)
             try:
                 outputdata.writedata(con.calc(data))
             except:

@@ -59,12 +59,12 @@ class RDFread(object):
         except IOError:
             return False
 
-    __aromatize = {1: 1, 2: 2, 3: 3, 4: 1.5}
+    __aromatize = {1: 1, 2: 2, 3: 3, 4: 4, 8: 8}
 
     def readdata(self):
-        '''парсер RDF файлов. возвращает пакет данных вида
+        """парсер RDF файлов. возвращает пакет данных вида
         {'substrats':substrats, 'products':products, 'molecules':{'номер':{'atomlist':atomlist, 'bondmatrix':matrix}}}
-        '''
+        """
         with open(self.__RDFfile) as f:
             ir = -1
             im = -1
@@ -127,12 +127,15 @@ class RDFread(object):
                             key = []
                             for i in range(int(line[10:13])):
                                 key.append(int(line[14 + 4 * i:17 + 4 * i]))
-                            molecule['DAT'][int(line[7:10])] = [key]
+                            molecule['DAT'][int(line[7:10])] = dict(atoms=key) #atoms indexes
                     elif 'M  SDT' in line and int(line[7:10]) in molecule['DAT']:
-                        if 'stereo' not in line:
+                        key = line.rstrip().split()[-1]
+                        if key not in ('stereo', 'dynbond', 'dyncharge'):
                             molecule['DAT'].pop(int(line[7:10]))
+                        else:
+                            molecule['DAT'][int(line[7:10])]['type'] = key
                     elif 'M  SED' in line and int(line[7:10]) in molecule['DAT']:
-                        molecule['DAT'][int(line[7:10])].append(line[10:].strip())
+                        molecule['DAT'][int(line[7:10])]['value'] = line[10:].strip()
 
                     if '$DTYPE' in line:
                         meta = line[7:].strip()
@@ -141,7 +144,7 @@ class RDFread(object):
 
                 elif "M  END" in line:
                     try:
-                        self.__postProc(molecule['atomlist'], molecule['bondmatrix'])
+                        #self.__postProc(molecule['atomlist'], molecule['bondmatrix'])
                         if len(reaction['substrats']) < substrats:
                             reaction['substrats'].append(molecule)
                         else:

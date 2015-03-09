@@ -3,7 +3,7 @@
 # func.py
 #
 # Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of condenser.
+# This file is part of condenser.
 #
 #  condenser is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
@@ -94,17 +94,32 @@ class Condenser(object):
         постройка матриц связности
         '''
         atomlist = []
-        dat = []
+        dat = {'stereo': [], 'dynbond': [], 'dyncharge': []}
         #объединим атомы в 1 список. и создадим пустую матрицу.
+        #('stereo', 'dynbond', 'dyncharge')
         for i in data:
             for j in i['DAT'].values():
-                dat.append([[x + len(atomlist) for x in j[0]], j[1]])
+                dat[j['type']].append([sorted([x + len(atomlist) for x in j['atoms']]), j['value']])
+
+            for j in dat['stereo']:
+                j[1] = j[1][0] if category == 'substrats' else j[1][-1]
+
+            for j in dat['dyncharge']: #update atom charges from CGR reactant charges
+                x = j[0][0] - 1
+                v = j[1][0] if category == 'substrats' else j[1][1]
+                i['atomlist'][x]['charge'] = int(v) if v != '8' else 0
+
             atomlist += i['atomlist']
+            for j in dat['dynbond']: #update bondmatrix from CGR reactant bonds
+                x, y = j[0][0] - 1, j[0][1] - 1
+                v = j[1][0] if category == 'substrats' else j[1][1]
+                i['bondmatrix'][x, y] = i['bondmatrix'][y, x] = float(v) if v != '8' else 0
+
 
         length = len(atomlist)
         self.__length = length
-        tempMatrix = dict(bondmatrix=numpy.zeros((length, length), dtype=float), maps=atomlist, diff=[], stereo=dat,
-                          bondstereo=[])
+        tempMatrix = dict(bondmatrix=numpy.zeros((length, length), dtype=float), maps=atomlist, diff=[],
+                          stereo=dat['stereo'], bondstereo=[])
         step = 0
         for i in data:
             matrixlength = len(i['atomlist'])
@@ -233,7 +248,7 @@ class Condenser(object):
 
     def __getStereo(self, target, i):
         for x in self.__matrix[target]['stereo']:
-            if sorted(x[0]) == i:
+            if x[0] == i:
                 return x[1]
         return 'A'
 
@@ -242,32 +257,34 @@ class Condenser(object):
         connections = {x: {} for x in range(length)}
 
         for i in xrange(length - 1):
-            a, b = self.__getStereo('substrats', [i]), self.__getStereo('products', [i])
-            if a == b:
-                if a != 'A':
-                    stereo = a
+            if self.__stereo:
+                a, b = self.__getStereo('substrats', [i]), self.__getStereo('products', [i])
+                if a == b:
+                    if a != 'A':
+                        stereo = a
+                    else:
+                        stereo = ''
                 else:
-                    stereo = ''
-            else:
-                stereo = a + b
-            if stereo and self.__stereo:
-                self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
+                    stereo = a + b
+                if stereo:
+                    self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \
                                 self.__matrix['products']['bondmatrix'][i][j] != 0:
                     diff = self.__cgr[self.__matrix['substrats']['bondmatrix'][i][j]][
                         self.__matrix['products']['bondmatrix'][i][j]]
-                    a, b = self.__getStereo('substrats', [i, j]), self.__getStereo('products', [i, j])
-                    if a == b:
-                        if a != 'A':
-                            stereo = a
+                    if self.__stereo:
+                        a, b = self.__getStereo('substrats', [i, j]), self.__getStereo('products', [i, j])
+                        if a == b:
+                            if a != 'A':
+                                stereo = a
+                            else:
+                                stereo = None
                         else:
-                            stereo = ''
-                    else:
-                        stereo = a + b
+                            stereo = a + b
+                        if stereo:
+                            self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
-                    if stereo and self.__stereo:
-                        self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
                     connections[i][j] = connections[j][i] = diff
 
         self.__connections = copy.deepcopy(connections)
