@@ -5,13 +5,13 @@
 # Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of condenser.
 #
-#  condenser is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU Affero General Public License as published by
-#  the Free Software Foundation; either version 3 of the License, or
-#  (at your option) any later version.
+# condenser is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
 #
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU Affero General Public License for more details.
 #
@@ -23,6 +23,7 @@
 
 from collections import defaultdict
 import copy
+import itertools
 from weightable import replace
 import numpy
 
@@ -39,15 +40,19 @@ class Condenser(object):
         self.__cgrtype = type
         self.__stereo = stereo
         self.__repare = repare
+        self.__cgr = self.__tocgr()
         self.__replace = replace()
 
     def calc(self, data):
         self.__moltorepare = False
         self.__data = data
         self.__creatematrix()  #подготовка матриц
-        self.__matrix['substrats']['meta'] = data['meta']
+        #        print(self.__matrix)
         self.__scan()
-        return copy.deepcopy(self.__matrix)
+        #print(self.__matrix)
+        out = self.__matrix['substrats']
+        return dict(meta=data['meta'], stereo=out['stereo'], dynbonds=out['dynbonds'], dyncharges=out['dyncharge'],
+                    maps=out['maps'], diff=out['diff'], products_maps=self.__matrix['products']['maps'])
 
     def __creatematrix(self):
         if self.__cgrtype == 1:
@@ -89,37 +94,79 @@ class Condenser(object):
             self.__getmatrix(mols, 'products')
             self.__matrix['substrats'] = self.__matrix['products']
 
+    __toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
+
+    __fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
+
+    __bondlabels = {'0': 0, '1': 1, '2': 2, '3': 3, 'a': 4, 'c': 5, 'n': 0, 'h': 6}
+
     def __getmatrix(self, data, category):
         '''
         постройка матриц связности
         '''
         atomlist = []
-        dat = {'stereo': [], 'dynbond': [], 'dyncharge': []}
+        datF = {'dynatom': [], 'dynbond': [], 'dynatomstereo': [], 'dynbondstereo': [],
+                'bondstereo': defaultdict(dict), 'atomstereo': {}, 'extrabond': []}
+
         #объединим атомы в 1 список. и создадим пустую матрицу.
-        #('stereo', 'dynbond', 'dyncharge')
         for i in data:
+            dat = {'dynatom': [], 'dynbond': [], 'dynatomstereo': [], 'dynbondstereo': [],
+                   'bondstereo': [], 'atomstereo': [], 'extrabond': []}
+
+            shift = len(atomlist)
             for j in i['DAT'].values():
-                dat[j['type']].append([sorted([x + len(atomlist) for x in j['atoms']]), j['value']])
+                dat[j['type']].append([sorted([x + shift for x in j['atoms']]), j['value']])
 
-            for j in dat['stereo']:
-                j[1] = j[1][0] if category == 'substrats' else j[1][-1]
+            atomlist.extend(i['atomlist'])
 
-            for j in dat['dyncharge']: #update atom charges from CGR reactant charges
-                x = j[0][0] - 1
-                v = j[1][0] if category == 'substrats' else j[1][1]
-                i['atomlist'][x]['charge'] = int(v) if v != '8' else 0
+            for j in dat['dynbondstereo']:
+                # если на вход дали кгр, то надо выдрать состояние в соответствии с положением (субстрат или продукт)
+                val = j[1].lower().split('>')
+                datF['bondstereo'][j[0][0]][j[0][1]] = datF['bondstereo'][j[0][1]][j[0][0]] = val[
+                    0] if category == 'substrats' else val[-1]
 
-            atomlist += i['atomlist']
-            for j in dat['dynbond']: #update bondmatrix from CGR reactant bonds
-                x, y = j[0][0] - 1, j[0][1] - 1
-                v = j[1][0] if category == 'substrats' else j[1][1]
-                i['bondmatrix'][x, y] = i['bondmatrix'][y, x] = float(v) if v != '8' else 0
+            for j in dat['dynatomstereo']:
+                val = j[1].lower().split('>')
+                datF['atomstereo'][j[0][0]] = val[0] if category == 'substrats' else val[-1]
 
+            for j in dat['bondstereo']:
+                datF['bondstereo'][j[0][0]][j[0][1]] = datF['bondstereo'][j[0][1]][j[0][0]] = j[1].lower()
+
+            for j in dat['atomstereo']:
+                datF['atomstereo'][j[0][0]] = j[1]
+
+            for j in dat['dynatom']:
+                x = j[0][0] - 1  # atom index
+                key = j[1][0].lower()
+                diff = int(j[1][1:])
+                if key == 'c':  #update atom charges from CGR
+                    charge = self.__fromMDL.get(i['atomlist'][x]['charge'], 0)
+                    v = 10 if category == 'substrats' else charge + diff
+                    if v != 10:
+                        i['atomlist'][x]['charge'] = self.__toMDL.get(v, 0)
+                elif key == 'h':
+                    pass
+                elif key == 'r':
+                    pass
+
+            for j in dat['dynbond']:  #update bondmatrix from CGR reactant bonds
+                x, y = j[0][0] - 1 - shift, j[0][1] - 1 - shift
+                raw = j[1].lower().split('>')
+                v = self.__bondlabels.get(raw[0] if category == 'substrats' else raw[-1], 0)
+                i['bondmatrix'][x, y] = i['bondmatrix'][y, x] = v
+
+            for j in dat['extrabond']:
+                x, y = j[0][0] - 1 - shift, j[0][1] - 1 - shift
+                raw = j[1].lower()
+                i['bondmatrix'][x, y] = i['bondmatrix'][y, x] = self.__bondlabels.get(raw)
 
         length = len(atomlist)
         self.__length = length
-        tempMatrix = dict(bondmatrix=numpy.zeros((length, length), dtype=float), maps=atomlist, diff=[],
-                          stereo=dat['stereo'], bondstereo=[])
+
+        tempMatrix = dict(bondmatrix=numpy.zeros((length, length), dtype=int), maps=atomlist, diff=[],
+                          atomstereo=datF['atomstereo'],
+                          bondstereo=datF['bondstereo'],
+                          stereo=[], dynbonds=[], dyncharge=[])
         step = 0
         for i in data:
             matrixlength = len(i['atomlist'])
@@ -180,11 +227,18 @@ class Condenser(object):
                 dat[i + 1] = k[1] - 1
             self.__matrix[j]['maps'] = atomlist
 
-            for x in self.__matrix[j]['stereo']:
-                newdat = []
-                for y in x[0]:
-                    newdat.append(dat[y])
-                x[0] = newdat
+            newbondstereoblock = defaultdict(dict)
+            for x, y in self.__matrix[j]['bondstereo'].items():
+                x = dat[x]
+                for z, w in y.items():
+                    z = dat[z]
+                    newbondstereoblock[z][x] = newbondstereoblock[x][z] = w
+            self.__matrix[j]['bondstereo'] = newbondstereoblock
+
+            newatomstereoblock = {}
+            for x, y in self.__matrix[j]['atomstereo'].items():
+                newatomstereoblock[dat[x]] = y
+            self.__matrix[j]['atomstereo'] = newatomstereoblock
 
         self.__lostlist = dict.fromkeys(('products', 'substrats'))
 
@@ -209,48 +263,55 @@ class Condenser(object):
             if self.__matrix[t]['maps'][i] == 0:
                 self.__matrix[t]['maps'][i] = self.__matrix[s]['maps'][i]
                 #print s, self.__matrix[s]['maps'][i]
+                if i in self.__matrix[s]['atomstereo']:
+                    self.__matrix[t]['atomstereo'][i] = self.__matrix[s]['atomstereo'][i]
                 lostlist.append(i)
         # надо сохранить список несбалансированных атомов. и когда их нельзя сбалансировать за счет списывания у многостадийных реакций, то надо внести фиктивные атомы итд.
         self.__lostlist[t] = lostlist
         for i in lostlist:
+            first = self.__matrix[s]['bondstereo'].get(i)
             for j in lostlist:
+                if first:
+                    second = first.get(j)
+                    if second:
+                        self.__matrix[t]['bondstereo'][i][j] = second
+
                 self.__matrix[t]['bondmatrix'][i, j] = self.__matrix[s]['bondmatrix'][i, j]
 
-    __cgr = {0: {0: 0, 1: 81, 2: 82, 3: 83, 4: 84, 1.5: 84, 5: 85, 6: 86, 7: 87},
-             1: {0: 18, 1: 1, 2: 12, 3: 13, 4: 14, 1.5: 14, 5: 15, 6: 16, 7: 17},
-             2: {0: 28, 1: 21, 2: 2, 3: 23, 4: 24, 1.5: 24, 5: 25, 6: 26, 7: 27},
-             3: {0: 38, 1: 31, 2: 32, 3: 3, 4: 34, 1.5: 34, 5: 35, 6: 36, 7: 37},
-             4: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 1.5: 4, 5: 45, 6: 46, 7: 47},
-             1.5: {0: 48, 1: 41, 2: 42, 3: 43, 4: 4, 1.5: 4, 5: 45, 6: 46, 7: 47},
-             5: {0: 58, 1: 51, 2: 52, 3: 53, 4: 54, 1.5: 54, 5: 5, 6: 56, 7: 57},
-             6: {0: 68, 1: 61, 2: 62, 3: 63, 4: 64, 1.5: 64, 5: 65, 6: 6, 7: 67},
-             7: {0: 78, 1: 71, 2: 72, 3: 73, 4: 74, 1.5: 74, 5: 75, 6: 76, 7: 7}}
+    def __tocgr(self):
+        ways = ['0', '1', '2', '3', 'a', 'c', 'h']
+        bondcodes = {0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: 'c', 6: 'h'}
+        cgrdict = defaultdict(dict)
+        for x, y in itertools.permutations(ways, 2):
+            cgrdict[self.__bondlabels[x]][self.__bondlabels[y]] = ('%s>%s' % (x, y))
+        for x, y in cgrdict.items():
+            y[x] = bondcodes[x]
+        return cgrdict
 
     def __chdiffpseudo(self, length):
         for i in xrange(length):
-            s = self.__matrix['substrats']['maps'][i]['charge']
-            p = self.__matrix['products']['maps'][i]['charge']
-            self.__matrix['substrats']['maps'][i]['charge'] = self.__cgr[s][p]
-
-    def __chdiffreal(self, length):
-        for i in xrange(length):
-            s = int(self.__matrix['substrats']['maps'][i]['element'])
-            p = int(self.__matrix['products']['maps'][i]['element'])
-            self.__matrix['substrats']['maps'][i]['element'] = str(p - s)
-
-    def __chreplacereal(self, length):
-        for i in xrange(length):
-            self.__matrix['substrats']['maps'][i]['element'] = self.__matrix['products']['maps'][i]['element']
+            s = self.__fromMDL.get(self.__matrix['substrats']['maps'][i]['charge'], 0)
+            p = self.__fromMDL.get(self.__matrix['products']['maps'][i]['charge'], 0)
+            diff = p - s
+            if diff:
+                self.__matrix['substrats']['dyncharge'].append([i + 1, 'c%+d' % diff, 'dyncharge'])
 
     def __chreplacepseudo(self, length):
         for i in xrange(length):
             self.__matrix['substrats']['maps'][i]['charge'] = self.__matrix['products']['maps'][i]['charge']
 
-    def __getStereo(self, target, i):
-        for x in self.__matrix[target]['stereo']:
-            if x[0] == i:
-                return x[1]
-        return 'A'
+    def __getStereo(self, target, i, stype):
+        if stype == 'atomstereo':
+            x = self.__matrix[target][stype].get(i, 'n')
+        elif stype == 'bondstereo':
+            x = self.__matrix[target][stype].get(i[0])
+            if x:
+                x = x.get(i[1], 'n')
+            else:
+                x = 'n'
+        else:
+            x = 'n'
+        return x
 
     def __scan(self):
         length = self.__length
@@ -258,32 +319,46 @@ class Condenser(object):
 
         for i in xrange(length - 1):
             if self.__stereo:
-                a, b = self.__getStereo('substrats', [i]), self.__getStereo('products', [i])
+                a, b = self.__getStereo('substrats', i, 'atomstereo'), self.__getStereo('products', i, 'atomstereo')
                 if a == b:
-                    if a != 'A':
+                    if a != 'n':
                         stereo = a
+                        stype = 'atomstereo'
                     else:
-                        stereo = ''
+                        stereo = False
                 else:
-                    stereo = a + b
+                    stereo = '%s>%s' % (a, b)
+                    stype = 'dynatomstereo'
                 if stereo:
-                    self.__matrix['substrats']['bondstereo'] += [(i + 1, stereo, 'stereo')]
+                    self.__matrix['substrats']['stereo'] += [(i + 1, stereo, stype)]
             for j in xrange(i + 1, length):
                 if self.__matrix['substrats']['bondmatrix'][i][j] != 0 or \
                                 self.__matrix['products']['bondmatrix'][i][j] != 0:
                     diff = self.__cgr[self.__matrix['substrats']['bondmatrix'][i][j]][
                         self.__matrix['products']['bondmatrix'][i][j]]
+
+                    if not diff.isdigit():
+                        if len(diff) == 1:
+                            btype = 'extrabond'
+                        else:
+                            btype = 'dynbond'
+                        self.__matrix['substrats']['dynbonds'].append((i + 1, j + 1, diff, btype))
+                        diff = '8'
+
                     if self.__stereo:
-                        a, b = self.__getStereo('substrats', [i, j]), self.__getStereo('products', [i, j])
+                        a = self.__getStereo('substrats', [i, j], 'bondstereo')
+                        b = self.__getStereo('products', [i, j], 'bondstereo')
                         if a == b:
-                            if a != 'A':
+                            if a != 'n':
                                 stereo = a
+                                stype = 'bondstereo'
                             else:
                                 stereo = None
                         else:
-                            stereo = a + b
+                            stereo = '%s>%s' % (a, b)
+                            stype = 'dynbondstereo'
                         if stereo:
-                            self.__matrix['substrats']['bondstereo'] += [(i + 1, j + 1, stereo, 'stereo')]
+                            self.__matrix['substrats']['stereo'] += [(i + 1, j + 1, stereo, stype)]
                     self.__matrix['substrats']['diff'] += [(i + 1, j + 1, diff)]
                     connections[i][j] = connections[j][i] = diff
 
@@ -322,13 +397,9 @@ class Condenser(object):
                         diff += [(x + 1, w + 1, z)]
             self.__matrix['substrats']['diff'] = diff
 
-        if self.__charge in (4, 6, 7):
-            self.__chreplacereal(length)
-        if self.__charge in (5, 6, 8):
+        if self.__charge == 2:
             self.__chreplacepseudo(length)
-        if self.__charge in (2, 3, 8):
-            self.__chdiffreal(length)
-        if self.__charge in (1, 3, 7):
+        elif self.__charge == 1:
             self.__chdiffpseudo(length)
 
     def __chargebalancer(self):

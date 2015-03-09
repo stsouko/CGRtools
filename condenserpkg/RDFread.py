@@ -97,13 +97,14 @@ class RDFread(object):
                         atomcount = int(line[0:3]) + im
                         bondcount = int(line[3:6]) + atomcount
 
-                        molecule['bondmatrix'] = numpy.zeros((int(line[0:3]), int(line[0:3])), dtype=float)
+                        molecule['bondmatrix'] = numpy.zeros((int(line[0:3]), int(line[0:3])), dtype=int)
                     except:
                         failkey = False
                         reaction = None
                 elif n <= atomcount:
                     molecule['atomlist'].append(dict(element=line[31:34].strip(), izotop=line[34:36].strip(),
-                                                     charge=int(line[38:39]), map=int(line[60:63]),
+                                                     charge=int(line[38:39]),
+                                                     map=int(line[60:63]),
                                                      mark=line[51:54].strip(),
                                                      x=float(line[0:10]),
                                                      y=float(line[10:20]),
@@ -111,8 +112,8 @@ class RDFread(object):
                 elif n <= bondcount:
                     try:
                         a1, a2 = int(line[0:3]) - 1, int(line[3:6]) - 1
-                        molecule['bondmatrix'][a1, a2] = molecule['bondmatrix'][a2, a1] = self.__aromatize[int(line[6:9])]
-                        molecule['bondlist'].append((a1 + 1, a2 + 1, int(line[6:9]), int(line[9:12])))
+                        molecule['bondmatrix'][a1, a2] = molecule['bondmatrix'][a2, a1] = int(line[6:9])
+                        #molecule['bondlist'].append((a1 + 1, a2 + 1, int(line[6:9]), int(line[9:12])))
                     except:
                         failkey = False
                         reaction = None
@@ -130,12 +131,13 @@ class RDFread(object):
                             molecule['DAT'][int(line[7:10])] = dict(atoms=key) #atoms indexes
                     elif 'M  SDT' in line and int(line[7:10]) in molecule['DAT']:
                         key = line.rstrip().split()[-1]
-                        if key not in ('stereo', 'dynbond', 'dyncharge'):
+                        if key not in ('dynatom', 'dynbond', 'dynatomstereo', 'dynbondstereo',
+                                       'atomstereo', 'bondstereo', 'extrabond'):
                             molecule['DAT'].pop(int(line[7:10]))
                         else:
                             molecule['DAT'][int(line[7:10])]['type'] = key
                     elif 'M  SED' in line and int(line[7:10]) in molecule['DAT']:
-                        molecule['DAT'][int(line[7:10])]['value'] = line[10:].strip()
+                        molecule['DAT'][int(line[7:10])]['value'] = line[10:].strip().replace('/', '').upper()
 
                     if '$DTYPE' in line:
                         meta = line[7:].strip()

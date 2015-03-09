@@ -44,11 +44,11 @@ def parser(rdfmeta, headlist, csvlist):
     metalist = []
     for i in rdfmeta:
         metalist += i['meta'].keys()
-    metalist = list(set(metalist))
+    metalist = sorted(list(set(metalist)))
 
     for i in enumerate(metalist):
         print '%2d -- %s' % (i[0], i[1])
-    meta = list(set(metalist) - set([metalist[int(x)] for x in raw_input('select params. e.g. 1,2,3… : ').split(',')]))
+    meta = sorted(list(set(metalist) - set([metalist[int(x)] for x in raw_input('select params. e.g. 1,2,3… : ').split(',') if x])))
     headline = [x.replace(' ', '_') for x in meta] + [x[8:].strip() for x in headlist]
     head = [','.join(headline)]
     headlen = len(headline)
