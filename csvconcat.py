@@ -4,9 +4,9 @@
 #  csvconcat.py
 #
 #  Copyright 2013 nougmanoff <stsouko@live.ru>
-#  This file is part of condenser.
+#  This file is part of cgrtools.
 #
-#  condenser is free software; you can redistribute it and/or modify
+#  cgrtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 2 of the License, or
 #  (at your option) any later version.
@@ -24,7 +24,7 @@
 
 import os
 import argparse
-from condenserpkg.rdfrw import Rdfrw
+from CGRtools.rdfrw import Rdfrw
 
 
 def filechk(filelist):

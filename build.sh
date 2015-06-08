@@ -1,14 +1,18 @@
 #!/bin/bash
+cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ ! -d "./pyinstaller" ] ; then
-  echo "download https://github.com/pyinstaller/pyinstaller into ./pyinstaller dir"
-  exit 1
+    echo "downloading pyinstaller into ./pyinstaller"
+    git clone git@github.com:pyinstaller/pyinstaller.git
 fi
 
-if [ ! -d "./pyinstaller" ] ; then
-  echo "download http://upx.sourceforge.net into ./upx-lin dir"
-  exit 1
+if [ ! -d "./upx-lin" ] ; then
+    echo "downloading upx into ./upx-lin"
+    wget http://upx.sourceforge.net/download/upx-3.91-amd64_linux.tar.bz2 -O - | tar -xj
+    mv upx-3.91-amd64_linux upx-lin
 fi
 
-python ./pyinstaller/pyinstaller.py --upx-dir=./upx-lin -y -F condenser.py
+nuitka --standalone --portable --python-version=3.4 --recurse-all --recurse-stdlib main.py
+
+python3 ./pyinstaller/pyinstaller.py  --additional-hooks-dir=./hooks --upx-dir=./upx-lin --name=cgrtools --key=jyvt0n3 -y -F main.py
 

@@ -4,9 +4,9 @@
 # preparerdf.py
 #
 # Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of condenser.
+# This file is part of cgrtools.
 #
-#  condenser is free software; you can redistribute it and/or modify
+#  cgrtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -25,7 +25,7 @@ import argparse
 import copy
 import re
 import subprocess as sp
-from condenserpkg.version import version
+from CGRtools.version import version
 
 
 def rings(connections, trace, inter):
