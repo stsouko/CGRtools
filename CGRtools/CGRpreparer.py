@@ -29,8 +29,14 @@ class CGRPreparer(object):
     def __init__(self, **kwargs):
         self.__cgrtype = self.__getcgrtype(kwargs['type'])
         self.__cgr = self.__tocgr()
-        self.__stereo = dict(atom=self.__getatomstereo, bond=self.__getbondstereo) if kwargs['stereo'] else \
-            dict(atom=lambda *_: None, bond=lambda *_: None)
+        self.__stereo = self.__removestereo if kwargs['stereo'] else lambda x: x
+
+    def __removestereo(self, g):
+        for n in g.nodes():
+            g.node[n]['s_stereo'] = g.node[n]['p_stereo'] = None
+        for n, m in g.edges():
+            g[n][m]['s_stereo'] = g[n][m]['p_stereo'] = None
+        return g
 
     def acceptrepair(self):
         return self.__cgrtype not in (1, 2, 3, 4, 5, 6)
@@ -40,7 +46,8 @@ class CGRPreparer(object):
         return matrix
 
     def preparetemplate(self, data):
-        return dict(substrats=nx.union_all(data['substrats']), products=nx.union_all(data['products']))
+        return dict(substrats=self.__stereo(nx.union_all(data['substrats'])),
+                    products=self.__stereo(nx.union_all(data['products'])))
 
     def getformattedcgr(self, graph):
         data = dict(atoms=[], bonds=[], CGR_DAT=[])
@@ -52,7 +59,7 @@ class CGRPreparer(object):
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            meta = self.__stereo['atom'](j['s_stereo'], j['p_stereo'])
+            meta = self.__getatomstereo(j['s_stereo'], j['p_stereo'])
             if meta:
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
@@ -66,7 +73,7 @@ class CGRPreparer(object):
 
             data['bonds'].append((renum[i], renum[l], bond))
 
-            meta = self.__stereo['bond'](j['s_stereo'], j['p_stereo'])
+            meta = self.__getbondstereo(j['s_stereo'], j['p_stereo'])
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
                 data['CGR_DAT'].append(meta)
@@ -157,11 +164,11 @@ class CGRPreparer(object):
             matrix['substrats'] = nx.union_all(getmols('substrats'))
             matrix['products'] = nx.union_all(excmols('products'))
 
-        for i, k in (('substrats', 's_part'), ('products', 'p_part')):
-            for j in matrix[i]:
-                matrix[i].node[j][k] = True
+        # for i, k in (('substrats', 's_part'), ('products', 'p_part')):
+        #     for j in matrix[i]:
+        #         matrix[i].node[j][k] = True
 
-        return matrix
+        return dict(substrats=self.__stereo(matrix['substrats']), products=self.__stereo(matrix['products']))
 
     def __propertyswitcher(self, g, s, t):
 

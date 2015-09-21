@@ -19,24 +19,16 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import copy
-#import numpy
-
-#from .mendel import replace
-#from .maprules import rules
+import networkx as nx
+from networkx.algorithms import isomorphism as gis
 
 
 class FEAR:
-    def __init__(self, **kwargs):
-        self.__rulesC = kwargs['c_rules']
-        self.__rulesE = kwargs['e_rules']
-        self.__repare = kwargs['map_repair']
-        
-        self.chkmap = self.__chkmap if self.__rulesC or self.__rulesE else lambda x: x
 
     def __chkmap(self, data):
+        print(self.__rules(data))
         print('#$#$', data)
-        return None
+        return data
 
     def __diff(self):
         diff = []

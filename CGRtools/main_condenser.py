@@ -19,6 +19,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import sys
+import traceback
 from CGRtools.RDFread import RDFread
 from CGRtools.SDFwrite import SDFwrite
 from CGRtools.CGRcore import CGRcore
@@ -33,15 +35,13 @@ def condenser_core(args):
     err = 0
     num = -1
     for num, data in enumerate(inputdata.readdata()):
-        #print(data['products'][0].node)
-        if num % 1000 == 0:
-            print("reaction: %d" % (num + 1))
-        a = con.getFCGR(data)
-        #outputdata.writedata(con.calc(data))
-        #try:
-        outputdata.writedata(a)
-        #except:
-        #    err += 1
-        #    print('reaction %d consist errors' % (num + 1))
-    print('%d from %d reactions condensed' % (num + 1 - err, num + 1))
+        if num % 100 == 0:
+            print("reaction: %d" % (num + 1), file=sys.stderr)
+        try:
+            a = con.getFCGR(data)
+            outputdata.writedata(a)
+        except Exception:
+            err += 1
+            print('reaction %d consist errors: %s' % (num + 1, traceback.format_exc()), file=sys.stderr)
+    print('%d from %d reactions condensed' % (num + 1 - err, num + 1), file=sys.stderr)
 

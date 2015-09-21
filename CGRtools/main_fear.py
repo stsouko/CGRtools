@@ -19,36 +19,29 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import sys
 from CGRtools.RDFread import RDFread
 from CGRtools.RDFwrite import RDFwrite
-from CGRtools.CGRcore import CGRcore
+from CGRtools.FEAR import FEAR
 
 
 def fear_core(args):
     options = vars(args)
     inputdata = RDFread(args.input)
     outputdata = RDFwrite(args.output)
-
-    con = CGRcore(repair=False, type='0', charge=2, stereo=True, check=True, **options)
+    fear = FEAR()
+    #con = CGRcore(balance=0, type='0', **options)
     err = 0
     num = -1
-    if inputdata.chkRDF():
-        for num, data in enumerate(inputdata.readdata()):
-            #print(data['products'][0].node)
-            if num % 1000 == 0:
-                print("reaction: %d" % (num + 1))
-            a = con.getCGR(data)
-            #outputdata.writedata(con.calc(data))
-            #try:
-            outputdata.writedata(a)
-            #except:
-            #    err += 1
-            #    print('reaction %d consist errors' % (num + 1))
-        print('%d from %d reactions condensed' % (num + 1 - err, num + 1))
-        outputdata.close()
-        #if rw.writedata(result):
-        #    print ('successfully done')
-    else:
-        print('incorrect inputfile')
-    return 0
+    #for num, data in enumerate(inputdata.readdata()):
+    #    if num % 100 == 0:
+    #        print("reaction: %d" % (num + 1), file=sys.stderr)
+        #try:
+        #a = con.getFreaction(data)
+        #outputdata.writedata(a)
+        #except:
+        #    err += 1
+        #    print('reaction %d consist errors' % (num + 1), file=sys.stderr)
+    #print('%d from %d reactions checked' % (num + 1 - err, num + 1), file=sys.stderr)
+
 

@@ -162,7 +162,7 @@ class RDFread(CGRRead):
             for j in reaction[i]:
                 g = nx.Graph()
                 for k, l in enumerate(j['atoms']):
-                    g.add_node(maps[i][k + shift], element=l['element'], mark=l['mark'],  x=l['x'], y=l['y'], z=l['z'],
+                    g.add_node(maps[i][k + shift], element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                                s_charge=l['charge'], s_stereo=None,
                                p_charge=l['charge'], p_stereo=None,
                                map=maps[i][k + shift], isotop=l['isotop'])

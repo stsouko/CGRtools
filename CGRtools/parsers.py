@@ -24,13 +24,14 @@ from CGRtools.main_condenser import condenser_core
 from CGRtools.main_fear import fear_core
 from CGRtools.main_balanser import balanser_core
 
+
 def fear_common(parser):
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--c_rules", "-cr", type=argparse.FileType('r'), help="correct reactions type file")
     group.add_argument("--e_rules", "-er", type=argparse.FileType('r'), help="incorrect reactions type file")
 
     parser.add_argument("--map_repair", "-r", action='store_true', help="repair incorrect AAM [experimental]")
-    parser.add_argument("--r_templates", "-R", type=argparse.FileType('r'), help="RDF with AAM repair rules")
+
 
 def condenser_common(parser):
     parser.add_argument("--type", "-t", type=str, default='0',
@@ -42,11 +43,8 @@ def condenser_common(parser):
                              "also supported CGR on parts of reagents or/and products molecules (e.g. 101,102,-201 - "
                              "CGR on only first and second reagents molecules with all products molecules excluded "
                              "first).")
-
     parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
 
-    parser.add_argument("--check", "-C", action='store_true',
-                        help="check reactions for correct map or type. rule based")
 
 def balanser(subparsers):
     parser = subparsers.add_parser('balanser', help='reaction balanser')
@@ -58,7 +56,14 @@ def balanser(subparsers):
     condenser_common(parser)
     fear_common(parser)
 
+    parser.add_argument("--balance", "-b", type=int, default=0, choices=[1, 2],
+                        help="repair unbalanced reactions [experimental]. 1 - template based, 2 - template in existing "
+                             "inputfile")
+    parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'),
+                        help="RDF with reactions balancing rules")
+
     parser.set_defaults(func=balanser_core)
+
 
 def condenser(subparsers):
     parser = subparsers.add_parser('condenser', help='CGR generator')

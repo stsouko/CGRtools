@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 # -*- coding: utf-8 -*-
-
 #
 #  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
@@ -22,9 +21,10 @@
 #  MA 02110-1301, USA.
 #
 import argparse
-#import argcomplete
+import importlib
+from importlib.util import find_spec
 from CGRtools.version import version
-from CGRtools.parsers import condenser
+from CGRtools.parsers import condenser, balanser, fear
 
 
 def parse_args():
@@ -33,10 +33,15 @@ def parse_args():
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
 
     condenser(subparsers)
+    balanser(subparsers)
+    fear(subparsers)
 
-#    argcomplete.autocomplete(parser)
+    if find_spec('argcomplete'):
+        argcomplete = importlib.import_module('argcomplete')
+        argcomplete.autocomplete(parser)
 
     return parser
+
 
 def main():
     parser = parse_args()
