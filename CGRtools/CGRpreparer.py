@@ -29,7 +29,7 @@ class CGRPreparer(object):
     def __init__(self, **kwargs):
         self.__cgrtype = self.__getcgrtype(kwargs['type'])
         self.__cgr = self.__tocgr()
-        self.__stereo = self.__removestereo if kwargs['stereo'] else lambda x: x
+        self.__stereo = self.__removestereo if not kwargs['stereo'] else lambda x: x
 
     def __removestereo(self, g):
         for n in g.nodes():

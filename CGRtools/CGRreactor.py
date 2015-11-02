@@ -55,7 +55,9 @@ class CGRReactor(object):
                 gm = gis.GraphMatcher(g, i['substrats'], node_match=self.__node_match, edge_match=self.__edge_match)
                 if gm.subgraph_is_isomorphic():
                     return dict(substrats=g,
-                                products=self.__remapgroup(i['products'], g, {y: x for x, y in gm.mapping.items()})[0])
+                                products=self.__remapgroup(i['products'], g, {y: x for x, y in gm.mapping.items()})[0]
+                                if 'products' in i else None)
+            return None
 
         return searcher
 

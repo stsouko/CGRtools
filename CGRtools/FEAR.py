@@ -21,9 +21,12 @@
 #
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
+from CGRtools.CGRpreparer import CGRPreparer
 
 
-class FEAR:
+class FEAR(CGRPreparer):
+    def __init__(self, **kwargs):
+        CGRPreparer.__init__(self, **kwargs)
 
     def __chkmap(self, data):
         print(self.__rules(data))

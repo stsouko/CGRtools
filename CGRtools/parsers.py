@@ -27,8 +27,8 @@ from CGRtools.main_balanser import balanser_core
 
 def fear_common(parser):
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--c_rules", "-cr", type=argparse.FileType('r'), help="correct reactions type file")
-    group.add_argument("--e_rules", "-er", type=argparse.FileType('r'), help="incorrect reactions type file")
+    group.add_argument("--c_rules", "-cr", type=argparse.FileType('r'), help="correct reactions type file (SDF)")
+    group.add_argument("--e_rules", "-er", type=argparse.FileType('r'), help="incorrect reactions type file (RDF)")
 
     parser.add_argument("--map_repair", "-r", action='store_true', help="repair incorrect AAM [experimental]")
 

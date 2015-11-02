@@ -19,12 +19,13 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from .CGRrw import CGRRead
+from CGRtools.CGRrw import CGRRead, fromMDL, toMDL, bondlabels
+import networkx as nx
 
 
 class SDFread(CGRRead):
     def __init__(self, file):
-        super().__init__()
+        CGRRead.__init__(self)
         self.__SDFfile = file
 
     def readprop(self):
@@ -36,77 +37,122 @@ class SDFread(CGRRead):
         return prop
 
     def readdata(self):
-        '''парсер SDF файлов. возвращает пакет данных вида
-        {'substrats':substrats, 'products':products, 'molecules':{'номер':{'atomlist':atomlist, 'bondmatrix':matrix}}}
-        '''
-        with open(self.__SDFfile) as f:
-            im = 3
-            atomcount = -1
-            bondcount = -1
-            failkey = False
-            meta = None
-            molecule = None
-            mend = False
-            for n, line in enumerate(f):
-                if failkey and "$$$$" not in line[0:4]:
-                    continue
-                elif "$$$$" in line[0:4]:
-                    if molecule:
-                        yield molecule
-
-                    meta = None
-                    im = n + 4
-                    failkey = False
-                    mend = False
-
-                elif n == im:
-                    atoms, bonds, prop = [], [], dict(STEREO_DAT={})
-
+        im = 3
+        atomcount = -1
+        bondcount = -1
+        failkey = False
+        meta = None
+        molecule = None
+        mend = False
+        for n, line in enumerate(self.__SDFfile):
+            if failkey and "$$$$" not in line[0:4]:
+                continue
+            elif "$$$$" in line[0:4]:
+                if molecule:
                     try:
-                        atomcount = int(line[0:3]) + n
-                        bondcount = int(line[3:6]) + atomcount
+                        yield self.__getGraphs(molecule)
                     except:
-                        failkey = True
-                        molecule = None
+                        pass
 
-                elif n <= atomcount:
-                    atoms.append(dict(element=line[31:34].strip(), isotop=line[34:36].strip(),
-                                      charge=line[38:39].strip(), map=int(line[60:63]),
-                                      mark=line[51:54].strip(),
-                                      x=float(line[0:10]),
-                                      y=float(line[10:20]),
-                                      z=float(line[20:30])))
+                meta = None
+                im = n + 4
+                failkey = False
+                mend = False
 
-                elif n <= bondcount:
-                    try:
-                        bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, line[6:9].strip(),
-                                      line[9:12].strip(), line[15:18].strip()))
-                    except:
-                        failkey = True
-                        molecule = None
+            elif n == im:
+                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}}
 
-                elif "M  END" in line:
-                    mend = True
-                    molecule = dict(bonds=bonds, atoms=atoms, prop=prop, cgr=self.getdata())
+                try:
+                    atomcount = int(line[0:3]) + n
+                    bondcount = int(line[3:6]) + atomcount
+                except:
+                    failkey = True
+                    molecule = None
 
-                elif n > bondcount and not mend:
-                    try:
-                        self.collect(line)
-                    except:
-                        failkey = True
-                        molecule = None
+            elif n <= atomcount:
+                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=line[34:36].strip(),
+                                              charge=int(line[38:39]),
+                                              map=int(line[60:63]), mark=line[51:54].strip(),
+                                              x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
 
-                elif n > bondcount:
-                    try:
-                        if '>  <' in line:
-                            meta = n
-                            mkey = line.strip()[4:-1]
-                            prop[mkey] = ''
-                        elif meta:
-                            prop[mkey] += line.strip()
-                    except:
-                        failkey = True
-                        molecule = None
-            else:
-                raise StopIteration
+            elif n <= bondcount:
+                try:
+                    molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9])))
+                except:
+                    failkey = True
+                    molecule = None
 
+            elif "M  END" in line:
+                mend = True
+                molecule['CGR_DAT'] = self.getdata()
+
+            elif n > bondcount and not mend:
+                try:
+                    self.collect(line)
+                except:
+                    failkey = True
+                    molecule = None
+
+            elif n > bondcount:
+                try:
+                    if '>  <' in line:
+                        meta = True
+                        mkey = line.strip()[4:-1]
+                        molecule['meta'][mkey] = ''
+                    elif meta:
+                        molecule['meta'][mkey] += line.strip() + ' '
+                except:
+                    failkey = True
+                    molecule = None
+        else:
+            raise StopIteration
+
+    def __getGraphs(self, molecule):
+        g = nx.Graph()
+        for k, l in enumerate(molecule['atoms'], start=1):
+            g.add_node(k, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                       s_charge=l['charge'], s_stereo=None,
+                       p_charge=l['charge'], p_stereo=None,
+                       map=l['map'], isotop=l['isotop'])
+
+        for k, l, m in molecule['bonds']:
+            g.add_edge(k, l,
+                       s_bond=m, s_stereo=None,
+                       p_bond=m, p_stereo=None)
+
+        for k in molecule['CGR_DAT']:
+            atom1 = k['atoms'][0] + 1
+            atom2 = k['atoms'][-1] + 1
+
+            if k['type'] == 'dynatomstereo':
+                g.node[atom1]['s_stereo'], *_, g.node[atom1]['p_stereo'] = k['value'].split('>')
+
+            elif k['type'] == 'atomstereo':
+                g.node[atom1]['s_stereo'] = g.node[atom1]['p_stereo'] = k['value']
+
+            elif k['type'] == 'dynatom':
+                key = k['value'][0]
+                diff = int(k['value'][1:])
+                if key == 'c':  # update atom charges from CGR
+                    s_charge = fromMDL.get(g.node[atom1]['s_charge'], 0)
+                    g.node[atom1]['p_charge'] = toMDL.get(s_charge + diff, 0)
+
+                elif key == '*':
+                    pass  # not implemented
+
+            elif k['type'] == 'dynbond':
+                val = k['value'].split('>')
+                g.edge[atom1][atom2]['s_bond'] = bondlabels.get(val[0])
+                g.edge[atom1][atom2]['p_bond'] = bondlabels.get(val[-1])
+
+            elif k['type'] == 'bondstereo':
+                g.edge[atom1][atom2]['s_stereo'] = g.edge[atom1][atom2]['p_stereo'] = k['value']
+
+            elif k['type'] == 'dynbondstereo':
+                val = k['value'].split('>')
+                g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = val
+
+            elif k['type'] == 'extrabond':
+                g.edge[atom1][atom2]['s_bond'], g.edge[atom1][atom2]['p_bond'] = k['value']
+
+        return dict(meta=molecule['meta'], structure=g)

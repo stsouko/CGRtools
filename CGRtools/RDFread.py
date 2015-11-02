@@ -20,9 +20,8 @@
 #  MA 02110-1301, USA.
 #
 from collections import defaultdict
-from .CGRrw import CGRRead
 import networkx as nx
-from .CGRrw import fromMDL, toMDL, bondlabels
+from CGRtools.CGRrw import CGRRead, fromMDL, toMDL, bondlabels
 
 
 class RDFread(CGRRead):

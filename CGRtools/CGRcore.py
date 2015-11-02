@@ -24,6 +24,7 @@ from CGRtools.CGRreactor import CGRReactor
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
 from CGRtools.RDFread import RDFread
+from CGRtools.SDFread import SDFread
 
 
 class CGRcore(CGRPreparer, CGRReactor):
@@ -58,14 +59,18 @@ class CGRcore(CGRPreparer, CGRReactor):
                          nodes=dict(substrats=dict(p_charge='s_charge', p_stereo='s_stereo'),
                                     products=dict(s_charge='p_charge', s_stereo='p_stereo')))
 
-    def __gettemplates(self, templates):
+    def __gettemplates(self, templates, isreaction=True):
         if templates:
-            source = RDFread(templates)
+            source = RDFread(templates) if isreaction else SDFread(templates)
+
             templates = []
             for template in source.readdata():
-                matrix = self.preparetemplate(template)
-                nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
-                nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
+                if isreaction:
+                    matrix = self.preparetemplate(template)
+                    nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
+                    nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
+                else:
+                    matrix = dict(substrats=template['structure'])
                 templates.append(matrix)
             return templates
 
