@@ -36,14 +36,16 @@ class CGRcore(CGRPreparer, CGRReactor):
         if kwargs['balance'] != 2:
             self.__maprepare = kwargs['map_repair']
             if kwargs['c_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.__gettemplates(kwargs['c_rules'])), True)
+                self.chkmap = self.__chkmap(self.searchtemplate(self.__gettemplates(kwargs['c_rules'],
+                                                                                    isreaction=False),
+                                                                patch=False), True)
             elif kwargs['e_rules']:
                 self.chkmap = self.__chkmap(self.searchtemplate(self.__gettemplates(kwargs['e_rules'])), False)
 
         if kwargs['balance'] == 1 and self.acceptrepair():
             self.__step_first, self.__step_second = self.__compose, True
         elif kwargs['balance'] == 2 and self.acceptrepair():
-            self.__step_first, self.__step_second = self.__patch, False
+            self.__step_first, self.__step_second = patcher, False
         else:
             self.__step_first, self.__step_second = self.__compose, False
 
@@ -70,7 +72,7 @@ class CGRcore(CGRPreparer, CGRReactor):
                     nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
                     nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
                 else:
-                    matrix = dict(substrats=template['structure'])
+                    matrix = dict(substrats=template['structure'], meta=template['meta'])
                 templates.append(matrix)
             return templates
 
@@ -103,15 +105,6 @@ class CGRcore(CGRPreparer, CGRReactor):
         for n, m, j in g.edges(common, data=True):
             for i in {'p_bond', 'p_stereo', 's_bond', 's_stereo'}.difference(j):
                 g[n][m][i] = None
-        return g
-
-    @staticmethod
-    def __patch(matrix):
-        """ remove edges bw common nodes. add edges from template and replace nodes data
-        """
-        g = matrix['substrats'].copy()
-        g.remove_edges_from(itertools.combinations(matrix['products'], 2))
-        g = nx.compose(g, matrix['products'])
         return g
 
     def __disscenter(self):
@@ -147,7 +140,7 @@ class CGRcore(CGRPreparer, CGRReactor):
                     if not match:
                         return g
                     elif self.__maprepare:
-                        g = self.__patch(match)
+                        g = patcher(match)
                         return g
                 raise Exception
 
@@ -167,7 +160,7 @@ class CGRcore(CGRPreparer, CGRReactor):
             while True:
                 patch = self.searchpatch(g)
                 if patch:
-                    g = self.__patch(patch)
+                    g = patcher(patch)
                 else:
                     break
 
@@ -182,3 +175,13 @@ class CGRcore(CGRPreparer, CGRReactor):
         matrix = self.__dissCGR(self.getCGR(data))
         matrix['meta'] = data['meta']
         return matrix
+
+
+def patcher(matrix):
+    """ remove edges bw common nodes. add edges from template and replace nodes data
+    :param matrix: dict
+    """
+    g = matrix['substrats'].copy()
+    g.remove_edges_from(itertools.combinations(matrix['products'], 2))
+    g = nx.compose(g, matrix['products'])
+    return g

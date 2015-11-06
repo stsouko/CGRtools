@@ -46,8 +46,12 @@ class CGRPreparer(object):
         return matrix
 
     def preparetemplate(self, data):
+        products = self.__stereo(nx.union_all(data['products']))
+        for n, d in products.nodes(data=True):
+            if d['element'] in ('A', '*'):
+                products.node[n].pop('element')
         return dict(substrats=self.__stereo(nx.union_all(data['substrats'])),
-                    products=self.__stereo(nx.union_all(data['products'])))
+                    products=products, meta=data['meta'])
 
     def getformattedcgr(self, graph):
         data = dict(atoms=[], bonds=[], CGR_DAT=[])

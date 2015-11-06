@@ -18,17 +18,19 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import operator
 from collections import defaultdict
 from networkx.algorithms import isomorphism as gis
 import networkx as nx
 
 
 class CGRReactor(object):
-    def __init__(self, templates):
-        self.searchpatch = self.searchtemplate(templates) if templates else lambda _: None
+    def __init__(self, templates, deep=False):
+        self.searchpatch = self.searchtemplate(templates, deep=deep) if templates else lambda _: None
         self.__rctemplate = self.__reactioncenter()
-        self.__node_match = gis.categorical_node_match(['s_stereo', 'p_stereo', 'element', 'isotop', 's_charge',
-                                                        'p_charge'], [None] * 6)
+        self.__node_match = gis.generic_node_match(['element', 's_stereo', 'p_stereo', 'isotop', 's_charge',
+                                                    'p_charge'], [None] * 6,
+                                                   [lambda a, b: a in b] + [operator.eq]*5)
         self.__edge_match = gis.categorical_edge_match(['s_bond', 'p_bond', 's_stereo', 'p_stereo'], [None] * 4)
 
         self.__node_match_products = gis.categorical_node_match(['p_stereo', 'element', 'isotop', 'p_charge'],
@@ -49,14 +51,21 @@ class CGRReactor(object):
         g3.add_edges_from([(1, 2, dict(s_bond=None, p_bond=1))])
         return g1, g2, g3
 
-    def searchtemplate(self, templates):
+    def spgraphmatcher(self, g, h):
+        return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
+
+    def searchtemplate(self, templates, deep=False, patch=True):
         def searcher(g):
             for i in templates:
-                gm = gis.GraphMatcher(g, i['substrats'], node_match=self.__node_match, edge_match=self.__edge_match)
-                if gm.subgraph_is_isomorphic():
-                    return dict(substrats=g,
-                                products=self.__remapgroup(i['products'], g, {y: x for x, y in gm.mapping.items()})[0]
-                                if 'products' in i else None)
+                gm = self.spgraphmatcher(g, i['substrats'])
+                for j in gm.subgraph_isomorphisms_iter():
+                    res = dict(substrats=g, meta=i['meta'],
+                               products=self.__remapgroup(i['products'], g,
+                                                          {y: x for x, y in j.items()})[0] if patch else None)
+                    if deep:
+                        yield res
+                    else:
+                        return res
             return None
 
         return searcher

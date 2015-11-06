@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of FEAR (C) Ramil Nugmanov <stsouko@live.ru>.
+# This file is part of CGRTools (C) Ramil Nugmanov <stsouko@live.ru>.
 #
 #  fragger is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
@@ -124,35 +124,6 @@ class SDFread(CGRRead):
             atom1 = k['atoms'][0] + 1
             atom2 = k['atoms'][-1] + 1
 
-            if k['type'] == 'dynatomstereo':
-                g.node[atom1]['s_stereo'], *_, g.node[atom1]['p_stereo'] = k['value'].split('>')
-
-            elif k['type'] == 'atomstereo':
-                g.node[atom1]['s_stereo'] = g.node[atom1]['p_stereo'] = k['value']
-
-            elif k['type'] == 'dynatom':
-                key = k['value'][0]
-                diff = int(k['value'][1:])
-                if key == 'c':  # update atom charges from CGR
-                    s_charge = fromMDL.get(g.node[atom1]['s_charge'], 0)
-                    g.node[atom1]['p_charge'] = toMDL.get(s_charge + diff, 0)
-
-                elif key == '*':
-                    pass  # not implemented
-
-            elif k['type'] == 'dynbond':
-                val = k['value'].split('>')
-                g.edge[atom1][atom2]['s_bond'] = bondlabels.get(val[0])
-                g.edge[atom1][atom2]['p_bond'] = bondlabels.get(val[-1])
-
-            elif k['type'] == 'bondstereo':
-                g.edge[atom1][atom2]['s_stereo'] = g.edge[atom1][atom2]['p_stereo'] = k['value']
-
-            elif k['type'] == 'dynbondstereo':
-                val = k['value'].split('>')
-                g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = val
-
-            elif k['type'] == 'extrabond':
-                g.edge[atom1][atom2]['s_bond'], g.edge[atom1][atom2]['p_bond'] = k['value']
+            self.cgr_dat(g, k, atom1, atom2)
 
         return dict(meta=molecule['meta'], structure=g)

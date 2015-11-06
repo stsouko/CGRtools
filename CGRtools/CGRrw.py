@@ -29,9 +29,15 @@ bondlabels = {'n': 0, '0': None, '1': 1, '2': 2, '3': 3, 'a': 4, '4': 4, '9': 9,
 class CGRRead:
     def __init__(self):
         self.__prop = {}
+        self.__mendeleytable = self.__mendeley
+        self.__mendeleyset = set(self.__mendeleytable)
 
     def collect(self, line):
-        if 'M  STY' in line:
+        if 'M  ALS' in line:
+            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10])],
+                                           type='atomlist' if line[14] == 'F' else 'atomnotlist',
+                                           value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
+        elif 'M  STY' in line:
             for i in range(int(line[8])):
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
                     self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
@@ -51,17 +57,75 @@ class CGRRead:
             self.__prop[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
 
     __cgrkeys = dict(dynatom=1, dynbond=2, dynatomstereo=1, dynbondstereo=2,
-                     atomstereo=1, bondstereo=2, extrabond=2)
+                     atomstereo=1, bondstereo=2, extrabond=2, atomnotlist=1, atomlist=1)
 
     def getdata(self):
         prop = []
-        #todo: запилить проверки значений от мудаков.
         for i in self.__prop.values():
             if len(i['atoms']) == self.__cgrkeys[i['type']]:
                 prop.append(i)
 
         self.__prop = {}
         return prop
+
+    def cgr_dat(self, g, k, atom1, atom2):
+        if k['type'] == 'dynatomstereo':
+            g.node[atom1]['s_stereo'], *_, g.node[atom1]['p_stereo'] = k['value'].split('>')
+
+        elif k['type'] == 'atomstereo':
+            g.node[atom1]['s_stereo'] = g.node[atom1]['p_stereo'] = k['value']
+
+        elif k['type'] == 'dynatom':
+            key = k['value'][0]
+            diff = int(k['value'][1:])
+            if key == 'c':  # update atom charges from CGR
+                s_charge = fromMDL.get(g.node[atom1]['s_charge'], 0)
+                g.node[atom1]['p_charge'] = toMDL.get(s_charge + diff, 0)
+
+            elif key == '*':
+                pass  # not implemented
+
+        elif k['type'] == 'dynbond':
+            val = k['value'].split('>')
+            g.edge[atom1][atom2]['s_bond'] = bondlabels.get(val[0])
+            g.edge[atom1][atom2]['p_bond'] = bondlabels.get(val[-1])
+
+        elif k['type'] == 'bondstereo':
+            g.edge[atom1][atom2]['s_stereo'] = g.edge[atom1][atom2]['p_stereo'] = k['value']
+
+        elif k['type'] == 'dynbondstereo':
+            val = k['value'].split('>')
+            g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = val
+
+        elif k['type'] == 'extrabond':
+            g.edge[atom1][atom2]['s_bond'], g.edge[atom1][atom2]['p_bond'] = k['value']
+
+        elif k['type'] == 'atomlist':
+            g.node[atom1]['element'] = k['value']
+
+        elif k['type'] == 'atomnotlist':
+            g.node[atom1]['element'] = list(self.__mendeleyset.difference(k['value']))
+
+    __mendeley = {j: i for i, j in enumerate(['H', 'He',
+                                              'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+                                              'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
+                                              'K', 'Ca',
+                                                    'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+                                                          'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
+                                              'Rb', 'Sr',
+                                                    'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd',
+                                                         'In', 'Sn', 'Sb', 'Te', 'I', 'Xe',
+                                              'Cs', 'Ba',
+                                                    'La', 'Ce', 'Pr', 'Nd', 'Pm',
+                                                    'Sm', 'Eu', 'Gd', 'Tb', 'Dy',
+                                                    'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+                                                          'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+                                                         'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
+                                              'Fr', 'Ra',
+                                                    'Ac', 'Th', 'Pa', 'U', 'Np',
+                                                    'Pu', 'Am', 'Cm', 'Bk', 'Cf',
+                                                    'Es', 'Fm', 'Md', 'No', 'Lr',
+                                                          'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn'])}
 
 
 class CGRWrite:

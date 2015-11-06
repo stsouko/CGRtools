@@ -24,7 +24,7 @@ import argparse
 import importlib
 from importlib.util import find_spec
 from CGRtools.version import version
-from CGRtools.parsers import condenser, balanser, fear
+from CGRtools.parsers import condenser, balanser, fear, reactmap
 
 
 def parse_args():
@@ -34,6 +34,7 @@ def parse_args():
 
     condenser(subparsers)
     balanser(subparsers)
+    reactmap(subparsers)
     fear(subparsers)
 
     if find_spec('argcomplete'):

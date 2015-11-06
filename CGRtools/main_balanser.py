@@ -33,17 +33,17 @@ def balanser_core(args):
 
     con = CGRcore(**options)
     err = 0
-    num = -1
-    for num, data in enumerate(inputdata.readdata()):
-        if num % 100 == 0:
-            print("reaction: %d" % (num + 1), file=sys.stderr)
+    num = 0
+    for num, data in enumerate(inputdata.readdata(), start=1):
+        if num % 100 == 1:
+            print("reaction: %d" % num, file=sys.stderr)
         try:
             a = con.getFreaction(data)
             outputdata.writedata(a)
         except Exception:
             err += 1
-            print('reaction %d consist errors: %s' % (num + 1, traceback.format_exc()), file=sys.stderr)
-    print('%d from %d reactions balanced' % (num + 1 - err, num + 1), file=sys.stderr)
+            print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
+    print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)
 
 
 

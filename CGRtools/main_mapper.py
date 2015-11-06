@@ -22,26 +22,25 @@
 import sys
 import traceback
 from CGRtools.RDFread import RDFread
-from CGRtools.SDFwrite import SDFwrite
-from CGRtools.CGRcore import CGRcore
+from CGRtools.RDFwrite import RDFwrite
+from CGRtools.Reactmap import ReactMap
 
 
-def condenser_core(args):
+def mapper_core(args):
     options = vars(args)
     inputdata = RDFread(args.input)
-    outputdata = SDFwrite(**options)
+    outputdata = RDFwrite(args.output)
 
-    con = CGRcore(**options)
+    con = ReactMap(**options)
     err = 0
     num = 0
     for num, data in enumerate(inputdata.readdata(), start=1):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = con.getFCGR(data)
+            a = con.getMap(data)
             outputdata.writedata(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
     print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)
-

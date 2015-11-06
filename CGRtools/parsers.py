@@ -23,6 +23,7 @@ import argparse
 from CGRtools.main_condenser import condenser_core
 from CGRtools.main_fear import fear_core
 from CGRtools.main_balanser import balanser_core
+from CGRtools.main_mapper import mapper_core
 
 
 def fear_common(parser):
@@ -94,3 +95,12 @@ def fear(subparsers):
 
     parser.set_defaults(func=fear_core)
 
+
+def reactmap(subparsers):
+    parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)')
+    parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
+    parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+
+    parser.add_argument("--templates", "-t", type=argparse.FileType('r'),
+                        help="RDF with reactions mapping rules")
+    parser.set_defaults(func=mapper_core)
