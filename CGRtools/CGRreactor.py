@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of cgrtools.
 #
 # cgrtools is free software; you can redistribute it and/or modify
@@ -25,17 +25,21 @@ import networkx as nx
 
 
 class CGRReactor(object):
-    def __init__(self, templates, deep=False):
-        self.searchpatch = self.searchtemplate(templates, deep=deep) if templates else lambda _: None
+    def __init__(self, stereo):
         self.__rctemplate = self.__reactioncenter()
-        self.__node_match = gis.generic_node_match(['element', 's_stereo', 'p_stereo', 'isotop', 's_charge',
-                                                    'p_charge'], [None] * 6,
-                                                   [lambda a, b: a in b] + [operator.eq]*5)
-        self.__edge_match = gis.categorical_edge_match(['s_bond', 'p_bond', 's_stereo', 'p_stereo'], [None] * 4)
+        stereo = (['s_stereo', 'p_stereo'], [None] * 2, [operator.eq] * 2) if stereo else ([], [], [])
+        pstereo = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
 
-        self.__node_match_products = gis.categorical_node_match(['p_stereo', 'element', 'isotop', 'p_charge'],
-                                                                [None] * 6)
-        self.__edge_match_products = gis.categorical_edge_match(['p_bond', 'p_stereo'], [None] * 2)
+        self.__node_match = gis.generic_node_match(['element', 'isotop', 's_charge', 'p_charge'] + stereo[0],
+                                                   [None] * 4 + stereo[1],
+                                                   [lambda a, b: a in b if
+                                                   isinstance(b, list) else a == b if b is not None else True] +
+                                                   [lambda a, b: a == b if b is not None else True] * 3 + stereo[2])
+        self.__edge_match = gis.categorical_edge_match(['s_bond', 'p_bond'] + stereo[0], [None] * 2 + stereo[1])
+
+        self.__node_match_products = gis.categorical_node_match(['element', 'isotop', 'p_charge'] + pstereo[0],
+                                                                [None] * 3 + pstereo[1])
+        self.__edge_match_products = gis.categorical_edge_match(['p_bond'] + pstereo[0], [None] + pstereo[1])
 
         self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
 
@@ -54,7 +58,7 @@ class CGRReactor(object):
     def spgraphmatcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
-    def searchtemplate(self, templates, deep=False, patch=True):
+    def searchtemplate(self, templates, patch=True):
         def searcher(g):
             for i in templates:
                 gm = self.spgraphmatcher(g, i['substrats'])
@@ -62,10 +66,8 @@ class CGRReactor(object):
                     res = dict(substrats=g, meta=i['meta'],
                                products=self.__remapgroup(i['products'], g,
                                                           {y: x for x, y in j.items()})[0] if patch else None)
-                    if deep:
-                        yield res
-                    else:
-                        return res
+                    yield res
+
             return None
 
         return searcher
@@ -84,7 +86,7 @@ class CGRReactor(object):
                     lose_bonds[mapping[2]][mapping[1]] = g[mapping[1]][mapping[2]]
                     g.remove_edge(mapping[2], mapping[3])
                     if 4 in mapping:
-                        # todo: есть проблема с ядром графа. можно пропустить фрагментацию...
+                        # todo: есть проблема с ядром графа. можно проебать фрагментацию...
                         lose_map[mapping[3]] = mapping[4]
                         lose_bonds[mapping[3]][mapping[4]] = g[mapping[3]][mapping[4]]
                         g.remove_edge(mapping[3], mapping[4])

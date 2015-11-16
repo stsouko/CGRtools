@@ -34,7 +34,7 @@ class CGRRead:
 
     def collect(self, line):
         if 'M  ALS' in line:
-            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10])],
+            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10]) - 1],
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif 'M  STY' in line:
@@ -56,8 +56,10 @@ class CGRRead:
         elif 'M  SED' in line and int(line[7:10]) in self.__prop:
             self.__prop[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
 
-    __cgrkeys = dict(dynatom=1, dynbond=2, dynatomstereo=1, dynbondstereo=2,
-                     atomstereo=1, bondstereo=2, extrabond=2, atomnotlist=1, atomlist=1)
+    __cgrkeys = dict(dynatom=1, atomstereo=1, dynatomstereo=1,
+                     bondstereo=2, dynbondstereo=2, extrabond=2, dynbond=2,
+                     atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1,
+                     atomnotlist=1, atomlist=1)
 
     def getdata(self):
         prop = []
@@ -94,8 +96,7 @@ class CGRRead:
             g.edge[atom1][atom2]['s_stereo'] = g.edge[atom1][atom2]['p_stereo'] = k['value']
 
         elif k['type'] == 'dynbondstereo':
-            val = k['value'].split('>')
-            g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = val
+            g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = k['value'].split('>')
 
         elif k['type'] == 'extrabond':
             g.edge[atom1][atom2]['s_bond'], g.edge[atom1][atom2]['p_bond'] = k['value']
@@ -105,6 +106,18 @@ class CGRRead:
 
         elif k['type'] == 'atomnotlist':
             g.node[atom1]['element'] = list(self.__mendeleyset.difference(k['value']))
+
+        elif k['type'] == 'atomhyb':
+            g.node[atom1]['s_hyb'] = g.node[atom1]['p_hyb'] = k['value']
+
+        elif k['type'] == 'atomneighbors':
+            g.node[atom1]['s_neighbors'] = g.node[atom1]['p_neighbors'] = k['value']
+
+        elif k['type'] == 'dynatomhyb':
+            g.node[atom1]['s_hyb'], *_, g.node[atom1]['p_hyb'] = k['value'].split('>')
+
+        elif k['type'] == 'dynatomneighbors':
+            g.node[atom1]['s_neighbors'], *_, g.node[atom1]['p_neighbors'] = k['value'].split('>')
 
     __mendeley = {j: i for i, j in enumerate(['H', 'He',
                                               'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',

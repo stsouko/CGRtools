@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2015, 2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -21,48 +21,95 @@
 #
 from CGRtools.CGRpreparer import CGRPreparer
 from CGRtools.CGRreactor import CGRReactor
-from CGRtools.RDFread import RDFread
 from CGRtools.CGRcore import patcher
 import networkx as nx
 
 
 class ReactMap(CGRPreparer, CGRReactor):
-    def __init__(self, **kwargs):
-        CGRPreparer.__init__(self, type='0', stereo=True, **kwargs)
-        CGRReactor.__init__(self, self.__gettemplates(kwargs['templates']), deep=True)
+    def __init__(self, debug=False, **kwargs):
+        CGRPreparer.__init__(self, '0')
+        CGRReactor.__init__(self, kwargs['stereo'])
 
-    def __gettemplates(self, templates):
-        if templates:
-            source = RDFread(templates)
-            templates = []
-            for template in source.readdata():
-                matrix = self.preparetemplate(template)
-                nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
-                nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
-                templates.append(matrix)
-            return templates
-
-        return None
+        templates = self.gettemplates(kwargs['templates'])
+        self.__searchpatch = self.searchtemplate(templates)
+        self.__searcharomatic = self.searchtemplate(self.__aromatize_templates())
+        self.__debug = debug
 
     def getMap(self, data):
-        self.__maps = []
-
         matrix = self.prepare(data)
-        self.__reactpath(matrix, first=True, deep=10)
-        print(self.__maps)
-        goodmap = self.__maps[0]
-        data['substrats'] = [self.getformattedcgr(nx.relabel_nodes(mol, goodmap, copy=True)) for mol in data['substrats']]
+        """ get aromatized products
+        """
+        matrix['products'], arflag = self.__aromatize(matrix['products'])
+
+        """ prototype start. тут надо пилить и пилить чтобы на выхое получитьнормальный goodmap.
+        """
+        res = self.__reactpath(matrix, first=True, deep=3, aromatized=arflag)
+
+        """ end. start normal final.
+        """
+        if res:
+            data['meta']['CGRtools mapping'] = res[1]
+        elif self.__debug:
+            raise Exception
+
+        data['substrats'] = [self.getformattedcgr((nx.relabel_nodes(mol, res[0], copy=True) if res else mol))
+                             for mol in data['substrats']]
         data['products'] = [self.getformattedcgr(mol) for mol in data['products']]
         return data
 
-    def __reactpath(self, matrix, deep=10, first=False):
+    def __reactpath(self, matrix, aromatized=False, deep=3, first=False):
+        morth = []
         if deep:
             paths = [dict(substrats=matrix['substrats'], products=nx.Graph())] if first \
-                else self.searchpatch(matrix['substrats'])
+                else self.__searchpatch(matrix['substrats'])
             for i in paths:
                 intermediate = patcher(i)
-                gm = self.spgraphmatcher(intermediate, matrix['products'])
-                if gm.subgraph_is_isomorphic():
-                    self.__maps.append(gm.mapping)
-                else:
-                    self.__reactpath(dict(substrats=intermediate, products=matrix['products']), deep=deep - 1)
+                forcheck, ar = self.__aromatize(intermediate) if aromatized else (intermediate, False)
+                if ar == aromatized:  # microoptimization
+                    gm = self.spgraphmatcher(forcheck, matrix['products'])
+                    if gm.subgraph_is_isomorphic():
+                        return gm.mapping, float(i['meta']['AAMSCORE'])
+                if deep > 1:
+                    morth.append(intermediate)
+            for i in morth:
+                tmp = self.__reactpath(dict(substrats=i, products=matrix['products']), aromatized=aromatized, deep=deep - 1)
+                if tmp:
+                    return tmp
+        return None
+
+    def __aromatize(self, g):
+        flag = False
+        while True:
+            patch = next(self.__searcharomatic(g), None)
+            if patch:
+                g = patcher(patch)
+                flag = True
+            else:
+                break
+        return g, flag
+
+    @staticmethod
+    def __aromatize_templates():
+        templates = []
+        benzene = nx.Graph()
+        benzene.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
+                                (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
+                                (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=2, p_bond=2))])
+        aromatic = nx.Graph()
+        aromatic.add_edges_from([(1001, 1002, dict(s_bond=4, p_bond=4)), (1002, 1003, dict(s_bond=4, p_bond=4)),
+                                 (1003, 1004, dict(s_bond=4, p_bond=4)), (1004, 1005, dict(s_bond=4, p_bond=4)),
+                                 (1005, 1006, dict(s_bond=4, p_bond=4)), (1006, 1001, dict(s_bond=4, p_bond=4))])
+
+        benzene1 = nx.Graph()
+        benzene1.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
+                                 (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
+                                 (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=4, p_bond=4))])
+        benzene2 = nx.Graph()
+        benzene2.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
+                                 (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=4, p_bond=4)),
+                                 (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=4, p_bond=4))])
+
+        templates.append(dict(substrats=benzene, products=aromatic, meta=None))
+        templates.append(dict(substrats=benzene1, products=aromatic, meta=None))
+        templates.append(dict(substrats=benzene2, products=aromatic, meta=None))
+        return templates

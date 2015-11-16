@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of cgrtools.
 #
 #  cgrtools is free software; you can redistribute it and/or modify
@@ -23,8 +23,8 @@ from .CGRrw import CGRWrite
 
 
 class SDFwrite(CGRWrite):
-    def __init__(self, **kwargs):
-        self.__file = kwargs['output']
+    def __init__(self, output, oldformat=False):
+        self.__file = output
 
         def tooldformat(x, y):
             if x[2] == '8':
@@ -32,7 +32,7 @@ class SDFwrite(CGRWrite):
                     if i['type'] == 'dynbond' and x[:2] == i['atoms']:
                         x = tuple(list(x[:2]) + [i['value'].replace('>', '').replace('0', '8')])
             return x
-        self.__format = tooldformat if kwargs['format'] else lambda x, _: x
+        self.__format = tooldformat if oldformat else lambda x, _: x
 
     def close(self):
         self.__file.close()

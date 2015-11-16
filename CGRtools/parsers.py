@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -103,4 +103,6 @@ def reactmap(subparsers):
 
     parser.add_argument("--templates", "-t", type=argparse.FileType('r'),
                         help="RDF with reactions mapping rules")
+    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
+    parser.add_argument("--debug", action='store_true', help="debug mod")
     parser.set_defaults(func=mapper_core)

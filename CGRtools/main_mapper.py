@@ -26,21 +26,21 @@ from CGRtools.RDFwrite import RDFwrite
 from CGRtools.Reactmap import ReactMap
 
 
-def mapper_core(args):
-    options = vars(args)
-    inputdata = RDFread(args.input)
-    outputdata = RDFwrite(args.output)
-
-    con = ReactMap(**options)
+def mapper_core(**kwargs):
+    inputdata = RDFread(kwargs['input'])
+    outputdata = RDFwrite(kwargs['output'])
+    mapper = ReactMap(**kwargs)
     err = 0
     num = 0
+
     for num, data in enumerate(inputdata.readdata(), start=1):
-        if num % 100 == 1:
+        if kwargs['debug'] or num % 10 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = con.getMap(data)
+            a = mapper.getMap(data)
             outputdata.writedata(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
-    print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)
+            break
+    print('%d from %d reactions mapped' % (num - err, num), file=sys.stderr)

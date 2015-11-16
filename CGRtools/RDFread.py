@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of FEAR (Fix Errors in Automapped Reactions).
 #
 # FEAR is free software; you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 #
 from collections import defaultdict
 import networkx as nx
-from CGRtools.CGRrw import CGRRead, fromMDL, toMDL, bondlabels
+from CGRtools.CGRrw import CGRRead
 
 
 class RDFread(CGRRead):
@@ -108,7 +108,7 @@ class RDFread(CGRRead):
                     if '$DTYPE' in line:
                         meta = line[7:].strip()
                     elif '$RFMT' not in line and meta:
-                        reaction['meta'][meta] += line.strip("$DATUM").strip() + ' '
+                        reaction['meta'][meta] += line.strip("$DATUM").strip()
                 except:
                     failkey = True
                     reaction = None
@@ -162,8 +162,8 @@ class RDFread(CGRRead):
                 g = nx.Graph()
                 for k, l in enumerate(j['atoms']):
                     g.add_node(maps[i][k + shift], element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                               s_charge=l['charge'], s_stereo=None,
-                               p_charge=l['charge'], p_stereo=None,
+                               s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
+                               p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
                                map=maps[i][k + shift], isotop=l['isotop'])
 
                 for k, l, m in j['bonds']:

@@ -2,7 +2,7 @@
 # PYTHON_ARGCOMPLETE_OK
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -48,7 +48,7 @@ def main():
     parser = parse_args()
     args = parser.parse_args()
     if 'func' in args:
-        args.func(args)
+        args.func(**vars(args))
     else:
         parser.print_help()
 

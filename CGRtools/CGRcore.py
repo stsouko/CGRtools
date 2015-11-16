@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of cgrtools.
 #
 # cgrtools is free software; you can redistribute it and/or modify
@@ -23,24 +23,25 @@ from CGRtools.CGRpreparer import CGRPreparer
 from CGRtools.CGRreactor import CGRReactor
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
-from CGRtools.RDFread import RDFread
-from CGRtools.SDFread import SDFread
 
 
 class CGRcore(CGRPreparer, CGRReactor):
     def __init__(self, **kwargs):
-        CGRPreparer.__init__(self, **kwargs)
-        CGRReactor.__init__(self, self.__gettemplates(kwargs['b_templates']))
+        CGRPreparer.__init__(self, kwargs['type'])
+        CGRReactor.__init__(self, kwargs['stereo'])
+
+        templates = self.gettemplates(kwargs['b_templates'])
+        self.__searchpatch = self.searchtemplate(templates) if templates else lambda _: iter([None])
 
         self.chkmap = lambda x: x
         if kwargs['balance'] != 2:
             self.__maprepare = kwargs['map_repair']
             if kwargs['c_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.__gettemplates(kwargs['c_rules'],
-                                                                                    isreaction=False),
-                                                                patch=False), True)
+                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['c_rules'], isreaction=False),
+                                                                patch=False))
             elif kwargs['e_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.__gettemplates(kwargs['e_rules'])), False)
+                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['e_rules'])),
+                                            iswhitelist=False)
 
         if kwargs['balance'] == 1 and self.acceptrepair():
             self.__step_first, self.__step_second = self.__compose, True
@@ -51,32 +52,13 @@ class CGRcore(CGRPreparer, CGRReactor):
 
         self.__disstemplate = self.__disscenter()
 
-    __popdict = dict(products=dict(edge=('s_bond', 's_stereo'), node=('s_charge', 's_stereo', 'x', 'y', 'z')),
-                     substrats=dict(edge=('p_bond', 'p_stereo'), node=('p_charge', 'p_stereo')))
-
-    __atrrset = {'p_bond', 'p_stereo', 's_bond', 's_stereo'}
+    __popdict = dict(products=dict(edge=('s_bond', 's_stereo'), node=('s_charge', 's_stereo', 's_neighbors', 's_hyb')),
+                     substrats=dict(edge=('p_bond', 'p_stereo'), node=('p_charge', 'p_stereo', 'p_neighbors', 'p_hyb')))
 
     __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond', p_stereo='s_stereo'),
                                     products=dict(s_bond='p_bond', s_stereo='p_stereo')),
                          nodes=dict(substrats=dict(p_charge='s_charge', p_stereo='s_stereo'),
                                     products=dict(s_charge='p_charge', s_stereo='p_stereo')))
-
-    def __gettemplates(self, templates, isreaction=True):
-        if templates:
-            source = RDFread(templates) if isreaction else SDFread(templates)
-
-            templates = []
-            for template in source.readdata():
-                if isreaction:
-                    matrix = self.preparetemplate(template)
-                    nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
-                    nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
-                else:
-                    matrix = dict(substrats=template['structure'], meta=template['meta'])
-                templates.append(matrix)
-            return templates
-
-        return None
 
     def __compose(self, data):
         """ remove from union graphs of products or substrats data about substrats or products
@@ -90,9 +72,9 @@ class CGRcore(CGRPreparer, CGRReactor):
             for n, m in matrix[i].edges(common):
                 for j in self.__popdict[i]['edge']:
                     matrix[i][n][m].pop(j)
-            for n in common:
-                for j in self.__popdict[i]['node']:
-                    matrix[i].node[n].pop(j)
+        for n in common:
+            for j in self.__popdict['products']['node']:
+                matrix['products'].node[n].pop(j)
 
         """ compose graphs. kostyl
         """
@@ -100,7 +82,7 @@ class CGRcore(CGRPreparer, CGRReactor):
         g.add_nodes_from(matrix['products'].nodes(data=True))
         g.add_edges_from(matrix['products'].edges(data=True))
 
-        """ add lost data
+        """ add lost bond data
         """
         for n, m, j in g.edges(common, data=True):
             for i in {'p_bond', 'p_stereo', 's_bond', 's_stereo'}.difference(j):
@@ -129,11 +111,11 @@ class CGRcore(CGRPreparer, CGRReactor):
                 tmp[category].append(self.getformattedcgr(mol))
         return tmp
 
-    def __chkmap(self, rsearcher, rtype):
+    def __chkmap(self, rsearcher, iswhitelist=True):
         def searcher(g):
             while True:
-                match = rsearcher(g)
-                if rtype:
+                match = next(rsearcher(g), None)
+                if iswhitelist:
                     if match:
                         return g
                 else:
@@ -158,7 +140,7 @@ class CGRcore(CGRPreparer, CGRReactor):
             '''
             g = self.clonesubgraphs(g)
             while True:
-                patch = self.searchpatch(g)
+                patch = next(self.__searchpatch(g), None)
                 if patch:
                     g = patcher(patch)
                 else:

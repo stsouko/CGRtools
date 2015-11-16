@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -26,12 +26,11 @@ from CGRtools.SDFwrite import SDFwrite
 from CGRtools.CGRcore import CGRcore
 
 
-def condenser_core(args):
-    options = vars(args)
-    inputdata = RDFread(args.input)
-    outputdata = SDFwrite(**options)
+def condenser_core(**kwargs):
+    inputdata = RDFread(kwargs['input'])
+    outputdata = SDFwrite(kwargs['output'], oldformat=kwargs.get('format'))
 
-    con = CGRcore(**options)
+    con = CGRcore(**kwargs)
     err = 0
     num = 0
     for num, data in enumerate(inputdata.readdata(), start=1):
@@ -43,5 +42,5 @@ def condenser_core(args):
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
-    print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)
+    print('%d from %d reactions condensed' % (num - err, num), file=sys.stderr)
 

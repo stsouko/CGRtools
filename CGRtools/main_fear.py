@@ -25,10 +25,9 @@ from CGRtools.RDFwrite import RDFwrite
 from CGRtools.FEAR import FEAR
 
 
-def fear_core(args):
-    options = vars(args)
-    inputdata = RDFread(args.input)
-    outputdata = RDFwrite(args.output)
+def fear_core(**kwargs):
+    inputdata = RDFread(kwargs['input'])
+    outputdata = RDFwrite(kwargs['output'])
     fear = FEAR()
     #con = CGRcore(balance=0, type='0', **options)
     err = 0

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of cgrtools.
 #
 # cgrtools is free software; you can redistribute it and/or modify
@@ -22,36 +22,46 @@ from collections import defaultdict
 import copy
 from itertools import product
 import networkx as nx
-from .CGRrw import fromMDL
+from CGRtools.CGRrw import fromMDL
+from CGRtools.RDFread import RDFread
+from CGRtools.SDFread import SDFread
 
 
 class CGRPreparer(object):
-    def __init__(self, **kwargs):
-        self.__cgrtype = self.__getcgrtype(kwargs['type'])
+    def __init__(self, cgrtype):
+        self.__cgrtype = self.__getcgrtype(cgrtype)
         self.__cgr = self.__tocgr()
-        self.__stereo = self.__removestereo if not kwargs['stereo'] else lambda x: x
-
-    def __removestereo(self, g):
-        for n in g.nodes():
-            g.node[n]['s_stereo'] = g.node[n]['p_stereo'] = None
-        for n, m in g.edges():
-            g[n][m]['s_stereo'] = g[n][m]['p_stereo'] = None
-        return g
 
     def acceptrepair(self):
         return self.__cgrtype not in (1, 2, 3, 4, 5, 6)
 
-    def prepare(self, data):
-        matrix = self.__creatematrix(data)
-        return matrix
+    def gettemplates(self, templates, isreaction=True):
+        if templates:
+            source = RDFread(templates) if isreaction else SDFread(templates)
 
-    def preparetemplate(self, data):
-        products = self.__stereo(nx.union_all(data['products']))
-        for n, d in products.nodes(data=True):
-            if d['element'] in ('A', '*'):
-                products.node[n].pop('element')
-        return dict(substrats=self.__stereo(nx.union_all(data['substrats'])),
-                    products=products, meta=data['meta'])
+            templates = []
+            for template in source.readdata():
+                if isreaction:
+                    matrix = self.preparetemplate(template)
+                    nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
+                    nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
+                else:
+                    matrix = dict(substrats=template['structure'], meta=template['meta'])
+                templates.append(matrix)
+            return templates
+
+        return None
+
+    @staticmethod
+    def preparetemplate(data):
+        res = dict(meta=data['meta'])
+        for i in ('products', 'substrats'):
+            x = nx.union_all(data[i])
+            for n, d in x.nodes(data=True):
+                if d['element'] in ('A', '*'):
+                    x.node[n].pop('element')
+            res[i] = x
+        return res
 
     def getformattedcgr(self, graph):
         data = dict(atoms=[], bonds=[], CGR_DAT=[])
@@ -63,7 +73,17 @@ class CGRPreparer(object):
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            meta = self.__getatomstereo(j['s_stereo'], j['p_stereo'])
+            meta = self.__getstate(j['s_stereo'], j['p_stereo'], 'atomstereo', 'dynatomstereo')
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            meta = self.__getstate(j['s_hyb'], j['p_hyb'], 'atomhyb', 'dynatomhyb')
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            meta = self.__getstate(j['s_neighbors'], j['p_neighbors'], 'atomneighbors', 'dynatomneighbors')
             if meta:
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
@@ -77,12 +97,88 @@ class CGRPreparer(object):
 
             data['bonds'].append((renum[i], renum[l], bond))
 
-            meta = self.__getbondstereo(j['s_stereo'], j['p_stereo'])
+            meta = self.__getstate(j['s_stereo'], j['p_stereo'], 'bondstereo', 'dynbondstereo')
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
                 data['CGR_DAT'].append(meta)
 
         return data
+
+    def prepare(self, data, setlabels=False):
+        def getmols(t):
+            mols = []
+            for x in self.__needed[t]:
+                try:
+                    mols.append(data[t][x])
+                except IndexError:
+                    pass
+            return mols
+
+        def excmols(t):
+            mols = copy.deepcopy(data[t])
+            for x in self.__needed[t]:
+                try:
+                    mols.pop(x)
+                except IndexError:
+                    pass
+            return mols
+
+        if self.__cgrtype == 0:
+            substrats = nx.union_all(data['substrats'])
+            products = nx.union_all(data['products'])
+        elif self.__cgrtype == 1:
+            products = substrats = nx.union_all(data['substrats'])
+        elif self.__cgrtype == 2:
+            products = substrats = nx.union_all(data['products'])
+        elif self.__cgrtype == 3:
+            products = substrats = nx.union_all(getmols('substrats'))
+        elif self.__cgrtype == 4:
+            products = substrats = nx.union_all(getmols('products'))
+        elif self.__cgrtype == 5:
+            products = substrats = nx.union_all(excmols('substrats'))
+        elif self.__cgrtype == 6:
+            products = substrats = nx.union_all(excmols('products'))
+        elif self.__cgrtype == 7:
+            substrats = nx.union_all(getmols('substrats'))
+            products = nx.union_all(getmols('products'))
+        elif self.__cgrtype == 8:
+            substrats = nx.union_all(excmols('substrats'))
+            products = nx.union_all(excmols('products'))
+        elif self.__cgrtype == 9:
+            substrats = nx.union_all(excmols('substrats'))
+            products = nx.union_all(getmols('products'))
+        elif self.__cgrtype == 10:
+            substrats = nx.union_all(getmols('substrats'))
+            products = nx.union_all(excmols('products'))
+        res = dict(substrats=self.__setlabels(substrats), products=self.__setlabels(products)) if setlabels else \
+            dict(substrats=substrats, products=products)
+        return res
+
+    @staticmethod
+    def __setlabels(g):
+        tmp = g.copy()
+        for i in tmp.nodes():
+            label = {'s_hyb': 1, 'p_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0}  # 1- sp3; 2- sp2; 3- sp1; 4- aromatic
+            for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
+                for node, bond in tmp[i].items():
+                    if tmp.node[node]['element'] != 'H' and bond[b]:
+                        label[n] += 1
+
+                    if bond[b] in (1, None):
+                        pass
+                    elif bond[b] == 4:
+                        label[h] = 4
+                    elif bond[b] == 3 or (bond[b] == 2 and label[h] == 2):  # Если есть 3-я или две 2-х связи, то sp1
+                        label[h] = 3
+                    elif bond[b] == 2:  # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
+                        label[h] = 2
+
+            for k in list(label):
+                if tmp.node[i][k] is not None:
+                    label.pop(k)
+
+            tmp.node[i].update(label)
+        return tmp
 
     def __getcgrtype(self, cgrtype):
         needed = [int(x) for x in cgrtype.split(',')]
@@ -119,65 +215,6 @@ class CGRPreparer(object):
                                  products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True))
         return t
 
-    def __creatematrix(self, data):
-        def getmols(t):
-            mols = []
-            for x in self.__needed[t]:
-                try:
-                    mols.append(data[t][x])
-                except IndexError:
-                    pass
-            return mols
-
-        def excmols(t):
-            mols = copy.deepcopy(data[t])
-            for x in self.__needed[t]:
-                try:
-                    mols.pop(x)
-                except IndexError:
-                    pass
-            return mols
-
-        matrix = {}
-
-        if self.__cgrtype == 0:
-            matrix['substrats'] = nx.union_all(data['substrats'])
-            matrix['products'] = nx.union_all(data['products'])
-        elif self.__cgrtype == 1:
-            matrix['products'] = matrix['substrats'] = nx.union_all(data['substrats'])
-        elif self.__cgrtype == 2:
-            matrix['products'] = matrix['substrats'] = nx.union_all(data['products'])
-        elif self.__cgrtype == 3:
-            matrix['products'] = matrix['substrats'] = nx.union_all(getmols('substrats'))
-        elif self.__cgrtype == 4:
-            matrix['products'] = matrix['substrats'] = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 5:
-            matrix['products'] = matrix['substrats'] = nx.union_all(excmols('substrats'))
-        elif self.__cgrtype == 6:
-            matrix['products'] = matrix['substrats'] = nx.union_all(excmols('products'))
-        elif self.__cgrtype == 7:
-            matrix['substrats'] = nx.union_all(getmols('substrats'))
-            matrix['products'] = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 8:
-            matrix['substrats'] = nx.union_all(excmols('substrats'))
-            matrix['products'] = nx.union_all(excmols('products'))
-        elif self.__cgrtype == 9:
-            matrix['substrats'] = nx.union_all(excmols('substrats'))
-            matrix['products'] = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 10:
-            matrix['substrats'] = nx.union_all(getmols('substrats'))
-            matrix['products'] = nx.union_all(excmols('products'))
-
-        # for i, k in (('substrats', 's_part'), ('products', 'p_part')):
-        #     for j in matrix[i]:
-        #         matrix[i].node[j][k] = True
-
-        return dict(substrats=self.__stereo(matrix['substrats']), products=self.__stereo(matrix['products']))
-
-    def __propertyswitcher(self, g, s, t):
-
-        pass
-
     @staticmethod
     def __charge(s, p):
         ss = fromMDL.get(s)
@@ -199,13 +236,8 @@ class CGRPreparer(object):
                 ('8', 's', 'extrabond') if x == 9 else (str(rep.get(x, x)), None, False)
         return cgrdict
 
-    def __getbondstereo(self, s, p):
-        return self.__getstereo(s, p, 'bondstereo', 'dynbondstereo')
-
-    def __getatomstereo(self, s, p):
-        return self.__getstereo(s, p, 'atomstereo', 'dynatomstereo')
-
-    def __getstereo(self, s, p, t1, t2):
+    @staticmethod
+    def __getstate(s, p, t1, t2):
         rep = {None: 'n'}
         s = rep.get(s, s)
         p = rep.get(p, p)

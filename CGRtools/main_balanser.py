@@ -26,12 +26,11 @@ from CGRtools.RDFwrite import RDFwrite
 from CGRtools.CGRcore import CGRcore
 
 
-def balanser_core(args):
-    options = vars(args)
-    inputdata = RDFread(args.input)
-    outputdata = RDFwrite(args.output)
+def balanser_core(**kwargs):
+    inputdata = RDFread(kwargs['input'])
+    outputdata = RDFwrite(kwargs['output'])
 
-    con = CGRcore(**options)
+    con = CGRcore(**kwargs)
     err = 0
     num = 0
     for num, data in enumerate(inputdata.readdata(), start=1):

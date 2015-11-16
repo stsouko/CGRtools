@@ -19,7 +19,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from CGRtools.CGRrw import CGRRead, fromMDL, toMDL, bondlabels
+from CGRtools.CGRrw import CGRRead
 import networkx as nx
 
 
@@ -100,7 +100,7 @@ class SDFread(CGRRead):
                         mkey = line.strip()[4:-1]
                         molecule['meta'][mkey] = ''
                     elif meta:
-                        molecule['meta'][mkey] += line.strip() + ' '
+                        molecule['meta'][mkey] += line.strip()
                 except:
                     failkey = True
                     molecule = None
@@ -111,8 +111,8 @@ class SDFread(CGRRead):
         g = nx.Graph()
         for k, l in enumerate(molecule['atoms'], start=1):
             g.add_node(k, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                       s_charge=l['charge'], s_stereo=None,
-                       p_charge=l['charge'], p_stereo=None,
+                       s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
+                       p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
                        map=l['map'], isotop=l['isotop'])
 
         for k, l, m in molecule['bonds']:

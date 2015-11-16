@@ -3,7 +3,7 @@
 #
 #  version.py
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of cgrtools.
 #
 #  cgrtools is free software; you can redistribute it and/or modify
@@ -24,4 +24,4 @@
 
 
 def version():
-    return '1.1.0'
+    return '1.2.0'
