@@ -31,7 +31,7 @@ class CGRcore(CGRPreparer, CGRReactor):
         CGRReactor.__init__(self, kwargs['stereo'])
 
         templates = self.gettemplates(kwargs['b_templates'])
-        self.__searchpatch = self.searchtemplate(templates) if templates else lambda _: iter([None])
+        self.__searchpatch = self.searchtemplate(templates) if templates else lambda _: iter([])
 
         self.chkmap = lambda x: x
         if kwargs['balance'] != 2:
@@ -71,10 +71,12 @@ class CGRcore(CGRPreparer, CGRReactor):
         for i in ('substrats', 'products'):
             for n, m in matrix[i].edges(common):
                 for j in self.__popdict[i]['edge']:
-                    matrix[i][n][m].pop(j)
+                    if j in matrix[i][n][m]:
+                        matrix[i][n][m].pop(j)
         for n in common:
             for j in self.__popdict['products']['node']:
-                matrix['products'].node[n].pop(j)
+                if j in matrix['products'].node[n]:
+                    matrix['products'].node[n].pop(j)
 
         """ compose graphs. kostyl
         """
@@ -82,8 +84,9 @@ class CGRcore(CGRPreparer, CGRReactor):
         g.add_nodes_from(matrix['products'].nodes(data=True))
         g.add_edges_from(matrix['products'].edges(data=True))
 
-        """ add lost bond data
+        """ get CGR core
         """
+        # todo: запиплить локализацию реакционного центра/ов
         for n, m, j in g.edges(common, data=True):
             for i in {'p_bond', 'p_stereo', 's_bond', 's_stereo'}.difference(j):
                 g[n][m][i] = None
@@ -104,10 +107,12 @@ class CGRcore(CGRPreparer, CGRReactor):
             for mol in components:
                 for n, m, edge_attr in mol.edges(data=True):
                     for i, j in self.__attrcompose['edges'][category].items():
-                        mol[n][m][i] = edge_attr[j]
+                        if j in edge_attr:
+                            mol[n][m][i] = edge_attr[j]
                 for n, node_attr in mol.nodes(data=True):
                     for i, j in self.__attrcompose['nodes'][category].items():
-                        mol.node[n][i] = node_attr[j]
+                        if j in node_attr:
+                            mol.node[n][i] = node_attr[j]
                 tmp[category].append(self.getformattedcgr(mol))
         return tmp
 
@@ -124,7 +129,8 @@ class CGRcore(CGRPreparer, CGRReactor):
                     elif self.__maprepare:
                         g = patcher(match)
                         return g
-                raise Exception
+                print('Map Check FAIL')
+                return False
 
         return searcher
 
@@ -133,7 +139,7 @@ class CGRcore(CGRPreparer, CGRReactor):
 
         ''' fear check. try to remap
         '''
-        g = self.chkmap(g)
+        g = self.chkmap(g) or g
 
         if self.__step_second:
             ''' reaction balancer.
@@ -145,7 +151,6 @@ class CGRcore(CGRPreparer, CGRReactor):
                     g = patcher(patch)
                 else:
                     break
-
         return g
 
     def getFCGR(self, data):

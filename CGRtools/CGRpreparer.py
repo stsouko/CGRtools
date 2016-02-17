@@ -61,6 +61,13 @@ class CGRPreparer(object):
                 if d['element'] in ('A', '*'):
                     x.node[n].pop('element')
             res[i] = x
+
+        for i in set(res['products']).intersection(res['substrats']):
+            for j in {'sp_charge', 'sp_hyb', 'sp_neighbors', 'sp_stereo'}.intersection(res['products'].node[i]):
+                if isinstance(res['products'].node[i][j], list):
+                    res['products'].node[i][j] = {x: y for x, y in zip(res['substrats'].node[i][j],
+                                                                       res['products'].node[i][j])}
+        print(res['products'].node)
         return res
 
     def getformattedcgr(self, graph):
@@ -73,22 +80,22 @@ class CGRPreparer(object):
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            meta = self.__getstate(j['s_stereo'], j['p_stereo'], 'atomstereo', 'dynatomstereo')
+            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
             if meta:
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            meta = self.__getstate(j['s_hyb'], j['p_hyb'], 'atomhyb', 'dynatomhyb')
+            meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
             if meta:
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            meta = self.__getstate(j['s_neighbors'], j['p_neighbors'], 'atomneighbors', 'dynatomneighbors')
+            meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
             if meta:
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            data['atoms'].append(dict(map=i, charge=j['s_charge'], isotop=j['isotop'], element=j['element'],
+            data['atoms'].append(dict(map=i, charge=j['s_charge'], isotop=j['isotop'], element=j.get('element', 'A'),
                                       x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
         for i, l, j in graph.edges(data=True):
             bond, cbond, btype = self.__cgr[j['s_bond']][j['p_bond']]
@@ -97,7 +104,7 @@ class CGRPreparer(object):
 
             data['bonds'].append((renum[i], renum[l], bond))
 
-            meta = self.__getstate(j['s_stereo'], j['p_stereo'], 'bondstereo', 'dynbondstereo')
+            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
                 data['CGR_DAT'].append(meta)
@@ -158,7 +165,8 @@ class CGRPreparer(object):
     def __setlabels(g):
         tmp = g.copy()
         for i in tmp.nodes():
-            label = {'s_hyb': 1, 'p_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0}  # 1- sp3; 2- sp2; 3- sp1; 4- aromatic
+            label = {'s_hyb': 1, 'p_hyb': 1, 'sp_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0, 'sp_neighbors': 0}
+            #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
                 for node, bond in tmp[i].items():
                     if tmp.node[node]['element'] != 'H' and bond[b]:
@@ -172,9 +180,11 @@ class CGRPreparer(object):
                         label[h] = 3
                     elif bond[b] == 2:  # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
                         label[h] = 2
+            for n, m, h in (('s_hyb', 'p_hyb', 'sp_hyb'), ('s_neighbors', 'p_neighbors', 'sp_neighbors')):
+                label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
 
             for k in list(label):
-                if tmp.node[i][k] is not None:
+                if tmp.node[i].get(k) is not None:
                     label.pop(k)
 
             tmp.node[i].update(label)

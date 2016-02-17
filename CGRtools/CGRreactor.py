@@ -27,14 +27,15 @@ import networkx as nx
 class CGRReactor(object):
     def __init__(self, stereo):
         self.__rctemplate = self.__reactioncenter()
-        stereo = (['s_stereo', 'p_stereo'], [None] * 2, [operator.eq] * 2) if stereo else ([], [], [])
+        stereo = (['s_stereo', 'p_stereo', 'sp_stereo'], [None] * 3,
+                  [operator.eq] * 2 + [lambda a, b: a in b if b is not None else True]) if stereo else ([], [], [])
         pstereo = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
 
-        self.__node_match = gis.generic_node_match(['element', 'isotop', 's_charge', 'p_charge'] + stereo[0],
+        self.__node_match = gis.generic_node_match(['element', 's_charge', 'p_charge', 'isotop'] + stereo[0],
                                                    [None] * 4 + stereo[1],
                                                    [lambda a, b: a in b if
-                                                   isinstance(b, list) else a == b if b is not None else True] +
-                                                   [lambda a, b: a == b if b is not None else True] * 3 + stereo[2])
+                                                   isinstance(b, list) else a == b if b is not None else True] * 3 +
+                                                   [lambda a, b: a == b if b is not None else True] + stereo[2])
         self.__edge_match = gis.categorical_edge_match(['s_bond', 'p_bond'] + stereo[0], [None] * 2 + stereo[1])
 
         self.__node_match_products = gis.categorical_node_match(['element', 'isotop', 'p_charge'] + pstereo[0],
@@ -63,6 +64,7 @@ class CGRReactor(object):
             for i in templates:
                 gm = self.spgraphmatcher(g, i['substrats'])
                 for j in gm.subgraph_isomorphisms_iter():
+
                     res = dict(substrats=g, meta=i['meta'],
                                products=self.__remapgroup(i['products'], g,
                                                           {y: x for x, y in j.items()})[0] if patch else None)
@@ -102,6 +104,7 @@ class CGRReactor(object):
         r_group = {}
         x_group = {}
         r_group_clones = defaultdict(list)
+        newcomponents = []
 
         ''' search bond breaks and creations
         '''
@@ -111,7 +114,7 @@ class CGRReactor(object):
         '''
         setlose = set(lose_map.values())
         setlosekey = set(lose_map)
-        newcomponents = []
+
         for i in components:
             x_terminal_atom = setlose.intersection(i)
             r_terminal_atom = setlosekey.intersection(i)
@@ -122,11 +125,10 @@ class CGRReactor(object):
                 r_group[r_terminal_atom.pop()] = i
             else:
                 newcomponents.append(i)
-        components = newcomponents
         ''' search similar R groups and patch.
         '''
         tmp = g.copy()
-        for i in components:
+        for i in newcomponents:
             for k, j in r_group.items():
                 gm = gis.GraphMatcher(j, i, node_match=self.__node_match_products,
                                       edge_match=self.__edge_match_products)

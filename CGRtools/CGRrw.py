@@ -23,7 +23,7 @@ from itertools import count
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
-bondlabels = {'n': 0, '0': None, '1': 1, '2': 2, '3': 3, 'a': 4, '4': 4, '9': 9, 's': 9}
+bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9}
 
 
 class CGRRead:
@@ -71,35 +71,71 @@ class CGRRead:
         return prop
 
     def cgr_dat(self, g, k, atom1, atom2):
+
+        def _parsedyn(target, name):
+            tmp = ([], [])
+            for x in k['value'].split(','):
+                s, *_, p = x.split('>')
+                tmp[0].append(int(s) if name != 'bond' else bondlabels[s])
+                tmp[1].append(int(p) if name != 'bond' else bondlabels[p])
+
+            if len(tmp[0]) == 1:
+                target['s_%s' % name], target['p_%s' % name] = (tmp[0][0], tmp[1][0])
+                target['sp_%s' % name] = (tmp[0][0], tmp[1][0])
+            else:
+                target['sp_%s' % name] = list(zip(*tmp))
+
+        def _parselist(target, name):
+            tmp = [bondlabels[x] if name == 'bond' else int(x) for x in k['value'].split(',')]
+            if len(tmp) == 1:
+                target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp[0]
+            else:
+                target['sp_%s' % name] = tmp
+
         if k['type'] == 'dynatomstereo':
-            g.node[atom1]['s_stereo'], *_, g.node[atom1]['p_stereo'] = k['value'].split('>')
+            _parsedyn(g.node[atom1], 'stereo')
 
         elif k['type'] == 'atomstereo':
-            g.node[atom1]['s_stereo'] = g.node[atom1]['p_stereo'] = k['value']
+            _parselist(g.node[atom1], 'stereo')
 
         elif k['type'] == 'dynatom':
             key = k['value'][0]
-            diff = int(k['value'][1:])
+            diff = k['value'][1:].split(',')
             if key == 'c':  # update atom charges from CGR
-                s_charge = fromMDL.get(g.node[atom1]['s_charge'], 0)
-                g.node[atom1]['p_charge'] = toMDL.get(s_charge + diff, 0)
+                base = fromMDL.get(g.node[atom1]['s_charge'], 0)
+
+                if len(diff) > 1:
+                    g.node[atom1].pop('s_charge')
+                    g.node[atom1].pop('p_charge')
+                    if int(diff[0]) == 0:
+                        g.node[atom1]['sp_charge'] = [toMDL.get(base + int(x), 0) for x in diff]
+                    elif (len(diff) - 1) % 2 == 0:
+                        s = [toMDL.get(base + int(x), 0) for x in [0] + diff[1::2]]
+                        p = [toMDL.get(fromMDL.get(x, 0) + int(y), 0) for x, y in zip(s, diff[::2])]
+                        g.node[atom1]['sp_charge'] = list(zip(s, p))
+
+                else:
+                    g.node[atom1]['p_charge'] = toMDL.get(base + int(diff[0]), 0)
+                    g.node[atom1]['sp_charge'] = (g.node[atom1]['s_charge'], g.node[atom1]['p_charge'])
 
             elif key == '*':
                 pass  # not implemented
 
         elif k['type'] == 'dynbond':
-            val = k['value'].split('>')
-            g.edge[atom1][atom2]['s_bond'] = bondlabels.get(val[0])
-            g.edge[atom1][atom2]['p_bond'] = bondlabels.get(val[-1])
+            g.edge[atom1][atom2].pop('s_bond')
+            g.edge[atom1][atom2].pop('p_bond')
+            _parsedyn(g.edge[atom1][atom2], 'bond')
 
         elif k['type'] == 'bondstereo':
-            g.edge[atom1][atom2]['s_stereo'] = g.edge[atom1][atom2]['p_stereo'] = k['value']
+            _parselist(g.edge[atom1][atom2], 'stereo')
 
         elif k['type'] == 'dynbondstereo':
-            g.edge[atom1][atom2]['s_stereo'], *_, g.edge[atom1][atom2]['p_stereo'] = k['value'].split('>')
+            _parsedyn(g.edge[atom1][atom2], 'stereo')
 
         elif k['type'] == 'extrabond':
-            g.edge[atom1][atom2]['s_bond'], g.edge[atom1][atom2]['p_bond'] = k['value']
+            g.edge[atom1][atom2].pop('s_bond')
+            g.edge[atom1][atom2].pop('p_bond')
+            _parselist(g.edge[atom1][atom2], 'bond')
 
         elif k['type'] == 'atomlist':
             g.node[atom1]['element'] = k['value']
@@ -108,16 +144,16 @@ class CGRRead:
             g.node[atom1]['element'] = list(self.__mendeleyset.difference(k['value']))
 
         elif k['type'] == 'atomhyb':
-            g.node[atom1]['s_hyb'] = g.node[atom1]['p_hyb'] = k['value']
+            _parselist(g.node[atom1], 'hyb')
 
         elif k['type'] == 'atomneighbors':
-            g.node[atom1]['s_neighbors'] = g.node[atom1]['p_neighbors'] = k['value']
+            _parselist(g.node[atom1], 'neighbors')
 
         elif k['type'] == 'dynatomhyb':
-            g.node[atom1]['s_hyb'], *_, g.node[atom1]['p_hyb'] = k['value'].split('>')
+            _parsedyn(g.node[atom1], 'hyb')
 
         elif k['type'] == 'dynatomneighbors':
-            g.node[atom1]['s_neighbors'], *_, g.node[atom1]['p_neighbors'] = k['value'].split('>')
+            _parsedyn(g.node[atom1], 'neighbors')
 
     __mendeley = {j: i for i, j in enumerate(['H', 'He',
                                               'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',

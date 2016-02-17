@@ -43,4 +43,10 @@ def mapper_core(**kwargs):
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
             break
+
+    dump = RDFwrite(open('TEMP.DUMP.rdf', 'w'))
+    for i in mapper.dumptemplates():
+        dump.writedata(i)
+
+
     print('%d from %d reactions mapped' % (num - err, num), file=sys.stderr)

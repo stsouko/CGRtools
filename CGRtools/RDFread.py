@@ -162,14 +162,16 @@ class RDFread(CGRRead):
                 g = nx.Graph()
                 for k, l in enumerate(j['atoms']):
                     g.add_node(maps[i][k + shift], element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                               s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
-                               p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
+                               s_charge=l['charge'],  # s_stereo=None, s_hyb=None, s_neighbors=None,
+                               p_charge=l['charge'],  # p_stereo=None, p_hyb=None, p_neighbors=None,
+                               sp_charge=l['charge'],
                                map=maps[i][k + shift], isotop=l['isotop'])
 
                 for k, l, m in j['bonds']:
                     g.add_edge(maps[i][k + shift], maps[i][l + shift],
-                               s_bond=m, s_stereo=None,
-                               p_bond=m, p_stereo=None)
+                               s_bond=m,  # s_stereo=None,
+                               p_bond=m,  # p_stereo=None
+                               sp_bond=m)
 
                 for k in j['CGR_DAT']:
                     atom1 = maps[i][k['atoms'][0] + shift]

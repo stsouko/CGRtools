@@ -30,50 +30,80 @@ class ReactMap(CGRPreparer, CGRReactor):
         CGRPreparer.__init__(self, '0')
         CGRReactor.__init__(self, kwargs['stereo'])
 
-        templates = self.gettemplates(kwargs['templates'])
-        self.__searchpatch = self.searchtemplate(templates)
+        self.__coretemplates = self.gettemplates(kwargs['templates'])
+        self.__preparesearchpatcher()
+
         self.__searcharomatic = self.searchtemplate(self.__aromatize_templates())
         self.__debug = debug
 
+    def __preparesearchpatcher(self, templates=None):
+        if templates:
+            self.__templates = templates + self.__templates
+        else:
+            self.__templates = self.__coretemplates
+        self.__searchpatch = self.searchtemplate(self.__templates)
+
+    def dumptemplates(self):
+        return [dict(meta=i['meta'],
+                     substrats=[self.getformattedcgr(i['substrats'])],
+                     products=[self.getformattedcgr(i['products'])]) for i in self.__templates]
+
     def getMap(self, data):
-        matrix = self.prepare(data)
+        matrix = self.prepare(data, setlabels=True)
         """ get aromatized products
         """
         matrix['products'], arflag = self.__aromatize(matrix['products'])
 
-        """ prototype start. тут надо пилить и пилить чтобы на выхое получитьнормальный goodmap.
+        """ prototype start. тут надо пилить и пилить чтобы на выхое получить нормальный map.
         """
-        res = self.__reactpath(matrix, first=True, deep=3, aromatized=arflag)
+        res = self.__reactpath(matrix, first=True, deep=10, aromatized=arflag)
 
         """ end. start normal final.
         """
         if res:
-            data['meta']['CGRtools mapping'] = res[1]
+            data['meta']['CGRtools mapping'] = res['score']
+            self.__preparesearchpatcher(templates=[dict(substrats=res.get('substrats', data['substrats']),
+                                                        products=res['products'],
+                                                        meta=dict(AAMSCORE=res['score'], AAMID=10))])
         elif self.__debug:
             raise Exception
 
-        data['substrats'] = [self.getformattedcgr((nx.relabel_nodes(mol, res[0], copy=True) if res else mol))
+        data['substrats'] = [self.getformattedcgr((nx.relabel_nodes(mol, res['mapping'], copy=True) if res else mol))
                              for mol in data['substrats']]
         data['products'] = [self.getformattedcgr(mol) for mol in data['products']]
         return data
 
-    def __reactpath(self, matrix, aromatized=False, deep=3, first=False):
+    def __reactpath(self, matrix, aromatized=False, deep=3, first=False, patchlist=None, score=0):
         morth = []
+        if first:
+            patchlist = []
+
         if deep:
-            paths = [dict(substrats=matrix['substrats'], products=nx.Graph())] if first \
-                else self.__searchpatch(matrix['substrats'])
+            paths = [dict(substrats=matrix['substrats'], products=nx.Graph(), meta=dict(AAMSCORE=0, AAMID=0))] \
+                if first else self.__searchpatch(matrix['substrats'])
             for i in paths:
                 intermediate = patcher(i)
                 forcheck, ar = self.__aromatize(intermediate) if aromatized else (intermediate, False)
                 if ar == aromatized:  # microoptimization
                     gm = self.spgraphmatcher(forcheck, matrix['products'])
                     if gm.subgraph_is_isomorphic():
-                        return gm.mapping, float(i['meta']['AAMSCORE'])
+                        # todo: generate new mapping rule
+                        base = nx.Graph()
+                        print(len(patchlist))
+                        for x in (patchlist + [i['products']]):
+                            base = patcher(dict(substrats=base, products=x))
+                        return dict(mapping=gm.mapping, score=score + float(i['meta']['AAMSCORE']), products=base)
                 if deep > 1:
-                    morth.append(intermediate)
-            for i in morth:
-                tmp = self.__reactpath(dict(substrats=i, products=matrix['products']), aromatized=aromatized, deep=deep - 1)
+                    morth.append((intermediate, patchlist + [i['products']], score + float(i['meta']['AAMSCORE'])))
+            for i, j, s in morth:
+                tmp = self.__reactpath(dict(substrats=i, products=matrix['products']), aromatized=aromatized,
+                                       deep=deep-1, patchlist=j, score=s)
                 if tmp:
+                    if first:
+                        # todo: slice substrat atoms
+                        g = matrix['substrats'].copy()
+                        g.remove_nodes_from(set(g).difference(tmp['products']))
+                        tmp['substrats'] = g
                     return tmp
         return None
 
@@ -91,10 +121,10 @@ class ReactMap(CGRPreparer, CGRReactor):
     @staticmethod
     def __aromatize_templates():
         templates = []
-        benzene = nx.Graph()
-        benzene.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
-                                (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
-                                (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=2, p_bond=2))])
+        benzene0 = nx.Graph()
+        benzene0.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
+                                 (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
+                                 (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=2, p_bond=2))])
         aromatic = nx.Graph()
         aromatic.add_edges_from([(1001, 1002, dict(s_bond=4, p_bond=4)), (1002, 1003, dict(s_bond=4, p_bond=4)),
                                  (1003, 1004, dict(s_bond=4, p_bond=4)), (1004, 1005, dict(s_bond=4, p_bond=4)),
@@ -109,7 +139,7 @@ class ReactMap(CGRPreparer, CGRReactor):
                                  (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=4, p_bond=4)),
                                  (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=4, p_bond=4))])
 
-        templates.append(dict(substrats=benzene, products=aromatic, meta=None))
+        templates.append(dict(substrats=benzene0, products=aromatic, meta=None))
         templates.append(dict(substrats=benzene1, products=aromatic, meta=None))
         templates.append(dict(substrats=benzene2, products=aromatic, meta=None))
         return templates
