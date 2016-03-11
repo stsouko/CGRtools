@@ -19,177 +19,182 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from collections import Counter, defaultdict
+from itertools import chain, count
 import networkx as nx
-from networkx.algorithms import isomorphism as gis
-from CGRtools.CGRpreparer import CGRPreparer
+from CGRtools.weightable import mendeley, atommass
+from CGRtools.CGRrw import fromMDL
 
 
-class FEAR(CGRPreparer):
-    def __init__(self, **kwargs):
-        CGRPreparer.__init__(self, **kwargs)
+class FEAR(object):
+    def __init__(self, deep=0, isotop=False):
+        self.__deep = list(range(deep))
+        self.__isotop = isotop
 
-    def __chkmap(self, data):
-        print(self.__rules(data))
-        print('#$#$', data)
-        return data
+    def sethashlib(self, data):
+        self.__whash = {x['FEAR_WHASH'] for x in data}
+        self.__lhash = {x['FEAR_LHASH'] for x in data}
+        self.__shash = {x['FEAR_SHASH'] for x in data}
 
-    def __diff(self):
-        diff = []
-        for x, y in list(self.__data['diff'].items()):
-            for w, z in list(y.items()):
-                if (w + 1, x + 1, z) not in diff:
-                    diff += [(x + 1, w + 1, z)]
-        return diff
+    def chkreaction(self, g, full=True):
+        chkd = set()
+        report = set()
 
-    def __reactcenter(self):
-        atoms = []
-        report = []
-        newstruct = 0
+        def dochk(x):
+            weights = self.__getMorgan(x)
+            whash = '.'.join(str(x) for x in sorted(weights.values()))
+            if whash in self.__whash:
+                levels = self.__getLevels(x)
+                lhash = '.'.join(str(x) for x in sorted(levels.values()))
+                if lhash in self.__lhash:
+                    shash = self.getsmarts(x, weights, levels)
+                    if shash in self.__shash:
+                        chkd.update(x)
+                        report.add(shash)
+                        return True
+            return False
 
-        def getsmarts(sub, level):
-            resout = []
-            while sub:
-                self.__nextnumb = self.__numb()
-                res = self.__getSmiles(sub[:1], sub[0], level=level)
-                resout.append(''.join(res[1]))
-                sub = list(set(sub) - res[0])
-            return resout
+        centers = self.getcenters(g)
+        for i in sorted(centers, reverse=True)[:-1]:
+            for j in centers[i]:
+                if not chkd.issuperset(j):
+                    dochk(j)
+        tmp = [chkd.issuperset(i) or dochk(i) for i in centers[0]]
+        return all(tmp) if full else any(tmp), report
 
-        rv = numpy.absolute(self.__data['products']['bondmatrix'] - self.__data['substrats']['bondmatrix'])
-        for i in range(self.__length):
-            if i not in atoms:
-                sub = list(self.__reactcenteratoms([i], i))
-                atoms.extend(sub)
+    def getcenters(self, g):
+        nodes = [set()]
+        """ get nodes of reaction center (dynamic bonds, stereo or charges).
+        """
+        for n, node_attr in g.nodes(data=True):
+            for k, l in (('s_charge', 'p_charge'), ('s_stereo', 'p_stereo')):
+                if node_attr.get(k) != node_attr.get(l):
+                    nodes[0].add(n)
 
-                if len(sub) > 1:
-                    srv = rv[numpy.ix_(sub, sub)].sum()
-                    hashes = []
-                    for j in [2]:#range(2, -1, -1):
-                        mhash = self.__getMorgan(sub, level=j)
-                        mhashkey = tuple(sorted(mhash.values()))
-                        ruledataC = self.__rulesC.get(mhashkey, [0])
-                        ruledataE = self.__rulesE.get(mhashkey, [0])
-                        if ruledataC[0]:
-                            hashes = [ruledataC[1]]
-                            newhash = 0
-                            break
-                        elif ruledataE[0]:
-                            hashes = [ruledataC[1]]
-                            newhash = 1
-                            break
-                        else:
-                            newhash = 1
-                            self.__recsub = sub
-                            self.__smartstarget = 'substrats'
-                            self.__nextmap = self.__numb()
-                            smirks = '.'.join(getsmarts(sub, j))
-                            self.__smartstarget = 'products'
-                            smirks += '>>' + '.'.join(getsmarts(sub, j))
-                            hashes.append("new: %s'%.1f + %s" % (','.join(str(x) for x in mhashkey), srv, smirks))
-                    report.extend(hashes)
-                    newstruct += newhash
-        return (True, report) if not newstruct else (False, report)
+        for *n, node_attr in g.edges(data=True):
+            for k, l in (('s_bond', 'p_bond'), ('s_stereo', 'p_stereo')):
+                if node_attr.get(k) != node_attr.get(l):
+                    nodes[0].update(n)
 
-    __tosmiles = {1: '-', 2: '=', 3: '#', 1.5: ':'}
+        """ get nodes of reaction center and neighbors
+        """
+        for i in self.__deep:
+            nodes.append(set(chain.from_iterable(g.edges(nodes[i]))))
 
-    def __numb(self):
-        i = 1
-        while True:
-            yield i
-            i += 1
+        centers = defaultdict(list)
+        for n, i in enumerate(nodes):
+            for j in nx.connected_component_subgraphs(g.subgraph(i)):
+                centers[n].append(j)
 
-    def __getSmiles(self, trace, inter, level=None):
-        strace = set(trace)
-        rule = {'substrats': lambda x: x < 80, 'products': lambda x: x % 10 != 8}
-        iterlist = set([x for x, y in list(self.__data['diff'][inter].items()) if rule[self.__smartstarget](y)]).intersection(self.__recsub).difference(trace[-2:])
-        #print iterlist, inter, self.__data['diff'][inter]
-        if level == 1:
-            symbol = '#%d' % self.__replace[self.__data[self.__smartstarget]['atomlist'][inter]['element']]
-        elif level == 2: # с типами атомов
-            symbol = '#%d%s' % (self.__replace[self.__data[self.__smartstarget]['atomlist'][inter]['element']], self.__types[self.__data[self.__smartstarget]['atomlist'][inter]['type']])
-        else:
-            symbol = '*'
-        if self.__smartstarget == 'substrats':
-            self.__mapsrepl[inter + 1] = next(self.__nextmap)
-        smi = ['[%s:%d]' % (symbol, self.__mapsrepl[inter + 1])]
-        #print smi
-        concat = []
-        stoplist = []
-        for i in iterlist:
-            if i in strace:
-                if i not in stoplist:
-                    # костыль для циклов. чтоб не было 2х проходов.
-                    cyc = next(self.__nextnumb)
-                    concat += [(i, cyc, inter)]
-                    #print concat
-                    smi[0] += '%s%d' % (self.__tosmiles[self.__data[self.__smartstarget]['bondmatrix'][inter][i]], cyc)
-                    #print smi, '!'
-                continue
-            deep = self.__getSmiles(copy.copy(trace + [i]), i, level)
-            strace.update(deep[0])
-            #print strace
-            #print deep
-            if deep[2]:
-                #print inter, i, '1'
-                concat += deep[2]
-                #print deep[2]
-                for j in deep[2]:
-                    if j[0] == inter:
-                        #print '2', inter
-                        stoplist += [j[2]]
-                        #print stoplist
-                        smi[0] += '%s%d' % (self.__tosmiles[self.__data[self.__smartstarget]['bondmatrix'][inter][i]], j[1])
-            smi += ['(%s' % self.__tosmiles[self.__data[self.__smartstarget]['bondmatrix'][inter][i]]] + deep[1] + [')']
+        return centers
 
-            #strace.update(self.__reactcenteratoms(copy.copy(trace + [i]), i))
-        return strace, smi, concat
+    def getsmarts(self, g, weights, levels):
+        newmaps = dict()
+        countmap = count(1)
+        countcyc = count(1)
 
-    def __reactcenteratoms(self, trace, inter):
-        '''
-        поиск всех атомов подструктур-реакционных центров
-        '''
-        strace = {inter}
-        iterlist = set(self.__data['diff'][inter]).difference(trace)
+        def getnextatom(atoms):
+            if len(atoms) == 1:
+                return [i for i in atoms][0]
+            maxw = max(weights[i] for i in atoms)
+            morgans = [i for i in atoms if weights[i] == maxw]
+            if len(morgans) == 1:
+                return morgans[0]
+            else:
+                maxl = max(levels[i] for i in morgans)
+                return next(i for i in morgans if levels[i] == maxl)
 
-        for i in iterlist:
-            if i in strace:
-                # костыль для циклов. чтоб не было 2х проходов.
-                continue
-            if self.__data['diff'][inter][i] > 10:
-                strace.update(self.__reactcenteratoms(copy.copy(trace + [i]), i))
-        return strace
+        def dosmarts(trace, inter, prev):
+            smi = [(lambda x: lambda ch, el=True, ms=False, st=False, hb=False: '[%s%s%s%s:%s]' %
+                                                                                (x['isotop'] if ms else '',
+                                                                                 x['element'] if el else '*',
+                                                                                 ';%s;' % ','.join(
+                                                                                     [x['s_stereo'] if st == 's' else
+                                                                                      x['p_stereo'] if st == 'p' else
+                                                                                      '',
+                                                                                      x['s_hyb'] if hb == 's' else
+                                                                                      x['p_hyb'] if hb == 'p' else '']),
+                                                                                 x['s_chagre'] if ch == 's' else
+                                                                                 x['p_charge'] if ch == 'p' else '',
+                                                                                 x['map']))(
+                dict(isotop=g.node[inter].get('isotop', ''), element=g.node[inter]['element'],
+                     s_stereo=self.__stereotypes[g.node[inter].get('s_stereo')],
+                     p_stereo=self.__stereotypes[g.node[inter].get('p_stereo')],
+                     s_hyb=self.__hybtypes[g.node[inter].get('s_hyb')],
+                     p_hyb=self.__hybtypes[g.node[inter].get('p_hyb')],
+                     map=newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)),
+                     s_charge='%+d' % fromMDL.get(g.node[inter].get('s_charge', 0)),
+                     p_charge='%+d' % fromMDL.get(g.node[inter].get('p_charge', 0))
+                     ))]
+            smis = ['[%s:%d]' % (g.node[inter]['element'],
+                                 newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
+            smip = smis.copy()
+            concat = []
+            stoplist = []
+            iterlist = set(g.neighbors(inter)).difference([prev])
+            while iterlist:
+                i = getnextatom(iterlist)
+                iterlist.discard(i)
+                if i in trace:
+                    if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
+                        cyc = next(countcyc)
+                        concat.append((i, cyc, inter))
+                        smis.append('%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')], cyc))
+                        smip.append('%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')], cyc))
+                    continue
 
-    __types = {4: 'A', 3: 'T', 2: 'D', 1: 'S'}
+                deep = dosmarts(set(chain(trace, [i])), i, inter)
+                trace.update(deep[0])
+                if deep[3]:
+                    concat.extend(deep[3])
+                    for j in deep[3]:
+                        if j[0] == inter:
+                            stoplist.append(j[2])
+                            smis.append('%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')], j[1]))
+                            smip.append('%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')], j[1]))
+                smis.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('s_bond')]] + deep[1] +
+                            [')' if iterlist else ''])
+                smip.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('p_bond')]] + deep[2] +
+                            [')' if iterlist else ''])
+            return trace, smis, smip, concat
 
-    def __getMorgan(self, sub, level=None):
-        '''
-        модифицированный алгоритм моргана используется для хэширования подструктур.
-        изначально все атомы имеют веса согласно сорту атомов.
-        итеративно значения весов атомов умножатся на кратности образуемых связей с последующим суммированием полученных
-        значений к текущему весу.
+        smirks = dosmarts(set(), getnextatom(g), 0)
+        return '%s>>%s' % (''.join(smirks[1]), ''.join(smirks[2]))
 
-        после возвращается хэш подструктуры.
-        '''
-        if level == 1:
-            weights = {x: self.__replace[self.__data['products']['atomlist'][x]['element']] * 1000 for x in sub}
-        elif level == 2:
-            weights = {x: self.__replace[self.__data['products']['atomlist'][x]['element']] * 1000 + self.__data['products']['atomlist'][x]['type'] * 1000000 for x in sub}
-        else:
-            weights = dict.fromkeys(sub, 0)
-        for i in sub:
-            l = sum([x for x in list(self.__data['diff'][i].values()) if x > 10]) + self.__data['diff'][i][i]
-            weights[i] += l
+    __tosmiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
+
+    __hybtypes = {4: 'Ha', 3: 'Ht', 2: 'Hd', 1: 'Hs', None: ''}
+
+    __stereotypes = {None: '', 1: '@s', 2: '@d'}
+
+    def __getLevels(self, g):
+        return {n: mendeley[attr['element']] +
+                   (atommass[attr['element']] - attr.get('isotop', atommass[attr['element']]) if self.__isotop else 0) -
+                   (attr['s_charge'] or 4) * (attr['p_charge'] or 4) -
+                   max(10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0) for eattr in g[n].values())
+                for n, attr in g.nodes(data=True)}
+
+    @staticmethod
+    def __getMorgan(g):
+        weights = dict.fromkeys(g, 1)
+        oldnumb = numb = len(g)
+        maxcount = 0
+        stab = 0
+        while oldnumb >= numb and maxcount != 1 and stab < 3:
+            oldnumb = numb
+            tmp = dict.fromkeys(g, 0)
+            for n, m in g.edges():
+                tmp[n] += weights[m]
+                tmp[m] += weights[n]
+
+            numb = len(set(tmp.values()))
+            if numb == oldnumb:
+                x = Counter(tmp.values())
+                stab += 1
+                maxcount = x[max(x)]
+            else:
+                stab = 0
+                maxcount = 0
+            weights = tmp
+
         return weights
-
-
-    def __accept(self, numb, length):
-        '''
-        функция остановки для алгоритма моргана. останавливает поиск после первого простоя улучшения.
-        '''
-        numl = len(set(numb.values()))
-        if numl == length:
-            return False
-        if self.__buffer == numl:
-            return False
-        self.__buffer = numl
-        return True

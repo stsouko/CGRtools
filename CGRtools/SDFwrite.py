@@ -43,7 +43,7 @@ class SDFwrite(CGRWrite):
             "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(data['atoms']), len(data['bonds'])))
 
         for i in data['atoms']:
-            self.__file.write("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s%(isotop)2s%(charge)3s  0  0  0  0  "
+            self.__file.write("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  "
                               "0%(mark)3s  0%(map)3s  0  0\n" % i)
         for i in data['bonds']:
             self.__file.write("%3d%3d%3s  0  0  0  0\n" % self.__format(i, data['CGR_DAT']))

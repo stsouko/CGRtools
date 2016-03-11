@@ -43,7 +43,7 @@ class RDFwrite(CGRWrite):
             self.__file.write('$MOL\n\n  FEAR\n\n%3d%3d  0  0  0  0            999 V2000\n' %
                               (len(m['atoms']), len(m['bonds'])))
             for a in m['atoms']:
-                self.__file.write("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s%(isotop)2s%(charge)3s"
+                self.__file.write("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s"
                                   "  0  0  0  0  0%(mark)3s  0%(map)3s  0  0\n" % a)
             for b in m['bonds']:
                 self.__file.write("%3s%3s%3s  0  0  0  0\n" % b)

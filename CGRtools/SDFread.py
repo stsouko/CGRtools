@@ -20,6 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from CGRtools.CGRrw import CGRRead
+from CGRtools.weightable import atommass
 import networkx as nx
 
 
@@ -70,7 +71,7 @@ class SDFread(CGRRead):
                     molecule = None
 
             elif n <= atomcount:
-                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=line[34:36].strip(),
+                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
                                               charge=int(line[38:39]),
                                               map=int(line[60:63]), mark=line[51:54].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
@@ -113,7 +114,9 @@ class SDFread(CGRRead):
             g.add_node(k, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                        s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
                        p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
-                       map=l['map'], isotop=l['isotop'])
+                       map=l['map'])
+            if l['isotop']:
+                g.node[k]['isotop'] = atommass[l['element']] + l['isotop']
 
         for k, l, m in molecule['bonds']:
             g.add_edge(k, l,

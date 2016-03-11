@@ -48,5 +48,4 @@ def mapper_core(**kwargs):
     for i in mapper.dumptemplates():
         dump.writedata(i)
 
-
     print('%d from %d reactions mapped' % (num - err, num), file=sys.stderr)

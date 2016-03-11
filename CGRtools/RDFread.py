@@ -22,6 +22,7 @@
 from collections import defaultdict
 import networkx as nx
 from CGRtools.CGRrw import CGRRead
+from CGRtools.weightable import atommass
 
 
 class RDFread(CGRRead):
@@ -73,7 +74,7 @@ class RDFread(CGRRead):
                     failkey = True
                     reaction = None
             elif n <= atomcount:
-                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=line[34:36].strip(),
+                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
                                               charge=int(line[38:39]),
                                               map=int(line[60:63]), mark=line[51:54].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
@@ -165,7 +166,9 @@ class RDFread(CGRRead):
                                s_charge=l['charge'],  # s_stereo=None, s_hyb=None, s_neighbors=None,
                                p_charge=l['charge'],  # p_stereo=None, p_hyb=None, p_neighbors=None,
                                sp_charge=l['charge'],
-                               map=maps[i][k + shift], isotop=l['isotop'])
+                               map=maps[i][k + shift])
+                    if l['isotop']:
+                        g.node[maps[i][k + shift]]['isotop'] = atommass[l['element']] + l['isotop']
 
                 for k, l, m in j['bonds']:
                     g.add_edge(maps[i][k + shift], maps[i][l + shift],

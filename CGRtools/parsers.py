@@ -44,7 +44,14 @@ def condenser_common(parser):
                              "also supported CGR on parts of reagents or/and products molecules (e.g. 101,102,-201 - "
                              "CGR on only first and second reagents molecules with all products molecules excluded "
                              "first).")
-    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
+
+
+def balanser_common(parser):
+    parser.add_argument("--balance", "-b", type=int, default=0, choices=[0, 1, 2],
+                        help="repair unbalanced reactions [experimental]. 1 - template based, 2 - template in existing "
+                             "inputfile")
+    parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'),
+                        help="RDF with reactions balancing rules")
 
 
 def balanser(subparsers):
@@ -53,15 +60,11 @@ def balanser(subparsers):
                         help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'),
                         help="RDF outputfile")
+    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
 
     condenser_common(parser)
     fear_common(parser)
-
-    parser.add_argument("--balance", "-b", type=int, default=0, choices=[1, 2],
-                        help="repair unbalanced reactions [experimental]. 1 - template based, 2 - template in existing "
-                             "inputfile")
-    parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'),
-                        help="RDF with reactions balancing rules")
+    balanser_common(parser)
 
     parser.set_defaults(func=balanser_core)
 
@@ -72,15 +75,11 @@ def condenser(subparsers):
                         help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.sdf", type=argparse.FileType('w'),
                         help="SDF outputfile")
+    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
 
     condenser_common(parser)
     fear_common(parser)
-
-    parser.add_argument("--balance", "-b", type=int, default=0, choices=[0, 1, 2],
-                        help="repair unbalanced reactions [experimental]. 1 - template based, 2 - template in existing "
-                             "inputfile")
-    parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'),
-                        help="RDF with reactions balancing rules")
+    balanser_common(parser)
 
     parser.add_argument("--format", "-f", action='store_true', help="generate old format of CGR SDF")
     parser.set_defaults(func=condenser_core)
@@ -90,9 +89,10 @@ def fear(subparsers):
     parser = subparsers.add_parser('fear', help='reaction atom-to-atom mapping (AAM) checker')
     parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
 
     fear_common(parser)
-
+    parser.add_argument("--debug", action='store_true', help="debug mod")
     parser.set_defaults(func=fear_core)
 
 
@@ -100,9 +100,9 @@ def reactmap(subparsers):
     parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)')
     parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
 
     parser.add_argument("--templates", "-t", type=argparse.FileType('r'),
                         help="RDF with reactions mapping rules")
-    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
     parser.add_argument("--debug", action='store_true', help="debug mod")
     parser.set_defaults(func=mapper_core)

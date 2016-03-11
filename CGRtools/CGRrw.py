@@ -20,6 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from itertools import count
+from CGRtools.weightable import mendeley
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
@@ -29,14 +30,16 @@ bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9}
 class CGRRead:
     def __init__(self):
         self.__prop = {}
-        self.__mendeleytable = self.__mendeley
-        self.__mendeleyset = set(self.__mendeleytable)
+        self.__mendeleyset = set(mendeley)
 
     def collect(self, line):
         if 'M  ALS' in line:
             self.__prop[line[3:10]] = dict(atoms=[int(line[7:10]) - 1],
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
+        elif 'M  ISO' in line:
+            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13]) - 1], type='isotop', value=int(line[14:17]))
+
         elif 'M  STY' in line:
             for i in range(int(line[8])):
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
@@ -59,7 +62,7 @@ class CGRRead:
     __cgrkeys = dict(dynatom=1, atomstereo=1, dynatomstereo=1,
                      bondstereo=2, dynbondstereo=2, extrabond=2, dynbond=2,
                      atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1,
-                     atomnotlist=1, atomlist=1)
+                     atomnotlist=1, atomlist=1, isotop=1)
 
     def getdata(self):
         prop = []
@@ -107,9 +110,9 @@ class CGRRead:
                 if len(diff) > 1:
                     g.node[atom1].pop('s_charge')
                     g.node[atom1].pop('p_charge')
-                    if int(diff[0]) == 0:
+                    if int(diff[0]) == 0:  # for list of charges c0,1,-2,+3...
                         g.node[atom1]['sp_charge'] = [toMDL.get(base + int(x), 0) for x in diff]
-                    elif (len(diff) - 1) % 2 == 0:
+                    elif (len(diff) - 1) % 2 == 0:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
                         s = [toMDL.get(base + int(x), 0) for x in [0] + diff[1::2]]
                         p = [toMDL.get(fromMDL.get(x, 0) + int(y), 0) for x, y in zip(s, diff[::2])]
                         g.node[atom1]['sp_charge'] = list(zip(s, p))
@@ -155,31 +158,19 @@ class CGRRead:
         elif k['type'] == 'dynatomneighbors':
             _parsedyn(g.node[atom1], 'neighbors')
 
-    __mendeley = {j: i for i, j in enumerate(['H', 'He',
-                                              'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
-                                              'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
-                                              'K', 'Ca',
-                                                    'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
-                                                          'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
-                                              'Rb', 'Sr',
-                                                    'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd',
-                                                         'In', 'Sn', 'Sb', 'Te', 'I', 'Xe',
-                                              'Cs', 'Ba',
-                                                    'La', 'Ce', 'Pr', 'Nd', 'Pm',
-                                                    'Sm', 'Eu', 'Gd', 'Tb', 'Dy',
-                                                    'Ho', 'Er', 'Tm', 'Yb', 'Lu',
-                                                          'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
-                                                         'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
-                                              'Fr', 'Ra',
-                                                    'Ac', 'Th', 'Pa', 'U', 'Np',
-                                                    'Pu', 'Am', 'Cm', 'Bk', 'Cf',
-                                                    'Es', 'Fm', 'Md', 'No', 'Lr',
-                                                          'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn'])}
+        elif k['type'] == 'isotop':
+            g.node[atom1]['isotop'] = k['value']
 
 
 class CGRWrite:
     def getformattedtext(self, data):
         text = []
+        for i in data['extended']:
+            if i['type'] == 'isotop':
+                text.append('M  ISO  1 %3d %3d' % (i['atoms'][0], i['value']))
+            elif i['type'] == 'atomlist':
+                pass
+
         for j in count():
             sty = data['CGR_DAT'][j * 8:j * 8 + 8]
             if sty:

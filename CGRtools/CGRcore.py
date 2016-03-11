@@ -30,7 +30,7 @@ class CGRcore(CGRPreparer, CGRReactor):
         CGRPreparer.__init__(self, kwargs['type'])
         CGRReactor.__init__(self, kwargs['stereo'])
 
-        templates = self.gettemplates(kwargs['b_templates'])
+        templates = self.gettemplates(kwargs.get('b_templates'))
         self.__searchpatch = self.searchtemplate(templates) if templates else lambda _: iter([])
 
         self.chkmap = lambda x: x
@@ -83,16 +83,10 @@ class CGRcore(CGRPreparer, CGRReactor):
         g = matrix['substrats']
         g.add_nodes_from(matrix['products'].nodes(data=True))
         g.add_edges_from(matrix['products'].edges(data=True))
-
-        """ get CGR core
-        """
-        # todo: запиплить локализацию реакционного центра/ов
-        for n, m, j in g.edges(common, data=True):
-            for i in {'p_bond', 'p_stereo', 's_bond', 's_stereo'}.difference(j):
-                g[n][m][i] = None
         return g
 
-    def __disscenter(self):
+    @staticmethod
+    def __disscenter():
         g1 = nx.Graph()
         g2 = nx.Graph()
 

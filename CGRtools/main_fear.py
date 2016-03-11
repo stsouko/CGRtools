@@ -20,27 +20,31 @@
 #  MA 02110-1301, USA.
 #
 import sys
+import traceback
 from CGRtools.RDFread import RDFread
 from CGRtools.RDFwrite import RDFwrite
 from CGRtools.FEAR import FEAR
+from CGRtools.CGRcore import CGRcore
 
 
 def fear_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'])
-    fear = FEAR()
-    #con = CGRcore(balance=0, type='0', **options)
-    err = 0
-    num = -1
-    #for num, data in enumerate(inputdata.readdata()):
-    #    if num % 100 == 0:
-    #        print("reaction: %d" % (num + 1), file=sys.stderr)
-        #try:
-        #a = con.getFreaction(data)
-        #outputdata.writedata(a)
-        #except:
-        #    err += 1
-        #    print('reaction %d consist errors' % (num + 1), file=sys.stderr)
-    #print('%d from %d reactions checked' % (num + 1 - err, num + 1), file=sys.stderr)
 
+    fear = FEAR()
+    cgr = CGRcore(type='0', balance=0, **kwargs)
+    err = 0
+    num = 0
+    for num, data in enumerate(inputdata.readdata(), start=1):
+        if kwargs['debug'] or num % 10 == 1:
+            print("reaction: %d" % num, file=sys.stderr)
+        try:
+            g = cgr.getCGR(data)
+            print(fear.getcenters(g))
+            outputdata.writedata(g)
+        except Exception:
+            err += 1
+            print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
+            break
+    print('%d from %d reactions checked' % (num - err, num), file=sys.stderr)
 

@@ -71,7 +71,7 @@ class CGRPreparer(object):
         return res
 
     def getformattedcgr(self, graph):
-        data = dict(atoms=[], bonds=[], CGR_DAT=[])
+        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[])
         renum = {}
         for n, (i, j) in enumerate(graph.nodes(data=True), start=1):
             renum[i] = n
@@ -95,7 +95,10 @@ class CGRPreparer(object):
                 meta['atoms'] = (renum[i],)
                 data['CGR_DAT'].append(meta)
 
-            data['atoms'].append(dict(map=i, charge=j['s_charge'], isotop=j['isotop'], element=j.get('element', 'A'),
+            if j.get('isotop'):
+                data['extended'].append(dict(atoms=(renum[i],), value=j.get('isotop'), type='isotop'))
+
+            data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
                                       x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
         for i, l, j in graph.edges(data=True):
             bond, cbond, btype = self.__cgr[j['s_bond']][j['p_bond']]
