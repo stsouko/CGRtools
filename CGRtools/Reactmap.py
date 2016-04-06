@@ -21,13 +21,13 @@
 #
 from CGRtools.CGRpreparer import CGRPreparer
 from CGRtools.CGRreactor import CGRReactor
-from CGRtools.CGRcore import patcher
+from CGRtools.CGRreactor import patcher
 import networkx as nx
 
 
 class ReactMap(CGRPreparer, CGRReactor):
     def __init__(self, debug=False, **kwargs):
-        CGRPreparer.__init__(self, '0')
+        CGRPreparer.__init__(self, '0', extralabels=True)
         CGRReactor.__init__(self, kwargs['stereo'])
 
         self.__coretemplates = self.gettemplates(kwargs['templates'])
@@ -49,7 +49,7 @@ class ReactMap(CGRPreparer, CGRReactor):
                      products=[self.getformattedcgr(i['products'])]) for i in self.__templates]
 
     def getMap(self, data):
-        matrix = self.prepare(data, setlabels=True)
+        matrix = self.prepare(data)
         """ get aromatized products
         """
         matrix['products'], arflag = self.__aromatize(matrix['products'])

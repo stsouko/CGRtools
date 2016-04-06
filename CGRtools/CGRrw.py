@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of FEAR (C) Ramil Nugmanov <stsouko@live.ru>.
 #
 #  fragger is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from itertools import count
-from CGRtools.weightable import mendeley
+import periodictable as pt
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
@@ -30,7 +30,7 @@ bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9}
 class CGRRead:
     def __init__(self):
         self.__prop = {}
-        self.__mendeleyset = set(mendeley)
+        self.__mendeleyset = set(pt.elements)
 
     def collect(self, line):
         if 'M  ALS' in line:

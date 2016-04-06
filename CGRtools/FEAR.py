@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of FEAR (Find Errors in Automapped Reactions).
 #
 # FEAR is free software; you can redistribute it and/or modify
@@ -19,50 +19,90 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import operator
 from collections import Counter, defaultdict
 from itertools import chain, count
+
+from functools import reduce
+
 import networkx as nx
-from CGRtools.weightable import mendeley, atommass
+import periodictable as pt
 from CGRtools.CGRrw import fromMDL
 
 
+def eratosthenes():
+    """Yields the sequence of prime numbers via the Sieve of Eratosthenes."""
+    D = {}  # map each composite integer to its first-found prime factor
+    for q in count(2):  # q gets 2, 3, 4, 5, ... ad infinitum
+        p = D.pop(q, None)
+        if p is None:
+            # q not a key in D, so q is prime, therefore, yield it
+            yield q
+            # mark q squared as not-prime (with q as first-found prime factor)
+            D[q * q] = q
+        else:
+            # let x <- smallest (N*p)+q which wasn't yet known to be composite
+            # we just learned x is composite, with p first-found prime factor,
+            # since p is the first-found prime factor of q -- find and mark it
+            x = p + q
+            while x in D:
+                x += p
+            D[x] = p
+
+
 class FEAR(object):
-    def __init__(self, deep=0, isotop=False):
-        self.__deep = list(range(deep))
+    def __init__(self, isotop=False, stereo=False, hyb=False, element=True, deep=0):
+        self.__primes = tuple(x for _, x in zip(range(1000), eratosthenes()))
         self.__isotop = isotop
+        self.__stereo = stereo
+        self.__deep = deep
+        self.__hyb = hyb
+        self.__element = element
+        self.__whash = set()
+        self.__lhash = set()
+        self.__shash = set()
 
     def sethashlib(self, data):
-        self.__whash = {x['FEAR_WHASH'] for x in data}
-        self.__lhash = {x['FEAR_LHASH'] for x in data}
-        self.__shash = {x['FEAR_SHASH'] for x in data}
+        self.__whash = {x['CGR_FEAR_WHASH'] for x in data}
+        self.__lhash = {x['CGR_FEAR_LHASH'] for x in data}
+        self.__shash = {x['CGR_FEAR_SHASH'] for x in data}
 
-    def chkreaction(self, g, full=True):
+    def chkreaction(self, g, full=True, gennew=False):
         chkd = set()
         report = set()
+        newhash = set()
 
         def dochk(x):
             weights = self.__getMorgan(x)
             whash = '.'.join(str(x) for x in sorted(weights.values()))
-            if whash in self.__whash:
-                levels = self.__getLevels(x)
-                lhash = '.'.join(str(x) for x in sorted(levels.values()))
-                if lhash in self.__lhash:
-                    shash = self.getsmarts(x, weights, levels)
-                    if shash in self.__shash:
-                        chkd.update(x)
-                        report.add(shash)
-                        return True
+            if whash in self.__whash or gennew:
+                shash = self.__getsmarts(x, weights)
+                if shash in self.__shash:
+                    chkd.update(x)
+                    report.add((whash, shash))
+                    return True
+                elif gennew:
+                    newhash.add((whash, shash))
             return False
 
-        centers = self.getcenters(g)
+        centers = self.__getcenters(g)
+        ''' check for very specific centers
+        '''
         for i in sorted(centers, reverse=True)[:-1]:
             for j in centers[i]:
                 if not chkd.issuperset(j):
                     dochk(j)
-        tmp = [chkd.issuperset(i) or dochk(i) for i in centers[0]]
-        return all(tmp) if full else any(tmp), report
+        ''' final check for common centers
+        '''
+        tmp = (chkd.issuperset(i) or dochk(i) for i in centers[0])
+        if gennew:
+            tmp = list(tmp)
+        return all(tmp) if full else any(tmp), report, newhash
 
-    def getcenters(self, g):
+    def getreactionhash(self, g):
+        return self.__getsmarts(g, self.__getMorgan(g))
+
+    def __getcenters(self, g):
         nodes = [set()]
         """ get nodes of reaction center (dynamic bonds, stereo or charges).
         """
@@ -78,7 +118,7 @@ class FEAR(object):
 
         """ get nodes of reaction center and neighbors
         """
-        for i in self.__deep:
+        for i in range(self.__deep):
             nodes.append(set(chain.from_iterable(g.edges(nodes[i]))))
 
         centers = defaultdict(list)
@@ -88,47 +128,36 @@ class FEAR(object):
 
         return centers
 
-    def getsmarts(self, g, weights, levels):
+    def __getsmarts(self, g, weights):
         newmaps = dict()
         countmap = count(1)
         countcyc = count(1)
+        visited = set()
 
         def getnextatom(atoms):
             if len(atoms) == 1:
-                return [i for i in atoms][0]
-            maxw = max(weights[i] for i in atoms)
-            morgans = [i for i in atoms if weights[i] == maxw]
-            if len(morgans) == 1:
-                return morgans[0]
+                nextatom = list(atoms)[0]
             else:
-                maxl = max(levels[i] for i in morgans)
-                return next(i for i in morgans if levels[i] == maxl)
+                nextatom = sorted((weights[i], i) for i in atoms)[-1][1]
+
+            visited.add(nextatom)
+            return nextatom
 
         def dosmarts(trace, inter, prev):
-            smi = [(lambda x: lambda ch, el=True, ms=False, st=False, hb=False: '[%s%s%s%s:%s]' %
-                                                                                (x['isotop'] if ms else '',
-                                                                                 x['element'] if el else '*',
-                                                                                 ';%s;' % ','.join(
-                                                                                     [x['s_stereo'] if st == 's' else
-                                                                                      x['p_stereo'] if st == 'p' else
-                                                                                      '',
-                                                                                      x['s_hyb'] if hb == 's' else
-                                                                                      x['p_hyb'] if hb == 'p' else '']),
-                                                                                 x['s_chagre'] if ch == 's' else
-                                                                                 x['p_charge'] if ch == 'p' else '',
-                                                                                 x['map']))(
-                dict(isotop=g.node[inter].get('isotop', ''), element=g.node[inter]['element'],
-                     s_stereo=self.__stereotypes[g.node[inter].get('s_stereo')],
-                     p_stereo=self.__stereotypes[g.node[inter].get('p_stereo')],
-                     s_hyb=self.__hybtypes[g.node[inter].get('s_hyb')],
-                     p_hyb=self.__hybtypes[g.node[inter].get('p_hyb')],
-                     map=newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)),
-                     s_charge='%+d' % fromMDL.get(g.node[inter].get('s_charge', 0)),
-                     p_charge='%+d' % fromMDL.get(g.node[inter].get('p_charge', 0))
-                     ))]
-            smis = ['[%s:%d]' % (g.node[inter]['element'],
-                                 newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
-            smip = smis.copy()
+            smis = ['[%s%s%s%s:%d]' % (g.node[inter].get('isotop', '') if self.__isotop else '',
+                                       g.node[inter]['element'] if self.__element else '*',
+                                       ';%s;' % ','.join(
+                                           [self.__stereotypes[g.node[inter].get('s_stereo')] if self.__stereo else '',
+                                            self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else '']),
+                                       '%+d' % fromMDL.get(g.node[inter].get('s_charge', 0)) if self.__element else '',
+                                       newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
+            smip = ['[%s%s%s%s:%d]' % (g.node[inter].get('isotop', '') if self.__isotop else '',
+                                       g.node[inter]['element'] if self.__element else '*',
+                                       ';%s;' % ','.join(
+                                           [self.__stereotypes[g.node[inter].get('p_stereo')] if self.__stereo else '',
+                                            self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else '']),
+                                       '%+d' % fromMDL.get(g.node[inter].get('p_charge', 0)) if self.__element else '',
+                                       newmaps.get(inter))]
             concat = []
             stoplist = []
             iterlist = set(g.neighbors(inter)).difference([prev])
@@ -150,42 +179,68 @@ class FEAR(object):
                     for j in deep[3]:
                         if j[0] == inter:
                             stoplist.append(j[2])
-                            smis.append('%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')], j[1]))
-                            smip.append('%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')], j[1]))
+                            smis.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('s_bond')], j[1]))
+                            smip.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('p_bond')], j[1]))
                 smis.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('s_bond')]] + deep[1] +
                             [')' if iterlist else ''])
                 smip.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('p_bond')]] + deep[2] +
                             [')' if iterlist else ''])
             return trace, smis, smip, concat
 
-        smirks = dosmarts(set(), getnextatom(g), 0)
-        return '%s>>%s' % (''.join(smirks[1]), ''.join(smirks[2]))
+        has_next = g
+        ssmiles, psmiles = [], []
+        while has_next:
+            firstatom = getnextatom(has_next)
+            smirks = dosmarts({firstatom}, firstatom, firstatom)
+            ssmiles.append(''.join(smirks[1]))
+            psmiles.append(''.join(smirks[2]))
+            has_next = set(g).difference(visited)
+        return '%s>>%s' % ('.'.join(ssmiles), '.'.join(psmiles))
 
     __tosmiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
 
     __hybtypes = {4: 'Ha', 3: 'Ht', 2: 'Hd', 1: 'Hs', None: ''}
 
-    __stereotypes = {None: '', 1: '@s', 2: '@d'}
+    __stereotypes = {None: '', 1: '@s', 2: '@r'}
 
-    def __getLevels(self, g):
-        return {n: mendeley[attr['element']] +
-                   (atommass[attr['element']] - attr.get('isotop', atommass[attr['element']]) if self.__isotop else 0) -
-                   (attr['s_charge'] or 4) * (attr['p_charge'] or 4) -
-                   max(10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0) for eattr in g[n].values())
-                for n, attr in g.nodes(data=True)}
+    def __getMorgan(self, g):
+        newlevels = {}
+        countprime = iter(self.__primes)
 
-    @staticmethod
-    def __getMorgan(g):
-        weights = dict.fromkeys(g, 1)
+        params = {n: (self.__primes[pt.elements.symbol(attr['element']).number] if self.__element else 1,
+                      self.__primes[10 * attr['s_charge'] + attr['p_charge']] if self.__element else 1,
+                      reduce(operator.mul,
+                             (self.__primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
+                              for eattr in g[n].values()), 1),
+                      self.__primes[attr['isotop']] if self.__isotop and 'isotop' in attr else 1,
+                      self.__primes[10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0)]
+                      if self.__stereo else 1,
+                      reduce(operator.mul,
+                             (self.__primes[10 * (eattr.get('s_stereo') or 0) + (eattr.get('p_stereo') or 0)]
+                              for eattr in g[n].values()), 1) if self.__stereo else 1)
+                  for n, attr in g.nodes(data=True)}
+
+        weights = {x: (newlevels.get(y) or newlevels.setdefault(y, next(countprime)))
+                   for x, y in sorted(params.items(), key=operator.itemgetter(1))}
+
         oldnumb = numb = len(g)
         maxcount = 0
         stab = 0
+
+        scaf = {}
+        for n, m in g.edge.items():
+            scaf[n] = tuple(m)
+
         while oldnumb >= numb and maxcount != 1 and stab < 3:
             oldnumb = numb
-            tmp = dict.fromkeys(g, 0)
-            for n, m in g.edges():
-                tmp[n] += weights[m]
-                tmp[m] += weights[n]
+            neweights = {}
+            countprime = iter(self.__primes)
+
+            tmp = {}
+            for n, m in scaf.items():
+                """ if don't have neighbors use self weight
+                """
+                tmp[n] = reduce(operator.mul, (weights[x] for x in m), weights[n])
 
             numb = len(set(tmp.values()))
             if numb == oldnumb:
@@ -195,6 +250,8 @@ class FEAR(object):
             else:
                 stab = 0
                 maxcount = 0
-            weights = tmp
+
+            weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
+                       for x, y in sorted(tmp.items(), key=operator.itemgetter(1))}
 
         return weights

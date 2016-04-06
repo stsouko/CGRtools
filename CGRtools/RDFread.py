@@ -22,7 +22,7 @@
 from collections import defaultdict
 import networkx as nx
 from CGRtools.CGRrw import CGRRead
-from CGRtools.weightable import atommass
+import periodictable as pt
 
 
 class RDFread(CGRRead):
@@ -33,8 +33,6 @@ class RDFread(CGRRead):
     def readdata(self):
         """парсер RDF файлов
         """
-        if "$RDFILE 1" not in self.__RDFfile.readline():
-            raise StopIteration
         ir = -1
         im = -1
         atomcount = -1
@@ -168,7 +166,8 @@ class RDFread(CGRRead):
                                sp_charge=l['charge'],
                                map=maps[i][k + shift])
                     if l['isotop']:
-                        g.node[maps[i][k + shift]]['isotop'] = atommass[l['element']] + l['isotop']
+                        a = pt.elements.symbol(l['element'])
+                        g.node[maps[i][k + shift]]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
                 for k, l, m in j['bonds']:
                     g.add_edge(maps[i][k + shift], maps[i][l + shift],

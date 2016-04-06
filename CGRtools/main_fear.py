@@ -32,7 +32,7 @@ def fear_core(**kwargs):
     outputdata = RDFwrite(kwargs['output'])
 
     fear = FEAR()
-    cgr = CGRcore(type='0', balance=0, **kwargs)
+    cgr = CGRcore(type='0', balance=0, b_templates=None, **kwargs)
     err = 0
     num = 0
     for num, data in enumerate(inputdata.readdata(), start=1):
@@ -40,7 +40,7 @@ def fear_core(**kwargs):
             print("reaction: %d" % num, file=sys.stderr)
         try:
             g = cgr.getCGR(data)
-            print(fear.getcenters(g))
+            print(fear.getreactionhash(g))
             outputdata.writedata(g)
         except Exception:
             err += 1

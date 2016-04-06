@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of CGRTools (C) Ramil Nugmanov <stsouko@live.ru>.
 #
 #  fragger is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from CGRtools.CGRrw import CGRRead
-from CGRtools.weightable import atommass
+import periodictable as pt
 import networkx as nx
 
 
@@ -116,7 +116,8 @@ class SDFread(CGRRead):
                        p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
                        map=l['map'])
             if l['isotop']:
-                g.node[k]['isotop'] = atommass[l['element']] + l['isotop']
+                a = pt.elements.symbol(l['element'])
+                g.node[k]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
         for k, l, m in molecule['bonds']:
             g.add_edge(k, l,

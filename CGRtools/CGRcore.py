@@ -18,27 +18,27 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import itertools
 from CGRtools.CGRpreparer import CGRPreparer
-from CGRtools.CGRreactor import CGRReactor
+from CGRtools.CGRreactor import CGRReactor, patcher
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
 
 
 class CGRcore(CGRPreparer, CGRReactor):
     def __init__(self, **kwargs):
-        CGRPreparer.__init__(self, kwargs['type'])
-        CGRReactor.__init__(self, kwargs['stereo'])
+        CGRPreparer.__init__(self, kwargs['type'], extralabels=kwargs.get('extralabels', False))
+        CGRReactor.__init__(self, stereo=kwargs['stereo'])
 
-        templates = self.gettemplates(kwargs.get('b_templates'))
-        self.__searchpatch = self.searchtemplate(templates) if templates else lambda _: iter([])
-
+        ''' balancer rules.
+        '''
+        self.__searchpatch = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['b_templates'])),
+                                           iswhitelist=False) if kwargs['b_templates'] else lambda x: x
+        ''' mapper rules.
+        '''
         self.chkmap = lambda x: x
         if kwargs['balance'] != 2:
-            self.__maprepare = kwargs['map_repair']
             if kwargs['c_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['c_rules'], isreaction=False),
-                                                                patch=False))
+                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['c_rules']), patch=False))
             elif kwargs['e_rules']:
                 self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['e_rules'])),
                                             iswhitelist=False)
@@ -94,8 +94,8 @@ class CGRcore(CGRPreparer, CGRReactor):
         g2.add_edges_from([(1, 2, dict(p_bond=None))])
         return dict(substrats=('s_bond', [g1]), products=('p_bond', [g2]))
 
-    def __dissCGR(self, data):
-        tmp = dict(substrats=[], products=[])
+    def dissCGR(self, data):
+        tmp = dict(substrats=[], products=[], meta={})
         for category, (edge, pattern) in self.__disstemplate.items():
             components, *_ = self.getbondbrokengraph(data, pattern, gis.categorical_edge_match(edge, None))
             for mol in components:
@@ -112,57 +112,48 @@ class CGRcore(CGRPreparer, CGRReactor):
 
     def __chkmap(self, rsearcher, iswhitelist=True):
         def searcher(g):
+            if iswhitelist:
+                if not rsearcher(g):
+                    g.graph.setdefault('CGR_REPORT', []).append('MAPPING INCORRECT')
+                return g
+
             while True:
                 match = next(rsearcher(g), None)
-                if iswhitelist:
-                    if match:
-                        return g
+                if match:
+                    g = patcher(match)
+                    g.graph.setdefault('CGR_REPORT', []).append(match['meta'].get('CGR_TEMPLATE'))
                 else:
-                    if not match:
-                        return g
-                    elif self.__maprepare:
-                        g = patcher(match)
-                        return g
-                print('Map Check FAIL')
-                return False
+                    return g
 
         return searcher
 
     def getCGR(self, data):
         g = self.__step_first(self.prepare(data))
 
-        ''' fear check. try to remap
+        ''' fear check. currently skip if white list fails
         '''
-        g = self.chkmap(g) or g
-
+        g = self.chkmap(g)
         if self.__step_second:
             ''' reaction balancer.
             '''
             g = self.clonesubgraphs(g)
-            while True:
-                patch = next(self.__searchpatch(g), None)
-                if patch:
-                    g = patcher(patch)
-                else:
-                    break
+            g = self.__searchpatch(g)
         return g
 
     def getFCGR(self, data):
-        matrix = self.getformattedcgr(self.getCGR(data))
-        matrix['meta'] = data['meta']
+        g = self.getCGR(data)
+        matrix = self.getformattedcgr(g)
+
+        meta = data['meta'].copy()
+        meta['CGR_REPORT'] = ';;'.join(g.graph.get('CGR_REPORT', []))
+        matrix['meta'] = meta
         return matrix
 
     def getFreaction(self, data):
-        matrix = self.__dissCGR(self.getCGR(data))
-        matrix['meta'] = data['meta']
+        g = self.getCGR(data)
+        matrix = self.dissCGR(g)
+
+        meta = data['meta'].copy()
+        meta['CGR_REPORT'] = ';;'.join(g.graph.get('CGR_REPORT', []))
+        matrix['meta'] = meta
         return matrix
-
-
-def patcher(matrix):
-    """ remove edges bw common nodes. add edges from template and replace nodes data
-    :param matrix: dict
-    """
-    g = matrix['substrats'].copy()
-    g.remove_edges_from(itertools.combinations(matrix['products'], 2))
-    g = nx.compose(g, matrix['products'])
-    return g

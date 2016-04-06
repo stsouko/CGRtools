@@ -28,7 +28,8 @@ from CGRtools.SDFread import SDFread
 
 
 class CGRPreparer(object):
-    def __init__(self, cgrtype):
+    def __init__(self, cgrtype, extralabels=False):
+        self.__extralabels = extralabels
         self.__cgrtype = self.__getcgrtype(cgrtype)
         self.__cgr = self.__tocgr()
 
@@ -67,7 +68,6 @@ class CGRPreparer(object):
                 if isinstance(res['products'].node[i][j], list):
                     res['products'].node[i][j] = {x: y for x, y in zip(res['substrats'].node[i][j],
                                                                        res['products'].node[i][j])}
-        print(res['products'].node)
         return res
 
     def getformattedcgr(self, graph):
@@ -101,7 +101,7 @@ class CGRPreparer(object):
             data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
                                       x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
         for i, l, j in graph.edges(data=True):
-            bond, cbond, btype = self.__cgr[j['s_bond']][j['p_bond']]
+            bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
             if btype:
                 data['CGR_DAT'].append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
 
@@ -114,7 +114,7 @@ class CGRPreparer(object):
 
         return data
 
-    def prepare(self, data, setlabels=False):
+    def prepare(self, data):
         def getmols(t):
             mols = []
             for x in self.__needed[t]:
@@ -160,8 +160,8 @@ class CGRPreparer(object):
         elif self.__cgrtype == 10:
             substrats = nx.union_all(getmols('substrats'))
             products = nx.union_all(excmols('products'))
-        res = dict(substrats=self.__setlabels(substrats), products=self.__setlabels(products)) if setlabels else \
-            dict(substrats=substrats, products=products)
+        res = dict(substrats=self.__setlabels(substrats), products=self.__setlabels(products)) \
+            if self.__extralabels else dict(substrats=substrats, products=products)
         return res
 
     @staticmethod

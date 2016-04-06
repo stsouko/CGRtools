@@ -31,8 +31,6 @@ def fear_common(parser):
     group.add_argument("--c_rules", "-cr", type=argparse.FileType('r'), help="correct reactions type file (SDF)")
     group.add_argument("--e_rules", "-er", type=argparse.FileType('r'), help="incorrect reactions type file (RDF)")
 
-    parser.add_argument("--map_repair", "-r", action='store_true', help="repair incorrect AAM [experimental]")
-
 
 def condenser_common(parser):
     parser.add_argument("--type", "-t", type=str, default='0',
