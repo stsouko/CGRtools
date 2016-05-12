@@ -37,7 +37,7 @@ def balanser_core(**kwargs):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = con.getFreaction(data)
+            a = con.dissCGR(con.getCGR(data))
             outputdata.writedata(a)
         except Exception:
             err += 1

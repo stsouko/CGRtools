@@ -22,9 +22,7 @@
 import operator
 from collections import Counter, defaultdict
 from itertools import chain, count
-
 from functools import reduce
-
 import networkx as nx
 import periodictable as pt
 from CGRtools.CGRrw import fromMDL

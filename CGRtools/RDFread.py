@@ -30,7 +30,7 @@ class RDFread(CGRRead):
         CGRRead.__init__(self)
         self.__RDFfile = file
 
-    def readdata(self):
+    def readdata(self, remap=True):
         """парсер RDF файлов
         """
         ir = -1
@@ -47,7 +47,7 @@ class RDFread(CGRRead):
             elif "$RXN" in line[0:4]:
                 if reaction:
                     try:
-                        yield self.__getGraphs(reaction)
+                        yield self.__getGraphs(reaction, remap)
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': defaultdict(str)}
@@ -114,13 +114,13 @@ class RDFread(CGRRead):
         else:
             if reaction:
                 try:
-                    yield self.__getGraphs(reaction)
+                    yield self.__getGraphs(reaction, remap)
                 except:
                     pass
 
-    def __getGraphs(self, reaction):
-        maps = {'substrats': [int(y['map']) for x in reaction['substrats'] for y in x['atoms']],
-                'products': [int(y['map']) for x in reaction['products'] for y in x['atoms']]}
+    def __getGraphs(self, reaction, remap):
+        maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
+                'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
         length = max((max(maps['products']), max(maps['substrats'])))
 
         ''' map unmapped atoms
@@ -143,14 +143,13 @@ class RDFread(CGRRead):
         '''
         lose = sorted(set(range(1, length + 1)).difference(maps['products']).difference(maps['substrats']),
                       reverse=True)
-        if lose:
+        if lose and remap:
             for k in maps:
                 for i in lose:
                     newmaps = []
                     for j in maps[k]:
                         newmaps.append(j if j < i else j - 1)
                     maps[k] = newmaps
-            length -= len(lose)
         ''' end
         '''
         greaction = dict(substrats=[], products=[], meta=reaction['meta'])

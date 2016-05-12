@@ -19,7 +19,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import count
+from itertools import count, product
+from collections import defaultdict
 import periodictable as pt
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
@@ -163,6 +164,53 @@ class CGRRead:
 
 
 class CGRWrite:
+    def __init__(self):
+        self.__cgr = self.__tocgr()
+
+    def getformattedcgr(self, g):
+        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[], meta=g.graph.get('meta', {}))
+        renum = {}
+        for n, (i, j) in enumerate(g.nodes(data=True), start=1):
+            renum[i] = n
+            meta = self.__charge(j['s_charge'], j['p_charge'])
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
+            if meta:
+                meta['atoms'] = (renum[i],)
+                data['CGR_DAT'].append(meta)
+
+            if j.get('isotop'):
+                data['extended'].append(dict(atoms=(renum[i],), value=j.get('isotop'), type='isotop'))
+
+            data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
+                                      x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
+        for i, l, j in g.edges(data=True):
+            bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
+            if btype:
+                data['CGR_DAT'].append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
+
+            data['bonds'].append((renum[i], renum[l], bond))
+
+            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
+            if meta:
+                meta['atoms'] = (renum[i], renum[l])
+                data['CGR_DAT'].append(meta)
+
+        return data
+
     def getformattedtext(self, data):
         text = []
         for i in data['extended']:
@@ -185,6 +233,43 @@ class CGRWrite:
             text.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
             text.append('M  SED %3d %s\n' % (i, j['value']))
         return ''.join(text)
+
+    @staticmethod
+    def __getstate(s, p, t1, t2):
+        rep = {None: 'n'}
+        s = rep.get(s, s)
+        p = rep.get(p, p)
+        if s == p:
+            stereo = s
+            stype = t1
+        else:
+            stereo = '%s>%s' % (s, p)
+            stype = t2
+        if stereo != 'n':
+            return {'value': stereo, 'type': stype}
+        else:
+            return None
+
+    @staticmethod
+    def __charge(s, p):
+        ss = fromMDL.get(s)
+        pp = fromMDL.get(p)
+        diff = pp - ss
+        if diff:
+            meta = {'value': 'c%+d' % diff, 'type': 'dynatom'}
+        else:
+            meta = None
+        return meta
+
+    @staticmethod
+    def __tocgr():
+        ways = [None, 0, 1, 2, 3, 4, 9]
+        rep = {None: 0}
+        cgrdict = defaultdict(dict)
+        for x, y in product(ways, repeat=2):
+            cgrdict[x][y] = ('8', '%s>%s' % (rep.get(x, x), rep.get(y, y)), 'dynbond') if x != y else \
+                ('8', 's', 'extrabond') if x == 9 else (str(rep.get(x, x)), None, False)
+        return cgrdict
 
     @staticmethod
     def __getposition(inp, atoms):

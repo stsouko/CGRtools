@@ -18,11 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import defaultdict
 import copy
-from itertools import product
 import networkx as nx
-from CGRtools.CGRrw import fromMDL
 from CGRtools.RDFread import RDFread
 from CGRtools.SDFread import SDFread
 
@@ -31,7 +28,6 @@ class CGRPreparer(object):
     def __init__(self, cgrtype, extralabels=False):
         self.__extralabels = extralabels
         self.__cgrtype = self.__getcgrtype(cgrtype)
-        self.__cgr = self.__tocgr()
 
     def acceptrepair(self):
         return self.__cgrtype not in (1, 2, 3, 4, 5, 6)
@@ -69,50 +65,6 @@ class CGRPreparer(object):
                     res['products'].node[i][j] = {x: y for x, y in zip(res['substrats'].node[i][j],
                                                                        res['products'].node[i][j])}
         return res
-
-    def getformattedcgr(self, graph):
-        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[])
-        renum = {}
-        for n, (i, j) in enumerate(graph.nodes(data=True), start=1):
-            renum[i] = n
-            meta = self.__charge(j['s_charge'], j['p_charge'])
-            if meta:
-                meta['atoms'] = (renum[i],)
-                data['CGR_DAT'].append(meta)
-
-            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
-            if meta:
-                meta['atoms'] = (renum[i],)
-                data['CGR_DAT'].append(meta)
-
-            meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
-            if meta:
-                meta['atoms'] = (renum[i],)
-                data['CGR_DAT'].append(meta)
-
-            meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
-            if meta:
-                meta['atoms'] = (renum[i],)
-                data['CGR_DAT'].append(meta)
-
-            if j.get('isotop'):
-                data['extended'].append(dict(atoms=(renum[i],), value=j.get('isotop'), type='isotop'))
-
-            data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
-                                      x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
-        for i, l, j in graph.edges(data=True):
-            bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
-            if btype:
-                data['CGR_DAT'].append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
-
-            data['bonds'].append((renum[i], renum[l], bond))
-
-            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
-            if meta:
-                meta['atoms'] = (renum[i], renum[l])
-                data['CGR_DAT'].append(meta)
-
-        return data
 
     def prepare(self, data):
         def getmols(t):
@@ -227,40 +179,3 @@ class CGRPreparer(object):
             self.__needed = dict(substrats=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
                                  products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True))
         return t
-
-    @staticmethod
-    def __charge(s, p):
-        ss = fromMDL.get(s)
-        pp = fromMDL.get(p)
-        diff = pp - ss
-        if diff:
-            meta = {'value': 'c%+d' % diff, 'type': 'dynatom'}
-        else:
-            meta = None
-        return meta
-
-    @staticmethod
-    def __tocgr():
-        ways = [None, 0, 1, 2, 3, 4, 9]
-        rep = {None: 0}
-        cgrdict = defaultdict(dict)
-        for x, y in product(ways, repeat=2):
-            cgrdict[x][y] = ('8', '%s>%s' % (rep.get(x, x), rep.get(y, y)), 'dynbond') if x != y else \
-                ('8', 's', 'extrabond') if x == 9 else (str(rep.get(x, x)), None, False)
-        return cgrdict
-
-    @staticmethod
-    def __getstate(s, p, t1, t2):
-        rep = {None: 'n'}
-        s = rep.get(s, s)
-        p = rep.get(p, p)
-        if s == p:
-            stereo = s
-            stype = t1
-        else:
-            stereo = '%s>%s' % (s, p)
-            stype = t2
-        if stereo != 'n':
-            return {'value': stereo, 'type': stype}
-        else:
-            return None

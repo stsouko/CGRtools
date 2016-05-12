@@ -90,8 +90,7 @@ class CGRReactor(object):
                 gm = self.spgraphmatcher(g, i['substrats'])
                 for j in gm.subgraph_isomorphisms_iter():
                     res = dict(substrats=g, meta=i['meta'],
-                               products=self.__remapgroup(i['products'], g,
-                                                          {y: x for x, y in j.items()})[0])
+                               products=self.__remapgroup(i['products'], g,  {y: x for x, y in j.items()})[0])
 
                     yield res
 

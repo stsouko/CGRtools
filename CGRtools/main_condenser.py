@@ -37,10 +37,11 @@ def condenser_core(**kwargs):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = con.getFCGR(data)
+            a = con.getCGR(data)
             outputdata.writedata(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
     print('%d from %d reactions condensed' % (num - err, num), file=sys.stderr)
 
+    return 0 if num and not err else 1 if num - err else 2

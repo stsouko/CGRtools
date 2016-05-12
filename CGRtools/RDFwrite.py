@@ -25,6 +25,7 @@ from .CGRrw import CGRWrite
 
 class RDFwrite(CGRWrite):
     def __init__(self, file):
+        CGRWrite.__init__(self)
         self.__file = file
         self.writedata = self.__initwrite
 
@@ -40,6 +41,7 @@ class RDFwrite(CGRWrite):
         self.__file.write('$RFMT\n$RXN\n\n  CGRtools. Ramil I. Nugmanov\n\n%3d%3d\n' %
                           (len(data['substrats']), len(data['products'])))
         for m in data['substrats'] + data['products']:
+            m = self.getformattedcgr(m)
             self.__file.write('$MOL\n\n  FEAR\n\n%3d%3d  0  0  0  0            999 V2000\n' %
                               (len(m['atoms']), len(m['bonds'])))
             for a in m['atoms']:
@@ -50,5 +52,6 @@ class RDFwrite(CGRWrite):
 
             self.__file.write(self.getformattedtext(m))
             self.__file.write("M  END\n")
+
         for p in data['meta'].items():
             self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)

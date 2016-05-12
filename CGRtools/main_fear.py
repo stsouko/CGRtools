@@ -35,16 +35,21 @@ def fear_core(**kwargs):
     cgr = CGRcore(type='0', balance=0, b_templates=None, **kwargs)
     err = 0
     num = 0
+    report = set()
+
     for num, data in enumerate(inputdata.readdata(), start=1):
         if kwargs['debug'] or num % 10 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
             g = cgr.getCGR(data)
-            print(fear.getreactionhash(g))
-            outputdata.writedata(g)
+            h = fear.chkreaction(g, gennew=True)[2]
+            report.update(x[1] for x in h)
+            data['meta']['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
+            outputdata.writedata(data)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
             break
+    print(report)
     print('%d from %d reactions checked' % (num - err, num), file=sys.stderr)
 

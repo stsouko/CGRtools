@@ -94,22 +94,6 @@ class CGRcore(CGRPreparer, CGRReactor):
         g2.add_edges_from([(1, 2, dict(p_bond=None))])
         return dict(substrats=('s_bond', [g1]), products=('p_bond', [g2]))
 
-    def dissCGR(self, data):
-        tmp = dict(substrats=[], products=[], meta={})
-        for category, (edge, pattern) in self.__disstemplate.items():
-            components, *_ = self.getbondbrokengraph(data, pattern, gis.categorical_edge_match(edge, None))
-            for mol in components:
-                for n, m, edge_attr in mol.edges(data=True):
-                    for i, j in self.__attrcompose['edges'][category].items():
-                        if j in edge_attr:
-                            mol[n][m][i] = edge_attr[j]
-                for n, node_attr in mol.nodes(data=True):
-                    for i, j in self.__attrcompose['nodes'][category].items():
-                        if j in node_attr:
-                            mol.node[n][i] = node_attr[j]
-                tmp[category].append(self.getformattedcgr(mol))
-        return tmp
-
     def __chkmap(self, rsearcher, iswhitelist=True):
         def searcher(g):
             if iswhitelist:
@@ -138,22 +122,24 @@ class CGRcore(CGRPreparer, CGRReactor):
             '''
             g = self.clonesubgraphs(g)
             g = self.__searchpatch(g)
+
+        meta = data['meta'].copy()
+        meta['CGR_REPORT'] = ';; '.join(g.graph.get('CGR_REPORT', []))
+        g.graph['meta'] = meta
         return g
 
-    def getFCGR(self, data):
-        g = self.getCGR(data)
-        matrix = self.getformattedcgr(g)
-
-        meta = data['meta'].copy()
-        meta['CGR_REPORT'] = ';;'.join(g.graph.get('CGR_REPORT', []))
-        matrix['meta'] = meta
-        return matrix
-
-    def getFreaction(self, data):
-        g = self.getCGR(data)
-        matrix = self.dissCGR(g)
-
-        meta = data['meta'].copy()
-        meta['CGR_REPORT'] = ';;'.join(g.graph.get('CGR_REPORT', []))
-        matrix['meta'] = meta
-        return matrix
+    def dissCGR(self, g):
+        tmp = dict(substrats=[], products=[], meta=g.graph['meta'])
+        for category, (edge, pattern) in self.__disstemplate.items():
+            components, *_ = self.getbondbrokengraph(g, pattern, gis.categorical_edge_match(edge, None))
+            for mol in components:
+                for n, m, edge_attr in mol.edges(data=True):
+                    for i, j in self.__attrcompose['edges'][category].items():
+                        if j in edge_attr:
+                            mol[n][m][i] = edge_attr[j]
+                for n, node_attr in mol.nodes(data=True):
+                    for i, j in self.__attrcompose['nodes'][category].items():
+                        if j in node_attr:
+                            mol.node[n][i] = node_attr[j]
+                tmp[category].append(mol)
+        return tmp
