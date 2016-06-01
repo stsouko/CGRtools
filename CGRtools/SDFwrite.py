@@ -19,6 +19,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from itertools import chain
 from .CGRrw import CGRWrite
 
 
@@ -53,6 +54,6 @@ class SDFwrite(CGRWrite):
         self.__file.write(self.getformattedtext(data))
 
         self.__file.write("M  END\n")
-        for i in list(data['meta'].items()):
+        for i in chain(data['colors'].items(), data['meta'].items()):
             self.__file.write(">  <%s>\n%s\n" % i)
         self.__file.write("$$$$\n")

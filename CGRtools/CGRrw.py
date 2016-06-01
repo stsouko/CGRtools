@@ -162,41 +162,64 @@ class CGRRead:
         elif k['type'] == 'isotop':
             g.node[atom1]['isotop'] = k['value']
 
+    def parsecolors(self, g, key, colors):
+        for population, *keys in (x.split() for x in colors):
+            for atom, val in (x.split(':') for x in keys):
+                if 'dyn' not in key[:3]:
+                    g.node[int(atom)].setdefault('s_%s' % key, {})[int(population)] = val
+                    g.node[int(atom)].setdefault('p_%s' % key, {})[int(population)] = val
+                else:
+                    v1, v2 = val.split('>')
+                    g.node[int(atom)].setdefault('s_%s' % key[3:], {})[int(population)] = v1
+                    g.node[int(atom)].setdefault('p_%s' % key[3:], {})[int(population)] = v2
+
 
 class CGRWrite:
     def __init__(self):
         self.__cgr = self.__tocgr()
 
     def getformattedcgr(self, g):
-        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[], meta=g.graph.get('meta', {}))
+        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[], meta=g.graph.get('meta', {}).copy(), colors={})
         renum = {}
+        colors = {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
             meta = self.__charge(j['s_charge'], j['p_charge'])
             if meta:
-                meta['atoms'] = (renum[i],)
+                meta['atoms'] = (n,)
                 data['CGR_DAT'].append(meta)
 
             meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
             if meta:
-                meta['atoms'] = (renum[i],)
+                meta['atoms'] = (n,)
                 data['CGR_DAT'].append(meta)
 
             meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
             if meta:
-                meta['atoms'] = (renum[i],)
+                meta['atoms'] = (n,)
                 data['CGR_DAT'].append(meta)
 
             meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
             if meta:
-                meta['atoms'] = (renum[i],)
+                meta['atoms'] = (n,)
                 data['CGR_DAT'].append(meta)
 
-            if j.get('isotop'):
-                data['extended'].append(dict(atoms=(renum[i],), value=j.get('isotop'), type='isotop'))
+            if 'isotop' in j:
+                data['extended'].append(dict(atoms=(n,), value=j.get('isotop'), type='isotop'))
+
+            for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
+                for part, s_val in j.get('s_%s' % k, {}).items():
+                    p_val = j['p_%s' % k][part]
+                    meta = self.__getstate(s_val, p_val, k, 'dyn%s' % k)
+                    if meta:
+                        colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
             data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
                                       x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
+
+        for i, j in colors.items():
+            data['colors'][i] = '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items())
+
         for i, l, j in g.edges(data=True):
             bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
             if btype:

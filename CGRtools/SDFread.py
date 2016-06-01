@@ -61,7 +61,7 @@ class SDFread(CGRRead):
                 mend = False
 
             elif n == im:
-                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}}
+                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
 
                 try:
                     atomcount = int(line[0:3]) + n
@@ -99,9 +99,16 @@ class SDFread(CGRRead):
                     if '>  <' in line:
                         meta = True
                         mkey = line.strip()[4:-1]
-                        molecule['meta'][mkey] = ''
+                        if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
+                                    'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
+                            target = 'colors'
+                        else:
+                            target = 'meta'
+                        molecule[target][mkey] = []
                     elif meta:
-                        molecule['meta'][mkey] += line.strip()
+                        data = line.strip()
+                        if data:
+                            molecule[target][mkey].append(data)
                 except:
                     failkey = True
                     molecule = None
@@ -127,7 +134,10 @@ class SDFread(CGRRead):
         for k in molecule['CGR_DAT']:
             atom1 = k['atoms'][0] + 1
             atom2 = k['atoms'][-1] + 1
-
             self.cgr_dat(g, k, atom1, atom2)
 
-        return dict(meta=molecule['meta'], structure=g)
+        for k, v in molecule['colors'].items():
+            self.parsecolors(g, k, v)
+
+        g.graph['meta'] = molecule['meta']
+        return g
