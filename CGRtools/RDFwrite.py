@@ -20,6 +20,7 @@
 #  MA 02110-1301, USA.
 #
 import time
+from itertools import count, chain
 from .CGRrw import CGRWrite
 
 
@@ -37,11 +38,13 @@ class RDFwrite(CGRWrite):
         self.__writedata(data)
         self.writedata = self.__writedata
 
-    def __writedata(self, data):
+    def __writedata(self, data, flushmap=False):
         self.__file.write('$RFMT\n$RXN\n\n  CGRtools. Ramil I. Nugmanov\n\n%3d%3d\n' %
                           (len(data['substrats']), len(data['products'])))
+        colors = {}
+        counter = count(1)
         for m in data['substrats'] + data['products']:
-            m = self.getformattedcgr(m)
+            m = self.getformattedcgr(m, flushmap=flushmap)
             self.__file.write('$MOL\n\n  FEAR\n\n%3d%3d  0  0  0  0            999 V2000\n' %
                               (len(m['atoms']), len(m['bonds'])))
             for a in m['atoms']:
@@ -52,6 +55,8 @@ class RDFwrite(CGRWrite):
 
             self.__file.write(self.getformattedtext(m))
             self.__file.write("M  END\n")
+            cnext = next(counter)
+            colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
 
-        for p in data['meta'].items():
+        for p in chain(colors.items(), data['meta'].items()):
             self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)

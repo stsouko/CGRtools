@@ -35,11 +35,11 @@ class CGRRead:
 
     def collect(self, line):
         if 'M  ALS' in line:
-            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10]) - 1],
+            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10])],
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif 'M  ISO' in line:
-            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13]) - 1], type='isotop', value=int(line[14:17]))
+            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotop', value=int(line[14:17]))
 
         elif 'M  STY' in line:
             for i in range(int(line[8])):
@@ -49,7 +49,7 @@ class CGRRead:
             if int(line[7:10]) in self.__prop:
                 key = []
                 for i in range(int(line[10:13])):
-                    key.append(int(line[14 + 4 * i:17 + 4 * i]) - 1)
+                    key.append(int(line[14 + 4 * i:17 + 4 * i]))
                 self.__prop[int(line[7:10])]['atoms'] = sorted(key)
         elif 'M  SDT' in line and int(line[7:10]) in self.__prop:
             key = line.split()[-1].lower()
@@ -162,23 +162,33 @@ class CGRRead:
         elif k['type'] == 'isotop':
             g.node[atom1]['isotop'] = k['value']
 
-    def parsecolors(self, g, key, colors):
-        for population, *keys in (x.split() for x in colors):
+    @staticmethod
+    def parsecolors(g, key, colors, remapped):
+        adhoc, before = [], []
+        for x in colors:
+            if (len(x) == 81 or len(x) == 75 and not before) and x[-1] == '+':
+                before.append(x[:-1])
+            else:
+                adhoc.append(''.join(before + [x]))
+                before = []
+
+        for population, *keys in (x.split() for x in adhoc):
             for atom, val in (x.split(':') for x in keys):
+                atom = remapped[int(atom)]
                 if 'dyn' not in key[:3]:
-                    g.node[int(atom)].setdefault('s_%s' % key, {})[int(population)] = val
-                    g.node[int(atom)].setdefault('p_%s' % key, {})[int(population)] = val
+                    g.node[atom].setdefault('s_%s' % key, {})[int(population)] = val
+                    g.node[atom].setdefault('p_%s' % key, {})[int(population)] = val
                 else:
                     v1, v2 = val.split('>')
-                    g.node[int(atom)].setdefault('s_%s' % key[3:], {})[int(population)] = v1
-                    g.node[int(atom)].setdefault('p_%s' % key[3:], {})[int(population)] = v2
+                    g.node[atom].setdefault('s_%s' % key[3:], {})[int(population)] = v1
+                    g.node[atom].setdefault('p_%s' % key[3:], {})[int(population)] = v2
 
 
 class CGRWrite:
     def __init__(self):
         self.__cgr = self.__tocgr()
 
-    def getformattedcgr(self, g):
+    def getformattedcgr(self, g, flushmap=False):
         data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[], meta=g.graph.get('meta', {}).copy(), colors={})
         renum = {}
         colors = {}
@@ -214,8 +224,8 @@ class CGRWrite:
                     if meta:
                         colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
-            data['atoms'].append(dict(map=i, charge=j['s_charge'], element=j.get('element', 'A'),
-                                      x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
+            data['atoms'].append(dict(map=j['mark'] if flushmap else i, charge=j['s_charge'],
+                                      element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
 
         for i, j in colors.items():
             data['colors'][i] = '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items())

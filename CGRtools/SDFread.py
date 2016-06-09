@@ -22,6 +22,7 @@
 from CGRtools.CGRrw import CGRRead
 import periodictable as pt
 import networkx as nx
+from itertools import count
 
 
 class SDFread(CGRRead):
@@ -37,7 +38,7 @@ class SDFread(CGRRead):
                     prop.add(line.strip()[4:-1].replace(',', '_'))
         return prop
 
-    def readdata(self):
+    def readdata(self, remap=True):
         im = 3
         atomcount = -1
         bondcount = -1
@@ -51,7 +52,7 @@ class SDFread(CGRRead):
             elif "$$$$" in line[0:4]:
                 if molecule:
                     try:
-                        yield self.__getGraphs(molecule)
+                        yield self.__getGraphs(molecule, remap)
                     except:
                         pass
 
@@ -59,6 +60,7 @@ class SDFread(CGRRead):
                 im = n + 4
                 failkey = False
                 mend = False
+                molecule = None
 
             elif n == im:
                 molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
@@ -73,7 +75,7 @@ class SDFread(CGRRead):
             elif n <= atomcount:
                 molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
                                               charge=int(line[38:39]),
-                                              map=int(line[60:63]), mark=line[51:54].strip(),
+                                              map=int(line[60:63]), mark=line[54:57].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
 
             elif n <= bondcount:
@@ -106,38 +108,46 @@ class SDFread(CGRRead):
                             target = 'meta'
                         molecule[target][mkey] = []
                     elif meta:
-                        data = line.strip()
+                        data = line.rstrip()
                         if data:
                             molecule[target][mkey].append(data)
                 except:
                     failkey = True
                     molecule = None
         else:
-            raise StopIteration
+            if molecule:
+                try:
+                    yield self.__getGraphs(molecule, remap)
+                except:
+                    pass
 
-    def __getGraphs(self, molecule):
+    def __getGraphs(self, molecule, remap):
         g = nx.Graph()
+        newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
+        remapped = {}
         for k, l in enumerate(molecule['atoms'], start=1):
-            g.add_node(k, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+            atom_map = k if remap else l['map'] or next(newmap)
+            remapped[k] = atom_map
+            g.add_node(atom_map, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                        s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
                        p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
                        map=l['map'])
             if l['isotop']:
                 a = pt.elements.symbol(l['element'])
-                g.node[k]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+                g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
         for k, l, m in molecule['bonds']:
-            g.add_edge(k, l,
+            g.add_edge(remapped[k], remapped[l],
                        s_bond=m, s_stereo=None,
                        p_bond=m, p_stereo=None)
 
         for k in molecule['CGR_DAT']:
-            atom1 = k['atoms'][0] + 1
-            atom2 = k['atoms'][-1] + 1
+            atom1 = remapped[k['atoms'][0]]
+            atom2 = remapped[k['atoms'][-1]]
             self.cgr_dat(g, k, atom1, atom2)
 
         for k, v in molecule['colors'].items():
-            self.parsecolors(g, k, v)
+            self.parsecolors(g, k, v, remapped)
 
-        g.graph['meta'] = molecule['meta']
+        g.graph['meta'] = {x: '\n'.join(z.strip() for z in y) for x, y in molecule['meta'].items()}
         return g
