@@ -20,7 +20,7 @@
 #
 import operator
 from collections import defaultdict
-import itertools
+from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
 import networkx as nx
 from CGRtools.FEAR import FEAR
@@ -31,7 +31,7 @@ def patcher(matrix):
     :param matrix: dict
     """
     g = matrix['substrats'].copy()
-    g.remove_edges_from(itertools.combinations(matrix['products'], 2))
+    g.remove_edges_from(combinations(matrix['products'], 2))
     g = nx.compose(g, matrix['products'])
     return g
 
@@ -69,7 +69,7 @@ class CGRReactor(object):
         g2 = nx.Graph()
         g1.add_edges_from([(1, 2, dict(s_bond=1, p_bond=None)), (2, 3, dict(s_bond=None, p_bond=1))])
         g2.add_edges_from([(1, 2, dict(s_bond=None, p_bond=1))])
-        return g1, g2
+        return [g1, g2]
 
     def spgraphmatcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
@@ -101,31 +101,31 @@ class CGRReactor(object):
     @staticmethod
     def getbondbrokengraph(g, rc_templates, edge_match):
         g = g.copy()
-        lose_bonds = defaultdict(dict)
+        lose_bonds = {}
         for i in rc_templates:
             gm = gis.GraphMatcher(g, i, edge_match=edge_match)
             for j in gm.subgraph_isomorphisms_iter():
                 mapping = {y: x for x, y in j.items()}
                 if 3 in mapping:
-                    lose_bonds[mapping[2]][mapping[1]] = g[mapping[1]][mapping[2]]
+                    lose_bonds[(mapping[2], mapping[1])] = g[mapping[1]][mapping[2]]
                     g.remove_edge(mapping[2], mapping[3])
                     g.remove_edge(mapping[1], mapping[2])
-                elif not any(nx.has_path(g, x, y) for y in lose_bonds for x in mapping.values()):
+                elif not any(nx.has_path(g, *x) for x in product((y for x in lose_bonds for y in x), mapping.values())):
                     # запилить проверку связности атомов 1 или 2 с lose_map атомами
                     g.remove_edge(mapping[1], mapping[2])
         components = list(nx.connected_component_subgraphs(g))
         return components, lose_bonds
 
     def clonesubgraphs(self, g):
-        r_group = {}
+        r_group = []
         x_group = {}
-        r_group_clones = defaultdict(list)
+        r_group_clones = []
         newcomponents = []
 
         ''' search bond breaks and creations
         '''
         components, lose_bonds = self.getbondbrokengraph(g, self.__rctemplate, self.__edge_match_only_bond)
-        lose_map = {x: z for x, y in lose_bonds.items() for z in y}
+        lose_map = {x: y for x, y in lose_bonds}
         ''' extract subgraphs and sort by group type (R or X)
         '''
         x_terminals = set(lose_map.values())
@@ -138,30 +138,30 @@ class CGRReactor(object):
             if x_terminal_atom:
                 x_group[x_terminal_atom.pop()] = i
             elif r_terminal_atom:
-                r_group[tuple(r_terminal_atom)] = i
+                r_group.append([r_terminal_atom, i])
             else:
                 newcomponents.append(i)
         ''' search similar R groups and patch.
         '''
         tmp = g.copy()
         for i in newcomponents:
-            for k, j in r_group.items():
+            for k, j in r_group:
                 gm = gis.GraphMatcher(j, i, node_match=self.__node_match_products,
                                       edge_match=self.__edge_match_products)
                 ''' search for similar R-groups started from bond breaks.
                 '''
-                mapping = next((x for x in gm.subgraph_isomorphisms_iter() if set(k).intersection(x)), None)
+                mapping = next((x for x in gm.subgraph_isomorphisms_iter() if k.intersection(x)), None)
                 if mapping:
-                    r_group_clones[k].append(mapping[k])
+                    r_group_clones.append([k, mapping])
                     tmp = nx.compose(tmp, self.__remapgroup(j, tmp, mapping)[0])
                     break
         ''' add lose X groups to R groups
         '''
-        for i, j in r_group_clones.items():
-            for k in j:
-                remappedgroup, mapping = self.__remapgroup(x_group[lose_map[i]], tmp, {})
+        for i, j in r_group_clones:
+            for k in i:
+                remappedgroup, mapping = self.__remapgroup(x_group[lose_map[k]], tmp, {})
                 tmp = nx.union(tmp, remappedgroup)
-                tmp.add_edge(k, mapping[lose_map[i]], attr_dict=lose_bonds[i][lose_map[i]])
+                tmp.add_edge(j[k], mapping[lose_map[k]], **lose_bonds[(k, lose_map[k])])
 
         return tmp
 
