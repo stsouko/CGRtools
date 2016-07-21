@@ -31,16 +31,19 @@ class CGRcore(CGRPreparer, CGRReactor):
 
         ''' balancer rules.
         '''
-        self.__searchpatch = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['b_templates'])),
+        self.__searchpatch = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['b_templates']),
+                                                               speed=kwargs.get('speed', False)),
                                            iswhitelist=False) if kwargs['b_templates'] else lambda x: x
         ''' mapper rules.
         '''
         self.chkmap = lambda x: x
         if kwargs['balance'] != 2:
             if kwargs['c_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['c_rules']), patch=False))
+                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['c_rules'], isreaction=False),
+                                                                patch=False, speed=kwargs.get('speed', False)))
             elif kwargs['e_rules']:
-                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['e_rules'])),
+                self.chkmap = self.__chkmap(self.searchtemplate(self.gettemplates(kwargs['e_rules']),
+                                                                speed=kwargs.get('speed', False)),
                                             iswhitelist=False)
 
         if kwargs['balance'] == 1 and self.acceptrepair():

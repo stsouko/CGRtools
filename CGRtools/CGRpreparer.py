@@ -36,7 +36,7 @@ class CGRPreparer(object):
         if templates:
             source = RDFread(templates) if isreaction else SDFread(templates)
 
-            templates = []
+            _templates = []
             for template in source.readdata():
                 if isreaction:
                     matrix = self.preparetemplate(template)
@@ -44,8 +44,8 @@ class CGRPreparer(object):
                     nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
                 else:
                     matrix = dict(substrats=template['structure'], meta=template['meta'])
-                templates.append(matrix)
-            return templates
+                _templates.append(matrix)
+            return _templates
 
         return None
 

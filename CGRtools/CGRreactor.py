@@ -19,7 +19,6 @@
 #  MA 02110-1301, USA.
 #
 import operator
-from collections import defaultdict
 from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
 import networkx as nx
@@ -74,7 +73,7 @@ class CGRReactor(object):
     def spgraphmatcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
-    def searchtemplate(self, templates, patch=True, speed=True):
+    def searchtemplate(self, templates, patch=True, speed=False):
         if speed:
             _fear = FEAR(isotop=self.__isotop, stereo=self.__stereo, hyb=self.__hyb,
                          element=self.__element, deep=self.__deep)
@@ -82,6 +81,7 @@ class CGRReactor(object):
             templates = {x['meta']['CGR_FEAR_SHASH']: x for x in templates}
 
         def searcher(g):
+            hitlist = []
             if speed or not patch:
                 hit, hitlist, _ = _fear.chkreaction(g, full=(not patch))
                 if not patch:

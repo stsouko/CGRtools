@@ -238,7 +238,7 @@ class FEAR(object):
             for n, m in scaf.items():
                 """ if don't have neighbors use self weight
                 """
-                tmp[n] = reduce(operator.mul, (weights[x] for x in m), weights[n])
+                tmp[n] = reduce(operator.mul, (weights[x] for x in m), weights[n]**2)
 
             numb = len(set(tmp.values()))
             if numb == oldnumb:
