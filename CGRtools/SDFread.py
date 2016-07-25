@@ -129,17 +129,13 @@ class SDFread(CGRRead):
             atom_map = k if remap else l['map'] or next(newmap)
             remapped[k] = atom_map
             g.add_node(atom_map, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                       s_charge=l['charge'], s_stereo=None, s_hyb=None, s_neighbors=None,
-                       p_charge=l['charge'], p_stereo=None, p_hyb=None, p_neighbors=None,
-                       map=l['map'])
+                       s_charge=l['charge'], p_charge=l['charge'], map=l['map'])
             if l['isotop']:
                 a = pt.elements.symbol(l['element'])
                 g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
         for k, l, m in molecule['bonds']:
-            g.add_edge(remapped[k], remapped[l],
-                       s_bond=m, s_stereo=None,
-                       p_bond=m, p_stereo=None)
+            g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m)
 
         for k in molecule['CGR_DAT']:
             atom1 = remapped[k['atoms'][0]]

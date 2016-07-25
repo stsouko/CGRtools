@@ -27,7 +27,7 @@ from networkx.algorithms import isomorphism as gis
 class CGRcore(CGRPreparer, CGRReactor):
     def __init__(self, **kwargs):
         CGRPreparer.__init__(self, kwargs['type'], extralabels=kwargs.get('extralabels', False))
-        CGRReactor.__init__(self, stereo=kwargs['stereo'])
+        CGRReactor.__init__(self, stereo=kwargs['stereo'], neighbors=True, hyb=True)
 
         ''' balancer rules.
         '''
@@ -55,37 +55,77 @@ class CGRcore(CGRPreparer, CGRReactor):
 
         self.__disstemplate = self.__disscenter()
 
-    __popdict = dict(products=dict(edge=('s_bond', 's_stereo'), node=('s_charge', 's_stereo', 's_neighbors', 's_hyb')),
-                     substrats=dict(edge=('p_bond', 'p_stereo'), node=('p_charge', 'p_stereo', 'p_neighbors', 'p_hyb')))
+    __popdict = dict(products=dict(edge=('s_bond', 's_stereo'), node=('s_charge', 's_stereo', 's_neighbors', 's_hyb'),
+                                   ext_node=('s_neighbors', 's_hyb')),
+                     substrats=dict(edge=('p_bond', 'p_stereo'), node=('p_charge', 'p_stereo', 'p_neighbors', 'p_hyb'),
+                                    ext_node=('p_neighbors', 'p_hyb')))
 
     __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond', p_stereo='s_stereo'),
                                     products=dict(s_bond='p_bond', s_stereo='p_stereo')),
-                         nodes=dict(substrats=dict(p_charge='s_charge', p_stereo='s_stereo'),
-                                    products=dict(s_charge='p_charge', s_stereo='p_stereo')))
+                         nodes=dict(substrats=dict(p_charge='s_charge', p_stereo='s_stereo',
+                                                   p_neighbors='s_neighbors', p_hyb='s_hyb'),
+                                    products=dict(s_charge='p_charge', s_stereo='p_stereo',
+                                                  s_neighbors='p_neighbors', s_hyb='p_hyb')))
 
     def __compose(self, data):
         """ remove from union graphs of products or substrats data about substrats or products
         """
         common = set(data['substrats']).intersection(data['products'])
         matrix = dict(products=data['products'].copy(), substrats=data['substrats'].copy())
+        extended_common = set()
 
-        """ remove bond and stereo states for common atoms.
+        """ remove bond, stereo, neighbors and hybridization states for common atoms.
         """
         for i in ('substrats', 'products'):
             for n, m in matrix[i].edges(common):
+                extended_common.update([n, m])
                 for j in self.__popdict[i]['edge']:
-                    if j in matrix[i][n][m]:
-                        matrix[i][n][m].pop(j)
+                    matrix[i][n][m].pop(j, None)
+
         for n in common:
             for j in self.__popdict['products']['node']:
-                if j in matrix['products'].node[n]:
-                    matrix['products'].node[n].pop(j)
+                matrix['products'].node[n].pop(j, None)
+
+        """ remove neighbors and hybridization states for common frontier atoms.
+        """
+        bubble = extended_common.difference(common)
+        for i in ('substrats', 'products'):
+            for n in bubble.intersection(data[i]):
+                for j in self.__popdict[i]['ext_node']:
+                    matrix[i].node[n].pop(j, None)
 
         """ compose graphs. kostyl
         """
         g = matrix['substrats']
         g.add_nodes_from(matrix['products'].nodes(data=True))
         g.add_edges_from(matrix['products'].edges(data=True))
+
+        """ update sp_* marks
+        """
+        for n in extended_common:
+            label = g.node[n]
+            for s, p, sp in (('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in
+                             ('neighbors', 'hyb', 'stereo', 'charge')):
+                ls = label.get(s)
+                lr = label.get(p)
+                if ls != lr:
+                    label[sp] = (ls, lr)
+                elif ls is not None:
+                    label[sp] = ls
+                else:
+                    label.pop(sp, None)
+
+        for n, m in g.edges(common):
+            label = g[n][m]
+            for s, p, sp in (('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo')):
+                ls = label.get(s)
+                lr = label.get(p)
+                if ls != lr:
+                    label[sp] = (ls, lr)
+                elif ls is not None:
+                    label[sp] = ls
+                else:
+                    label.pop(sp, None)
         return g
 
     @staticmethod

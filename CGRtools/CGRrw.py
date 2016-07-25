@@ -80,21 +80,29 @@ class CGRRead:
             tmp = ([], [])
             for x in k['value'].split(','):
                 s, *_, p = x.split('>')
-                tmp[0].append(int(s) if name != 'bond' else bondlabels[s])
-                tmp[1].append(int(p) if name != 'bond' else bondlabels[p])
+                tmp[0].append((int(s) if s != 'n' else None) if name != 'bond' else bondlabels[s])
+                tmp[1].append((int(p) if p != 'n' else None) if name != 'bond' else bondlabels[p])
 
             if len(tmp[0]) == 1:
-                target['s_%s' % name], target['p_%s' % name] = (tmp[0][0], tmp[1][0])
-                target['sp_%s' % name] = (tmp[0][0], tmp[1][0])
+                target['sp_%s' % name] = tmp[0][0], tmp[1][0]
+                for sp_key, sp_ind in (('s', 0), ('p', 1)):
+                    if tmp[sp_ind][0] is not None:
+                        target['%s_%s' % (sp_key, name)] = tmp[sp_ind][0]
+                    else:
+                        target.pop('%s_%s' % (sp_key, name), None)
             else:
                 target['sp_%s' % name] = list(zip(*tmp))
+                target.pop('s_%s' % name, None)
+                target.pop('p_%s' % name, None)
 
         def _parselist(target, name):
-            tmp = [bondlabels[x] if name == 'bond' else int(x) for x in k['value'].split(',')]
+            tmp = [bondlabels[x] if name == 'bond' else (int(x) if x != 'n' else None) for x in k['value'].split(',')]
             if len(tmp) == 1:
                 target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp[0]
             else:
                 target['sp_%s' % name] = tmp
+                target.pop('s_%s' % name, None)
+                target.pop('p_%s' % name, None)
 
         if k['type'] == 'dynatomstereo':
             _parsedyn(g.node[atom1], 'stereo')
@@ -126,8 +134,6 @@ class CGRRead:
                 pass  # not implemented
 
         elif k['type'] == 'dynbond':
-            g.edge[atom1][atom2].pop('s_bond')
-            g.edge[atom1][atom2].pop('p_bond')
             _parsedyn(g.edge[atom1][atom2], 'bond')
 
         elif k['type'] == 'bondstereo':
@@ -137,8 +143,6 @@ class CGRRead:
             _parsedyn(g.edge[atom1][atom2], 'stereo')
 
         elif k['type'] == 'extrabond':
-            g.edge[atom1][atom2].pop('s_bond')
-            g.edge[atom1][atom2].pop('p_bond')
             _parselist(g.edge[atom1][atom2], 'bond')
 
         elif k['type'] == 'atomlist':

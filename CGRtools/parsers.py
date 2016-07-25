@@ -42,6 +42,8 @@ def condenser_common(parser):
                              "also supported CGR on parts of reagents or/and products molecules (e.g. 101,102,-201 - "
                              "CGR on only first and second reagents molecules with all products molecules excluded "
                              "first).")
+    parser.add_argument("--extralabels", "-E", action='store_true',
+                        help="generate atom hybridization and neighbors labels")
 
 
 def balanser_common(parser):

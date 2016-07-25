@@ -35,6 +35,14 @@ def patcher(matrix):
     return g
 
 
+def list_eq(a, b):
+    return True if b is None else a in b if isinstance(b, list) else a == b
+
+
+def simple_eq(a, b):
+    return True if b is None else a == b
+
+
 class CGRReactor(object):
     def __init__(self, stereo=False, hyb=False, neighbors=False, isotop=False, element=True, deep=0):
         self.__rctemplate = self.__reactioncenter()
@@ -45,20 +53,31 @@ class CGRReactor(object):
         self.__element = element
         self.__deep = deep
 
-        stereo = (['s_stereo', 'p_stereo', 'sp_stereo'], [None] * 3,
-                  [operator.eq] * 2 + [lambda a, b: a in b if b is not None else True]) if stereo else ([], [], [])
-        pstereo = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
+        stereo_match = (['s_stereo', 'p_stereo', 'sp_stereo'], [None] * 3,
+                        [simple_eq] * 2 + [list_eq]) if stereo else ([], [], [])
+        pstereo_match = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
 
-        self.__node_match = gis.generic_node_match(['element', 's_charge', 'p_charge', 'isotop'] + stereo[0],
-                                                   [None] * 4 + stereo[1],
-                                                   [lambda a, b: a in b if
-                                                   isinstance(b, list) else a == b if b is not None else True] * 3 +
-                                                   [lambda a, b: a == b if b is not None else True] + stereo[2])
-        self.__edge_match = gis.categorical_edge_match(['s_bond', 'p_bond'] + stereo[0], [None] * 2 + stereo[1])
+        hyb_match = (['sp_hyb'], [None],
+                     [list_eq]) if hyb else ([], [], [])
 
-        self.__node_match_products = gis.categorical_node_match(['element', 'isotop', 'p_charge'] + pstereo[0],
-                                                                [None] * 3 + pstereo[1])
-        self.__edge_match_products = gis.categorical_edge_match(['p_bond'] + pstereo[0], [None] + pstereo[1])
+        neig_match = (['sp_neighbors'], [None],
+                      [list_eq]) if neighbors else ([], [], [])
+
+        self.__node_match = gis.generic_node_match(['isotop', 'sp_charge', 'element'] +
+                                                   stereo_match[0] + neig_match[0] + hyb_match[0],
+                                                   [None] * 3 + stereo_match[1] + neig_match[1] + hyb_match[1],
+                                                   [simple_eq] + [list_eq] * 2 +
+                                                   stereo_match[2] + neig_match[2] + hyb_match[2])
+
+        self.__edge_match = gis.generic_node_match(['sp_bond'] + stereo_match[0],
+                                                   [None] + stereo_match[1],
+                                                   [list_eq] + stereo_match[2])
+
+        self.__node_match_products = gis.categorical_node_match(['element', 'isotop', 'p_charge'] + pstereo_match[0],
+                                                                [None] * 3 + pstereo_match[1])
+
+        self.__edge_match_products = gis.categorical_edge_match(['p_bond'] + pstereo_match[0],
+                                                                [None] + pstereo_match[1])
 
         self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
 

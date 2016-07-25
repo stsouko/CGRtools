@@ -11,7 +11,7 @@ setup(name='cgrtools',
       author='Ramil Nugmanov',
       author_email='stsouko@live.ru',
       description='CGR tools',
-      scripts=['main.py'], requires=['numpy', 'networkx'],
+      scripts=['main.py'], requires=['networkx', 'periodictable'],
       long_description='CGR tools distributive',
 
       keywords="tools cgr cli",
@@ -26,5 +26,6 @@ setup(name='cgrtools',
                    'Programming Language :: Python :: 3.2',
                    'Programming Language :: Python :: 3.3',
                    'Programming Language :: Python :: 3.4',
+                   'Programming Language :: Python :: 3.5',
                    ]
       )
