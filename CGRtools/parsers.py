@@ -81,7 +81,6 @@ def condenser(subparsers):
     fear_common(parser)
     balanser_common(parser)
 
-    parser.add_argument("--format", "-f", action='store_true', help="generate old format of CGR SDF")
     parser.set_defaults(func=condenser_core)
 
 

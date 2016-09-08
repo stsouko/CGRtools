@@ -28,7 +28,7 @@ from CGRtools.CGRcore import CGRcore
 
 def condenser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
-    outputdata = SDFwrite(kwargs['output'], oldformat=kwargs.get('format'))
+    outputdata = SDFwrite(kwargs['output'])
 
     con = CGRcore(**kwargs)
     err = 0

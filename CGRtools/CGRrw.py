@@ -189,11 +189,14 @@ class CGRRead:
 
 
 class CGRWrite:
-    def __init__(self):
+    def __init__(self, neighbors_and_hyb=False):
         self.__cgr = self.__tocgr()
+        self.__neighyb = neighbors_and_hyb
 
     def getformattedcgr(self, g, flushmap=False):
-        data = dict(atoms=[], bonds=[], CGR_DAT=[], extended=[], meta=g.graph.get('meta', {}).copy(), colors={})
+        data = dict(atoms=[], bonds=[], meta=g.graph.get('meta', {}).copy())
+        cgr_dat = []
+        extended = []
         renum = {}
         colors = {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
@@ -201,25 +204,26 @@ class CGRWrite:
             meta = self.__charge(j['s_charge'], j['p_charge'])
             if meta:
                 meta['atoms'] = (n,)
-                data['CGR_DAT'].append(meta)
+                cgr_dat.append(meta)
 
             meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
             if meta:
                 meta['atoms'] = (n,)
-                data['CGR_DAT'].append(meta)
+                cgr_dat.append(meta)
 
-            meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
-            if meta:
-                meta['atoms'] = (n,)
-                data['CGR_DAT'].append(meta)
+            if self.__neighyb:
+                meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
+                if meta:
+                    meta['atoms'] = (n,)
+                    cgr_dat.append(meta)
 
-            meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
-            if meta:
-                meta['atoms'] = (n,)
-                data['CGR_DAT'].append(meta)
+                meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
+                if meta:
+                    meta['atoms'] = (n,)
+                    cgr_dat.append(meta)
 
             if 'isotop' in j:
-                data['extended'].append(dict(atoms=(n,), value=j.get('isotop'), type='isotop'))
+                extended.append(dict(atoms=(n,), value=j.get('isotop'), type='isotop'))
 
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
                 for part, s_val in j.get('s_%s' % k, {}).items():
@@ -231,40 +235,42 @@ class CGRWrite:
             data['atoms'].append(dict(map=j['mark'] if flushmap else i, charge=j['s_charge'],
                                       element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
 
-        for i, j in colors.items():
-            data['colors'][i] = '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items())
+        data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items()) for i, j in colors.items()}
 
         for i, l, j in g.edges(data=True):
             bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
             if btype:
-                data['CGR_DAT'].append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
+                cgr_dat.append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
 
             data['bonds'].append((renum[i], renum[l], bond))
 
             meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
-                data['CGR_DAT'].append(meta)
+                cgr_dat.append(meta)
+
+        data['CGR'] = self.__getformattedtext(extended, cgr_dat, data['atoms'])
 
         return data
 
-    def getformattedtext(self, data):
+    def __getformattedtext(self, extended, cgr_dat, atoms):
         text = []
-        for i in data['extended']:
+        for i in extended:
             if i['type'] == 'isotop':
                 text.append('M  ISO  1 %3d %3d' % (i['atoms'][0], i['value']))
             elif i['type'] == 'atomlist':
-                pass
+                pass  # todo: save atomlist for query
 
         for j in count():
-            sty = data['CGR_DAT'][j * 8:j * 8 + 8]
+            sty = cgr_dat[j * 8:j * 8 + 8]
             if sty:
                 stydat = ' '.join(['%3d DAT' % (x + 1 + j * 8) for x in range(len(sty))])
                 text.append('M  STY  %d %s\n' % (len(sty), stydat))
             else:
                 break
-        for i, j in enumerate(data['CGR_DAT'], start=1):
-            cx, cy = self.__getposition(j['atoms'], data['atoms'])
+
+        for i, j in enumerate(cgr_dat, start=1):
+            cx, cy = self.__getposition([atoms[i - 1] for i in j['atoms']])
             text.append('M  SAL %3d%3d %s\n' % (i, len(j['atoms']), ' '.join(['%3d' % x for x in j['atoms']])))
             text.append('M  SDT %3d %s\n' % (i, j['type']))
             text.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
@@ -309,25 +315,16 @@ class CGRWrite:
         return cgrdict
 
     @staticmethod
-    def __getposition(inp, atoms):
-        cord = []
-        for i in inp:
-            cord.append(atoms[i - 1])
+    def __getposition(cord):
         if len(cord) > 1:
             x = (cord[-1]['x'] + cord[0]['x']) / 2 + .2
             y = (cord[-1]['y'] + cord[0]['y']) / 2
             dy = cord[-1]['y'] - cord[0]['y']
             dx = cord[-1]['x'] - cord[0]['x']
             if dx > 0:
-                if dy > 0:
-                    y -= .2
-                else:
-                    y += .2
+                y += -.2 if dy > 0 else .2
             elif dx < 0:
-                if dy < 0:
-                    y -= .2
-                else:
-                    y += .2
+                y += -.2 if dy < 0 else .2
         else:
             x, y = cord[0]['x'] + .25, cord[0]['y']
 

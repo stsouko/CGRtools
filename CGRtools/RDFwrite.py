@@ -25,8 +25,8 @@ from .CGRrw import CGRWrite
 
 
 class RDFwrite(CGRWrite):
-    def __init__(self, file):
-        CGRWrite.__init__(self)
+    def __init__(self, file, neighbors_and_hyb=False):
+        CGRWrite.__init__(self, neighbors_and_hyb=neighbors_and_hyb)
         self.__file = file
         self.writedata = self.__initwrite
 
@@ -42,8 +42,7 @@ class RDFwrite(CGRWrite):
         self.__file.write('$RFMT\n$RXN\n\n  CGRtools. Ramil I. Nugmanov\n\n%3d%3d\n' %
                           (len(data['substrats']), len(data['products'])))
         colors = {}
-        counter = count(1)
-        for m in data['substrats'] + data['products']:
+        for cnext, m in enumerate(data['substrats'] + data['products'], start=1):
             m = self.getformattedcgr(m, flushmap=flushmap)
             self.__file.write('$MOL\n\n  FEAR\n\n%3d%3d  0  0  0  0            999 V2000\n' %
                               (len(m['atoms']), len(m['bonds'])))
@@ -53,9 +52,8 @@ class RDFwrite(CGRWrite):
             for b in m['bonds']:
                 self.__file.write("%3s%3s%3s  0  0  0  0\n" % b)
 
-            self.__file.write(self.getformattedtext(m))
+            self.__file.write(m['CGR'])
             self.__file.write("M  END\n")
-            cnext = next(counter)
             colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
 
         for p in chain(colors.items(), data['meta'].items()):
