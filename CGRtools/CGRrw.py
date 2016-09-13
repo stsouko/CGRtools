@@ -19,7 +19,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import count, product
+from itertools import count, product, chain
 from collections import defaultdict
 import periodictable as pt
 
@@ -189,16 +189,16 @@ class CGRRead:
 
 
 class CGRWrite:
-    def __init__(self, neighbors_and_hyb=False):
+    def __init__(self, extralabels=False, flushmap=False):
         self.__cgr = self.__tocgr()
-        self.__neighyb = neighbors_and_hyb
+        self.__flushmap = flushmap
+        tmp = ['stereo'] + (['hyb', 'neighbors'] if extralabels else [])
+        self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
 
-    def getformattedcgr(self, g, flushmap=False):
-        data = dict(atoms=[], bonds=[], meta=g.graph.get('meta', {}).copy())
-        cgr_dat = []
-        extended = []
-        renum = {}
-        colors = {}
+    def getformattedcgr(self, g):
+        data = dict(meta=g.graph.get('meta', {}).copy())
+        cgr_dat, extended, atoms, bonds = [], [], [], []
+        renum, colors = {}, {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
             meta = self.__charge(j['s_charge'], j['p_charge'])
@@ -206,18 +206,8 @@ class CGRWrite:
                 meta['atoms'] = (n,)
                 cgr_dat.append(meta)
 
-            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'atomstereo', 'dynatomstereo')
-            if meta:
-                meta['atoms'] = (n,)
-                cgr_dat.append(meta)
-
-            if self.__neighyb:
-                meta = self.__getstate(j.get('s_hyb'), j.get('p_hyb'), 'atomhyb', 'dynatomhyb')
-                if meta:
-                    meta['atoms'] = (n,)
-                    cgr_dat.append(meta)
-
-                meta = self.__getstate(j.get('s_neighbors'), j.get('p_neighbors'), 'atomneighbors', 'dynatomneighbors')
+            for s_key, p_key, a_key, d_key in self.__atomprop:
+                meta = self.__getstate(j.get(s_key), j.get(p_key), a_key, d_key)
                 if meta:
                     meta['atoms'] = (n,)
                     cgr_dat.append(meta)
@@ -232,8 +222,8 @@ class CGRWrite:
                     if meta:
                         colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
-            data['atoms'].append(dict(map=j['mark'] if flushmap else i, charge=j['s_charge'],
-                                      element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
+            atoms.append(dict(map=j['mark'] if self.__flushmap else i, charge=j['s_charge'],
+                              element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
 
         data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items()) for i, j in colors.items()}
 
@@ -242,18 +232,22 @@ class CGRWrite:
             if btype:
                 cgr_dat.append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[l])})
 
-            data['bonds'].append((renum[i], renum[l], bond))
+            bonds.append((renum[i], renum[l], bond))
 
             meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
                 cgr_dat.append(meta)
 
-        data['CGR'] = self.__getformattedtext(extended, cgr_dat, data['atoms'])
-
+        data['CGR'] = ''.join(chain(("\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n"
+                                     "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(atoms), len(bonds)),),
+                                    ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0%(mark)3s  "
+                                     "0%(map)3s  0  0\n" % i for i in atoms),
+                                    ("%3d%3d%3s  0  0  0  0\n" % i for i in bonds),
+                                    self.__formatprop(extended, cgr_dat, atoms)))
         return data
 
-    def __getformattedtext(self, extended, cgr_dat, atoms):
+    def __formatprop(self, extended, cgr_dat, atoms):
         text = []
         for i in extended:
             if i['type'] == 'isotop':
@@ -275,7 +269,7 @@ class CGRWrite:
             text.append('M  SDT %3d %s\n' % (i, j['type']))
             text.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
             text.append('M  SED %3d %s\n' % (i, j['value']))
-        return ''.join(text)
+        return text
 
     @staticmethod
     def __getstate(s, p, t1, t2):

@@ -82,9 +82,9 @@ class CGRcore(CGRPreparer, CGRReactor):
                 for j in self.__popdict[i]['edge']:
                     matrix[i][n][m].pop(j, None)
 
-        for n in common:
-            for j in self.__popdict['products']['node']:
-                matrix['products'].node[n].pop(j, None)
+            for n in common:
+                for j in self.__popdict[i]['node']:
+                    matrix[i].node[n].pop(j, None)
 
         """ remove neighbors and hybridization states for common frontier atoms.
         """
