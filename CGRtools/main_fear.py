@@ -21,8 +21,7 @@
 #
 import sys
 import traceback
-from CGRtools.RDFread import RDFread
-from CGRtools.RDFwrite import RDFwrite
+from CGRtools.RDFrw import RDFread, RDFwrite
 from CGRtools.FEAR import FEAR
 from CGRtools.CGRcore import CGRcore
 
@@ -31,25 +30,25 @@ def fear_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'])
 
-    fear = FEAR()
-    cgr = CGRcore(type='0', balance=0, b_templates=None, **kwargs)
+    fear = FEAR(isotop=kwargs['isotop'], stereo=kwargs['stereo'], hyb=kwargs['extralabels'], element=kwargs['element'],
+                deep=kwargs['deep'])
+    cgr = CGRcore(extralabels=kwargs['extralabels'])
     err = 0
     num = 0
     report = set()
 
-    for num, data in enumerate(inputdata.readdata(), start=1):
-        if kwargs['debug'] or num % 10 == 1:
+    for num, data in enumerate(inputdata.read(), start=1):
+        if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
             g = cgr.getCGR(data)
             h = fear.chkreaction(g, gennew=True)[2]
             report.update(x[1] for x in h)
             data['meta']['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
-            outputdata.writedata(data)
+            outputdata.write(data)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
             break
     print(report)
     print('%d from %d reactions checked' % (num - err, num), file=sys.stderr)
-

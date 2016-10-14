@@ -34,8 +34,8 @@ def parse_args():
 
     condenser(subparsers)
     balanser(subparsers)
-    reactmap(subparsers)
     fear(subparsers)
+    #reactmap(subparsers)
 
     if find_spec('argcomplete'):
         argcomplete = importlib.import_module('argcomplete')

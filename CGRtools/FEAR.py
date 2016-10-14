@@ -25,7 +25,6 @@ from itertools import chain, count
 from functools import reduce
 import networkx as nx
 import periodictable as pt
-from CGRtools.CGRrw import fromMDL
 
 
 def eratosthenes():
@@ -147,14 +146,14 @@ class FEAR(object):
                                        ';%s;' % ','.join(
                                            [self.__stereotypes[g.node[inter].get('s_stereo')] if self.__stereo else '',
                                             self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else '']),
-                                       '%+d' % fromMDL.get(g.node[inter].get('s_charge', 0)) if self.__element else '',
+                                       '%+d' % g.node[inter].get('s_charge', 0) if self.__element else '',
                                        newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
             smip = ['[%s%s%s%s:%d]' % (g.node[inter].get('isotop', '') if self.__isotop else '',
                                        g.node[inter]['element'] if self.__element else '*',
                                        ';%s;' % ','.join(
                                            [self.__stereotypes[g.node[inter].get('p_stereo')] if self.__stereo else '',
                                             self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else '']),
-                                       '%+d' % fromMDL.get(g.node[inter].get('p_charge', 0)) if self.__element else '',
+                                       '%+d' % g.node[inter].get('p_charge', 0) if self.__element else '',
                                        newmaps.get(inter))]
             concat = []
             stoplist = []

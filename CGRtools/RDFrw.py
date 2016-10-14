@@ -19,19 +19,20 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import time
 from collections import defaultdict
-from itertools import count
+from itertools import count, chain
 import networkx as nx
-from CGRtools.CGRrw import CGRRead
+from CGRtools.CGRrw import CGRread, CGRwrite, fromMDL
 import periodictable as pt
 
 
-class RDFread(CGRRead):
+class RDFread(CGRread):
     def __init__(self, file):
-        CGRRead.__init__(self)
+        CGRread.__init__(self)
         self.__RDFfile = file
 
-    def readdata(self, remap=True):
+    def read(self, remap=True):
         """ парсер RDF файлов
         """
         ir = -1
@@ -48,7 +49,7 @@ class RDFread(CGRRead):
             elif "$RXN" in line[0:4]:
                 if reaction:
                     try:
-                        yield self.__getGraphs(reaction, remap)
+                        yield self.__get_graphs(reaction, remap)
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -74,7 +75,7 @@ class RDFread(CGRRead):
                     reaction = None
             elif n <= atomcount:
                 molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
-                                              charge=int(line[38:39]),
+                                              charge=fromMDL.get(int(line[38:39]), 0),
                                               map=int(line[60:63]), mark=line[54:57].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
             elif n <= bondcount:
@@ -123,11 +124,11 @@ class RDFread(CGRRead):
         else:
             if reaction:
                 try:
-                    yield self.__getGraphs(reaction, remap)
+                    yield self.__get_graphs(reaction, remap)
                 except:
                     pass
 
-    def __getGraphs(self, reaction, remap):
+    def __get_graphs(self, reaction, remap):
         maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
                 'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
         length = count(max((max(maps['products']), max(maps['substrats']))) + 1)
@@ -166,12 +167,14 @@ class RDFread(CGRRead):
             for j in reaction[i]:
                 g = nx.Graph()
                 for k, l in enumerate(j['atoms']):
-                    g.add_node(maps[i][k + shift], element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                    g.add_node(maps[i][k + shift], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                                s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
+                    if l['element'] not in ('A', '*'):
+                        g.node[maps[i][k + shift]]['element'] = l['element']
                     if l['isotop']:
                         a = pt.elements.symbol(l['element'])
-                        g.node[maps[i][k + shift]]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
-
+                        g.node[maps[i][k + shift]]['isotop'] = max((a[x].abundance, x)
+                                                                   for x in a.isotopes)[1] + l['isotop']
                 for k, l, m in j['bonds']:
                     g.add_edge(maps[i][k + shift], maps[i][l + shift], s_bond=m, p_bond=m, sp_bond=m)
 
@@ -190,3 +193,31 @@ class RDFread(CGRRead):
 
         return greaction
 
+
+class RDFwrite(CGRwrite):
+    def __init__(self, file, extralabels=False, mark_to_map=False):
+        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
+        self.__file = file
+        self.write = self.__initwrite
+
+    def close(self):
+        self.__file.close()
+
+    def __initwrite(self, data):
+        self.__file.write(time.strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
+        self.__writedata(data)
+        self.write = self.__writedata
+
+    def __writedata(self, data):
+        self.__file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
+                          (len(data['substrats']), len(data['products'])))
+        colors = {}
+        for cnext, m in enumerate(data['substrats'] + data['products'], start=1):
+            m = self.getformattedcgr(m)
+            self.__file.write('$MOL\n')
+            self.__file.write(m['CGR'])
+            self.__file.write("M  END\n")
+            colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
+
+        for p in chain(colors.items(), data['meta'].items()):
+            self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)

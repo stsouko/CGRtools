@@ -19,15 +19,15 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from CGRtools.CGRrw import CGRRead
+from CGRtools.CGRrw import CGRread, CGRwrite, fromMDL
 import periodictable as pt
 import networkx as nx
-from itertools import count
+from itertools import count, chain
 
 
-class SDFread(CGRRead):
+class SDFread(CGRread):
     def __init__(self, file):
-        CGRRead.__init__(self)
+        CGRread.__init__(self)
         self.__SDFfile = file
 
     def readprop(self):
@@ -38,7 +38,7 @@ class SDFread(CGRRead):
                     prop.add(line.strip()[4:-1].replace(',', '_'))
         return prop
 
-    def readdata(self, remap=True):
+    def read(self, remap=True):
         im = 3
         atomcount = -1
         bondcount = -1
@@ -52,7 +52,7 @@ class SDFread(CGRRead):
             elif "$$$$" in line[0:4]:
                 if molecule:
                     try:
-                        yield self.__getGraphs(molecule, remap)
+                        yield self.__get_graph(molecule, remap)
                     except:
                         pass
 
@@ -74,7 +74,7 @@ class SDFread(CGRRead):
 
             elif n <= atomcount:
                 molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
-                                              charge=int(line[38:39]),
+                                              charge=fromMDL.get(int(line[38:39]), 0),
                                               map=int(line[60:63]), mark=line[54:57].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
 
@@ -117,19 +117,21 @@ class SDFread(CGRRead):
         else:
             if molecule:
                 try:
-                    yield self.__getGraphs(molecule, remap)
+                    yield self.__get_graph(molecule, remap)
                 except:
                     pass
 
-    def __getGraphs(self, molecule, remap):
+    def __get_graph(self, molecule, remap):
         g = nx.Graph()
         newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
         remapped = {}
         for k, l in enumerate(molecule['atoms'], start=1):
             atom_map = k if remap else l['map'] or next(newmap)
             remapped[k] = atom_map
-            g.add_node(atom_map, element=l['element'], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+            g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                        s_charge=l['charge'], p_charge=l['charge'], map=l['map'])
+            if l['element'] not in ('A', '*'):
+                g.node[atom_map]['element'] = l['element']
             if l['isotop']:
                 a = pt.elements.symbol(l['element'])
                 g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
@@ -147,3 +149,21 @@ class SDFread(CGRRead):
 
         g.graph['meta'] = {x: '\n'.join(z.strip() for z in y) for x, y in molecule['meta'].items()}
         return g
+
+
+class SDFwrite(CGRwrite):
+    def __init__(self, output, extralabels=False, mark_to_map=False):
+        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
+        self.__file = output
+
+    def close(self):
+        self.__file.close()
+
+    def write(self, data):
+        m = self.getformattedcgr(data)
+        self.__file.write(m['CGR'])
+        self.__file.write("M  END\n")
+
+        for i in chain(m['colors'].items(), m['meta'].items()):
+            self.__file.write(">  <%s>\n%s\n" % i)
+        self.__file.write("$$$$\n")

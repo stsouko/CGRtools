@@ -21,28 +21,28 @@
 #
 import sys
 import traceback
-from CGRtools.RDFread import RDFread
-from CGRtools.RDFwrite import RDFwrite
-from CGRtools.CGRcore import CGRcore
+from CGRtools.RDFrw import RDFread, RDFwrite
+from CGRtools.CGRpreparer import CGRcombo
 
 
 def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
-    outputdata = RDFwrite(kwargs['output'])
+    outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    con = CGRcore(**kwargs)
+    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], speed=kwargs['speed'],
+                      b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'],
+                      stereo=kwargs['stereo'], isotop=kwargs['isotop'], element=kwargs['element'], deep=kwargs['deep'])
+
     err = 0
     num = 0
-    for num, data in enumerate(inputdata.readdata(), start=1):
+    for num, data in enumerate(inputdata.read(), start=1):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = con.dissCGR(con.getCGR(data))
-            outputdata.writedata(a)
+            a = worker.getCGR(data)
+            a = worker.dissCGR(a)
+            outputdata.write(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
     print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)
-
-
-

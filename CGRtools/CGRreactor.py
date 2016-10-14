@@ -43,7 +43,7 @@ def simple_eq(a, b):
     return True if b is None else a == b
 
 
-class CGRReactor(object):
+class CGRreactor(object):
     def __init__(self, stereo=False, hyb=False, neighbors=False, isotop=False, element=True, deep=0):
         self.__rctemplate = self.__reactioncenter()
         self.__stereo = stereo
@@ -53,8 +53,7 @@ class CGRReactor(object):
         self.__element = element
         self.__deep = deep
 
-        stereo_match = (['s_stereo', 'p_stereo', 'sp_stereo'], [None] * 3,
-                        [simple_eq] * 2 + [list_eq]) if stereo else ([], [], [])
+        stereo_match = (['sp_stereo'], [None], [list_eq]) if stereo else ([], [], [])
         pstereo_match = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
 
         hyb_match = (['sp_hyb'], [None],
@@ -66,7 +65,7 @@ class CGRReactor(object):
         self.__node_match = gis.generic_node_match(['isotop', 'sp_charge', 'element'] +
                                                    stereo_match[0] + neig_match[0] + hyb_match[0],
                                                    [None] * 3 + stereo_match[1] + neig_match[1] + hyb_match[1],
-                                                   [simple_eq] + [list_eq] * 2 +
+                                                   [list_eq] * 3 +
                                                    stereo_match[2] + neig_match[2] + hyb_match[2])
 
         self.__edge_match = gis.generic_node_match(['sp_bond'] + stereo_match[0],

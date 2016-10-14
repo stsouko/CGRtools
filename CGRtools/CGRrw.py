@@ -25,13 +25,13 @@ import periodictable as pt
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
-bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9}
+bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
 
 
-class CGRRead:
+class CGRread:
     def __init__(self):
         self.__prop = {}
-        self.__mendeleyset = set(pt.elements)
+        self.__mendeleyset = set(x.symbol for x in pt.elements)
 
     def collect(self, line):
         if 'M  ALS' in line:
@@ -39,7 +39,7 @@ class CGRRead:
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif 'M  ISO' in line:
-            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotop', value=int(line[14:17]))
+            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotop', value=line[14:17].strip())
 
         elif 'M  STY' in line:
             for i in range(int(line[8])):
@@ -80,8 +80,9 @@ class CGRRead:
             tmp = ([], [])
             for x in k['value'].split(','):
                 s, *_, p = x.split('>')
-                tmp[0].append((int(s) if s != 'n' else None) if name != 'bond' else bondlabels[s])
-                tmp[1].append((int(p) if p != 'n' else None) if name != 'bond' else bondlabels[p])
+                if s != p:
+                    tmp[0].append((s != 'n' and int(s) or None) if name != 'bond' else bondlabels[s])
+                    tmp[1].append((p != 'n' and int(p) or None) if name != 'bond' else bondlabels[p])
 
             if len(tmp[0]) == 1:
                 target['sp_%s' % name] = tmp[0][0], tmp[1][0]
@@ -90,19 +91,20 @@ class CGRRead:
                         target['%s_%s' % (sp_key, name)] = tmp[sp_ind][0]
                     else:
                         target.pop('%s_%s' % (sp_key, name), None)
-            else:
-                target['sp_%s' % name] = list(zip(*tmp))
-                target.pop('s_%s' % name, None)
-                target.pop('p_%s' % name, None)
+            elif len(tmp[0]) > 1:
+                tmp2 = list(zip(*tmp))
+                if len(set(tmp2)) == len(tmp2):
+                    target['sp_%s' % name] = tmp2
+                    target['s_%s' % name] = tmp[0]
+                    target['p_%s' % name] = tmp[1]
 
         def _parselist(target, name):
-            tmp = [bondlabels[x] if name == 'bond' else (int(x) if x != 'n' else None) for x in k['value'].split(',')]
+            tmp = [(x != 'n' and int(x) or None) if name != 'bond' else bondlabels[x] for x in k['value'].split(',')]
             if len(tmp) == 1:
-                target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp[0]
-            else:
-                target['sp_%s' % name] = tmp
-                target.pop('s_%s' % name, None)
-                target.pop('p_%s' % name, None)
+                if tmp[0] is not None:
+                    target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp[0]
+            elif len(set(tmp)) == len(tmp):
+                target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp
 
         if k['type'] == 'dynatomstereo':
             _parsedyn(g.node[atom1], 'stereo')
@@ -112,25 +114,30 @@ class CGRRead:
 
         elif k['type'] == 'dynatom':
             key = k['value'][0]
-            diff = k['value'][1:].split(',')
+            diff = [int(x) for x in k['value'][1:].split(',')]
             if key == 'c':  # update atom charges from CGR
-                base = fromMDL.get(g.node[atom1]['s_charge'], 0)
+                base = g.node[atom1]['s_charge']
 
                 if len(diff) > 1:
-                    g.node[atom1].pop('s_charge')
-                    g.node[atom1].pop('p_charge')
-                    if int(diff[0]) == 0:  # for list of charges c0,1,-2,+3...
-                        g.node[atom1]['sp_charge'] = [toMDL.get(base + int(x), 0) for x in diff]
-                    elif (len(diff) - 1) % 2 == 0:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
-                        s = [toMDL.get(base + int(x), 0) for x in [0] + diff[1::2]]
-                        p = [toMDL.get(fromMDL.get(x, 0) + int(y), 0) for x, y in zip(s, diff[::2])]
-                        g.node[atom1]['sp_charge'] = list(zip(s, p))
-
+                    if diff[0] == 0:  # for list of charges c0,1,-2,+3...
+                        tmp = [base + x for x in diff]
+                        if len(set(tmp)) == len(tmp):
+                            g.node[atom1]['s_charge'] = g.node[atom1]['p_charge'] = g.node[atom1]['sp_charge'] = tmp
+                    elif len(diff) % 2 == 1:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
+                        s = [base] + [base + x for x in diff[1::2]]
+                        p = [base + x for x in diff[::2]]
+                        tmp = list(zip(s, p))
+                        if len(set(tmp)) == len(tmp):
+                            g.node[atom1]['sp_charge'] = tmp
+                            g.node[atom1]['s_charge'] = s
+                            g.node[atom1]['p_charge'] = p
                 else:
-                    g.node[atom1]['p_charge'] = toMDL.get(base + int(diff[0]), 0)
-                    g.node[atom1]['sp_charge'] = (g.node[atom1]['s_charge'], g.node[atom1]['p_charge'])
+                    tmp = diff[0]
+                    if tmp:
+                        g.node[atom1]['p_charge'] = base + tmp
+                        g.node[atom1]['sp_charge'] = (g.node[atom1]['s_charge'], g.node[atom1]['p_charge'])
 
-            elif key == '*':
+            else:
                 pass  # not implemented
 
         elif k['type'] == 'dynbond':
@@ -164,7 +171,8 @@ class CGRRead:
             _parsedyn(g.node[atom1], 'neighbors')
 
         elif k['type'] == 'isotop':
-            g.node[atom1]['isotop'] = k['value']
+            tmp = k['value'].split(',')
+            g.node[atom1]['isotop'] = [int(x) for x in tmp] if len(tmp) > 1 else int(tmp[0])
 
     @staticmethod
     def parsecolors(g, key, colors, remapped):
@@ -188,12 +196,13 @@ class CGRRead:
                     g.node[atom].setdefault('p_%s' % key[3:], {})[int(population)] = v2
 
 
-class CGRWrite:
-    def __init__(self, extralabels=False, flushmap=False):
+class CGRwrite:
+    def __init__(self, extralabels=False, mark_to_map=False):
         self.__cgr = self.__tocgr()
-        self.__flushmap = flushmap
+        self.__mark_to_map = mark_to_map
         tmp = ['stereo'] + (['hyb', 'neighbors'] if extralabels else [])
-        self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
+        self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
+        self.__mendeleyset = set(x.symbol for x in pt.elements)
 
     def getformattedcgr(self, g):
         data = dict(meta=g.graph.get('meta', {}).copy())
@@ -201,19 +210,19 @@ class CGRWrite:
         renum, colors = {}, {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
-            meta = self.__charge(j['s_charge'], j['p_charge'])
+            charge, meta = self.__charge(j.get('s_charge'), j.get('p_charge'))
             if meta:
                 meta['atoms'] = (n,)
                 cgr_dat.append(meta)
 
-            for s_key, p_key, a_key, d_key in self.__atomprop:
-                meta = self.__getstate(j.get(s_key), j.get(p_key), a_key, d_key)
+            for s_key, p_key, _, a_key, d_key in self.__atomprop:
+                meta = self.__getstate(j.get(s_key), j.get(p_key),  a_key, d_key)
                 if meta:
                     meta['atoms'] = (n,)
                     cgr_dat.append(meta)
 
             if 'isotop' in j:
-                extended.append(dict(atoms=(n,), value=j.get('isotop'), type='isotop'))
+                extended.append(dict(atoms=(n,), value=j['isotop'], type='isotop'))
 
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
                 for part, s_val in j.get('s_%s' % k, {}).items():
@@ -222,7 +231,11 @@ class CGRWrite:
                     if meta:
                         colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
-            atoms.append(dict(map=j['mark'] if self.__flushmap else i, charge=j['s_charge'],
+            if isinstance(j.get('element'), list):
+                extended.append(dict(atoms=(n,), value=j['element'], type='atomlist'))
+                j['element'] = 'L'
+
+            atoms.append(dict(map=j['mark'] if self.__mark_to_map else i, charge=charge,
                               element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
 
         data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items()) for i, j in colors.items()}
@@ -251,9 +264,17 @@ class CGRWrite:
         text = []
         for i in extended:
             if i['type'] == 'isotop':
-                text.append('M  ISO  1 %3d %3d' % (i['atoms'][0], i['value']))
+                if isinstance(i['value'], list):
+                    i['value'] = ','.join(str(x) for x in i['value'])
+                    cgr_dat.insert(0, i)
+                else:
+                    text.append('M  ISO  1 %3d %3d\n' % (i['atoms'][0], i['value']))
             elif i['type'] == 'atomlist':
-                pass  # todo: save atomlist for query
+                atomslist, _type = (self.__mendeleyset.difference(i['value']), 'T') \
+                    if len(i['value']) > len(self.__mendeleyset) / 2 else (i['value'], 'F')
+
+                text.append('M  ALS %3d%3d %s %s\n' % (i['atoms'][0], len(atomslist), _type,
+                                                       ''.join('%-4s' % x for x in atomslist)))
 
         for j in count():
             sty = cgr_dat[j * 8:j * 8 + 8]
@@ -273,30 +294,41 @@ class CGRWrite:
 
     @staticmethod
     def __getstate(s, p, t1, t2):
-        rep = {None: 'n'}
-        s = rep.get(s, s)
-        p = rep.get(p, p)
-        if s == p:
-            stereo = s
-            stype = t1
+        if isinstance(s, list):
+            if s == p:
+                _val = ','.join(x and str(x) or 'n' for x in s)
+                _type = t1
+            else:
+                _val = ','.join('%s>%s' % (x or 'n', y or 'n') for x, y in zip(s, p) if x != y)
+                _type = t2
+
+        elif s != p:
+            _val = '%s>%s' % (s or 'n', p or 'n')
+            _type = t2
         else:
-            stereo = '%s>%s' % (s, p)
-            stype = t2
-        if stereo != 'n':
-            return {'value': stereo, 'type': stype}
-        else:
-            return None
+            _val = s
+            _type = t1
+
+        return _val and {'value': _val, 'type': _type}
 
     @staticmethod
     def __charge(s, p):
-        ss = fromMDL.get(s)
-        pp = fromMDL.get(p)
-        diff = pp - ss
-        if diff:
-            meta = {'value': 'c%+d' % diff, 'type': 'dynatom'}
+        charge = s
+        if isinstance(s, list):
+            charge = s[0]
+            if s == p:
+                meta = dict(type='dynatom', value='c0%s' % ','.join(str(x) for x in s[1:])) if len(s) > 1 else None
+            elif s[0] != p[0]:
+                meta = dict(type='dynatom', value='c%s' % ','.join(chain(['%+d' % (p[0] - charge)],
+                                                                         ('%+d,%+d' % (x - charge, y - charge)
+                                                                          for x, y in zip(s[1:], p[1:]) if x != y))))
+            else:
+                meta = None
+        elif p != s:
+            meta = dict(value='c%+d' % (p - s), type='dynatom')
         else:
             meta = None
-        return meta
+        return toMDL.get(charge, 0), meta
 
     @staticmethod
     def __tocgr():

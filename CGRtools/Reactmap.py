@@ -19,16 +19,16 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from CGRtools.CGRpreparer import CGRPreparer
-from CGRtools.CGRreactor import CGRReactor
+from CGRtools.CGRpreparer import CGRbalanser
+from CGRtools.CGRreactor import CGRreactor
 from CGRtools.CGRreactor import patcher
 import networkx as nx
 
 
-class ReactMap(CGRPreparer, CGRReactor):
+class ReactMap(CGRbalanser, CGRreactor):
     def __init__(self, debug=False, **kwargs):
-        CGRPreparer.__init__(self, '0', extralabels=True)
-        CGRReactor.__init__(self, kwargs['stereo'])
+        CGRbalanser.__init__(self, '0', extralabels=True)
+        CGRreactor.__init__(self, kwargs['stereo'])
 
         self.__coretemplates = self.gettemplates(kwargs['templates'])
         self.__preparesearchpatcher()
