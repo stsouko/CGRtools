@@ -21,8 +21,8 @@
 #
 import sys
 import traceback
-from CGRtools.RDFrw import RDFread, RDFwrite
-from CGRtools.Reactmap import ReactMap
+from ..files.RDFrw import RDFread, RDFwrite
+from ..Reactmap import ReactMap
 
 
 def mapper_core(**kwargs):

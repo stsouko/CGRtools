@@ -20,10 +20,13 @@
 #  MA 02110-1301, USA.
 #
 import argparse
-from CGRtools.main_condenser import condenser_core
-from CGRtools.main_fear import fear_core
-from CGRtools.main_balanser import balanser_core
-from CGRtools.main_mapper import mapper_core
+import importlib
+from importlib.util import find_spec
+from .version import version
+from .cli.main_mapper import mapper_core
+from .cli.main_balanser import balanser_core
+from .cli.main_condenser import condenser_core
+from .cli.main_fear import fear_core
 
 
 def fear_common(parser):
@@ -118,3 +121,29 @@ def reactmap(subparsers):
     parser.add_argument("--templates", "-t", type=argparse.FileType('r'),
                         help="RDF with reactions mapping rules")
     parser.set_defaults(func=mapper_core)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="CGR tools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
+    parser.add_argument("--version", "-v", action="version", version=version(), default=False)
+    subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
+
+    condenser(subparsers)
+    balanser(subparsers)
+    fear(subparsers)
+    #reactmap(subparsers)
+
+    if find_spec('argcomplete'):
+        argcomplete = importlib.import_module('argcomplete')
+        argcomplete.autocomplete(parser)
+
+    return parser
+
+
+def launcher():
+    parser = parse_args()
+    args = parser.parse_args()
+    if 'func' in args:
+        args.func(**vars(args))
+    else:
+        parser.print_help()

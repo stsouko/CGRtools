@@ -19,9 +19,9 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from CGRtools.CGRpreparer import CGRbalanser
-from CGRtools.CGRreactor import CGRreactor
-from CGRtools.CGRreactor import patcher
+from .CGRpreparer import CGRbalanser
+from .CGRreactor import CGRreactor
+from .CGRreactor import patcher
 import networkx as nx
 
 

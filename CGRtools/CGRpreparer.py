@@ -19,9 +19,9 @@
 #  MA 02110-1301, USA.
 #
 import networkx as nx
-from CGRtools.RDFrw import RDFread
-from CGRtools.CGRreactor import CGRreactor, patcher
-from CGRtools.CGRcore import CGRcore
+from .CGRcore import CGRcore
+from .CGRreactor import CGRreactor, patcher
+from .files.RDFrw import RDFread
 
 
 class CGRcombo(CGRcore):
@@ -38,8 +38,10 @@ class CGRcombo(CGRcore):
 
     def getCGR(self, data):
         g = super(CGRcombo, self).getCGR(data)
-        g = self.__map.prepare(g) if self.__map is not None else g
-        g = self.__bal.prepare(g) if self.__bal is not None else g
+        if self.__map is not None:
+            g = self.__map.prepare(g)
+        if self.__bal is not None:
+            g = self.__bal.prepare(g)
         return g
 
 

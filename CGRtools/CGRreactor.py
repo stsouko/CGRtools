@@ -18,11 +18,11 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+import networkx as nx
 import operator
 from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
-import networkx as nx
-from CGRtools.FEAR import FEAR
+from .FEAR import FEAR
 
 
 def patcher(matrix):
@@ -187,4 +187,4 @@ class CGRreactor(object):
     def __remapgroup(g, h, mapping):
         newmap = mapping.copy()
         newmap.update({x: y for x, y in zip(set(g).difference(newmap), set(range(1, 1000)).difference(h))})
-        return nx.relabel_nodes(g, newmap, copy=True), newmap
+        return nx.relabel_nodes(g, newmap), newmap

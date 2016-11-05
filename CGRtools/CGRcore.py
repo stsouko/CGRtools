@@ -19,9 +19,10 @@
 #  MA 02110-1301, USA.
 #
 from copy import deepcopy
-from CGRtools.CGRreactor import CGRreactor
+from .CGRreactor import CGRreactor
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
+from .files import MoleculeContainer, ReactionContainer
 
 
 class CGRcore(object):
@@ -36,11 +37,11 @@ class CGRcore(object):
 
     def getCGR(self, data):
         g = self.__compose(self.merge_mols(data))
-        g.graph['meta'] = data['meta'].copy()
+        g.graph['meta'] = data.meta.copy()
         return g
 
     def dissCGR(self, g):
-        tmp = dict(substrats=[], products=[], meta=g.graph['meta'])
+        tmp = ReactionContainer(meta=g.meta)
         for category, (edge, pattern) in self.__disstemplate.items():
             components, *_ = CGRreactor.getbondbrokengraph(g, pattern, gis.categorical_edge_match(edge, None))
             for mol in components:
@@ -56,6 +57,13 @@ class CGRcore(object):
         return tmp
 
     def merge_mols(self, data):
+        data = data.copy()
+        if not data['products']:
+            data['products'] = [MoleculeContainer()]
+
+        if not data['substrats']:
+            data['substrats'] = [MoleculeContainer()]
+
         def getmols(t):
             mols = []
             for x in self.__needed[t]:
@@ -101,6 +109,7 @@ class CGRcore(object):
         elif self.__cgrtype == 10:
             substrats = nx.union_all(getmols('substrats'))
             products = nx.union_all(excmols('products'))
+
         res = dict(substrats=self.__setlabels(substrats), products=self.__setlabels(products)) \
             if self.__extralabels else dict(substrats=substrats, products=products)
         return res
@@ -167,8 +176,8 @@ class CGRcore(object):
         """ remove from union graphs of products or substrats data about substrats or products
         """
         common = set(data['substrats']).intersection(data['products'])
-        products = data['products'].copy()
-        substrats = data['substrats'].copy()
+        products = data['products']
+        substrats = data['substrats']
         extended_common = set()
 
         """ remove bond, stereo, neighbors and hybridization states for common atoms.
@@ -187,7 +196,7 @@ class CGRcore(object):
         """
         bubble = extended_common.difference(common)
         for i, g in (('substrats', substrats), ('products', products)):
-            for n in bubble.intersection(data[i]):
+            for n in bubble.intersection(g):
                 for j in self.__popdict[i]['ext_node']:
                     g.node[n].pop(j, None)
 

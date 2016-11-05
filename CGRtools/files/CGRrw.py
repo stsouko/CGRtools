@@ -34,30 +34,29 @@ class CGRread:
         self.__mendeleyset = set(x.symbol for x in pt.elements)
 
     def collect(self, line):
-        if 'M  ALS' in line:
+        if line.startswith('M  ALS'):
             self.__prop[line[3:10]] = dict(atoms=[int(line[7:10])],
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
-        elif 'M  ISO' in line:
+        elif line.startswith('M  ISO'):
             self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotop', value=line[14:17].strip())
 
-        elif 'M  STY' in line:
+        elif line.startswith('M  STY'):
             for i in range(int(line[8])):
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
                     self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
-        elif 'M  SAL' in line:
-            if int(line[7:10]) in self.__prop:
-                key = []
-                for i in range(int(line[10:13])):
-                    key.append(int(line[14 + 4 * i:17 + 4 * i]))
-                self.__prop[int(line[7:10])]['atoms'] = sorted(key)
-        elif 'M  SDT' in line and int(line[7:10]) in self.__prop:
+        elif line.startswith('M  SAL') and int(line[7:10]) in self.__prop:
+            key = []
+            for i in range(int(line[10:13])):
+                key.append(int(line[14 + 4 * i:17 + 4 * i]))
+            self.__prop[int(line[7:10])]['atoms'] = sorted(key)
+        elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
             key = line.split()[-1].lower()
             if key not in self.__cgrkeys:
                 self.__prop.pop(int(line[7:10]))
             else:
                 self.__prop[int(line[7:10])]['type'] = key
-        elif 'M  SED' in line and int(line[7:10]) in self.__prop:
+        elif line.startswith('M  SED') and int(line[7:10]) in self.__prop:
             self.__prop[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
 
     __cgrkeys = dict(dynatom=1, atomstereo=1, dynatomstereo=1,
@@ -205,7 +204,7 @@ class CGRwrite:
         self.__mendeleyset = set(x.symbol for x in pt.elements)
 
     def getformattedcgr(self, g):
-        data = dict(meta=g.graph.get('meta', {}).copy())
+        data = dict(meta=g.graph['meta'].copy())
         cgr_dat, extended, atoms, bonds = [], [], [], []
         renum, colors = {}, {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):

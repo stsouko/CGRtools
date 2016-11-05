@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -21,34 +21,28 @@
 #
 import sys
 import traceback
-from CGRtools.RDFrw import RDFread, RDFwrite
-from CGRtools.FEAR import FEAR
-from CGRtools.CGRcore import CGRcore
+from ..files.RDFrw import RDFread, RDFwrite
+from ..CGRpreparer import CGRcombo
 
 
-def fear_core(**kwargs):
+def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
-    outputdata = RDFwrite(kwargs['output'])
+    outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    fear = FEAR(isotop=kwargs['isotop'], stereo=kwargs['stereo'], hyb=kwargs['extralabels'], element=kwargs['element'],
-                deep=kwargs['deep'])
-    cgr = CGRcore(extralabels=kwargs['extralabels'])
+    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], speed=kwargs['speed'],
+                      b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'],
+                      stereo=kwargs['stereo'], isotop=kwargs['isotop'], element=kwargs['element'], deep=kwargs['deep'])
+
     err = 0
     num = 0
-    report = set()
-
     for num, data in enumerate(inputdata.read(), start=1):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            g = cgr.getCGR(data)
-            h = fear.chkreaction(g, gennew=True)[2]
-            report.update(x[1] for x in h)
-            data['meta']['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
-            outputdata.write(data)
+            a = worker.getCGR(data)
+            a = worker.dissCGR(a)
+            outputdata.write(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
-            break
-    print(report)
-    print('%d from %d reactions checked' % (num - err, num), file=sys.stderr)
+    print('%d from %d reactions balanced' % (num - err, num), file=sys.stderr)

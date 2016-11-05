@@ -19,24 +19,16 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from CGRtools.CGRrw import CGRread, CGRwrite, fromMDL
 import periodictable as pt
-import networkx as nx
 from itertools import count, chain
+from .CGRrw import CGRread, CGRwrite, fromMDL
+from . import MoleculeContainer
 
 
 class SDFread(CGRread):
     def __init__(self, file):
         CGRread.__init__(self)
         self.__SDFfile = file
-
-    def readprop(self):
-        with open(self.__SDFfile) as f:
-            prop = set()
-            for line in f:
-                if '>  <' in line[:5]:
-                    prop.add(line.strip()[4:-1].replace(',', '_'))
-        return prop
 
     def read(self, remap=True):
         im = 3
@@ -47,9 +39,9 @@ class SDFread(CGRread):
         molecule = None
         mend = False
         for n, line in enumerate(self.__SDFfile):
-            if failkey and "$$$$" not in line[0:4]:
+            if failkey and not line.startswith("$$$$"):
                 continue
-            elif "$$$$" in line[0:4]:
+            elif line.startswith("$$$$"):
                 if molecule:
                     try:
                         yield self.__get_graph(molecule, remap)
@@ -85,7 +77,7 @@ class SDFread(CGRread):
                     failkey = True
                     molecule = None
 
-            elif "M  END" in line:
+            elif line.startswith("M  END"):
                 mend = True
                 molecule['CGR_DAT'] = self.getdata()
 
@@ -98,7 +90,7 @@ class SDFread(CGRread):
 
             elif n > bondcount:
                 try:
-                    if '>  <' in line:
+                    if line.startswith('>  <'):
                         meta = True
                         mkey = line.strip()[4:-1]
                         if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
@@ -108,7 +100,7 @@ class SDFread(CGRread):
                             target = 'meta'
                         molecule[target][mkey] = []
                     elif meta:
-                        data = line.rstrip()
+                        data = line.strip()
                         if data:
                             molecule[target][mkey].append(data)
                 except:
@@ -122,7 +114,7 @@ class SDFread(CGRread):
                     pass
 
     def __get_graph(self, molecule, remap):
-        g = nx.Graph()
+        g = MoleculeContainer({x: '\n'.join(z.strip() for z in y) for x, y in molecule['meta'].items()})
         newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
         remapped = {}
         for k, l in enumerate(molecule['atoms'], start=1):
@@ -147,7 +139,6 @@ class SDFread(CGRread):
         for k, v in molecule['colors'].items():
             self.parsecolors(g, k, v, remapped)
 
-        g.graph['meta'] = {x: '\n'.join(z.strip() for z in y) for x, y in molecule['meta'].items()}
         return g
 
 

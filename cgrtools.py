@@ -20,38 +20,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import argparse
-import importlib
-from importlib.util import find_spec
-from CGRtools.version import version
-from CGRtools.parsers import condenser, balanser, fear, reactmap
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="CGR tools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
-    parser.add_argument("--version", "-v", action="version", version=version(), default=False)
-    subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
-
-    condenser(subparsers)
-    balanser(subparsers)
-    fear(subparsers)
-    #reactmap(subparsers)
-
-    if find_spec('argcomplete'):
-        argcomplete = importlib.import_module('argcomplete')
-        argcomplete.autocomplete(parser)
-
-    return parser
-
-
-def main():
-    parser = parse_args()
-    args = parser.parse_args()
-    if 'func' in args:
-        args.func(**vars(args))
-    else:
-        parser.print_help()
+from CGRtools.parsers import launcher
 
 
 if __name__ == '__main__':
-    main()
+    launcher()

@@ -24,4 +24,4 @@
 
 
 def version():
-    return '1.5.0'
+    return '2.1.0'

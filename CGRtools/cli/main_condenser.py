@@ -21,9 +21,9 @@
 #
 import sys
 import traceback
-from CGRtools.RDFrw import RDFread
-from CGRtools.SDFrw import SDFwrite
-from CGRtools.CGRpreparer import CGRcombo
+from ..files.RDFrw import RDFread
+from ..files.SDFrw import SDFwrite
+from ..CGRpreparer import CGRcombo
 
 
 def condenser_core(**kwargs):

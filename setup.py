@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 from CGRtools.version import version
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 setup(name='cgrtools',
       version=version(),
-      packages=['CGRtools'],
-      url='https://github.com/stsouko/condenser',
+      packages=find_packages(),
+      url='https://github.com/stsouko/CGRtools',
       license='AGPLv3',
-      author='Ramil Nugmanov',
+      author='Dr. Ramil Nugmanov',
       author_email='stsouko@live.ru',
       description='CGR tools',
-      scripts=['main.py'], requires=['networkx', 'periodictable'],
+      scripts=['cgrtools.py'],
+      requires=['networkx', 'periodictable'],
       long_description='CGR tools distributive',
 
       keywords="tools cgr cli",
