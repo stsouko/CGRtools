@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of cgrtools.
 #
 # cgrtools is free software; you can redistribute it and/or modify
@@ -18,7 +18,6 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from copy import deepcopy
 from .CGRreactor import CGRreactor
 import networkx as nx
 from networkx.algorithms import isomorphism as gis
@@ -36,8 +35,18 @@ class CGRcore(object):
         self.__edge_marks = [('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo')]
 
     def getCGR(self, data):
-        g = self.__compose(self.merge_mols(data))
-        g.graph['meta'] = data.meta.copy()
+        if self.__cgrtype in (1, 2, 3, 4, 5, 6):
+            g = self.__reaction_splitter(data)
+            if self.__extralabels:
+                g = self.__setlabels(g)
+        else:
+            res = self.merge_mols(data)
+            if self.__extralabels:
+                res = dict(substrats=self.__setlabels(res['substrats']), products=self.__setlabels(res['products']))
+
+            g = self.__compose(res)
+
+        g.meta.update(data.meta)
         return g
 
     def dissCGR(self, g):
@@ -56,73 +65,75 @@ class CGRcore(object):
                 tmp[category].append(mol)
         return tmp
 
+    def __reaction_splitter(self, data):
+        data = data.copy()
+        if self.__cgrtype == 1:
+            g = nx.union_all(data.substrats)
+        elif self.__cgrtype == 2:
+            g = nx.union_all(data.products)
+        elif self.__cgrtype == 3:
+            g = nx.union_all(self.__getmols(data.substrats, self.__needed['substrats']))
+        elif self.__cgrtype == 4:
+            g = nx.union_all(self.__getmols(data.products, self.__needed['products']))
+        elif self.__cgrtype == 5:
+            g = nx.union_all(self.__excmols(data.substrats, self.__needed['substrats']))
+        elif self.__cgrtype == 6:
+            g = nx.union_all(self.__excmols(data.products, self.__needed['products']))
+        else:
+            raise Exception('Splitter Error')
+        return g or MoleculeContainer()
+
+    @staticmethod
+    def __getmols(data, needed):
+        mols = []
+        for x in needed:
+            try:
+                mols.append(data[x])
+            except IndexError:
+                pass
+        return mols
+
+    @staticmethod
+    def __excmols(data, needed):
+        mols = data.copy()
+        for x in needed:
+            try:
+                mols.pop(x)
+            except IndexError:
+                pass
+        return mols
+
     def merge_mols(self, data):
         data = data.copy()
-        if not data['products']:
-            data['products'] = [MoleculeContainer()]
-
-        if not data['substrats']:
-            data['substrats'] = [MoleculeContainer()]
-
-        def getmols(t):
-            mols = []
-            for x in self.__needed[t]:
-                try:
-                    mols.append(data[t][x])
-                except IndexError:
-                    pass
-            return mols
-
-        def excmols(t):
-            mols = deepcopy(data[t])
-            for x in self.__needed[t]:
-                try:
-                    mols.pop(x)
-                except IndexError:
-                    pass
-            return mols
-
         if self.__cgrtype == 0:
-            substrats = nx.union_all(data['substrats'])
-            products = nx.union_all(data['products'])
-        elif self.__cgrtype == 1:
-            products = substrats = nx.union_all(data['substrats'])
-        elif self.__cgrtype == 2:
-            products = substrats = nx.union_all(data['products'])
-        elif self.__cgrtype == 3:
-            products = substrats = nx.union_all(getmols('substrats'))
-        elif self.__cgrtype == 4:
-            products = substrats = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 5:
-            products = substrats = nx.union_all(excmols('substrats'))
-        elif self.__cgrtype == 6:
-            products = substrats = nx.union_all(excmols('products'))
-        elif self.__cgrtype == 7:
-            substrats = nx.union_all(getmols('substrats'))
-            products = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 8:
-            substrats = nx.union_all(excmols('substrats'))
-            products = nx.union_all(excmols('products'))
-        elif self.__cgrtype == 9:
-            substrats = nx.union_all(excmols('substrats'))
-            products = nx.union_all(getmols('products'))
-        elif self.__cgrtype == 10:
-            substrats = nx.union_all(getmols('substrats'))
-            products = nx.union_all(excmols('products'))
+            substrats = nx.union_all(data.substrats)
+            products = nx.union_all(data.products)
 
-        res = dict(substrats=self.__setlabels(substrats), products=self.__setlabels(products)) \
-            if self.__extralabels else dict(substrats=substrats, products=products)
-        return res
+        elif self.__cgrtype == 7:
+            substrats = nx.union_all(self.__getmols(data.substrats, self.__needed['substrats']))
+            products = nx.union_all(self.__getmols(data.products, self.__needed['products']))
+        elif self.__cgrtype == 8:
+            substrats = nx.union_all(self.__excmols(data.substrats, self.__needed['substrats']))
+            products = nx.union_all(self.__excmols(data.products, self.__needed['products']))
+        elif self.__cgrtype == 9:
+            substrats = nx.union_all(self.__excmols(data.substrats, self.__needed['substrats']))
+            products = nx.union_all(self.__getmols(data.products, self.__needed['products']))
+        elif self.__cgrtype == 10:
+            substrats = nx.union_all(self.__getmols(data.substrats, self.__needed['substrats']))
+            products = nx.union_all(self.__excmols(data.products, self.__needed['products']))
+        else:
+            raise Exception('Merging need reagents and products')
+
+        return dict(substrats=substrats or MoleculeContainer(), products=products or MoleculeContainer())
 
     @staticmethod
     def __setlabels(g):
-        tmp = g.copy()
-        for i in tmp.nodes():
+        for i in g.nodes():
             label = {'s_hyb': 1, 'p_hyb': 1, 'sp_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0, 'sp_neighbors': 0}
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
-                for node, bond in tmp[i].items():
-                    if tmp.node[node]['element'] != 'H' and bond[b]:
+                for node, bond in g[i].items():
+                    if g.node[node]['element'] != 'H' and bond[b]:
                         label[n] += 1
 
                     if bond[b] in (1, None):
@@ -137,11 +148,11 @@ class CGRcore(object):
                 label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
 
             for k in list(label):
-                if tmp.node[i].get(k) is not None:
+                if g.node[i].get(k) is not None:
                     label.pop(k)
 
-            tmp.node[i].update(label)
-        return tmp
+            g.node[i].update(label)
+        return g
 
     @staticmethod
     def __attr_merge(attr_iter, marks):

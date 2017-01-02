@@ -117,9 +117,12 @@ def reactmap(subparsers):
                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+    parser.add_argument("--templates", "-t", type=argparse.FileType('r'), help="RDF with reactions mapping rules")
+    parser.add_argument("--dump_templates", "-d", default="dump.rdf", type=argparse.FileType('w'),
+                        help="save RDF with reactions mapping rules")
 
-    parser.add_argument("--templates", "-t", type=argparse.FileType('r'),
-                        help="RDF with reactions mapping rules")
+    stereo_common(parser)
+
     parser.set_defaults(func=mapper_core)
 
 
@@ -131,7 +134,7 @@ def parse_args():
     condenser(subparsers)
     balanser(subparsers)
     fear(subparsers)
-    #reactmap(subparsers)
+    reactmap(subparsers)
 
     if find_spec('argcomplete'):
         argcomplete = importlib.import_module('argcomplete')

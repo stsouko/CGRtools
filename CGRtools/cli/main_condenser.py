@@ -36,7 +36,7 @@ def condenser_core(**kwargs):
 
     err = 0
     num = 0
-    for num, data in enumerate(inputdata.read(), start=1):
+    for num, data in enumerate(inputdata, start=1):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:

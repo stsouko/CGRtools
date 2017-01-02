@@ -32,19 +32,20 @@ def mapper_core(**kwargs):
     err = 0
     num = 0
 
-    for num, data in enumerate(inputdata.read(), start=1):
-        if kwargs['debug'] or num % 10 == 1:
+    for num, data in enumerate(inputdata, start=1):
+        if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
-            a = mapper.getMap(data)
+            a = mapper.map(data)
             outputdata.write(a)
         except Exception:
             err += 1
+            print('reaction: %d' % num, file=sys.stderr)
             print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
             break
 
-    dump = RDFwrite(open('TEMP.DUMP.rdf', 'w'))
-    for i in mapper.dumptemplates():
+    dump = RDFwrite(kwargs['dump_templates'])
+    for i in mapper.templates:
         dump.write(i)
 
     print('%d from %d reactions mapped' % (num - err, num), file=sys.stderr)

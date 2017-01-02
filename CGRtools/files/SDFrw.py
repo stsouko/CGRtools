@@ -26,16 +26,26 @@ from . import MoleculeContainer
 
 
 class SDFread(CGRread):
-    def __init__(self, file):
-        CGRread.__init__(self)
+    def __init__(self, file, remap=True):
+        self.__remap = remap
         self.__SDFfile = file
+        self.__data = self.__reader()
 
-    def read(self, remap=True):
+    def read(self):
+        return list(self.__data)
+
+    def __iter__(self):
+        return self.__data
+
+    def __next__(self):
+        return next(self.__data)
+
+    def __reader(self):
         im = 3
         atomcount = -1
         bondcount = -1
         failkey = False
-        meta = None
+        mkey = None
         molecule = None
         mend = False
         for n, line in enumerate(self.__SDFfile):
@@ -44,23 +54,23 @@ class SDFread(CGRread):
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
-                        yield self.__get_graph(molecule, remap)
+                        yield self.get_molecule(molecule, self.__remap)
                     except:
                         pass
 
-                meta = None
+                mkey = None
                 im = n + 4
                 failkey = False
                 mend = False
                 molecule = None
 
             elif n == im:
-                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
-
                 try:
                     atomcount = int(line[0:3]) + n
                     bondcount = int(line[3:6]) + atomcount
+                    molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
                 except:
+                    atomcount = bondcount = -1
                     failkey = True
                     molecule = None
 
@@ -81,17 +91,11 @@ class SDFread(CGRread):
                 mend = True
                 molecule['CGR_DAT'] = self.getdata()
 
-            elif n > bondcount and not mend:
+            elif molecule and n > bondcount:
                 try:
-                    self.collect(line)
-                except:
-                    failkey = True
-                    molecule = None
-
-            elif n > bondcount:
-                try:
-                    if line.startswith('>  <'):
-                        meta = True
+                    if not mend:
+                        self.collect(line)
+                    elif line.startswith('>  <'):
                         mkey = line.strip()[4:-1]
                         if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
                                     'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
@@ -99,7 +103,7 @@ class SDFread(CGRread):
                         else:
                             target = 'meta'
                         molecule[target][mkey] = []
-                    elif meta:
+                    elif mkey:
                         data = line.strip()
                         if data:
                             molecule[target][mkey].append(data)
@@ -107,21 +111,22 @@ class SDFread(CGRread):
                     failkey = True
                     molecule = None
         else:
-            if molecule:
+            if molecule:  # True for MOL file only.
                 try:
-                    yield self.__get_graph(molecule, remap)
+                    yield self.get_molecule(molecule, self.__remap)
                 except:
                     pass
 
-    def __get_graph(self, molecule, remap):
-        g = MoleculeContainer({x: '\n'.join(z.strip() for z in y) for x, y in molecule['meta'].items()})
+    @staticmethod
+    def get_molecule(molecule, remap):
+        g = MoleculeContainer({x: '\n'.join(y) for x, y in molecule['meta'].items()})
         newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
         remapped = {}
         for k, l in enumerate(molecule['atoms'], start=1):
             atom_map = k if remap else l['map'] or next(newmap)
             remapped[k] = atom_map
             g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                       s_charge=l['charge'], p_charge=l['charge'], map=l['map'])
+                       s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
             if l['element'] not in ('A', '*'):
                 g.node[atom_map]['element'] = l['element']
             if l['isotop']:
@@ -129,15 +134,15 @@ class SDFread(CGRread):
                 g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
         for k, l, m in molecule['bonds']:
-            g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m)
+            g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m, sp_bond=m)
 
         for k in molecule['CGR_DAT']:
             atom1 = remapped[k['atoms'][0]]
             atom2 = remapped[k['atoms'][-1]]
-            self.cgr_dat(g, k, atom1, atom2)
+            CGRread.cgr_dat(g, k, atom1, atom2)
 
         for k, v in molecule['colors'].items():
-            self.parsecolors(g, k, v, remapped)
+            CGRread.parsecolors(g, k, v, remapped)
 
         return g
 

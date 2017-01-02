@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of cgrtools.
 #
 # cgrtools is free software; you can redistribute it and/or modify
@@ -23,16 +23,32 @@ import operator
 from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
 from .FEAR import FEAR
+from .files.RDFrw import RDFread
 
 
 def patcher(matrix):
     """ remove edges bw common nodes. add edges from template and replace nodes data
     :param matrix: dict
     """
-    g = matrix['substrats'].copy()
-    g.remove_edges_from(combinations(matrix['products'], 2))
-    g = nx.compose(g, matrix['products'])
-    return g
+    s = matrix['substrats'].copy()
+    p = matrix['products'].copy()
+
+    common = set(p).intersection(s)
+    for i in common:
+        for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
+                  'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(p.node[i]):
+            if isinstance(p.node[i][j], dict):
+                p.node[i][j] = p.node[i][j][s.node[i][j]]
+
+    for m, n, a in p.edges(data=True):
+        if m in common and n in common:
+            for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
+                if isinstance(a[j], dict):
+                    a[j] = a[j][s.edge[m][n][j]]
+
+    s.remove_edges_from(combinations(common, 2))
+
+    return nx.compose(s, p)
 
 
 def list_eq(a, b):
@@ -88,10 +104,10 @@ class CGRreactor(object):
         g2.add_edges_from([(1, 2, dict(s_bond=None, p_bond=1))])
         return [g1, g2]
 
-    def spgraphmatcher(self, g, h):
+    def get_cgr_matcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
-    def searchtemplate(self, templates, patch=True, speed=False):
+    def get_template_searcher(self, templates, patch=True, speed=False):
         if speed:
             _fear = FEAR(isotop=self.__isotop, stereo=self.__stereo, hyb=self.__hyb,
                          element=self.__element, deep=self.__deep)
@@ -101,18 +117,15 @@ class CGRreactor(object):
         def searcher(g):
             hitlist = []
             if speed or not patch:
-                hit, hitlist, _ = _fear.chkreaction(g, full=(not patch))
+                hit, hitlist, _ = _fear.check_cgr(g, full=(not patch))
                 if not patch:
                     return hit
             for i in ((templates[x[2]] for x in hitlist) if speed else templates):
-                gm = self.spgraphmatcher(g, i['substrats'])
+                gm = self.get_cgr_matcher(g, i['substrats'])
                 for j in gm.subgraph_isomorphisms_iter():
                     res = dict(substrats=g, meta=i['meta'],
                                products=self.__remapgroup(i['products'], g,  {y: x for x, y in j.items()})[0])
-
                     yield res
-
-            return None
 
         return searcher
 
@@ -188,3 +201,35 @@ class CGRreactor(object):
         newmap = mapping.copy()
         newmap.update({x: y for x, y in zip(set(g).difference(newmap), set(range(1, 1000)).difference(h))})
         return nx.relabel_nodes(g, newmap), newmap
+
+    @staticmethod
+    def get_templates(templates):
+        _templates = []
+        if templates:
+            source = RDFread(templates)
+
+            for template in source:
+                matrix = dict(meta=template['meta'])
+                for i in ('products', 'substrats'):
+                    x = nx.union_all(template[i])
+                    matrix[i] = x
+
+                common = set(matrix['products']).intersection(matrix['substrats'])
+                for n in common:
+                    for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
+                              'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(matrix['products'].node[n]):
+                        if isinstance(matrix['products'].node[n][j], list):
+                            matrix['products'].node[n][j] = {x: y for x, y in zip(matrix['substrats'].node[n][j],
+                                                                                  matrix['products'].node[n][j])}
+                for m, n, a in matrix['products'].edges(data=True):
+                    if m in common and n in common:
+                        for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
+                            if isinstance(a[j], list):
+                                matrix['products'].edge[m][n][j] = {x: y for x, y in
+                                                                    zip(matrix['substrats'].edge[m][n][j], a[j])}
+
+                nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
+                nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
+
+                _templates.append(matrix)
+        return _templates

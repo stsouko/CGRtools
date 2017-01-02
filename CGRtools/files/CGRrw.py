@@ -26,12 +26,11 @@ import periodictable as pt
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
 bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
+mendeleyset = set(x.symbol for x in pt.elements)
 
 
 class CGRread:
-    def __init__(self):
-        self.__prop = {}
-        self.__mendeleyset = set(x.symbol for x in pt.elements)
+    __prop = {}
 
     def collect(self, line):
         if line.startswith('M  ALS'):
@@ -70,10 +69,11 @@ class CGRread:
             if len(i['atoms']) == self.__cgrkeys[i['type']]:
                 prop.append(i)
 
-        self.__prop = {}
+        self.__prop.clear()
         return prop
 
-    def cgr_dat(self, g, k, atom1, atom2):
+    @staticmethod
+    def cgr_dat(g, k, atom1, atom2):
 
         def _parsedyn(target, name):
             tmp = ([], [])
@@ -155,7 +155,7 @@ class CGRread:
             g.node[atom1]['element'] = k['value']
 
         elif k['type'] == 'atomnotlist':
-            g.node[atom1]['element'] = list(self.__mendeleyset.difference(k['value']))
+            g.node[atom1]['element'] = list(mendeleyset.difference(k['value']))
 
         elif k['type'] == 'atomhyb':
             _parselist(g.node[atom1], 'hyb')
@@ -201,10 +201,9 @@ class CGRwrite:
         self.__mark_to_map = mark_to_map
         tmp = ['stereo'] + (['hyb', 'neighbors'] if extralabels else [])
         self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
-        self.__mendeleyset = set(x.symbol for x in pt.elements)
 
     def getformattedcgr(self, g):
-        data = dict(meta=g.graph['meta'].copy())
+        data = dict(meta=g.meta.copy())
         cgr_dat, extended, atoms, bonds = [], [], [], []
         renum, colors = {}, {}
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
@@ -269,8 +268,8 @@ class CGRwrite:
                 else:
                     text.append('M  ISO  1 %3d %3d\n' % (i['atoms'][0], i['value']))
             elif i['type'] == 'atomlist':
-                atomslist, _type = (self.__mendeleyset.difference(i['value']), 'T') \
-                    if len(i['value']) > len(self.__mendeleyset) / 2 else (i['value'], 'F')
+                atomslist, _type = (mendeleyset.difference(i['value']), 'T') \
+                    if len(i['value']) > len(mendeleyset) / 2 else (i['value'], 'F')
 
                 text.append('M  ALS %3d%3d %s %s\n' % (i['atoms'][0], len(atomslist), _type,
                                                        ''.join('%-4s' % x for x in atomslist)))

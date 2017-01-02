@@ -20,35 +20,29 @@
 #  MA 02110-1301, USA.
 #
 from .CGRpreparer import CGRbalanser
-from .CGRreactor import CGRreactor
 from .CGRreactor import patcher
 import networkx as nx
 
 
-class ReactMap(CGRbalanser, CGRreactor):
+class ReactMap(CGRbalanser):
     def __init__(self, debug=False, **kwargs):
-        CGRbalanser.__init__(self, '0', extralabels=True)
-        CGRreactor.__init__(self, kwargs['stereo'])
+        CGRbalanser.__init__(self, kwargs['templates'], balanse_groups=False, stereo=kwargs['stereo'],
+                             extralabels=True, isotop=True)
 
-        self.__coretemplates = self.gettemplates(kwargs['templates'])
+        self.__coretemplates = self.get_templates(kwargs['templates'])
         self.__preparesearchpatcher()
 
-        self.__searcharomatic = self.searchtemplate(self.__aromatize_templates())
+        self.__searcharomatic = self.get_template_searcher(self.__aromatize_templates())
         self.__debug = debug
 
     def __preparesearchpatcher(self, templates=None):
         if templates:
-            self.__templates = templates + self.__templates
+            self.templates = templates + self.templates
         else:
-            self.__templates = self.__coretemplates
-        self.__searchpatch = self.searchtemplate(self.__templates)
+            self.templates = self.__coretemplates
+        self.__searchpatch = self.get_template_searcher(self.templates)
 
-    def dumptemplates(self):
-        return [dict(meta=i['meta'],
-                     substrats=[self.getformattedcgr(i['substrats'])],
-                     products=[self.getformattedcgr(i['products'])]) for i in self.__templates]
-
-    def getMap(self, data):
+    def map(self, data):
         matrix = self.prepare(data)
         """ get aromatized products
         """
@@ -85,7 +79,7 @@ class ReactMap(CGRbalanser, CGRreactor):
                 intermediate = patcher(i)
                 forcheck, ar = self.__aromatize(intermediate) if aromatized else (intermediate, False)
                 if ar == aromatized:  # microoptimization
-                    gm = self.spgraphmatcher(forcheck, matrix['products'])
+                    gm = self.get_CGR_matcher(forcheck, matrix['products'])
                     if gm.subgraph_is_isomorphic():
                         # todo: generate new mapping rule
                         base = nx.Graph()

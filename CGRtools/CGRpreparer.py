@@ -18,10 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import networkx as nx
 from .CGRcore import CGRcore
 from .CGRreactor import CGRreactor, patcher
-from .files.RDFrw import RDFread
 
 
 class CGRcombo(CGRcore):
@@ -51,7 +49,7 @@ class CGRbalanser(CGRreactor):
         CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
                             isotop=isotop, element=element, deep=deep)
 
-        self.__searcher = self.searchtemplate(self.get_templates(templates), speed=speed, patch=True)
+        self.__searcher = self.get_template_searcher(self.get_templates(templates), speed=speed, patch=True)
         self.__balanse_groups = balanse_groups
 
     def prepare(self, g):
@@ -63,34 +61,8 @@ class CGRbalanser(CGRreactor):
             match = next(self.__searcher(g), None)
             if match:
                 g = patcher(match)
-                report.append(match['meta'].get('CGR_TEMPLATE'))
+                if 'CGR_TEMPLATE' in match['meta']:
+                    report.append(match['meta']['CGR_TEMPLATE'])
             else:
                 g.graph.setdefault('CGR_REPORT', []).extend(report)
                 return g
-
-    @staticmethod
-    def get_templates(templates):
-        if templates:
-            source = RDFread(templates)
-
-            _templates = []
-            for template in source.read():
-                matrix = dict(meta=template['meta'])
-                for i in ('products', 'substrats'):
-                    x = nx.union_all(template[i])
-                    matrix[i] = x
-
-                for i in set(matrix['products']).intersection(matrix['substrats']):
-                    for j in {'sp_charge', 'sp_hyb',  # todo: это надо сделать работать
-                              'sp_neighbors', 'sp_stereo'}.intersection(matrix['products'].node[i]):
-                        if isinstance(matrix['products'].node[i][j], list):
-                            matrix['products'].node[i][j] = {x: y for x, y in zip(matrix['substrats'].node[i][j],
-                                                                                  matrix['products'].node[i][j])}
-
-                nx.relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
-                nx.relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
-
-                _templates.append(matrix)
-            return _templates
-
-        return None

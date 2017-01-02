@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of FEAR (Fix Errors in Automapped Reactions).
 #
 # FEAR is free software; you can redistribute it and/or modify
@@ -24,23 +24,33 @@ import periodictable as pt
 from collections import defaultdict
 from itertools import count, chain
 from .CGRrw import CGRread, CGRwrite, fromMDL
+from .SDFrw import SDFread
 from . import ReactionContainer, MoleculeContainer
 
 
 class RDFread(CGRread):
-    def __init__(self, file):
-        CGRread.__init__(self)
+    def __init__(self, file, remap=True):
+        self.__remap = remap
         self.__RDFfile = file
+        self.__data = self.__reader()
 
-    def read(self, remap=True):
-        """ парсер RDF файлов
-        """
+    def read(self):
+        return list(self.__data)
+
+    def __iter__(self):
+        return self.__data
+
+    def __next__(self):
+        return next(self.__data)
+
+    def __reader(self):
         ir = -1
         im = -1
         atomcount = -1
         bondcount = -1
         failkey = True
         reaction = None
+        isreaction = True
         mkey = None
         mend = False
         for n, line in enumerate(self.__RDFfile):
@@ -49,21 +59,25 @@ class RDFread(CGRread):
             elif line.startswith("$RFMT"):
                 if reaction:
                     try:
-                        yield self.__get_graphs(reaction, remap)
+                        yield self.get_reaction(reaction, self.__remap) if isreaction \
+                            else self.get_molecule(reaction, self.__remap)
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
+                isreaction = True
                 mkey = None
                 ir = n + 5
                 failkey = False
             elif line.startswith("$MFMT"):
                 if reaction:
                     try:
-                        yield self.__get_graphs(reaction, remap)
+                        yield self.get_reaction(reaction, self.__remap) if isreaction \
+                            else self.get_molecule(reaction, self.__remap)
                     except:
                         pass
-                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}}
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
+                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}}
+                isreaction = False
                 substrats, products = 1, 0
                 mkey = None
                 mend = False
@@ -94,7 +108,7 @@ class RDFread(CGRread):
                                               x=float(line[:10]), y=float(line[10:20]), z=float(line[20:30])))
             elif n <= bondcount:
                 try:
-                    molecule['bonds'].append((int(line[:3]) - 1, int(line[3:6]) - 1, int(line[6:9])))
+                    molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9])))
                 except:
                     failkey = True
                     reaction = None
@@ -106,24 +120,20 @@ class RDFread(CGRread):
                     reaction['substrats'].append(molecule)
                 elif len(reaction['products']) < products:
                     reaction['products'].append(molecule)
-            elif n > bondcount and not mend:
-                try:
-                    self.collect(line)
-                except:
-                    failkey = True
-                    reaction = None
 
             elif n > bondcount:
                 try:
-                    if line.startswith('$DTYPE'):
+                    if not mend:
+                        self.collect(line)
+                    elif line.startswith('$DTYPE'):
                         mkey = line[7:].strip()
-                        if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
-                                    'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
+                        if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG', 'dynPHTYP',
+                                                  'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
                             target = 'colors'
                         else:
                             target = 'meta'
                         reaction[target][mkey] = []
-                    elif not line.startswith(("$RFMT", "$MFMT")) and mkey:
+                    elif mkey:
                         data = line.lstrip("$DATUM").strip()
                         if data:
                             reaction[target][mkey].append(data)
@@ -133,11 +143,20 @@ class RDFread(CGRread):
         else:
             if reaction:
                 try:
-                    yield self.__get_graphs(reaction, remap)
+                    yield self.get_reaction(reaction, self.__remap) if isreaction \
+                        else self.get_molecule(reaction, self.__remap)
                 except:
                     pass
 
-    def __get_graphs(self, reaction, remap):
+    @staticmethod
+    def get_molecule(reaction, remap):
+        molecule = reaction['substrats'][0]
+        molecule['meta'] = reaction['meta']
+        molecule['colors'] = reaction['colors']
+        return SDFread.get_molecule(molecule, remap)
+
+    @staticmethod
+    def get_reaction(reaction, remap):
         maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
                 'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
         length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0))) + 1)
@@ -154,48 +173,49 @@ class RDFread(CGRread):
         '''
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
-        lose = sorted(set(range(1, next(length))).difference(maps['products']).difference(maps['substrats']),
-                      reverse=True)
-        if lose and remap:
-            for k in maps:
-                for i in lose:
-                    maps[k] = [j if j < i else j - 1 for j in maps[k]]
+        if remap:
+            lose = sorted(set(range(1, next(length))).difference(maps['products']).difference(maps['substrats']),
+                          reverse=True)
+            if lose:
+                for k in ('substrats', 'products'):
+                    for i in lose:
+                        maps[k] = [j if j < i else j - 1 for j in maps[k]]
         ''' end
         '''
-        greaction = ReactionContainer(meta={x: '\n'.join(z.strip() for z in y) for x, y in reaction['meta'].items()})
+        greaction = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
 
         colors = defaultdict(dict)
         for k, v in reaction['colors'].items():
-            color_type, mol_num = (k.split('.')[0], 1) if not reaction['products'] and len(reaction['substrats']) == 1 \
-                or not reaction['substrats'] and len(reaction['products']) == 1 else k.split('.')
+            color_type, mol_num = k.split('.')
             colors[int(mol_num)][color_type] = v
 
         counter = count(1)
         for i in ('substrats', 'products'):
-            shift = 0
+            shift = -1
             for j in reaction[i]:
                 g = MoleculeContainer()
-                for k, l in enumerate(j['atoms']):
-                    g.add_node(maps[i][k + shift], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                for k, l in enumerate(j['atoms'], start=1):
+                    ks = k + shift
+                    g.add_node(maps[i][ks], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                                s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
                     if l['element'] not in ('A', '*'):
-                        g.node[maps[i][k + shift]]['element'] = l['element']
+                        g.node[maps[i][ks]]['element'] = l['element']
                     if l['isotop']:
                         a = pt.elements.symbol(l['element'])
-                        g.node[maps[i][k + shift]]['isotop'] = max((a[x].abundance, x)
-                                                                   for x in a.isotopes)[1] + l['isotop']
+                        g.node[maps[i][ks]]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
                 for k, l, m in j['bonds']:
                     g.add_edge(maps[i][k + shift], maps[i][l + shift], s_bond=m, p_bond=m, sp_bond=m)
 
                 for k in j['CGR_DAT']:
-                    atom1 = maps[i][k['atoms'][0] + shift - 1]
-                    atom2 = maps[i][k['atoms'][-1] + shift - 1]
+                    atom1 = maps[i][k['atoms'][0] + shift]
+                    atom2 = maps[i][k['atoms'][-1] + shift]
 
-                    self.cgr_dat(g, k, atom1, atom2)
+                    CGRread.cgr_dat(g, k, atom1, atom2)
 
                 for k, v in colors[next(counter)].items():
-                    self.parsecolors(g, k, v,
-                                     {x: y for x, y in enumerate(maps[i][shift: shift + len(j['atoms'])], start=1)})
+                    CGRread.parsecolors(g, k, v,
+                                        {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
+                                                                    start=1)})
 
                 shift += len(j['atoms'])
                 greaction[i].append(g)
@@ -204,10 +224,9 @@ class RDFread(CGRread):
 
 
 class RDFwrite(CGRwrite):
-    def __init__(self, file, extralabels=False, mark_to_map=False, mfmt=False):
+    def __init__(self, file, extralabels=False, mark_to_map=False):
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
         self.__file = file
-        self.__mfmt = mfmt
         self.write = self.__initwrite
 
     def close(self):
@@ -219,22 +238,22 @@ class RDFwrite(CGRwrite):
         self.write = self.__writedata
 
     def __writedata(self, data):
-        if self.__mfmt:
-            m = self.getformattedcgr(data['substrats'][0])
+        if isinstance(data, MoleculeContainer):
+            m = self.getformattedcgr(data)
             self.__file.write('$MFMT\n')
             self.__file.write(m['CGR'])
             self.__file.write("M  END\n")
             colors = m['colors']
         else:
             self.__file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
-                              (len(data['substrats']), len(data['products'])))
+                              (len(data.substrats), len(data.products)))
             colors = {}
-            for cnext, m in enumerate(data['substrats'] + data['products'], start=1):
+            for cnext, m in enumerate(chain(data.substrats + data.products), start=1):
                 m = self.getformattedcgr(m)
                 self.__file.write('$MOL\n')
                 self.__file.write(m['CGR'])
                 self.__file.write("M  END\n")
                 colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
 
-        for p in chain(colors.items(), data['meta'].items()):
+        for p in chain(colors.items(), data.meta.items()):
             self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)

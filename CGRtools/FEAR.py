@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 # This file is part of FEAR (Find Errors in Automapped Reactions).
 #
 # FEAR is free software; you can redistribute it and/or modify
@@ -64,13 +64,13 @@ class FEAR(object):
         self.__lhash = {x['CGR_FEAR_LHASH'] for x in data}
         self.__shash = {x['CGR_FEAR_SHASH'] for x in data}
 
-    def chkreaction(self, g, full=True, gennew=False):
+    def check_cgr(self, g, full=True, gennew=False):
         chkd = set()
         report = set()
         newhash = set()
 
         def dochk(x):
-            weights = self.__getMorgan(x)
+            weights = self.__get_morgan(x)
             whash = '.'.join(str(x) for x in sorted(weights.values()))
             if whash in self.__whash or gennew:
                 shash = self.__getsmarts(x, weights)
@@ -96,8 +96,8 @@ class FEAR(object):
             tmp = list(tmp)
         return all(tmp) if full else any(tmp), report, newhash
 
-    def getreactionhash(self, g):
-        return self.__getsmarts(g, self.__getMorgan(g))
+    def get_cgr_string(self, g):
+        return self.__getsmarts(g, self.__get_morgan(g))
 
     def __getcenters(self, g):
         nodes = [set()]
@@ -200,7 +200,7 @@ class FEAR(object):
 
     __stereotypes = {None: '', 1: '@s', 2: '@r'}
 
-    def __getMorgan(self, g):
+    def __get_morgan(self, g):
         newlevels = {}
         countprime = iter(self.__primes)
 

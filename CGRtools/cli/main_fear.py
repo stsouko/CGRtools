@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGR tools.
 #
 #  CGR tools is free software; you can redistribute it and/or modify
@@ -37,14 +37,14 @@ def fear_core(**kwargs):
     num = 0
     report = set()
 
-    for num, data in enumerate(inputdata.read(), start=1):
+    for num, data in enumerate(inputdata, start=1):
         if num % 100 == 1:
             print("reaction: %d" % num, file=sys.stderr)
         try:
             g = cgr.getCGR(data)
-            h = fear.chkreaction(g, gennew=True)[2]
+            h = fear.check_cgr(g, gennew=True)[2]
             report.update(x[1] for x in h)
-            data['meta']['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
+            data.meta['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
             outputdata.write(data)
         except Exception:
             err += 1
