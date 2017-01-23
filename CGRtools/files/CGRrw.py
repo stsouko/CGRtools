@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of FEAR (C) Ramil Nugmanov <stsouko@live.ru>.
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  This file is part of CGR tools.
 #
-#  fragger is free software; you can redistribute it and/or modify
+#  CGR tools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -26,6 +26,8 @@ import periodictable as pt
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
 bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
+stereolabels = dict(trans='e', cis='z', unknown='u', cycle='c', symm='x', odd='r', even='s',
+                    e='e', z='z', u='u', c='c', x='x', r='r', s='s', n=None)
 mendeleyset = set(x.symbol for x in pt.elements)
 
 
@@ -80,8 +82,10 @@ class CGRread:
             for x in k['value'].split(','):
                 s, *_, p = x.split('>')
                 if s != p:
-                    tmp[0].append((s != 'n' and int(s) or None) if name != 'bond' else bondlabels[s])
-                    tmp[1].append((p != 'n' and int(p) or None) if name != 'bond' else bondlabels[p])
+                    tmp[0].append(bondlabels[s] if name == 'bond' else
+                                  stereolabels[s] if name == 'stereo' else (s != 'n' and int(s) or None))
+                    tmp[1].append(bondlabels[p] if name == 'bond' else
+                                  stereolabels[p] if name == 'stereo' else (p != 'n' and int(p) or None))
 
             if len(tmp[0]) == 1:
                 target['sp_%s' % name] = tmp[0][0], tmp[1][0]
@@ -98,7 +102,9 @@ class CGRread:
                     target['p_%s' % name] = tmp[1]
 
         def _parselist(target, name):
-            tmp = [(x != 'n' and int(x) or None) if name != 'bond' else bondlabels[x] for x in k['value'].split(',')]
+            tmp = [bondlabels[x] if name == 'bond' else
+                   stereolabels[x] if name == 'stereo' else (x != 'n' and int(x) or None)
+                   for x in k['value'].split(',')]
             if len(tmp) == 1:
                 if tmp[0] is not None:
                     target['s_%s' % name] = target['p_%s' % name] = target['sp_%s' % name] = tmp[0]

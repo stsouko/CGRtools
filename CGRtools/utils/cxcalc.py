@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+#  cxcalc.py
+#
+#  Copyright 2014, 2017 Dr. Ramil Nugmanov <stsouko@live.ru>
+#  This file is part of CGR tools.
+#
+#  CGR tools is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU Affero General Public License as published by
+#  the Free Software Foundation; either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU Affero General Public License for more details.
+#
+#  You should have received a copy of the GNU Affero General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+from subprocess import check_output
+
+rep_dict = dict(TRANS='E', CIS='Z', UNKNOWN='U', CYCLE='C', SYMM='X', ODD='R', EVEN='S',
+                E='E', Z='Z', R='R', S='S')
+
+
+def stereo(file):
+    result = []
+    for data in check_output(['cxcalc', 'stereoanalysis', file]).decode().rstrip().split('\n\n'):
+        structure = dict(atomstereo={}, bondstereo={})
+        if data != 'NONE':
+            for x in data.split('\n'):
+                line = x.split()
+                m = rep_dict[line[-1]]
+                mark = dict(s_stereo=m, p_stereo=m, sp_stereo=m)
+                if line[0] == 'TETRAHEDRAL':
+                    structure['atomstereo'][int(line[1][1:-1])] = mark
+                elif line[0] == 'CISTRANS':
+                    structure['bondstereo'][(int(line[1][1:-1]), int(line[2][:-1]))] = mark
+
+        result.append(structure)
+    return result

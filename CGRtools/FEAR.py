@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of FEAR (Find Errors in Automapped Reactions).
+#  This file is part of CGR tools.
 #
-# FEAR is free software; you can redistribute it and/or modify
+#  CGR tools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -141,20 +141,25 @@ class FEAR(object):
             return nextatom
 
         def dosmarts(trace, inter, prev):
-            smis = ['[%s%s%s%s:%d]' % (g.node[inter].get('isotop', '') if self.__isotop else '',
-                                       g.node[inter]['element'] if self.__element else '*',
-                                       ';%s;' % ','.join(
-                                           [self.__stereotypes[g.node[inter].get('s_stereo')] if self.__stereo else '',
-                                            self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else '']),
-                                       '%+d' % g.node[inter].get('s_charge', 0) if self.__element else '',
-                                       newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
-            smip = ['[%s%s%s%s:%d]' % (g.node[inter].get('isotop', '') if self.__isotop else '',
-                                       g.node[inter]['element'] if self.__element else '*',
-                                       ';%s;' % ','.join(
-                                           [self.__stereotypes[g.node[inter].get('p_stereo')] if self.__stereo else '',
-                                            self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else '']),
-                                       '%+d' % g.node[inter].get('p_charge', 0) if self.__element else '',
-                                       newmaps.get(inter))]
+            s_stereo = self.__stereotypes[g.node[inter].get('s_stereo')] if self.__stereo else ''
+            p_stereo = self.__stereotypes[g.node[inter].get('p_stereo')] if self.__stereo else ''
+            s_hyb = self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else ''
+            p_hyb = self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else ''
+            s_sh = '%s%s' % (s_stereo, s_hyb and ',%s' % s_hyb or '')
+            p_sh = '%s%s' % (p_stereo, p_hyb and ',%s' % p_hyb or '')
+
+            smis = ['[%s%s%s%s:%d]' %
+                    (self.__isotop and g.node[inter].get('isotop') or '',
+                     self.__element and g.node[inter]['element'] or '*',
+                     s_sh and ';%s;' % s_sh or '',
+                     self.__element and g.node[inter]['s_charge'] and '%+d' % g.node[inter]['s_charge'] or '',
+                     newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
+            smip = ['[%s%s%s%s:%d]' %
+                    (self.__isotop and g.node[inter].get('isotop') or '',
+                     self.__element and g.node[inter]['element'] or '*',
+                     p_sh and ';%s;' % p_sh or '',
+                     self.__element and g.node[inter]['p_charge'] and '%+d' % g.node[inter]['p_charge'] or '',
+                     newmaps.get(inter))]
             concat = []
             stoplist = []
             iterlist = set(g.neighbors(inter)).difference([prev])
@@ -192,7 +197,9 @@ class FEAR(object):
             ssmiles.append(''.join(smirks[1]))
             psmiles.append(''.join(smirks[2]))
             has_next = set(g).difference(visited)
-        return '%s>>%s' % ('.'.join(ssmiles), '.'.join(psmiles))
+        jssmiles = '.'.join(ssmiles)
+        jpsmiles = '.'.join(psmiles)
+        return '%s>>%s' % (jssmiles, jpsmiles) if jssmiles != jpsmiles else jssmiles
 
     __tosmiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of CGRTools (C) Ramil Nugmanov <stsouko@live.ru>.
+#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  This file is part of CGR tools.
 #
-#  fragger is free software; you can redistribute it and/or modify
+#  CGR tools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -20,14 +20,15 @@
 #  MA 02110-1301, USA.
 #
 import periodictable as pt
-from itertools import count, chain
+from itertools import count, chain, repeat
 from .CGRrw import CGRread, CGRwrite, fromMDL
 from . import MoleculeContainer
 
 
 class SDFread(CGRread):
-    def __init__(self, file, remap=True):
+    def __init__(self, file, remap=True, stereo=None):
         self.__remap = remap
+        self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__SDFfile = file
         self.__data = self.__reader()
 
@@ -54,7 +55,7 @@ class SDFread(CGRread):
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
-                        yield self.get_molecule(molecule, self.__remap)
+                        yield self.get_molecule(molecule, self.__remap, stereo=next(self.__stereo))
                     except:
                         pass
 
@@ -113,12 +114,12 @@ class SDFread(CGRread):
         else:
             if molecule:  # True for MOL file only.
                 try:
-                    yield self.get_molecule(molecule, self.__remap)
+                    yield self.get_molecule(molecule, self.__remap, stereo=next(self.__stereo))
                 except:
                     pass
 
     @staticmethod
-    def get_molecule(molecule, remap):
+    def get_molecule(molecule, remap, stereo=None):
         g = MoleculeContainer({x: '\n'.join(y) for x, y in molecule['meta'].items()})
         newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
         remapped = {}
@@ -133,8 +134,18 @@ class SDFread(CGRread):
                 a = pt.elements.symbol(l['element'])
                 g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
 
+            if stereo and k - 1 in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
+                g.node[atom_map].update(stereo['atomstereo'][k - 1])
+
         for k, l, m in molecule['bonds']:
             g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m, sp_bond=m)
+
+            if stereo:  # AD-HOC for stereo marks integration.
+                ks = k - 1
+                ls = l - 1
+                kls = stereo['bondstereo'].get((ks, ls)) or stereo['bondstereo'].get((ls, ks))
+                if kls:
+                    g[remapped[k]][remapped[l]].update(kls)
 
         for k in molecule['CGR_DAT']:
             atom1 = remapped[k['atoms'][0]]

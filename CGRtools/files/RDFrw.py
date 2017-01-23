@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
-# This file is part of FEAR (Fix Errors in Automapped Reactions).
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  This file is part of CGR tools.
 #
-# FEAR is free software; you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+#  CGR tools is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU Affero General Public License as published by
+#  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
 #
 #  This program is distributed in the hope that it will be useful,
@@ -22,16 +22,17 @@
 import time
 import periodictable as pt
 from collections import defaultdict
-from itertools import count, chain
+from itertools import count, chain, repeat
 from .CGRrw import CGRread, CGRwrite, fromMDL
 from .SDFrw import SDFread
 from . import ReactionContainer, MoleculeContainer
 
 
 class RDFread(CGRread):
-    def __init__(self, file, remap=True):
+    def __init__(self, file, remap=True, stereo=None):
         self.__remap = remap
         self.__RDFfile = file
+        self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__data = self.__reader()
 
     def read(self):
@@ -59,8 +60,8 @@ class RDFread(CGRread):
             elif line.startswith("$RFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, self.__remap) if isreaction \
-                            else self.get_molecule(reaction, self.__remap)
+                        yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
+                            else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -71,8 +72,8 @@ class RDFread(CGRread):
             elif line.startswith("$MFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, self.__remap) if isreaction \
-                            else self.get_molecule(reaction, self.__remap)
+                        yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
+                            else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -143,20 +144,20 @@ class RDFread(CGRread):
         else:
             if reaction:
                 try:
-                    yield self.get_reaction(reaction, self.__remap) if isreaction \
-                        else self.get_molecule(reaction, self.__remap)
+                    yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
+                        else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
                 except:
                     pass
 
     @staticmethod
-    def get_molecule(reaction, remap):
+    def get_molecule(reaction, remap, stereo=None):
         molecule = reaction['substrats'][0]
         molecule['meta'] = reaction['meta']
         molecule['colors'] = reaction['colors']
-        return SDFread.get_molecule(molecule, remap)
+        return SDFread.get_molecule(molecule, remap, stereo=stereo)
 
     @staticmethod
-    def get_reaction(reaction, remap):
+    def get_reaction(reaction, remap, stereo=None):
         maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
                 'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
         length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0))) + 1)
@@ -190,21 +191,36 @@ class RDFread(CGRread):
             colors[int(mol_num)][color_type] = v
 
         counter = count(1)
+        total_shift = 0
         for i in ('substrats', 'products'):
             shift = -1
             for j in reaction[i]:
                 g = MoleculeContainer()
                 for k, l in enumerate(j['atoms'], start=1):
                     ks = k + shift
-                    g.add_node(maps[i][ks], mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                    atom_map = maps[i][ks]
+                    g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
                                s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
                     if l['element'] not in ('A', '*'):
-                        g.node[maps[i][ks]]['element'] = l['element']
+                        g.node[atom_map]['element'] = l['element']
                     if l['isotop']:
                         a = pt.elements.symbol(l['element'])
-                        g.node[maps[i][ks]]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+                        g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+
+                    if stereo and ks + total_shift in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
+                        g.node[atom_map].update(stereo['atomstereo'][ks + total_shift])
+
                 for k, l, m in j['bonds']:
-                    g.add_edge(maps[i][k + shift], maps[i][l + shift], s_bond=m, p_bond=m, sp_bond=m)
+                    ks = k + shift
+                    ls = l + shift
+                    g.add_edge(maps[i][ks], maps[i][ls], s_bond=m, p_bond=m, sp_bond=m)
+
+                    if stereo:  # AD-HOC for stereo marks integration.
+                        tks = ks + total_shift
+                        tls = ls + total_shift
+                        kls = stereo['bondstereo'].get((tks, tls)) or stereo['bondstereo'].get((tls, tks))
+                        if kls:
+                            g[maps[i][ks]][maps[i][ls]].update(kls)
 
                 for k in j['CGR_DAT']:
                     atom1 = maps[i][k['atoms'][0] + shift]
@@ -219,6 +235,8 @@ class RDFread(CGRread):
 
                 shift += len(j['atoms'])
                 greaction[i].append(g)
+
+            total_shift += shift + 1
 
         return greaction
 
