@@ -183,9 +183,9 @@ class FEAR(object):
                             stoplist.append(j[2])
                             smis.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('s_bond')], j[1]))
                             smip.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('p_bond')], j[1]))
-                smis.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('s_bond')]] + deep[1] +
+                smis.extend(['(' if iterlist else ''] + [self.__tosmiles[g[inter][i].get('s_bond')]] + deep[1] +
                             [')' if iterlist else ''])
-                smip.extend(['(' if iterlist else ''] + ['%s' % self.__tosmiles[g[inter][i].get('p_bond')]] + deep[2] +
+                smip.extend(['(' if iterlist else ''] + [self.__tosmiles[g[inter][i].get('p_bond')]] + deep[2] +
                             [')' if iterlist else ''])
             return trace, smis, smip, concat
 

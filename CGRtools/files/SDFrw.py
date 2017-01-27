@@ -27,10 +27,10 @@ from . import MoleculeContainer
 
 class SDFread(CGRread):
     def __init__(self, file, remap=True, stereo=None):
-        self.__remap = remap
         self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__SDFfile = file
         self.__data = self.__reader()
+        CGRread.__init__(self, remap)
 
     def read(self):
         return list(self.__data)
@@ -55,7 +55,7 @@ class SDFread(CGRread):
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
-                        yield self.get_molecule(molecule, self.__remap, stereo=next(self.__stereo))
+                        yield self.get_molecule(molecule, stereo=next(self.__stereo))
                     except:
                         pass
 
@@ -114,48 +114,9 @@ class SDFread(CGRread):
         else:
             if molecule:  # True for MOL file only.
                 try:
-                    yield self.get_molecule(molecule, self.__remap, stereo=next(self.__stereo))
+                    yield self.get_molecule(molecule, stereo=next(self.__stereo))
                 except:
                     pass
-
-    @staticmethod
-    def get_molecule(molecule, remap, stereo=None):
-        g = MoleculeContainer({x: '\n'.join(y) for x, y in molecule['meta'].items()})
-        newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
-        remapped = {}
-        for k, l in enumerate(molecule['atoms'], start=1):
-            atom_map = k if remap else l['map'] or next(newmap)
-            remapped[k] = atom_map
-            g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                       s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
-            if l['element'] not in ('A', '*'):
-                g.node[atom_map]['element'] = l['element']
-            if l['isotop']:
-                a = pt.elements.symbol(l['element'])
-                g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
-
-            if stereo and k - 1 in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
-                g.node[atom_map].update(stereo['atomstereo'][k - 1])
-
-        for k, l, m in molecule['bonds']:
-            g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m, sp_bond=m)
-
-            if stereo:  # AD-HOC for stereo marks integration.
-                ks = k - 1
-                ls = l - 1
-                kls = stereo['bondstereo'].get((ks, ls)) or stereo['bondstereo'].get((ls, ks))
-                if kls:
-                    g[remapped[k]][remapped[l]].update(kls)
-
-        for k in molecule['CGR_DAT']:
-            atom1 = remapped[k['atoms'][0]]
-            atom2 = remapped[k['atoms'][-1]]
-            CGRread.cgr_dat(g, k, atom1, atom2)
-
-        for k, v in molecule['colors'].items():
-            CGRread.parsecolors(g, k, v, remapped)
-
-        return g
 
 
 class SDFwrite(CGRwrite):

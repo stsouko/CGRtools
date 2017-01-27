@@ -22,16 +22,19 @@
 from itertools import count, product, chain
 from collections import defaultdict
 import periodictable as pt
+from . import ReactionContainer, MoleculeContainer
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
 bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
-stereolabels = dict(trans='e', cis='z', unknown='u', cycle='c', symm='x', odd='r', even='s',
-                    e='e', z='z', u='u', c='c', x='x', r='r', s='s', n=None)
+stereolabels = dict(e='e', z='z', u='u', r='r', s='s', re='re', si='si', n=None)
 mendeleyset = set(x.symbol for x in pt.elements)
 
 
 class CGRread:
+    def __init__(self, remap):
+        self.__remap = remap
+
     __prop = {}
 
     def collect(self, line):
@@ -199,6 +202,127 @@ class CGRread:
                     v1, v2 = val.split('>')
                     g.node[atom].setdefault('s_%s' % key[3:], {})[int(population)] = v1
                     g.node[atom].setdefault('p_%s' % key[3:], {})[int(population)] = v2
+
+    def get_reaction(self, reaction, stereo=None):
+        maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
+                'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
+        length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0))) + 1)
+
+        ''' map unmapped atoms
+        '''
+        for i in ('substrats', 'products'):
+            if 0 in maps[i]:
+                maps[i] = [j or next(length) for j in maps[i]]
+
+            if len(maps[i]) != len(set(maps[i])):
+                raise Exception("MapError")
+        ''' end
+        '''
+        ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
+        '''
+        if self.__remap:
+            lose = sorted(set(range(1, next(length))).difference(maps['products']).difference(maps['substrats']),
+                          reverse=True)
+            if lose:
+                for k in ('substrats', 'products'):
+                    for i in lose:
+                        maps[k] = [j if j < i else j - 1 for j in maps[k]]
+        ''' end
+        '''
+        greaction = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
+
+        colors = defaultdict(dict)
+        for k, v in reaction['colors'].items():
+            color_type, mol_num = k.split('.')
+            colors[int(mol_num)][color_type] = v
+
+        counter = count(1)
+        total_shift = 0
+        for i in ('substrats', 'products'):
+            shift = -1
+            for j in reaction[i]:
+                g = MoleculeContainer()
+                for k, l in enumerate(j['atoms'], start=1):
+                    ks = k + shift
+                    atom_map = maps[i][ks]
+                    g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                               s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
+                    if l['element'] not in ('A', '*'):
+                        g.node[atom_map]['element'] = l['element']
+                    if l['isotop']:
+                        a = pt.elements.symbol(l['element'])
+                        g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+
+                    if stereo and ks + total_shift in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
+                        g.node[atom_map].update(stereo['atomstereo'][ks + total_shift])
+
+                for k, l, m in j['bonds']:
+                    ks = k + shift
+                    ls = l + shift
+                    g.add_edge(maps[i][ks], maps[i][ls], s_bond=m, p_bond=m, sp_bond=m)
+
+                    if stereo:  # AD-HOC for stereo marks integration.
+                        tks = ks + total_shift
+                        tls = ls + total_shift
+                        kls = stereo['bondstereo'].get((tks, tls)) or stereo['bondstereo'].get((tls, tks))
+                        if kls:
+                            g[maps[i][ks]][maps[i][ls]].update(kls)
+
+                for k in j['CGR_DAT']:
+                    atom1 = maps[i][k['atoms'][0] + shift]
+                    atom2 = maps[i][k['atoms'][-1] + shift]
+
+                    self.cgr_dat(g, k, atom1, atom2)
+
+                for k, v in colors[next(counter)].items():
+                    self.parsecolors(g, k, v,
+                                     {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
+                                                                 start=1)})
+
+                shift += len(j['atoms'])
+                greaction[i].append(g)
+
+            total_shift += shift + 1
+
+        return greaction
+
+    def get_molecule(self, molecule, stereo=None):
+        g = MoleculeContainer({x: '\n'.join(y) for x, y in molecule['meta'].items()})
+        newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
+        remapped = {}
+        for k, l in enumerate(molecule['atoms'], start=1):
+            atom_map = k if self.__remap else l['map'] or next(newmap)
+            remapped[k] = atom_map
+            g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
+                       s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
+            if l['element'] not in ('A', '*'):
+                g.node[atom_map]['element'] = l['element']
+            if l['isotop']:
+                a = pt.elements.symbol(l['element'])
+                g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+
+            if stereo and k - 1 in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
+                g.node[atom_map].update(stereo['atomstereo'][k - 1])
+
+        for k, l, m in molecule['bonds']:
+            g.add_edge(remapped[k], remapped[l], s_bond=m, p_bond=m, sp_bond=m)
+
+            if stereo:  # AD-HOC for stereo marks integration.
+                ks = k - 1
+                ls = l - 1
+                kls = stereo['bondstereo'].get((ks, ls)) or stereo['bondstereo'].get((ls, ks))
+                if kls:
+                    g[remapped[k]][remapped[l]].update(kls)
+
+        for k in molecule['CGR_DAT']:
+            atom1 = remapped[k['atoms'][0]]
+            atom2 = remapped[k['atoms'][-1]]
+            CGRread.cgr_dat(g, k, atom1, atom2)
+
+        for k, v in molecule['colors'].items():
+            CGRread.parsecolors(g, k, v, remapped)
+
+        return g
 
 
 class CGRwrite:

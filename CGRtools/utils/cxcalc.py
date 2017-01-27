@@ -23,8 +23,7 @@
 #
 from subprocess import check_output
 
-rep_dict = dict(TRANS='E', CIS='Z', UNKNOWN='U', CYCLE='C', SYMM='X', ODD='R', EVEN='S',
-                E='E', Z='Z', R='R', S='S')
+rep_dict = dict(UNKNOWN='u', WIGGLY='u', E='e', Z='z', R='r', S='s', r='re', s='si')
 
 
 def stereo(file):

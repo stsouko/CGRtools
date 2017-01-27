@@ -20,20 +20,17 @@
 #  MA 02110-1301, USA.
 #
 import time
-import periodictable as pt
-from collections import defaultdict
-from itertools import count, chain, repeat
+from itertools import chain, repeat
 from .CGRrw import CGRread, CGRwrite, fromMDL
-from .SDFrw import SDFread
-from . import ReactionContainer, MoleculeContainer
+from . import MoleculeContainer
 
 
 class RDFread(CGRread):
     def __init__(self, file, remap=True, stereo=None):
-        self.__remap = remap
         self.__RDFfile = file
         self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__data = self.__reader()
+        CGRread.__init__(self, remap)
 
     def read(self):
         return list(self.__data)
@@ -60,8 +57,8 @@ class RDFread(CGRread):
             elif line.startswith("$RFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
-                            else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
+                        yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
+                            else self.get_molecule(reaction, stereo=next(self.__stereo))
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -72,8 +69,8 @@ class RDFread(CGRread):
             elif line.startswith("$MFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
-                            else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
+                        yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
+                            else self.get_molecule(reaction, stereo=next(self.__stereo))
                     except:
                         pass
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -144,101 +141,16 @@ class RDFread(CGRread):
         else:
             if reaction:
                 try:
-                    yield self.get_reaction(reaction, self.__remap, stereo=next(self.__stereo)) if isreaction \
-                        else self.get_molecule(reaction, self.__remap, stereo=next(self.__stereo))
+                    yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
+                        else self.get_molecule(reaction, stereo=next(self.__stereo))
                 except:
                     pass
 
-    @staticmethod
-    def get_molecule(reaction, remap, stereo=None):
+    def get_molecule(self, reaction, stereo=None):
         molecule = reaction['substrats'][0]
         molecule['meta'] = reaction['meta']
         molecule['colors'] = reaction['colors']
-        return SDFread.get_molecule(molecule, remap, stereo=stereo)
-
-    @staticmethod
-    def get_reaction(reaction, remap, stereo=None):
-        maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
-                'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
-        length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0))) + 1)
-
-        ''' map unmapped atoms
-        '''
-        for i in ('substrats', 'products'):
-            if 0 in maps[i]:
-                maps[i] = [j or next(length) for j in maps[i]]
-
-            if len(maps[i]) != len(set(maps[i])):
-                raise Exception("MapError")
-        ''' end
-        '''
-        ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
-        '''
-        if remap:
-            lose = sorted(set(range(1, next(length))).difference(maps['products']).difference(maps['substrats']),
-                          reverse=True)
-            if lose:
-                for k in ('substrats', 'products'):
-                    for i in lose:
-                        maps[k] = [j if j < i else j - 1 for j in maps[k]]
-        ''' end
-        '''
-        greaction = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
-
-        colors = defaultdict(dict)
-        for k, v in reaction['colors'].items():
-            color_type, mol_num = k.split('.')
-            colors[int(mol_num)][color_type] = v
-
-        counter = count(1)
-        total_shift = 0
-        for i in ('substrats', 'products'):
-            shift = -1
-            for j in reaction[i]:
-                g = MoleculeContainer()
-                for k, l in enumerate(j['atoms'], start=1):
-                    ks = k + shift
-                    atom_map = maps[i][ks]
-                    g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'],
-                               s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
-                    if l['element'] not in ('A', '*'):
-                        g.node[atom_map]['element'] = l['element']
-                    if l['isotop']:
-                        a = pt.elements.symbol(l['element'])
-                        g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
-
-                    if stereo and ks + total_shift in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
-                        g.node[atom_map].update(stereo['atomstereo'][ks + total_shift])
-
-                for k, l, m in j['bonds']:
-                    ks = k + shift
-                    ls = l + shift
-                    g.add_edge(maps[i][ks], maps[i][ls], s_bond=m, p_bond=m, sp_bond=m)
-
-                    if stereo:  # AD-HOC for stereo marks integration.
-                        tks = ks + total_shift
-                        tls = ls + total_shift
-                        kls = stereo['bondstereo'].get((tks, tls)) or stereo['bondstereo'].get((tls, tks))
-                        if kls:
-                            g[maps[i][ks]][maps[i][ls]].update(kls)
-
-                for k in j['CGR_DAT']:
-                    atom1 = maps[i][k['atoms'][0] + shift]
-                    atom2 = maps[i][k['atoms'][-1] + shift]
-
-                    CGRread.cgr_dat(g, k, atom1, atom2)
-
-                for k, v in colors[next(counter)].items():
-                    CGRread.parsecolors(g, k, v,
-                                        {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
-                                                                    start=1)})
-
-                shift += len(j['atoms'])
-                greaction[i].append(g)
-
-            total_shift += shift + 1
-
-        return greaction
+        return super(RDFread, self).get_molecule(molecule, stereo=stereo)
 
 
 class RDFwrite(CGRwrite):
