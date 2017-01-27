@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -22,7 +22,6 @@ import networkx as nx
 import operator
 from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
-from .FEAR import FEAR
 from .files.RDFrw import RDFread
 
 
@@ -60,12 +59,10 @@ def simple_eq(a, b):
 
 
 class CGRreactor(object):
-    def __init__(self, stereo=False, hyb=False, neighbors=False, isotop=False, element=True, deep=0):
+    def __init__(self, stereo=False, hyb=False, neighbors=False, isotope=False, element=True, deep=0):
         self.__rctemplate = self.__reactioncenter()
         self.__stereo = stereo
-        self.__isotop = isotop
-        self.__hyb = hyb
-        self.__neighbors = neighbors
+        self.__isotope = isotope
         self.__element = element
         self.__deep = deep
 
@@ -78,7 +75,7 @@ class CGRreactor(object):
         neig_match = (['sp_neighbors'], [None],
                       [list_eq]) if neighbors else ([], [], [])
 
-        self.__node_match = gis.generic_node_match(['isotop', 'sp_charge', 'element'] +
+        self.__node_match = gis.generic_node_match(['isotope', 'sp_charge', 'element'] +
                                                    stereo_match[0] + neig_match[0] + hyb_match[0],
                                                    [None] * 3 + stereo_match[1] + neig_match[1] + hyb_match[1],
                                                    [list_eq] * 3 +
@@ -88,7 +85,7 @@ class CGRreactor(object):
                                                    [None] + stereo_match[1],
                                                    [list_eq] + stereo_match[2])
 
-        self.__node_match_products = gis.categorical_node_match(['element', 'isotop', 'p_charge'] + pstereo_match[0],
+        self.__node_match_products = gis.categorical_node_match(['element', 'isotope', 'p_charge'] + pstereo_match[0],
                                                                 [None] * 3 + pstereo_match[1])
 
         self.__edge_match_products = gis.categorical_edge_match(['p_bond'] + pstereo_match[0],
@@ -107,20 +104,9 @@ class CGRreactor(object):
     def get_cgr_matcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
-    def get_template_searcher(self, templates, patch=True, speed=False):
-        if speed:
-            _fear = FEAR(isotop=self.__isotop, stereo=self.__stereo, hyb=self.__hyb,
-                         element=self.__element, deep=self.__deep)
-            _fear.sethashlib([x['meta'] for x in templates])
-            templates = {x['meta']['CGR_FEAR_SHASH']: x for x in templates}
-
+    def get_template_searcher(self, templates):
         def searcher(g):
-            hitlist = []
-            if speed or not patch:
-                hit, hitlist, _ = _fear.check_cgr(g, full=(not patch))
-                if not patch:
-                    return hit
-            for i in ((templates[x[2]] for x in hitlist) if speed else templates):
+            for i in templates:
                 gm = self.get_cgr_matcher(g, i['substrats'])
                 for j in gm.subgraph_isomorphisms_iter():
                     res = dict(substrats=g, meta=i['meta'],

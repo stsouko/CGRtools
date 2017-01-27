@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -42,7 +41,7 @@ def fear_core(**kwargs):
             print("reaction: %d" % num, file=sys.stderr)
         try:
             g = cgr.getCGR(data)
-            h = fear.check_cgr(g, gennew=True)[2]
+            h = fear.check_cgr(g, gennew=True)[1]
             report.update(x[1] for x in h)
             data.meta['REACTION_HASHES'] = ' : '.join(x[1] for x in h)
             outputdata.write(data)

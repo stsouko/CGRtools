@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -23,14 +23,14 @@ from .CGRreactor import CGRreactor, patcher
 
 
 class CGRcombo(CGRcore):
-    def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None, speed=False,
-                 isotop=False, element=True, deep=0, stereo=False):
+    def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
+                 isotope=False, element=True, deep=0, stereo=False):
         CGRcore.__init__(self, cgr_type=cgr_type, extralabels=extralabels)
-        self.__bal = CGRbalanser(b_templates, balanse_groups=True, speed=speed, stereo=stereo, isotop=isotop,
+        self.__bal = CGRbalanser(b_templates, balanse_groups=True, stereo=stereo, isotope=isotope,
                                  extralabels=extralabels, element=element,
                                  deep=deep) if b_templates is not None else None
 
-        self.__map = CGRbalanser(m_templates, balanse_groups=False, speed=speed, stereo=stereo, isotop=isotop,
+        self.__map = CGRbalanser(m_templates, balanse_groups=False, stereo=stereo, isotope=isotope,
                                  extralabels=extralabels, element=element,
                                  deep=deep) if m_templates is not None else None
 
@@ -44,12 +44,12 @@ class CGRcombo(CGRcore):
 
 
 class CGRbalanser(CGRreactor):
-    def __init__(self, templates, speed=False, balanse_groups=True, stereo=False, extralabels=False,
-                 isotop=False, element=True, deep=0):
+    def __init__(self, templates, balanse_groups=True, stereo=False, extralabels=False,
+                 isotope=False, element=True, deep=0):
         CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
-                            isotop=isotop, element=element, deep=deep)
+                            isotope=isotope, element=element, deep=deep)
 
-        self.__searcher = self.get_template_searcher(self.get_templates(templates), speed=speed, patch=True)
+        self.__searcher = self.get_template_searcher(self.get_templates(templates))
         self.__balanse_groups = balanse_groups
 
     def prepare(self, g):

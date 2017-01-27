@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -31,7 +30,7 @@ from .cli.main_fear import fear_core
 
 def fear_common(parser):
     parser.add_argument("--element", "-e", action='store_false', help="FEAR use element data")
-    parser.add_argument("--isotop", "-I", action='store_true', help="FEAR use isotop data")
+    parser.add_argument("--isotope", "-I", action='store_true', help="FEAR use isotope data")
     parser.add_argument("--deep", "-d", default=0, type=int, help="FEAR deep of scan")
 
 
@@ -58,7 +57,6 @@ def condenser_common(parser):
 
 
 def balanser_common(parser):
-    parser.add_argument("--speed", "-S", action='store_true', help="speed up by FEAR")
     parser.add_argument("--m_templates", "-M", type=argparse.FileType('r'), default=None,
                         help="RDF with reactions remapping rules")
     parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'), default=None,
@@ -127,7 +125,7 @@ def reactmap(subparsers):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="CGR tools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
+    parser = argparse.ArgumentParser(description="CGRtools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
     parser.add_argument("--version", "-v", action="version", version=version(), default=False)
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
 

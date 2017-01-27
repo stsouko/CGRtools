@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -43,7 +42,7 @@ class CGRread:
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif line.startswith('M  ISO'):
-            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotop', value=line[14:17].strip())
+            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotope', value=line[14:17].strip())
 
         elif line.startswith('M  STY'):
             for i in range(int(line[8])):
@@ -66,7 +65,7 @@ class CGRread:
     __cgrkeys = dict(dynatom=1, atomstereo=1, dynatomstereo=1,
                      bondstereo=2, dynbondstereo=2, extrabond=2, dynbond=2,
                      atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1,
-                     atomnotlist=1, atomlist=1, isotop=1)
+                     atomnotlist=1, atomlist=1, isotope=1)
 
     def getdata(self):
         prop = []
@@ -178,9 +177,9 @@ class CGRread:
         elif k['type'] == 'dynatomneighbors':
             _parsedyn(g.node[atom1], 'neighbors')
 
-        elif k['type'] == 'isotop':
+        elif k['type'] == 'isotope':
             tmp = k['value'].split(',')
-            g.node[atom1]['isotop'] = [int(x) for x in tmp] if len(tmp) > 1 else int(tmp[0])
+            g.node[atom1]['isotope'] = [int(x) for x in tmp] if len(tmp) > 1 else int(tmp[0])
 
     @staticmethod
     def parsecolors(g, key, colors, remapped):
@@ -249,9 +248,9 @@ class CGRread:
                                s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
                     if l['element'] not in ('A', '*'):
                         g.node[atom_map]['element'] = l['element']
-                    if l['isotop']:
+                    if l['isotope']:
                         a = pt.elements.symbol(l['element'])
-                        g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+                        g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
                     if stereo and ks + total_shift in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
                         g.node[atom_map].update(stereo['atomstereo'][ks + total_shift])
@@ -297,9 +296,9 @@ class CGRread:
                        s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'], map=l['map'])
             if l['element'] not in ('A', '*'):
                 g.node[atom_map]['element'] = l['element']
-            if l['isotop']:
+            if l['isotope']:
                 a = pt.elements.symbol(l['element'])
-                g.node[atom_map]['isotop'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotop']
+                g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
             if stereo and k - 1 in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
                 g.node[atom_map].update(stereo['atomstereo'][k - 1])
@@ -349,8 +348,8 @@ class CGRwrite:
                     meta['atoms'] = (n,)
                     cgr_dat.append(meta)
 
-            if 'isotop' in j:
-                extended.append(dict(atoms=(n,), value=j['isotop'], type='isotop'))
+            if 'isotope' in j:
+                extended.append(dict(atoms=(n,), value=j['isotope'], type='isotope'))
 
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
                 for part, s_val in j.get('s_%s' % k, {}).items():
@@ -391,7 +390,7 @@ class CGRwrite:
     def __formatprop(self, extended, cgr_dat, atoms):
         text = []
         for i in extended:
-            if i['type'] == 'isotop':
+            if i['type'] == 'isotope':
                 if isinstance(i['value'], list):
                     i['value'] = ','.join(str(x) for x in i['value'])
                     cgr_dat.insert(0, i)

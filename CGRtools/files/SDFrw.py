@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -76,7 +75,7 @@ class SDFread(CGRread):
                     molecule = None
 
             elif n <= atomcount:
-                molecule['atoms'].append(dict(element=line[31:34].strip(), isotop=int(line[34:36]),
+                molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
                                               charge=fromMDL.get(int(line[38:39]), 0),
                                               map=int(line[60:63]), mark=line[54:57].strip(),
                                               x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))

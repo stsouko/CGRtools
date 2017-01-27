@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -48,9 +47,9 @@ def eratosthenes():
 
 
 class FEAR(object):
-    def __init__(self, isotop=False, stereo=False, hyb=False, element=True, deep=0):
+    def __init__(self, isotope=False, stereo=False, hyb=False, element=True, deep=0):
         self.__primes = tuple(x for _, x in zip(range(1000), eratosthenes()))
-        self.__isotop = isotop
+        self.__isotope = isotope
         self.__stereo = stereo
         self.__deep = deep
         self.__hyb = hyb
@@ -67,7 +66,6 @@ class FEAR(object):
     def check_cgr(self, g, full=True, gennew=False):
         chkd = set()
         report = set()
-        newhash = set()
 
         def dochk(x):
             weights = self.__get_morgan(x)
@@ -79,7 +77,7 @@ class FEAR(object):
                     report.add((whash, shash))
                     return True
                 elif gennew:
-                    newhash.add((whash, shash))
+                    report.add((whash, shash))
             return False
 
         centers = self.__getcenters(g)
@@ -94,7 +92,7 @@ class FEAR(object):
         tmp = (chkd.issuperset(i) or dochk(i) for i in centers[0])
         if gennew:
             tmp = list(tmp)
-        return all(tmp) if full else any(tmp), report, newhash
+        return all(tmp) if full else any(tmp), report
 
     def get_cgr_string(self, g):
         return self.__getsmarts(g, self.__get_morgan(g))
@@ -141,21 +139,19 @@ class FEAR(object):
             return nextatom
 
         def dosmarts(trace, inter, prev):
-            s_stereo = self.__stereotypes[g.node[inter].get('s_stereo')] if self.__stereo else ''
-            p_stereo = self.__stereotypes[g.node[inter].get('p_stereo')] if self.__stereo else ''
-            s_hyb = self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else ''
-            p_hyb = self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else ''
-            s_sh = '%s%s' % (s_stereo, s_hyb and ',%s' % s_hyb or '')
-            p_sh = '%s%s' % (p_stereo, p_hyb and ',%s' % p_hyb or '')
+            s_sh = '%s%s' % (self.__stereo and g.node[inter].get('s_stereo') or '',
+                             self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else '')
+            p_sh = '%s%s' % (self.__stereo and g.node[inter].get('p_stereo') or '',
+                             self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else '')
 
             smis = ['[%s%s%s%s:%d]' %
-                    (self.__isotop and g.node[inter].get('isotop') or '',
+                    (self.__isotope and g.node[inter].get('isotope') or '',
                      self.__element and g.node[inter]['element'] or '*',
                      s_sh and ';%s;' % s_sh or '',
                      self.__element and g.node[inter]['s_charge'] and '%+d' % g.node[inter]['s_charge'] or '',
                      newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
             smip = ['[%s%s%s%s:%d]' %
-                    (self.__isotop and g.node[inter].get('isotop') or '',
+                    (self.__isotope and g.node[inter].get('isotope') or '',
                      self.__element and g.node[inter]['element'] or '*',
                      p_sh and ';%s;' % p_sh or '',
                      self.__element and g.node[inter]['p_charge'] and '%+d' % g.node[inter]['p_charge'] or '',
@@ -170,8 +166,10 @@ class FEAR(object):
                     if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
                         cyc = next(countcyc)
                         concat.append((i, cyc, inter))
-                        smis.append('%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')], cyc))
-                        smip.append('%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')], cyc))
+                        smis.append('%s%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')],
+                                                self.__stereo and g[inter][i].get('s_stereo', '') or '', cyc))
+                        smip.append('%s%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')],
+                                                self.__stereo and g[inter][i].get('p_stereo', '') or '', cyc))
                     continue
 
                 deep = dosmarts(set(chain(trace, [i])), i, inter)
@@ -181,11 +179,17 @@ class FEAR(object):
                     for j in deep[3]:
                         if j[0] == inter:
                             stoplist.append(j[2])
-                            smis.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('s_bond')], j[1]))
-                            smip.append('%s%d' % (self.__tosmiles[g[inter][j[2]].get('p_bond')], j[1]))
-                smis.extend(['(' if iterlist else ''] + [self.__tosmiles[g[inter][i].get('s_bond')]] + deep[1] +
+                            smis.append('%s%s%d' % (self.__tosmiles[g[inter][j[2]].get('s_bond')],
+                                                    self.__stereo and g[inter][j[2]].get('s_stereo', '') or '', j[1]))
+                            smip.append('%s%s%d' % (self.__tosmiles[g[inter][j[2]].get('p_bond')],
+                                                    self.__stereo and g[inter][j[2]].get('p_stereo', '') or '', j[1]))
+                smis.extend(['(' if iterlist else ''] +
+                            ['%s%s' % (self.__tosmiles[g[inter][i].get('s_bond')],
+                                       self.__stereo and g[inter][i].get('s_stereo', '') or '')] + deep[1] +
                             [')' if iterlist else ''])
-                smip.extend(['(' if iterlist else ''] + [self.__tosmiles[g[inter][i].get('p_bond')]] + deep[2] +
+                smip.extend(['(' if iterlist else ''] +
+                            ['%s%s' % (self.__tosmiles[g[inter][i].get('p_bond')],
+                                       self.__stereo and g[inter][i].get('p_stereo', '') or '')] + deep[2] +
                             [')' if iterlist else ''])
             return trace, smis, smip, concat
 
@@ -203,9 +207,9 @@ class FEAR(object):
 
     __tosmiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
 
-    __hybtypes = {4: 'Ha', 3: 'Ht', 2: 'Hd', 1: 'Hs', None: ''}
+    __hybtypes = {4: ',a', 3: ',t', 2: ',d', 1: ',s', None: ''}
 
-    __stereotypes = {None: '', 1: '@s', 2: '@r'}
+    __stereotypes = {None: 0, 'u': 1, 'e': 2, 'z': 3, 'r': 4, 's': 5, 're': 6, 'si': 7}
 
     def __get_morgan(self, g):
         newlevels = {}
@@ -216,11 +220,13 @@ class FEAR(object):
                       reduce(operator.mul,
                              (self.__primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
                               for eattr in g[n].values()), 1),
-                      self.__primes[attr['isotop']] if self.__isotop and 'isotop' in attr else 1,
-                      self.__primes[10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0)]
+                      self.__primes[attr['isotope']] if self.__isotope and 'isotope' in attr else 1,
+                      self.__primes[10 * self.__stereotypes[attr.get('s_stereo')] +
+                                    self.__stereotypes[attr.get('p_stereo')]]
                       if self.__stereo else 1,
                       reduce(operator.mul,
-                             (self.__primes[10 * (eattr.get('s_stereo') or 0) + (eattr.get('p_stereo') or 0)]
+                             (self.__primes[10 * self.__stereotypes[eattr.get('s_stereo')] +
+                                            self.__stereotypes[eattr.get('p_stereo')]]
                               for eattr in g[n].values()), 1) if self.__stereo else 1)
                   for n, attr in g.nodes(data=True)}
 

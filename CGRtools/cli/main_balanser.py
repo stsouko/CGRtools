@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014, 2015 Ramil Nugmanov <stsouko@live.ru>
-#  This file is part of CGR tools.
+#  This file is part of CGRtools.
 #
-#  CGR tools is free software; you can redistribute it and/or modify
+#  CGRtools is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU Affero General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -29,7 +28,7 @@ def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], speed=kwargs['speed'],
+    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'],
                       b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'],
                       stereo=kwargs['stereo'], isotop=kwargs['isotop'], element=kwargs['element'], deep=kwargs['deep'])
 
