@@ -29,8 +29,8 @@ def fear_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'])
 
-    fear = FEAR(isotop=kwargs['isotop'], stereo=kwargs['stereo'], hyb=kwargs['extralabels'], element=kwargs['element'],
-                deep=kwargs['deep'])
+    fear = FEAR(isotope=kwargs['isotope'], stereo=kwargs['stereo'], hyb=kwargs['extralabels'],
+                element=kwargs['element'], deep=kwargs['deep'])
     cgr = CGRcore(extralabels=kwargs['extralabels'])
     err = 0
     num = 0

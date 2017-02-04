@@ -24,15 +24,15 @@ from .CGRreactor import CGRreactor, patcher
 
 class CGRcombo(CGRcore):
     def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
-                 isotope=False, element=True, deep=0, stereo=False):
+                 isotope=False, element=True, stereo=False):
         CGRcore.__init__(self, cgr_type=cgr_type, extralabels=extralabels)
         self.__bal = CGRbalanser(b_templates, balanse_groups=True, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels, element=element,
-                                 deep=deep) if b_templates is not None else None
+                                 extralabels=extralabels,
+                                 element=element) if b_templates is not None else None
 
         self.__map = CGRbalanser(m_templates, balanse_groups=False, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels, element=element,
-                                 deep=deep) if m_templates is not None else None
+                                 extralabels=extralabels,
+                                 element=element) if m_templates is not None else None
 
     def getCGR(self, data):
         g = super(CGRcombo, self).getCGR(data)
@@ -44,10 +44,9 @@ class CGRcombo(CGRcore):
 
 
 class CGRbalanser(CGRreactor):
-    def __init__(self, templates, balanse_groups=True, stereo=False, extralabels=False,
-                 isotope=False, element=True, deep=0):
+    def __init__(self, templates, balanse_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
         CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
-                            isotope=isotope, element=element, deep=deep)
+                            isotope=isotope, element=element)
 
         self.__searcher = self.get_template_searcher(self.get_templates(templates))
         self.__balanse_groups = balanse_groups
@@ -55,7 +54,7 @@ class CGRbalanser(CGRreactor):
     def prepare(self, g):
         report = []
         if self.__balanse_groups:
-            g = self.clonesubgraphs(g)
+            g = self.clone_subgraphs(g)
 
         while True:
             match = next(self.__searcher(g), None)

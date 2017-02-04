@@ -38,11 +38,11 @@ class CGRcore(object):
         if self.__cgrtype in (1, 2, 3, 4, 5, 6):
             g = self.__reaction_splitter(data)
             if self.__extralabels:
-                g = self.__setlabels(g)
+                g = self.set_labels(g)
         else:
             res = self.merge_mols(data)
             if self.__extralabels:
-                res = dict(substrats=self.__setlabels(res['substrats']), products=self.__setlabels(res['products']))
+                res = dict(substrats=self.set_labels(res['substrats']), products=self.set_labels(res['products']))
 
             g = self.__compose(res)
 
@@ -52,7 +52,7 @@ class CGRcore(object):
     def dissCGR(self, g):
         tmp = ReactionContainer(meta=g.meta)
         for category, (edge, pattern) in self.__disstemplate.items():
-            components, *_ = CGRreactor.getbondbrokengraph(g, pattern, gis.categorical_edge_match(edge, None))
+            components, *_ = CGRreactor.get_bond_broken_graph(g, pattern, gis.categorical_edge_match(edge, None))
             for mol in components:
                 for n, m, edge_attr in mol.edges(data=True):
                     for i, j in self.__attrcompose['edges'][category].items():
@@ -127,7 +127,7 @@ class CGRcore(object):
         return dict(substrats=substrats or MoleculeContainer(), products=products or MoleculeContainer())
 
     @staticmethod
-    def __setlabels(g):
+    def set_labels(g):
         for i in g.nodes():
             label = {'s_hyb': 1, 'p_hyb': 1, 'sp_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0, 'sp_neighbors': 0}
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic

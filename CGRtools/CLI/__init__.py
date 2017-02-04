@@ -18,3 +18,13 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from .parsers import parse_args
+
+
+def launcher():
+    parser = parse_args()
+    args = parser.parse_args()
+    if 'func' in args:
+        args.func(**vars(args))
+    else:
+        parser.print_help()

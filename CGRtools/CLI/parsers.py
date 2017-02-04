@@ -21,11 +21,11 @@
 import argparse
 import importlib
 from importlib.util import find_spec
-from .version import version
-from .cli.main_mapper import mapper_core
-from .cli.main_balanser import balanser_core
-from .cli.main_condenser import condenser_core
-from .cli.main_fear import fear_core
+from ..version import version
+from .main_mapper import mapper_core
+from .main_balanser import balanser_core
+from .main_condenser import condenser_core
+from .main_fear import fear_core
 
 
 def fear_common(parser):
@@ -139,12 +139,3 @@ def parse_args():
         argcomplete.autocomplete(parser)
 
     return parser
-
-
-def launcher():
-    parser = parse_args()
-    args = parser.parse_args()
-    if 'func' in args:
-        args.func(**vars(args))
-    else:
-        parser.print_help()

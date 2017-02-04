@@ -30,8 +30,8 @@ def condenser_core(**kwargs):
     outputdata = SDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
     worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'],
-                      b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'],
-                      stereo=kwargs['stereo'], isotop=kwargs['isotop'], element=kwargs['element'], deep=kwargs['deep'])
+                      b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'], stereo=kwargs['stereo'],
+                      isotope=kwargs['isotope'], element=kwargs['element'], deep=kwargs['deep'])
 
     err = 0
     num = 0

@@ -26,7 +26,7 @@ import networkx as nx
 class ReactMap(CGRbalanser):
     def __init__(self, debug=False, **kwargs):
         CGRbalanser.__init__(self, kwargs['templates'], balanse_groups=False, stereo=kwargs['stereo'],
-                             extralabels=True, isotop=True)
+                             extralabels=True, isotope=True)
 
         self.__coretemplates = self.get_templates(kwargs['templates'])
         self.__preparesearchpatcher()

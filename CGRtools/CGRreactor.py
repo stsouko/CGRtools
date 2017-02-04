@@ -59,38 +59,30 @@ def simple_eq(a, b):
 
 
 class CGRreactor(object):
-    def __init__(self, stereo=False, hyb=False, neighbors=False, isotope=False, element=True, deep=0):
+    def __init__(self, stereo=False, hyb=False, neighbors=False, isotope=False, element=True):
         self.__rctemplate = self.__reactioncenter()
-        self.__stereo = stereo
-        self.__isotope = isotope
-        self.__element = element
-        self.__deep = deep
 
-        stereo_match = (['sp_stereo'], [None], [list_eq]) if stereo else ([], [], [])
-        pstereo_match = (['p_stereo'], [None], [operator.eq]) if stereo else ([], [], [])
+        gnm_sp, gem_sp, pcem, pcnm = ['sp_bond'], [], ['p_bond'], ['element', 'p_charge']
+        if isotope:
+            gnm_sp.append('isotope')
+            pcnm.append('isotope')
+        if element:
+            gnm_sp.extend(['sp_charge', 'element'])
+        if neighbors:
+            gnm_sp.append('sp_neighbors')
+        if hyb:
+            gnm_sp.append('sp_hyb')
+        if stereo:
+            gnm_sp.append('sp_stereo')
+            gem_sp.append('sp_stereo')
+            pcem.append('p_stereo')
+            pcnm.append('p_stereo')
 
-        hyb_match = (['sp_hyb'], [None],
-                     [list_eq]) if hyb else ([], [], [])
+        self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [list_eq] * len(gnm_sp))
+        self.__edge_match = gis.generic_node_match(gem_sp, [None] * len(gem_sp), [list_eq] * len(gem_sp))
 
-        neig_match = (['sp_neighbors'], [None],
-                      [list_eq]) if neighbors else ([], [], [])
-
-        self.__node_match = gis.generic_node_match(['isotope', 'sp_charge', 'element'] +
-                                                   stereo_match[0] + neig_match[0] + hyb_match[0],
-                                                   [None] * 3 + stereo_match[1] + neig_match[1] + hyb_match[1],
-                                                   [list_eq] * 3 +
-                                                   stereo_match[2] + neig_match[2] + hyb_match[2])
-
-        self.__edge_match = gis.generic_node_match(['sp_bond'] + stereo_match[0],
-                                                   [None] + stereo_match[1],
-                                                   [list_eq] + stereo_match[2])
-
-        self.__node_match_products = gis.categorical_node_match(['element', 'isotope', 'p_charge'] + pstereo_match[0],
-                                                                [None] * 3 + pstereo_match[1])
-
-        self.__edge_match_products = gis.categorical_edge_match(['p_bond'] + pstereo_match[0],
-                                                                [None] + pstereo_match[1])
-
+        self.__node_match_products = gis.categorical_node_match(pcnm, [None] * len(pcnm))
+        self.__edge_match_products = gis.categorical_edge_match(pcem, [None] * len(pcem))
         self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
 
     @staticmethod
@@ -116,7 +108,7 @@ class CGRreactor(object):
         return searcher
 
     @staticmethod
-    def getbondbrokengraph(g, rc_templates, edge_match):
+    def get_bond_broken_graph(g, rc_templates, edge_match):
         g = g.copy()
         lose_bonds = {}
         for i in rc_templates:
@@ -133,7 +125,7 @@ class CGRreactor(object):
         components = list(nx.connected_component_subgraphs(g))
         return components, lose_bonds
 
-    def clonesubgraphs(self, g):
+    def clone_subgraphs(self, g):
         r_group = []
         x_group = {}
         r_group_clones = []
@@ -141,7 +133,7 @@ class CGRreactor(object):
 
         ''' search bond breaks and creations
         '''
-        components, lose_bonds = self.getbondbrokengraph(g, self.__rctemplate, self.__edge_match_only_bond)
+        components, lose_bonds = self.get_bond_broken_graph(g, self.__rctemplate, self.__edge_match_only_bond)
         lose_map = {x: y for x, y in lose_bonds}
         ''' extract subgraphs and sort by group type (R or X)
         '''

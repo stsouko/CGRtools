@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 import operator
-from collections import Counter, defaultdict
+from collections import Counter
 from itertools import chain, count
 from functools import reduce
 import networkx as nx
@@ -54,13 +54,17 @@ class FEAR(object):
         self.__deep = deep
         self.__hyb = hyb
         self.__element = element
-        self.__whash = set()
-        self.__lhash = set()
-        self.__shash = set()
+        if stereo:
+            self.__rc_node.append(('s_stereo', 'p_stereo'))
+            self.__rc_edge.append(('s_stereo', 'p_stereo'))
+
+    __whash = set()
+    __shash = set()
+    __rc_node = [('s_charge', 'p_charge')]
+    __rc_edge = [('s_bond', 'p_bond')]
 
     def sethashlib(self, data):
         self.__whash = {x['CGR_FEAR_WHASH'] for x in data}
-        self.__lhash = {x['CGR_FEAR_LHASH'] for x in data}
         self.__shash = {x['CGR_FEAR_SHASH'] for x in data}
 
     def check_cgr(self, g, full=True, gennew=False):
@@ -80,16 +84,16 @@ class FEAR(object):
                     report.add((whash, shash))
             return False
 
-        centers = self.__getcenters(g)
+        centers = self.get_environment(g, self.get_center_atoms(g), dante=True)
         ''' check for very specific centers
         '''
-        for i in sorted(centers, reverse=True)[:-1]:
-            for j in centers[i]:
-                if not chkd.issuperset(j):
-                    dochk(j)
+        for s in centers[:0:-1]:
+            for c in nx.connected_component_subgraphs(s):
+                if not chkd.issuperset(c):
+                    dochk(c)
         ''' final check for common centers
         '''
-        tmp = (chkd.issuperset(i) or dochk(i) for i in centers[0])
+        tmp = (chkd.issuperset(c) or dochk(c) for c in nx.connected_component_subgraphs(centers[0]))
         if gennew:
             tmp = list(tmp)
         return all(tmp) if full else any(tmp), report
@@ -97,29 +101,31 @@ class FEAR(object):
     def get_cgr_string(self, g):
         return self.__getsmarts(g, self.__get_morgan(g))
 
-    def __getcenters(self, g):
-        nodes = [set()]
-        """ get nodes of reaction center (dynamic bonds, stereo or charges).
+    def get_center_atoms(self, g):
+        """ get atoms of reaction center (dynamic bonds, stereo or charges).
         """
+        nodes = set()
         for n, node_attr in g.nodes(data=True):
-            for k, l in (('s_charge', 'p_charge'), ('s_stereo', 'p_stereo')):
-                if node_attr.get(k) != node_attr.get(l):
-                    nodes[0].add(n)
+            if any(node_attr.get(k) != node_attr.get(l) for k, l in self.__rc_node):
+                nodes.add(n)
 
         for *n, node_attr in g.edges(data=True):
-            for k, l in (('s_bond', 'p_bond'), ('s_stereo', 'p_stereo')):
-                if node_attr.get(k) != node_attr.get(l):
-                    nodes[0].update(n)
+            if any(node_attr.get(k) != node_attr.get(l) for k, l in self.__rc_edge):
+                nodes.update(n)
 
-        """ get nodes of reaction center and neighbors
+        return list(nodes)
+
+    def get_environment(self, g, atoms, dante=False):
+        """ get subgraph with atoms and their neighbors
         """
+        nodes = [atoms]
         for i in range(self.__deep):
             nodes.append(set(chain.from_iterable(g.edges(nodes[i]))))
 
-        centers = defaultdict(list)
-        for n, i in enumerate(nodes):
-            for j in nx.connected_component_subgraphs(g.subgraph(i)):
-                centers[n].append(j)
+        if dante:
+            centers = [g.subgraph(a) for a in nodes]
+        else:
+            centers = g.subgraph(nodes[-1])
 
         return centers
 
