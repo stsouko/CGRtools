@@ -19,7 +19,6 @@
 #  MA 02110-1301, USA.
 #
 import networkx as nx
-import operator
 from itertools import product, combinations
 from networkx.algorithms import isomorphism as gis
 from .files.RDFrw import RDFread

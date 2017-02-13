@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -28,10 +28,10 @@ from .main_condenser import condenser_core
 from .main_fear import fear_core
 
 
-def fear_common(parser):
+def reactor_common(parser):
     parser.add_argument("--element", "-e", action='store_false', help="FEAR use element data")
     parser.add_argument("--isotope", "-I", action='store_true', help="FEAR use isotope data")
-    parser.add_argument("--deep", "-d", default=0, type=int, help="FEAR deep of scan")
+
 
 
 def stereo_common(parser):
@@ -75,7 +75,7 @@ def balanser(subparsers):
     extra_common(parser)
     stereo_common(parser)
     balanser_common(parser)
-    fear_common(parser)
+    reactor_common(parser)
 
     parser.set_defaults(func=balanser_core)
 
@@ -92,7 +92,7 @@ def condenser(subparsers):
     extra_common(parser)
     stereo_common(parser)
     balanser_common(parser)
-    fear_common(parser)
+    reactor_common(parser)
 
     parser.set_defaults(func=condenser_core)
 
@@ -102,10 +102,12 @@ def fear(subparsers):
                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
     parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+    parser.add_argument("--deep", "-d", default=0, type=int, help="FEAR deep of scan")
+    parser.add_argument("--extralabels", "-E", action='store_true',
+                        help="generate atom hybridization and neighbors labels")
 
-    fear_common(parser)
+    reactor_common(parser)
     stereo_common(parser)
-    condenser_common(parser)
 
     parser.set_defaults(func=fear_core)
 
