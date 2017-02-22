@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import sys
-import traceback
+from sys import stderr
+from traceback import format_exc
 from ..files.RDFrw import RDFread
 from ..files.SDFrw import SDFwrite
 from ..CGRpreparer import CGRcombo
@@ -31,19 +31,19 @@ def condenser_core(**kwargs):
 
     worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'],
                       b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'], stereo=kwargs['stereo'],
-                      isotope=kwargs['isotope'], element=kwargs['element'], deep=kwargs['deep'])
+                      isotope=kwargs['isotope'], element=kwargs['element'])
 
     err = 0
     num = 0
     for num, data in enumerate(inputdata, start=1):
         if num % 100 == 1:
-            print("reaction: %d" % num, file=sys.stderr)
+            print("reaction: %d" % num, file=stderr)
         try:
             a = worker.getCGR(data)
             outputdata.write(a)
         except Exception:
             err += 1
-            print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
-    print('%d from %d reactions condensed' % (num - err, num), file=sys.stderr)
+            print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
+    print('%d from %d reactions condensed' % (num - err, num), file=stderr)
 
     return 0 if num and not err else 1 if num - err else 2

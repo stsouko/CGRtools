@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -26,16 +26,14 @@ class CGRcombo(CGRcore):
     def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
                  isotope=False, element=True, stereo=False):
         CGRcore.__init__(self, cgr_type=cgr_type, extralabels=extralabels)
-        self.__bal = CGRbalanser(b_templates, balanse_groups=True, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels,
-                                 element=element) if b_templates is not None else None
+        self.__bal = CGRbalancer(b_templates, balance_groups=True, stereo=stereo, isotope=isotope,
+                                 extralabels=extralabels, element=element) if b_templates is not None else None
 
-        self.__map = CGRbalanser(m_templates, balanse_groups=False, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels,
-                                 element=element) if m_templates is not None else None
+        self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
+                                 extralabels=extralabels, element=element) if m_templates is not None else None
 
-    def getCGR(self, data):
-        g = super(CGRcombo, self).getCGR(data)
+    def getCGR(self, data, is_merged=False):
+        g = super(CGRcombo, self).getCGR(data, is_merged=is_merged)
         if self.__map is not None:
             g = self.__map.prepare(g)
         if self.__bal is not None:
@@ -43,17 +41,17 @@ class CGRcombo(CGRcore):
         return g
 
 
-class CGRbalanser(CGRreactor):
-    def __init__(self, templates, balanse_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
+class CGRbalancer(CGRreactor):
+    def __init__(self, templates, balance_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
         CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
                             isotope=isotope, element=element)
 
         self.__searcher = self.get_template_searcher(self.get_templates(templates))
-        self.__balanse_groups = balanse_groups
+        self.__balance_groups = balance_groups
 
     def prepare(self, g):
         report = []
-        if self.__balanse_groups:
+        if self.__balance_groups:
             g = self.clone_subgraphs(g)
 
         while True:

@@ -18,12 +18,12 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import operator
+from operator import mul, itemgetter
 from collections import Counter
 from itertools import chain, count
 from functools import reduce
-import networkx as nx
-import periodictable as pt
+from networkx import connected_component_subgraphs
+from periodictable import elements
 
 
 def eratosthenes():
@@ -63,7 +63,7 @@ class FEAR(object):
     __rc_node = [('s_charge', 'p_charge')]
     __rc_edge = [('s_bond', 'p_bond')]
 
-    def sethashlib(self, data):
+    def set_hashlib(self, data):
         self.__whash = {x['CGR_FEAR_WHASH'] for x in data}
         self.__shash = {x['CGR_FEAR_SHASH'] for x in data}
 
@@ -72,10 +72,10 @@ class FEAR(object):
         report = set()
 
         def dochk(x):
-            weights = self.__get_morgan(x)
+            weights = self.get_morgan(x)
             whash = '.'.join(str(x) for x in sorted(weights.values()))
             if whash in self.__whash or gennew:
-                shash = self.__getsmarts(x, weights)
+                shash = self.__get_smarts(x, weights)
                 if shash in self.__shash:
                     chkd.update(x)
                     report.add((whash, shash))
@@ -88,18 +88,18 @@ class FEAR(object):
         ''' check for very specific centers
         '''
         for s in centers[:0:-1]:
-            for c in nx.connected_component_subgraphs(s):
+            for c in connected_component_subgraphs(s):
                 if not chkd.issuperset(c):
                     dochk(c)
         ''' final check for common centers
         '''
-        tmp = (chkd.issuperset(c) or dochk(c) for c in nx.connected_component_subgraphs(centers[0]))
+        tmp = (chkd.issuperset(c) or dochk(c) for c in connected_component_subgraphs(centers[0]))
         if gennew:
             tmp = list(tmp)
         return all(tmp) if full else any(tmp), report
 
     def get_cgr_string(self, g):
-        return self.__getsmarts(g, self.__get_morgan(g))
+        return self.__get_smarts(g, self.get_morgan(g))
 
     def get_center_atoms(self, g):
         """ get atoms of reaction center (dynamic bonds, stereo or charges).
@@ -129,7 +129,7 @@ class FEAR(object):
 
         return centers
 
-    def __getsmarts(self, g, weights):
+    def __get_smarts(self, g, weights):
         newmaps = dict()
         countmap = count(1)
         countcyc = count(1)
@@ -146,9 +146,9 @@ class FEAR(object):
 
         def dosmarts(trace, inter, prev):
             s_sh = '%s%s' % (self.__stereo and g.node[inter].get('s_stereo') or '',
-                             self.__hybtypes[g.node[inter].get('s_hyb')] if self.__hyb else '')
+                             self.__hyb_types[g.node[inter].get('s_hyb')] if self.__hyb else '')
             p_sh = '%s%s' % (self.__stereo and g.node[inter].get('p_stereo') or '',
-                             self.__hybtypes[g.node[inter].get('p_hyb')] if self.__hyb else '')
+                             self.__hyb_types[g.node[inter].get('p_hyb')] if self.__hyb else '')
 
             smis = ['[%s%s%s%s:%d]' %
                     (self.__isotope and g.node[inter].get('isotope') or '',
@@ -172,9 +172,9 @@ class FEAR(object):
                     if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
                         cyc = next(countcyc)
                         concat.append((i, cyc, inter))
-                        smis.append('%s%s%d' % (self.__tosmiles[g[inter][i].get('s_bond')],
+                        smis.append('%s%s%d' % (self.__to_smiles[g[inter][i].get('s_bond')],
                                                 self.__stereo and g[inter][i].get('s_stereo', '') or '', cyc))
-                        smip.append('%s%s%d' % (self.__tosmiles[g[inter][i].get('p_bond')],
+                        smip.append('%s%s%d' % (self.__to_smiles[g[inter][i].get('p_bond')],
                                                 self.__stereo and g[inter][i].get('p_stereo', '') or '', cyc))
                     continue
 
@@ -185,16 +185,16 @@ class FEAR(object):
                     for j in deep[3]:
                         if j[0] == inter:
                             stoplist.append(j[2])
-                            smis.append('%s%s%d' % (self.__tosmiles[g[inter][j[2]].get('s_bond')],
+                            smis.append('%s%s%d' % (self.__to_smiles[g[inter][j[2]].get('s_bond')],
                                                     self.__stereo and g[inter][j[2]].get('s_stereo', '') or '', j[1]))
-                            smip.append('%s%s%d' % (self.__tosmiles[g[inter][j[2]].get('p_bond')],
+                            smip.append('%s%s%d' % (self.__to_smiles[g[inter][j[2]].get('p_bond')],
                                                     self.__stereo and g[inter][j[2]].get('p_stereo', '') or '', j[1]))
                 smis.extend(['(' if iterlist else ''] +
-                            ['%s%s' % (self.__tosmiles[g[inter][i].get('s_bond')],
+                            ['%s%s' % (self.__to_smiles[g[inter][i].get('s_bond')],
                                        self.__stereo and g[inter][i].get('s_stereo', '') or '')] + deep[1] +
                             [')' if iterlist else ''])
                 smip.extend(['(' if iterlist else ''] +
-                            ['%s%s' % (self.__tosmiles[g[inter][i].get('p_bond')],
+                            ['%s%s' % (self.__to_smiles[g[inter][i].get('p_bond')],
                                        self.__stereo and g[inter][i].get('p_stereo', '') or '')] + deep[2] +
                             [')' if iterlist else ''])
             return trace, smis, smip, concat
@@ -211,33 +211,33 @@ class FEAR(object):
         jpsmiles = '.'.join(psmiles)
         return '%s>>%s' % (jssmiles, jpsmiles) if jssmiles != jpsmiles else jssmiles
 
-    __tosmiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
+    __to_smiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
 
-    __hybtypes = {4: ',a', 3: ',t', 2: ',d', 1: ',s', None: ''}
+    __hyb_types = {4: ',a', 3: ',t', 2: ',d', 1: ',s', None: ''}
 
-    __stereotypes = {None: 0, 'u': 1, 'e': 2, 'z': 3, 'r': 4, 's': 5, 're': 6, 'si': 7}
+    __stereo_types = {None: 0, 'u': 1, 'e': 2, 'z': 3, 'r': 4, 's': 5, 're': 6, 'si': 7}
 
-    def __get_morgan(self, g):
+    def get_morgan(self, g):
         newlevels = {}
         countprime = iter(self.__primes)
 
-        params = {n: (self.__primes[pt.elements.symbol(attr['element']).number] if self.__element else 1,
+        params = {n: (self.__primes[elements.symbol(attr['element']).number] if self.__element else 1,
                       self.__primes[10 * attr['s_charge'] + attr['p_charge']] if self.__element else 1,
-                      reduce(operator.mul,
+                      reduce(mul,
                              (self.__primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
                               for eattr in g[n].values()), 1),
                       self.__primes[attr['isotope']] if self.__isotope and 'isotope' in attr else 1,
-                      self.__primes[10 * self.__stereotypes[attr.get('s_stereo')] +
-                                    self.__stereotypes[attr.get('p_stereo')]]
+                      self.__primes[10 * self.__stereo_types[attr.get('s_stereo')] +
+                                    self.__stereo_types[attr.get('p_stereo')]]
                       if self.__stereo else 1,
-                      reduce(operator.mul,
-                             (self.__primes[10 * self.__stereotypes[eattr.get('s_stereo')] +
-                                            self.__stereotypes[eattr.get('p_stereo')]]
+                      reduce(mul,
+                             (self.__primes[10 * self.__stereo_types[eattr.get('s_stereo')] +
+                                            self.__stereo_types[eattr.get('p_stereo')]]
                               for eattr in g[n].values()), 1) if self.__stereo else 1)
                   for n, attr in g.nodes(data=True)}
 
         weights = {x: (newlevels.get(y) or newlevels.setdefault(y, next(countprime)))
-                   for x, y in sorted(params.items(), key=operator.itemgetter(1))}
+                   for x, y in sorted(params.items(), key=itemgetter(1))}
 
         oldnumb = numb = len(g)
         maxcount = 0
@@ -256,7 +256,7 @@ class FEAR(object):
             for n, m in scaf.items():
                 """ if don't have neighbors use self weight
                 """
-                tmp[n] = reduce(operator.mul, (weights[x] for x in m), weights[n]**2)
+                tmp[n] = reduce(mul, (weights[x] for x in m), weights[n]**2)
 
             numb = len(set(tmp.values()))
             if numb == oldnumb:
@@ -268,6 +268,6 @@ class FEAR(object):
                 maxcount = 0
 
             weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
-                       for x, y in sorted(tmp.items(), key=operator.itemgetter(1))}
+                       for x, y in sorted(tmp.items(), key=itemgetter(1))}
 
         return weights

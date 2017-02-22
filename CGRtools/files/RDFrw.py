@@ -18,7 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import time
+from time import strftime
 from itertools import chain, repeat
 from .CGRrw import CGRread, CGRwrite, fromMDL
 from . import MoleculeContainer
@@ -112,7 +112,7 @@ class RDFread(CGRread):
 
             elif line.startswith("M  END"):
                 mend = True
-                molecule['CGR_DAT'] = self.getdata()
+                molecule['CGR_DAT'] = self.get_data()
                 if len(reaction['substrats']) < substrats:
                     reaction['substrats'].append(molecule)
                 elif len(reaction['products']) < products:
@@ -162,13 +162,13 @@ class RDFwrite(CGRwrite):
         self.__file.close()
 
     def __initwrite(self, data):
-        self.__file.write(time.strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
+        self.__file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
         self.__writedata(data)
         self.write = self.__writedata
 
     def __writedata(self, data):
         if isinstance(data, MoleculeContainer):
-            m = self.getformattedcgr(data)
+            m = self.get_formatted_cgr(data)
             self.__file.write('$MFMT\n')
             self.__file.write(m['CGR'])
             self.__file.write("M  END\n")
@@ -178,7 +178,7 @@ class RDFwrite(CGRwrite):
                               (len(data.substrats), len(data.products)))
             colors = {}
             for cnext, m in enumerate(chain(data.substrats + data.products), start=1):
-                m = self.getformattedcgr(m)
+                m = self.get_formatted_cgr(m)
                 self.__file.write('$MOL\n')
                 self.__file.write(m['CGR'])
                 self.__file.write("M  END\n")

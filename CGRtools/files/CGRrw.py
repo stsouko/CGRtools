@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,14 +20,14 @@
 #
 from itertools import count, product, chain
 from collections import defaultdict
-import periodictable as pt
+from periodictable import elements
 from . import ReactionContainer, MoleculeContainer
 
 toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
 fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
 bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
 stereolabels = dict(e='e', z='z', u='u', r='r', s='s', re='re', si='si', n=None)
-mendeleyset = set(x.symbol for x in pt.elements)
+mendeleyset = set(x.symbol for x in elements)
 
 
 class CGRread:
@@ -67,7 +67,7 @@ class CGRread:
                      atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1,
                      atomnotlist=1, atomlist=1, isotope=1)
 
-    def getdata(self):
+    def get_data(self):
         prop = []
         for i in self.__prop.values():
             if len(i['atoms']) == self.__cgrkeys[i['type']]:
@@ -182,7 +182,7 @@ class CGRread:
             g.node[atom1]['isotope'] = [int(x) for x in tmp] if len(tmp) > 1 else int(tmp[0])
 
     @staticmethod
-    def parsecolors(g, key, colors, remapped):
+    def parse_colors(g, key, colors, remapped):
         adhoc, before = [], []
         for x in colors:
             if (len(x) == 81 or len(x) == 75 and not before) and x[-1] == '+':
@@ -249,7 +249,7 @@ class CGRread:
                     if l['element'] not in ('A', '*'):
                         g.node[atom_map]['element'] = l['element']
                     if l['isotope']:
-                        a = pt.elements.symbol(l['element'])
+                        a = elements.symbol(l['element'])
                         g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
                     if stereo and ks + total_shift in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
@@ -274,9 +274,9 @@ class CGRread:
                     self.cgr_dat(g, k, atom1, atom2)
 
                 for k, v in colors[next(counter)].items():
-                    self.parsecolors(g, k, v,
-                                     {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
-                                                                 start=1)})
+                    self.parse_colors(g, k, v,
+                                      {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
+                                                                  start=1)})
 
                 shift += len(j['atoms'])
                 greaction[i].append(g)
@@ -297,7 +297,7 @@ class CGRread:
             if l['element'] not in ('A', '*'):
                 g.node[atom_map]['element'] = l['element']
             if l['isotope']:
-                a = pt.elements.symbol(l['element'])
+                a = elements.symbol(l['element'])
                 g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
             if stereo and k - 1 in stereo['atomstereo']:  # AD-HOC for stereo marks integration.
@@ -319,19 +319,19 @@ class CGRread:
             CGRread.cgr_dat(g, k, atom1, atom2)
 
         for k, v in molecule['colors'].items():
-            CGRread.parsecolors(g, k, v, remapped)
+            CGRread.parse_colors(g, k, v, remapped)
 
         return g
 
 
 class CGRwrite:
     def __init__(self, extralabels=False, mark_to_map=False):
-        self.__cgr = self.__tocgr()
+        self.__cgr = self.__to_cgr()
         self.__mark_to_map = mark_to_map
         tmp = ['stereo'] + (['hyb', 'neighbors'] if extralabels else [])
         self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
 
-    def getformattedcgr(self, g):
+    def get_formatted_cgr(self, g):
         data = dict(meta=g.meta.copy())
         cgr_dat, extended, atoms, bonds = [], [], [], []
         renum, colors = {}, {}
@@ -343,7 +343,7 @@ class CGRwrite:
                 cgr_dat.append(meta)
 
             for s_key, p_key, _, a_key, d_key in self.__atomprop:
-                meta = self.__getstate(j.get(s_key), j.get(p_key),  a_key, d_key)
+                meta = self.__get_state(j.get(s_key), j.get(p_key), a_key, d_key)
                 if meta:
                     meta['atoms'] = (n,)
                     cgr_dat.append(meta)
@@ -354,7 +354,7 @@ class CGRwrite:
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
                 for part, s_val in j.get('s_%s' % k, {}).items():
                     p_val = j['p_%s' % k][part]
-                    meta = self.__getstate(s_val, p_val, k, 'dyn%s' % k)
+                    meta = self.__get_state(s_val, p_val, k, 'dyn%s' % k)
                     if meta:
                         colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
@@ -374,7 +374,7 @@ class CGRwrite:
 
             bonds.append((renum[i], renum[l], bond))
 
-            meta = self.__getstate(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
+            meta = self.__get_state(j.get('s_stereo'), j.get('p_stereo'), 'bondstereo', 'dynbondstereo')
             if meta:
                 meta['atoms'] = (renum[i], renum[l])
                 cgr_dat.append(meta)
@@ -384,10 +384,10 @@ class CGRwrite:
                                     ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0%(mark)3s  "
                                      "0%(map)3s  0  0\n" % i for i in atoms),
                                     ("%3d%3d%3s  0  0  0  0\n" % i for i in bonds),
-                                    self.__formatprop(extended, cgr_dat, atoms)))
+                                    self.__format_prop(extended, cgr_dat, atoms)))
         return data
 
-    def __formatprop(self, extended, cgr_dat, atoms):
+    def __format_prop(self, extended, cgr_dat, atoms):
         text = []
         for i in extended:
             if i['type'] == 'isotope':
@@ -412,7 +412,7 @@ class CGRwrite:
                 break
 
         for i, j in enumerate(cgr_dat, start=1):
-            cx, cy = self.__getposition([atoms[i - 1] for i in j['atoms']])
+            cx, cy = self.__get_position([atoms[i - 1] for i in j['atoms']])
             text.append('M  SAL %3d%3d %s\n' % (i, len(j['atoms']), ' '.join(['%3d' % x for x in j['atoms']])))
             text.append('M  SDT %3d %s\n' % (i, j['type']))
             text.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
@@ -420,7 +420,7 @@ class CGRwrite:
         return text
 
     @staticmethod
-    def __getstate(s, p, t1, t2):
+    def __get_state(s, p, t1, t2):
         if isinstance(s, list):
             if s == p:
                 _val = ','.join(x and str(x) or 'n' for x in s)
@@ -458,7 +458,7 @@ class CGRwrite:
         return toMDL.get(charge, 0), meta
 
     @staticmethod
-    def __tocgr():
+    def __to_cgr():
         ways = [None, 0, 1, 2, 3, 4, 9]
         rep = {None: 0}
         cgrdict = defaultdict(dict)
@@ -468,7 +468,7 @@ class CGRwrite:
         return cgrdict
 
     @staticmethod
-    def __getposition(cord):
+    def __get_position(cord):
         if len(cord) > 1:
             x = (cord[-1]['x'] + cord[0]['x']) / 2 + .2
             y = (cord[-1]['y'] + cord[0]['y']) / 2

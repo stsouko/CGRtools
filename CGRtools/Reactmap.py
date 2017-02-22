@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2015, 2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2015-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,14 +18,14 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from .CGRpreparer import CGRbalanser
+from networkx import Graph, relabel_nodes
+from .CGRpreparer import CGRbalancer
 from .CGRreactor import patcher
-import networkx as nx
 
 
-class ReactMap(CGRbalanser):
+class ReactMap(CGRbalancer):
     def __init__(self, debug=False, **kwargs):
-        CGRbalanser.__init__(self, kwargs['templates'], balanse_groups=False, stereo=kwargs['stereo'],
+        CGRbalancer.__init__(self, kwargs['templates'], balance_groups=False, stereo=kwargs['stereo'],
                              extralabels=True, isotope=True)
 
         self.__coretemplates = self.get_templates(kwargs['templates'])
@@ -61,7 +61,7 @@ class ReactMap(CGRbalanser):
         elif self.__debug:
             raise Exception
 
-        data['substrats'] = [self.getformattedcgr((nx.relabel_nodes(mol, res['mapping'], copy=True) if res else mol))
+        data['substrats'] = [self.getformattedcgr((relabel_nodes(mol, res['mapping'], copy=True) if res else mol))
                              for mol in data['substrats']]
         data['products'] = [self.getformattedcgr(mol) for mol in data['products']]
         return data
@@ -72,7 +72,7 @@ class ReactMap(CGRbalanser):
             patchlist = []
 
         if deep:
-            paths = [dict(substrats=matrix['substrats'], products=nx.Graph(), meta=dict(AAMSCORE=0, AAMID=0))] \
+            paths = [dict(substrats=matrix['substrats'], products=Graph(), meta=dict(AAMSCORE=0, AAMID=0))] \
                 if first else self.__searchpatch(matrix['substrats'])
             for i in paths:
                 intermediate = patcher(i)
@@ -81,7 +81,7 @@ class ReactMap(CGRbalanser):
                     gm = self.get_CGR_matcher(forcheck, matrix['products'])
                     if gm.subgraph_is_isomorphic():
                         # todo: generate new mapping rule
-                        base = nx.Graph()
+                        base = Graph()
                         print(len(patchlist))
                         for x in (patchlist + [i['products']]):
                             base = patcher(dict(substrats=base, products=x))
@@ -114,20 +114,20 @@ class ReactMap(CGRbalanser):
     @staticmethod
     def __aromatize_templates():
         templates = []
-        benzene0 = nx.Graph()
+        benzene0 = Graph()
         benzene0.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
                                  (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
                                  (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=2, p_bond=2))])
-        aromatic = nx.Graph()
+        aromatic = Graph()
         aromatic.add_edges_from([(1001, 1002, dict(s_bond=4, p_bond=4)), (1002, 1003, dict(s_bond=4, p_bond=4)),
                                  (1003, 1004, dict(s_bond=4, p_bond=4)), (1004, 1005, dict(s_bond=4, p_bond=4)),
                                  (1005, 1006, dict(s_bond=4, p_bond=4)), (1006, 1001, dict(s_bond=4, p_bond=4))])
 
-        benzene1 = nx.Graph()
+        benzene1 = Graph()
         benzene1.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
                                  (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=2, p_bond=2)),
                                  (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=4, p_bond=4))])
-        benzene2 = nx.Graph()
+        benzene2 = Graph()
         benzene2.add_edges_from([(1001, 1002, dict(s_bond=1, p_bond=1)), (1002, 1003, dict(s_bond=2, p_bond=2)),
                                  (1003, 1004, dict(s_bond=1, p_bond=1)), (1004, 1005, dict(s_bond=4, p_bond=4)),
                                  (1005, 1006, dict(s_bond=1, p_bond=1)), (1006, 1001, dict(s_bond=4, p_bond=4))])

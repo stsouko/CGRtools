@@ -18,8 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import argparse
-import importlib
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
+from importlib import import_module
 from importlib.util import find_spec
 from ..version import version
 from .main_mapper import mapper_core
@@ -31,7 +31,6 @@ from .main_fear import fear_core
 def reactor_common(parser):
     parser.add_argument("--element", "-e", action='store_false', help="FEAR use element data")
     parser.add_argument("--isotope", "-I", action='store_true', help="FEAR use isotope data")
-
 
 
 def stereo_common(parser):
@@ -57,18 +56,18 @@ def condenser_common(parser):
 
 
 def balanser_common(parser):
-    parser.add_argument("--m_templates", "-M", type=argparse.FileType('r'), default=None,
+    parser.add_argument("--m_templates", "-M", type=FileType(), default=None,
                         help="RDF with reactions remapping rules")
-    parser.add_argument("--b_templates", "-B", type=argparse.FileType('r'), default=None,
+    parser.add_argument("--b_templates", "-B", type=FileType(), default=None,
                         help="RDF with reactions balancing rules")
 
 
 def balanser(subparsers):
     parser = subparsers.add_parser('balanser', help='reaction balanser',
-                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'),
+                                   formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
                         help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'),
+    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'),
                         help="RDF outputfile")
 
     condenser_common(parser)
@@ -82,10 +81,10 @@ def balanser(subparsers):
 
 def condenser(subparsers):
     parser = subparsers.add_parser('condenser', help='CGR generator',
-                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'),
+                                   formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
                         help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.sdf", type=argparse.FileType('w'),
+    parser.add_argument("--output", "-o", default="output.sdf", type=FileType('w'),
                         help="SDF outputfile")
 
     condenser_common(parser)
@@ -99,9 +98,9 @@ def condenser(subparsers):
 
 def fear(subparsers):
     parser = subparsers.add_parser('fear', help='reaction atom-to-atom mapping (AAM) checker',
-                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
+                                   formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(), help="RDF inputfile")
+    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'), help="RDF outputfile")
     parser.add_argument("--deep", "-d", default=0, type=int, help="FEAR deep of scan")
     parser.add_argument("--extralabels", "-E", action='store_true',
                         help="generate atom hybridization and neighbors labels")
@@ -114,11 +113,11 @@ def fear(subparsers):
 
 def reactmap(subparsers):
     parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)',
-                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=argparse.FileType('r'), help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=argparse.FileType('w'), help="RDF outputfile")
-    parser.add_argument("--templates", "-t", type=argparse.FileType('r'), help="RDF with reactions mapping rules")
-    parser.add_argument("--dump_templates", "-d", default="dump.rdf", type=argparse.FileType('w'),
+                                   formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(), help="RDF inputfile")
+    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'), help="RDF outputfile")
+    parser.add_argument("--templates", "-t", type=FileType(), help="RDF with reactions mapping rules")
+    parser.add_argument("--dump_templates", "-d", default="dump.rdf", type=FileType('w'),
                         help="save RDF with reactions mapping rules")
 
     stereo_common(parser)
@@ -127,7 +126,7 @@ def reactmap(subparsers):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="CGRtools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
+    parser = ArgumentParser(description="CGRtools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
     parser.add_argument("--version", "-v", action="version", version=version(), default=False)
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
 
@@ -137,7 +136,7 @@ def parse_args():
     reactmap(subparsers)
 
     if find_spec('argcomplete'):
-        argcomplete = importlib.import_module('argcomplete')
+        argcomplete = import_module('argcomplete')
         argcomplete.autocomplete(parser)
 
     return parser

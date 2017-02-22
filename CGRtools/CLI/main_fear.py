@@ -18,8 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import sys
-import traceback
+from sys import stderr
+from traceback import format_exc
 from ..files.RDFrw import RDFread, RDFwrite
 from ..CGRcore import CGRcore
 from ..FEAR import FEAR
@@ -38,7 +38,7 @@ def fear_core(**kwargs):
 
     for num, data in enumerate(inputdata, start=1):
         if num % 100 == 1:
-            print("reaction: %d" % num, file=sys.stderr)
+            print("reaction: %d" % num, file=stderr)
         try:
             g = cgr.getCGR(data)
             h = fear.check_cgr(g, gennew=True)[1]
@@ -47,7 +47,7 @@ def fear_core(**kwargs):
             outputdata.write(data)
         except Exception:
             err += 1
-            print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
+            print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
             break
     print(report)
-    print('%d from %d reactions checked' % (num - err, num), file=sys.stderr)
+    print('%d from %d reactions checked' % (num - err, num), file=stderr)

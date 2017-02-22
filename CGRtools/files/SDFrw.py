@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,10 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import periodictable as pt
-from itertools import count, chain, repeat
+from itertools import chain, repeat
 from .CGRrw import CGRread, CGRwrite, fromMDL
-from . import MoleculeContainer
 
 
 class SDFread(CGRread):
@@ -89,7 +87,7 @@ class SDFread(CGRread):
 
             elif line.startswith("M  END"):
                 mend = True
-                molecule['CGR_DAT'] = self.getdata()
+                molecule['CGR_DAT'] = self.get_data()
 
             elif molecule and n > bondcount:
                 try:
@@ -127,7 +125,7 @@ class SDFwrite(CGRwrite):
         self.__file.close()
 
     def write(self, data):
-        m = self.getformattedcgr(data)
+        m = self.get_formatted_cgr(data)
         self.__file.write(m['CGR'])
         self.__file.write("M  END\n")
 

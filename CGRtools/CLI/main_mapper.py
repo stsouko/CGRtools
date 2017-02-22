@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2015, 2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2015-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-import sys
-import traceback
+from sys import stderr
+from traceback import format_exc
 from ..files.RDFrw import RDFread, RDFwrite
 from ..Reactmap import ReactMap
 
@@ -33,18 +33,17 @@ def mapper_core(**kwargs):
 
     for num, data in enumerate(inputdata, start=1):
         if num % 100 == 1:
-            print("reaction: %d" % num, file=sys.stderr)
+            print("reaction: %d" % num, file=stderr)
         try:
             a = mapper.map(data)
             outputdata.write(a)
         except Exception:
             err += 1
-            print('reaction: %d' % num, file=sys.stderr)
-            print('reaction %d consist errors: %s' % (num, traceback.format_exc()), file=sys.stderr)
+            print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
             break
 
     dump = RDFwrite(kwargs['dump_templates'])
     for i in mapper.templates:
         dump.write(i)
 
-    print('%d from %d reactions mapped' % (num - err, num), file=sys.stderr)
+    print('%d from %d reactions mapped' % (num - err, num), file=stderr)
