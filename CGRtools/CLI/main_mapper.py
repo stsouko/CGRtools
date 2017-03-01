@@ -27,7 +27,7 @@ from ..Reactmap import ReactMap
 def mapper_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'])
-    mapper = ReactMap(**kwargs)
+    mapper = ReactMap(kwargs['templates'], stereo=kwargs['stereo'])
     err = 0
     num = 0
 

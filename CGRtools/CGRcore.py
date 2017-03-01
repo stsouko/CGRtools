@@ -51,8 +51,8 @@ class CGRcore(object):
             res = dict(substrats=data['substrats'].copy(),
                        products=data['products'].copy()) if is_merged else self.merge_mols(data)
             if self.__extralabels:
-                res = dict(substrats=self.set_labels(res['substrats'], copy=False),
-                           products=self.set_labels(res['products'], copy=False))
+                self.set_labels(res['substrats'], copy=False)
+                self.set_labels(res['products'], copy=False)
 
             g = self.__compose(res)
 

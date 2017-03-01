@@ -45,8 +45,9 @@ def patcher(matrix):
                     a[j] = a[j][s.edge[m][n][j]]
 
     s.remove_edges_from(combinations(common, 2))
-
-    return compose(s, p)
+    composed = compose(s, p)
+    composed.meta.update(s.meta)
+    return composed
 
 
 def list_eq(a, b):
@@ -61,7 +62,7 @@ class CGRreactor(object):
     def __init__(self, stereo=False, hyb=False, neighbors=False, isotope=False, element=True):
         self.__rc_template = self.__reaction_center()
 
-        gnm_sp, gem_sp, pcem, pcnm = ['sp_bond'], [], ['p_bond'], ['element', 'p_charge']
+        gnm_sp, gem_sp, pcem, pcnm = [], ['sp_bond'], ['p_bond'], ['element', 'p_charge']
         if isotope:
             gnm_sp.append('isotope')
             pcnm.append('isotope')
