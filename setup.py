@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,31 +22,31 @@
 from CGRtools.version import version
 from setuptools import setup, find_packages
 
+setup(
+    name='CGRtools',
+    version=version(),
+    packages=find_packages(),
+    url='https://github.com/stsouko/CGRtools',
+    license='AGPLv3',
+    author='Dr. Ramil Nugmanov',
+    author_email='stsouko@live.ru',
+    description='CGR tools',
+    entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
+    install_requires=['networkx>=2.0.dev', 'periodictable'],
+    dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.0.dev'],
+    long_description='CGR tools distributive',
 
-setup(name='cgrtools',
-      version=version(),
-      packages=find_packages(),
-      url='https://github.com/stsouko/CGRtools',
-      license='AGPLv3',
-      author='Dr. Ramil Nugmanov',
-      author_email='stsouko@live.ru',
-      description='CGR tools',
-      scripts=['cgrtools.py'],
-      requires=['networkx', 'periodictable'],
-      long_description='CGR tools distributive',
-
-      keywords="tools cgr cli",
-      classifiers=['Environment :: Console',
-                   'Intended Audience :: End Users/Desktop',
-                   'Intended Audience :: Developers',
-                   ('License :: OSI Approved :: GNU Affero General Public License'
-                    ' v3 or later (AGPLv3+)'),
-                   'Operating System :: OS Independent',
-                   'Programming Language :: Python',
-                   'Programming Language :: Python :: 3',
-                   'Programming Language :: Python :: 3.2',
-                   'Programming Language :: Python :: 3.3',
-                   'Programming Language :: Python :: 3.4',
-                   'Programming Language :: Python :: 3.5',
-                   ]
-      )
+    keywords="tools cgr cli",
+    classifiers=['Environment :: Console',
+                 'Intended Audience :: Science/Research',
+                 'Intended Audience :: Developers',
+                 'Topic :: Scientific/Engineering :: Chemistry',
+                 'Topic :: Software Development :: Libraries :: Python Modules',
+                 'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
+                 'Operating System :: OS Independent',
+                 'Programming Language :: Python',
+                 'Programming Language :: Python :: 3',
+                 'Programming Language :: Python :: 3.4',
+                 'Programming Language :: Python :: 3.5',
+                 ]
+)

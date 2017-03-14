@@ -1,6 +1,6 @@
 CGRTools
 =========
-CGR based reaction manipulations.
+CGR based reactions manipulations.
 
 
 based on
@@ -9,6 +9,9 @@ DOI: 10.1007/s10822-005-9008-0
 
 usage
 =====
-to be or not to be
+cgrtools --help
 
 
+INSTALL
+=====
+    pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools --process-dependency-links --allow-all-external
