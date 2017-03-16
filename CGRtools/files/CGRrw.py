@@ -33,8 +33,7 @@ mendeleyset = set(x.symbol for x in elements)
 class CGRread:
     def __init__(self, remap):
         self.__remap = remap
-
-    __prop = {}
+        self.__prop = {}
 
     def collect(self, line):
         if line.startswith('M  ALS'):

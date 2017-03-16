@@ -54,12 +54,12 @@ class FEAR(object):
         self.__deep = deep
         self.__hyb = hyb
         self.__element = element
+        self.__whash = set()
+        self.__shash = set()
         if stereo:
             self.__rc_node.append(('s_stereo', 'p_stereo'))
             self.__rc_edge.append(('s_stereo', 'p_stereo'))
 
-    __whash = set()
-    __shash = set()
     __rc_node = [('s_charge', 'p_charge')]
     __rc_edge = [('s_bond', 'p_bond')]
 
