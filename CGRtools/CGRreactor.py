@@ -196,6 +196,9 @@ class CGRreactor(object):
                     if isinstance(matrix['products'].node[n][j], list):
                         matrix['products'].node[n][j] = {x: y for x, y in zip(matrix['substrats'].node[n][j],
                                                                               matrix['products'].node[n][j])}
+                for j in ('x', 'y', 'z'):
+                    matrix['products'].node[n].pop(j)
+
             for m, n, a in matrix['products'].edges(data=True):
                 if m in common and n in common:
                     for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):

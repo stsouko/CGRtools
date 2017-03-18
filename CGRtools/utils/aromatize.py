@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,13 +18,29 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from .parser import argparser
 
 
-def launcher():
-    _argparser = argparser()
-    args = _argparser.parse_args()
-    if 'func' in args:
-        args.func(**vars(args))
-    else:
-        _argparser.print_help()
+def dearomatize(g):
+
+    def trace_route(atom, trace):
+        data = {}
+        double = False
+        for i, attr in g[atom].items():
+            if not trace or i != trace[-1]:
+                data[i] = attr['s_bond']
+            if attr['s_bond'] == 2:
+                double = True
+
+        for i, bond in data.items():
+            if i in trace and len(trace) > 5:
+                if i == trace[-5]:
+                    pass
+                elif i == trace[-6]:
+                    pass
+
+            elif bond == 4:
+                g[atom][i]['s_bond'] = g[atom][i]['p_bond'] = 1 if double else 2
+                trace_route(i, trace + [atom])
+
+    min_node = min(g)
+    trace_route(min_node, [])

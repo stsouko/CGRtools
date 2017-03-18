@@ -22,10 +22,10 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
 from importlib import import_module
 from importlib.util import find_spec
 from ..version import version
-from .main_mapper import mapper_core
 from .main_balanser import balanser_core
 from .main_condenser import condenser_core
 from .main_fear import fear_core
+from .main_mapper import mapper_core
 
 
 def reactor_common(parser):
@@ -125,7 +125,7 @@ def reactmap(subparsers):
     parser.set_defaults(func=mapper_core)
 
 
-def parse_args():
+def argparser():
     parser = ArgumentParser(description="CGRtools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
     parser.add_argument("--version", "-v", action="version", version=version(), default=False)
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
