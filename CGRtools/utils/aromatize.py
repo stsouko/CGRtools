@@ -18,29 +18,23 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from os.path import join, dirname
+from ..CGRreactor import CGRreactor, patcher
 
 
-def dearomatize(g):
+class Aromatize(CGRreactor):
+    def __init__(self):
+        CGRreactor.__init__(self)
+        self.__searcher = self.get_template_searcher(self.get_templates(open(join(dirname(__file__), 'aromatize.rdf'))))
+        #todo: Implement optimizations!
 
-    def trace_route(atom, trace):
-        data = {}
-        double = False
-        for i, attr in g[atom].items():
-            if not trace or i != trace[-1]:
-                data[i] = attr['s_bond']
-            if attr['s_bond'] == 2:
-                double = True
-
-        for i, bond in data.items():
-            if i in trace and len(trace) > 5:
-                if i == trace[-5]:
-                    pass
-                elif i == trace[-6]:
-                    pass
-
-            elif bond == 4:
-                g[atom][i]['s_bond'] = g[atom][i]['p_bond'] = 1 if double else 2
-                trace_route(i, trace + [atom])
-
-    min_node = min(g)
-    trace_route(min_node, [])
+    def get(self, g):
+        flag = False
+        while True:
+            patch = next(self.__searcher(g), None)
+            if patch:
+                g = patcher(patch)
+                flag = True
+            else:
+                break
+        return g, flag

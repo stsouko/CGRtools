@@ -18,11 +18,11 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from operator import mul, itemgetter
 from collections import Counter
 from itertools import chain, count
 from functools import reduce
 from networkx import connected_component_subgraphs
+from operator import mul, itemgetter
 from periodictable import elements
 
 
@@ -266,7 +266,7 @@ class FEAR(object):
                 if x[max(x)] > 1:
                     if stab == 3:
                         break
-                elif stab == 2:
+                elif stab >= 2:
                     break
 
                 stab += 1

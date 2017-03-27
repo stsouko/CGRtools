@@ -19,7 +19,6 @@
 #  MA 02110-1301, USA.
 #
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
-from importlib import import_module
 from importlib.util import find_spec
 from ..version import version
 from .main_balanser import balanser_core
@@ -136,7 +135,7 @@ def argparser():
     reactmap(subparsers)
 
     if find_spec('argcomplete'):
-        argcomplete = import_module('argcomplete')
-        argcomplete.autocomplete(parser)
+        from argcomplete import autocomplete
+        autocomplete(parser)
 
     return parser

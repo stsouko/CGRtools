@@ -20,8 +20,11 @@
 #
 from networkx import Graph, relabel_nodes
 from .CGRcore import CGRcore
-from .files import MoleculeContainer
 from .CGRreactor import CGRreactor, patcher
+from .utils.aromatize import Aromatize
+
+
+aromatize = Aromatize()
 
 
 class ReactMap(CGRreactor, CGRcore):
@@ -31,8 +34,6 @@ class ReactMap(CGRreactor, CGRcore):
 
         self.__core_templates = self.get_templates(templates)
         self.__prepare_search_patcher()
-
-        self.__search_aromatic = self.get_template_searcher(self.__aromatize_templates())
 
     def __prepare_search_patcher(self, templates=None):
         if templates:
@@ -48,7 +49,7 @@ class ReactMap(CGRreactor, CGRcore):
 
         """ get aromatized products
         """
-        res['products'], arflag = self.__aromatize(res['products'])
+        res['products'], arflag = aromatize.get(res['products'])
 
         """ prototype start. тут надо пилить и пилить чтобы на выхое получить нормальный map.
         """
@@ -77,9 +78,9 @@ class ReactMap(CGRreactor, CGRcore):
                 if first else self.__search_patch(matrix['substrats'])
             for i in paths:
                 intermediate = patcher(i)
-                forcheck, ar = self.__aromatize(intermediate) if aromatized else (intermediate, False)
+                forcheck, ar = aromatize.get(intermediate) if aromatized else (intermediate, False)
                 if ar == aromatized:  # microoptimization
-                    gm = self.get_CGR_matcher(forcheck, matrix['products'])
+                    gm = self.get_cgr_matcher(forcheck, matrix['products'])
                     if gm.subgraph_is_isomorphic():
                         # todo: generate new mapping rule
                         base = Graph()
@@ -100,52 +101,3 @@ class ReactMap(CGRreactor, CGRcore):
                         tmp['substrats'] = g
                     return tmp
         return None
-
-    def __aromatize(self, g):
-        flag = False
-        while True:
-            patch = next(self.__search_aromatic(g), None)
-            if patch:
-                g = patcher(patch)
-                flag = True
-            else:
-                break
-        return g, flag
-
-    def __aromatize_templates(self):
-        relabel = {x: 1000 + x for x in range(1, 7)}
-
-        aromatic = Graph()
-        aromatic.add_edges_from([(1, 2, dict(s_bond=4, p_bond=4)), (2, 3, dict(s_bond=4, p_bond=4)),
-                                 (3, 4, dict(s_bond=4, p_bond=4)), (4, 5, dict(s_bond=4, p_bond=4)),
-                                 (5, 6, dict(s_bond=4, p_bond=4)), (6, 1, dict(s_bond=4, p_bond=4))])
-
-        benzene0 = Graph()
-        benzene0.add_edges_from([(1, 2, dict(s_bond=1, p_bond=1)), (2, 3, dict(s_bond=2, p_bond=2)),
-                                 (3, 4, dict(s_bond=1, p_bond=1)), (4, 5, dict(s_bond=2, p_bond=2)),
-                                 (5, 6, dict(s_bond=1, p_bond=1)), (6, 1, dict(s_bond=2, p_bond=2))])
-
-        benzene1 = Graph()
-        benzene1.add_edges_from([(1, 2, dict(s_bond=1, p_bond=1)), (2, 3, dict(s_bond=2, p_bond=2)),
-                                 (3, 4, dict(s_bond=1, p_bond=1)), (4, 5, dict(s_bond=2, p_bond=2)),
-                                 (5, 6, dict(s_bond=1, p_bond=1)), (6, 1, dict(s_bond=4, p_bond=4))])
-        benzene2 = Graph()
-        benzene2.add_edges_from([(1, 2, dict(s_bond=1, p_bond=1)), (2, 3, dict(s_bond=2, p_bond=2)),
-                                 (3, 4, dict(s_bond=1, p_bond=1)), (4, 5, dict(s_bond=4, p_bond=4)),
-                                 (5, 6, dict(s_bond=1, p_bond=1)), (6, 1, dict(s_bond=4, p_bond=4))])
-
-        relabel_nodes(aromatic, relabel, copy=False)
-        relabel_nodes(benzene0, relabel, copy=False)
-        relabel_nodes(benzene1, relabel, copy=False)
-        relabel_nodes(benzene2, relabel, copy=False)
-
-        self.update_sp_marks(aromatic, copy=False)
-        self.update_sp_marks(benzene0, copy=False)
-        self.update_sp_marks(benzene1, copy=False)
-        self.update_sp_marks(benzene2, copy=False)
-
-        benzene0.__class__ = benzene1.__class__ = benzene2.__class__ = aromatic.__class__ = MoleculeContainer
-
-        return [dict(substrats=benzene0, products=aromatic, meta=None),
-                dict(substrats=benzene1, products=aromatic, meta=None),
-                dict(substrats=benzene2, products=aromatic, meta=None)]

@@ -20,6 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from CGRtools.version import version
+from os.path import join, dirname
 from setuptools import setup, find_packages
 
 setup(
@@ -32,10 +33,11 @@ setup(
     author_email='stsouko@live.ru',
     description='CGR tools',
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
+    package_data={'CGRtools.utils': ['aromatize.rdf']},
     install_requires=['networkx>=2.0.dev', 'periodictable'],
+    extras_require={'autocomplete': ['argcomplete']},
     dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.0.dev'],
-    long_description='CGR tools distributive',
-
+    long_description=open(join(dirname(__file__), 'README.md')).read(),
     keywords="tools cgr cli",
     classifiers=['Environment :: Console',
                  'Intended Audience :: Science/Research',
