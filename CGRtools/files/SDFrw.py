@@ -19,6 +19,8 @@
 #  MA 02110-1301, USA.
 #
 from itertools import chain, repeat
+from sys import stderr
+from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL
 
 
@@ -54,7 +56,7 @@ class SDFread(CGRread):
                     try:
                         yield self.get_molecule(molecule, stereo=next(self.__stereo))
                     except:
-                        pass
+                        print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
                 mkey = None
                 im = n + 4
@@ -71,19 +73,25 @@ class SDFread(CGRread):
                     atomcount = bondcount = -1
                     failkey = True
                     molecule = None
+                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
 
             elif n <= atomcount:
-                molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                              charge=fromMDL.get(int(line[38:39]), 0),
-                                              map=int(line[60:63]), mark=line[54:57].strip(),
-                                              x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
-
+                try:
+                    molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
+                                                  charge=fromMDL.get(int(line[38:39]), 0),
+                                                  map=int(line[60:63]), mark=line[54:57].strip(),
+                                                  x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
+                except ValueError:
+                    failkey = True
+                    molecule = None
+                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
             elif n <= bondcount:
                 try:
                     molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9])))
                 except:
                     failkey = True
                     molecule = None
+                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
 
             elif line.startswith("M  END"):
                 mend = True
@@ -108,12 +116,13 @@ class SDFread(CGRread):
                 except:
                     failkey = True
                     molecule = None
+                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
         else:
             if molecule:  # True for MOL file only.
                 try:
                     yield self.get_molecule(molecule, stereo=next(self.__stereo))
                 except:
-                    pass
+                    print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
 
 class SDFwrite(CGRwrite):
