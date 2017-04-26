@@ -26,11 +26,15 @@ class CGRcombo(CGRcore):
     def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
                  isotope=False, element=True, stereo=False):
         CGRcore.__init__(self, cgr_type=cgr_type, extralabels=extralabels)
-        self.__bal = CGRbalancer(b_templates, balance_groups=True, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels, element=element) if b_templates is not None else None
+        if b_templates:
+            self.__bal = CGRbalancer(b_templates, balance_groups=True, stereo=stereo, isotope=isotope,
+                                     extralabels=extralabels, element=element)
+        if m_templates:
+            self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
+                                     extralabels=extralabels, element=element)
 
-        self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
-                                 extralabels=extralabels, element=element) if m_templates is not None else None
+    __map = None
+    __bal = None
 
     def getCGR(self, data, is_merged=False):
         g = super(CGRcombo, self).getCGR(data, is_merged=is_merged)

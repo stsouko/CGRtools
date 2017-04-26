@@ -181,13 +181,12 @@ class CGRreactor(object):
         return relabel_nodes(g, newmap), newmap
 
     @staticmethod
-    def get_templates(templates):
-        _templates = []
-        for template in RDFread(templates):
-            matrix = dict(meta=template['meta'])
+    def get_templates(raw_templates):
+        templates = []
+        for template in raw_templates:
+            matrix = dict(meta=template.meta.copy())
             for i in ('products', 'substrats'):
-                x = union_all(template[i])
-                matrix[i] = x
+                matrix[i] = union_all([x.copy() for x in template[i]])
 
             common = set(matrix['products']).intersection(matrix['substrats'])
             for n in common:
@@ -209,5 +208,5 @@ class CGRreactor(object):
             relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
             relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
 
-            _templates.append(matrix)
-        return _templates
+            templates.append(matrix)
+        return templates

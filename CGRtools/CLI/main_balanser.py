@@ -28,9 +28,9 @@ def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'],
-                      b_templates=kwargs['b_templates'], m_templates=kwargs['m_templates'], stereo=kwargs['stereo'],
-                      isotope=kwargs['isotope'], element=kwargs['element'])
+    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
+                      b_templates=RDFread(kwargs['b_templates']).read(), isotope=kwargs['isotope'],
+                      m_templates=RDFread(kwargs['m_templates']).read(), element=kwargs['element'])
 
     err = 0
     num = 0
