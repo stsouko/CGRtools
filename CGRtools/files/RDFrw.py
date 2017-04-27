@@ -22,7 +22,7 @@ from itertools import chain, repeat
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule
 from . import MoleculeContainer
 
 
@@ -96,9 +96,12 @@ class RDFread(CGRread):
                 mend = False
             elif n == im:
                 try:
-                    atomcount = int(line[:3]) + im
+                    atoms = int(line[0:3])
+                    if not atoms:
+                        raise EmptyMolecule('Molecule without atoms')
+                    atomcount = atoms + im
                     bondcount = int(line[3:6]) + atomcount
-                except ValueError:
+                except (EmptyMolecule, ValueError):
                     failkey = True
                     reaction = None
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)

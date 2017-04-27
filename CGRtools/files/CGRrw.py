@@ -30,6 +30,10 @@ stereolabels = dict(e='e', z='z', u='u', r='r', s='s', re='re', si='si', n=None)
 mendeleyset = set(x.symbol for x in elements)
 
 
+class EmptyMolecule(Exception):
+    pass
+
+
 class CGRread:
     def __init__(self, remap):
         self.__remap = remap

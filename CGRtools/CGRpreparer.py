@@ -36,6 +36,14 @@ class CGRcombo(CGRcore):
     __map = None
     __bal = None
 
+    def pickle(self):
+        """ remove attrs incorrectly dumped with dill
+        """
+        if self.__map is not None:
+            self.__bal.pickle()
+        if self.__bal is not None:
+            self.__bal.pickle()
+
     def getCGR(self, data, is_merged=False):
         g = super(CGRcombo, self).getCGR(data, is_merged=is_merged)
         if self.__map is not None:
@@ -50,10 +58,20 @@ class CGRbalancer(CGRreactor):
         CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
                             isotope=isotope, element=element)
 
-        self.__searcher = self.get_template_searcher(self.get_templates(templates))
+        self.__templates = templates
         self.__balance_groups = balance_groups
 
+    __searcher = None
+
+    def pickle(self):
+        """ remove attrs incorrectly dumped with dill
+        """
+        self.__searcher = None
+
     def prepare(self, g):
+        if self.__searcher is None:
+            self.__searcher = self.get_template_searcher(self.get_templates(self.__templates))
+
         report = []
         if self.__balance_groups:
             g = self.clone_subgraphs(g)

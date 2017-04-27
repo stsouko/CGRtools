@@ -21,7 +21,7 @@
 from itertools import chain, repeat
 from sys import stderr
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule
 
 
 class SDFread(CGRread):
@@ -66,10 +66,13 @@ class SDFread(CGRread):
 
             elif n == im:
                 try:
-                    atomcount = int(line[0:3]) + n
+                    atoms = int(line[0:3])
+                    if not atoms:
+                        raise EmptyMolecule('Molecule without atoms')
+                    atomcount = atoms + n
                     bondcount = int(line[3:6]) + atomcount
                     molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
-                except:
+                except (EmptyMolecule, ValueError):
                     atomcount = bondcount = -1
                     failkey = True
                     molecule = None
@@ -88,7 +91,7 @@ class SDFread(CGRread):
             elif n <= bondcount:
                 try:
                     molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9])))
-                except:
+                except ValueError:
                     failkey = True
                     molecule = None
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
