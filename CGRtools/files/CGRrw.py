@@ -28,9 +28,14 @@ fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
 bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
 stereolabels = dict(e='e', z='z', u='u', r='r', s='s', re='re', si='si', n=None)
 mendeleyset = set(x.symbol for x in elements)
+half_table = len(mendeleyset) // 2
 
 
 class EmptyMolecule(Exception):
+    pass
+
+
+class FinalizedFile(Exception):
     pass
 
 
@@ -328,11 +333,14 @@ class CGRread:
 
 
 class CGRwrite:
-    def __init__(self, extralabels=False, mark_to_map=False):
+    def __init__(self, extralabels=False, mark_to_map=False, _format='mdl'):
         self.__cgr = self.__to_cgr()
         self.__mark_to_map = mark_to_map
-        tmp = ['stereo'] + (['hyb', 'neighbors'] if extralabels else [])
-        self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in tmp]
+        self.__is_mdl = _format == 'mdl'
+        self.__format_mol = self.__get_mol if self.__is_mdl else self.__get_mrv
+
+        self.__atomprop = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x)
+                           for x in (['stereo', 'hyb', 'neighbors'] if extralabels else ['stereo'])]
 
     def get_formatted_cgr(self, g):
         data = dict(meta=g.meta.copy())
@@ -341,6 +349,8 @@ class CGRwrite:
         for n, (i, j) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
             charge, meta = self.__charge(j.get('s_charge'), j.get('p_charge'))
+            element = j.get('element', 'A')
+
             if meta:
                 meta['atoms'] = (n,)
                 cgr_dat.append(meta)
@@ -352,7 +362,10 @@ class CGRwrite:
                     cgr_dat.append(meta)
 
             if 'isotope' in j:
-                extended.append(dict(atoms=(n,), value=j['isotope'], type='isotope'))
+                if isinstance(j['isotope'], list):
+                    cgr_dat.append(dict(atoms=(n,), value=','.join(str(x) for x in j['isotope']), type='isotope'))
+                else:
+                    extended.append(dict(atom=n, value=j['isotope'], type='isotope'))
 
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
                 for part, s_val in j.get('s_%s' % k, {}).items():
@@ -361,12 +374,14 @@ class CGRwrite:
                     if meta:
                         colors.setdefault(meta['type'], {}).setdefault(part, []).append('%d:%s' % (n, meta['value']))
 
-            if isinstance(j.get('element'), list):
-                extended.append(dict(atoms=(n,), value=j['element'], type='atomlist'))
-                j['element'] = 'L'
+            if isinstance(element, list):
+                extended.append(dict(atom=n, value=j['element'], type='atomlist'))
+                element = 'L'
+
+            x, y, z = (j['x'], j['y'], j['z']) if self.__is_mdl else (j['x'] * 2, j['y'] * 2, j['z'] * 2)
 
             atoms.append(dict(map=j['mark'] if self.__mark_to_map else i, charge=charge,
-                              element=j.get('element', 'A'), x=j['x'], y=j['y'], z=j['z'], mark=j['mark']))
+                              element=element, mark=j['mark'], x=x, y=y, z=z))
 
         data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items()) for i, j in colors.items()}
 
@@ -382,45 +397,72 @@ class CGRwrite:
                 meta['atoms'] = (renum[i], renum[l])
                 cgr_dat.append(meta)
 
-        data['CGR'] = ''.join(chain(("\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n"
-                                     "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(atoms), len(bonds)),),
-                                    ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0%(mark)3s  "
-                                     "0%(map)3s  0  0\n" % i for i in atoms),
-                                    ("%3d%3d%3s  0  0  0  0\n" % i for i in bonds),
-                                    self.__format_prop(extended, cgr_dat, atoms)))
+        data['CGR'] = self.__format_mol(atoms, bonds, extended, cgr_dat)
         return data
 
-    def __format_prop(self, extended, cgr_dat, atoms):
-        text = []
+    @classmethod
+    def __get_mol(cls, atoms, bonds, extended, cgr_dat):
+        mol_prop = []
         for i in extended:
             if i['type'] == 'isotope':
-                if isinstance(i['value'], list):
-                    i['value'] = ','.join(str(x) for x in i['value'])
-                    cgr_dat.insert(0, i)
-                else:
-                    text.append('M  ISO  1 %3d %3d\n' % (i['atoms'][0], i['value']))
+                mol_prop.append('M  ISO  1 %3d %3d\n' % (i['atom'], i['value']))
             elif i['type'] == 'atomlist':
                 atomslist, _type = (mendeleyset.difference(i['value']), 'T') \
-                    if len(i['value']) > len(mendeleyset) / 2 else (i['value'], 'F')
+                    if len(i['value']) > half_table else (i['value'], 'F')
 
-                text.append('M  ALS %3d%3d %s %s\n' % (i['atoms'][0], len(atomslist), _type,
-                                                       ''.join('%-4s' % x for x in atomslist)))
+                mol_prop.append('M  ALS %3d%3d %s %s\n' % (i['atom'], len(atomslist), _type,
+                                                           ''.join('%-4s' % x for x in atomslist)))
 
         for j in count():
-            sty = cgr_dat[j * 8:j * 8 + 8]
+            sty = len(cgr_dat[j * 8:j * 8 + 8])
             if sty:
-                stydat = ' '.join(['%3d DAT' % (x + 1 + j * 8) for x in range(len(sty))])
-                text.append('M  STY  %d %s\n' % (len(sty), stydat))
+                stydat = ' '.join(['%3d DAT' % (x + j * 8) for x in range(1, 1 + sty)])
+                mol_prop.append('M  STY  %d %s\n' % (sty, stydat))
             else:
                 break
 
         for i, j in enumerate(cgr_dat, start=1):
-            cx, cy = self.__get_position([atoms[i - 1] for i in j['atoms']])
-            text.append('M  SAL %3d%3d %s\n' % (i, len(j['atoms']), ' '.join(['%3d' % x for x in j['atoms']])))
-            text.append('M  SDT %3d %s\n' % (i, j['type']))
-            text.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
-            text.append('M  SED %3d %s\n' % (i, j['value']))
-        return text
+            cx, cy = cls.__get_position([atoms[i - 1] for i in j['atoms']])
+            mol_prop.append('M  SAL %3d%3d %s\n' % (i, len(j['atoms']), ' '.join(['%3d' % x for x in j['atoms']])))
+            mol_prop.append('M  SDT %3d %s\n' % (i, j['type']))
+            mol_prop.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
+            mol_prop.append('M  SED %3d %s\n' % (i, j['value']))
+
+        return ''.join(chain(("\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n"
+                             "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(atoms), len(bonds)),),
+                             ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0"
+                              "%(mark)3s  0%(map)3s  0  0\n" % i for i in atoms),
+                             ("%3d%3d%3s  0  0  0  0\n" % i for i in bonds), mol_prop))
+
+    @classmethod
+    def __get_mrv(cls, atoms, bonds, extended, cgr_dat):
+        isotope = {}
+        atom_query = {}
+        for i in extended:
+            if i['type'] == 'isotope':
+                isotope[i['atom']] = ' isotope="%d"' % i['value']
+            elif i['type'] == 'atomlist':
+                atom_query[i['atom']] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in
+                                                                           mendeleyset.difference(i['value']))
+                                                                          if len(i['value']) > half_table else
+                                                                          i['value'])
+
+        return ''.join(chain(('<atomArray>',),
+                             ('<atom id="a{0}" elementType="{1[element]}" x3="{1[x]:.4f}" y3="{1[y]:.4f}" '
+                              'z3="{1[z]:.4f}" mrvMap="{1[map]}" formalCharge="{1[charge]}"'
+                              '{2}{3}{4}/>'.format(i, j, isotope.get(i, ''), atom_query.get(i, ''),
+                                                   ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
+                              for i, j in enumerate(atoms, start=1)),
+                             ('</atomArray><bondArray>',),
+                             ('<bond id="b{0}" atomRefs2="a{1[0]} a{1[1]}" '
+                              'order="{2[0]}"{2[1]}/>'.format(i, j, ('1', ' queryType="Any"') if k == '8' else (k, ''))
+                              for i, (*j, k) in enumerate(bonds, start=1)),
+                             ('</bondArray>',),
+                             ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1[type]}" fieldData="{1[value]}" '
+                              'atomRefs="{2}" x="{3[0]}" y="{3[1]}" '
+                              '/>'.format(i, j, ' '.join('a%d' % x for x in j['atoms']),
+                                          cls.__get_position([atoms[i - 1] for i in j['atoms']]))
+                              for i, j in enumerate(cgr_dat, start=1))))
 
     @staticmethod
     def __get_state(s, p, t1, t2):
@@ -441,8 +483,7 @@ class CGRwrite:
 
         return _val and {'value': _val, 'type': _type}
 
-    @staticmethod
-    def __charge(s, p):
+    def __charge(self, s, p):
         charge = s
         if isinstance(s, list):
             charge = s[0]
@@ -458,7 +499,7 @@ class CGRwrite:
             meta = dict(value='c%+d' % (p - s), type='dynatom')
         else:
             meta = None
-        return toMDL.get(charge, 0), meta
+        return toMDL.get(charge, 0) if self.__is_mdl else charge, meta
 
     @staticmethod
     def __to_cgr():

@@ -22,13 +22,13 @@ from itertools import chain, repeat
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
 from . import MoleculeContainer
 
 
 class RDFread(CGRread):
     def __init__(self, file, remap=True, stereo=None):
-        self.__RDFfile = file
+        self.__file = file
         self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__data = self.__reader()
         CGRread.__init__(self, remap)
@@ -52,7 +52,7 @@ class RDFread(CGRread):
         isreaction = True
         mkey = None
         mend = False
-        for n, line in enumerate(self.__RDFfile):
+        for n, line in enumerate(self.__file):
             if failkey and not line.startswith(("$RFMT", "$MFMT")):
                 continue
             elif line.startswith("$RFMT"):
@@ -169,17 +169,22 @@ class RDFwrite(CGRwrite):
     def __init__(self, file, extralabels=False, mark_to_map=False):
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
         self.__file = file
-        self.write = self.__initwrite
+        self.write = self.__init_write
 
     def close(self):
+        self.write = self.__write_adhoc
         self.__file.close()
 
-    def __initwrite(self, data):
-        self.__file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
-        self.__writedata(data)
-        self.write = self.__writedata
+    @staticmethod
+    def __write_adhoc(_):
+        raise FinalizedFile('Writer closed')
 
-    def __writedata(self, data):
+    def __init_write(self, data):
+        self.__file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
+        self.__write(data)
+        self.write = self.__write
+
+    def __write(self, data):
         if isinstance(data, MoleculeContainer):
             m = self.get_formatted_cgr(data)
             self.__file.write('$MFMT\n')

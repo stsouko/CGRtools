@@ -21,13 +21,13 @@
 from itertools import chain, repeat
 from sys import stderr
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
 
 
 class SDFread(CGRread):
     def __init__(self, file, remap=True, stereo=None):
         self.__stereo = stereo and iter(stereo) or repeat(None)
-        self.__SDFfile = file
+        self.__file = file
         self.__data = self.__reader()
         CGRread.__init__(self, remap)
 
@@ -48,7 +48,7 @@ class SDFread(CGRread):
         mkey = None
         molecule = None
         mend = False
-        for n, line in enumerate(self.__SDFfile):
+        for n, line in enumerate(self.__file):
             if failkey and not line.startswith("$$$$"):
                 continue
             elif line.startswith("$$$$"):
@@ -132,11 +132,17 @@ class SDFwrite(CGRwrite):
     def __init__(self, output, extralabels=False, mark_to_map=False):
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
         self.__file = output
+        self.write = self.__write
 
     def close(self):
+        self.write = self.__write_adhoc
         self.__file.close()
 
-    def write(self, data):
+    @staticmethod
+    def __write_adhoc(_):
+        raise FinalizedFile('Writer closed')
+
+    def __write(self, data):
         m = self.get_formatted_cgr(data)
         self.__file.write(m['CGR'])
         self.__file.write("M  END\n")
