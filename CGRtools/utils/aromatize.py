@@ -20,12 +20,14 @@
 #
 from os.path import join, dirname
 from ..CGRreactor import CGRreactor, patcher
+from ..files.RDFrw import RDFread
 
 
 class Aromatize(CGRreactor):
     def __init__(self):
         CGRreactor.__init__(self)
-        self.__searcher = self.get_template_searcher(self.get_templates(open(join(dirname(__file__), 'aromatize.rdf'))))
+        raw_templates = RDFread(open(join(dirname(__file__), 'aromatize.rdf'))).read()
+        self.__searcher = self.get_template_searcher(self.get_templates(raw_templates))
         #todo: Implement optimizations!
 
     def get(self, g):
