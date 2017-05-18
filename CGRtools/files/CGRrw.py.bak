@@ -77,7 +77,7 @@ class CGRread:
 
     def get_data(self):
         prop = []
-        for i in list(self.__prop.values()):
+        for i in self.__prop.values():
             if len(i['atoms']) == self.__cgrkeys[i['type']]:
                 prop.append(i)
 
@@ -236,10 +236,10 @@ class CGRread:
                         maps[k] = [j if j < i else j - 1 for j in maps[k]]
         ''' end
         '''
-        greaction = ReactionContainer(meta={x: '\n'.join(y) for x, y in list(reaction['meta'].items())})
+        greaction = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
 
         colors = defaultdict(dict)
-        for k, v in list(reaction['colors'].items()):
+        for k, v in reaction['colors'].items():
             color_type, mol_num = k.split('.')
             colors[int(mol_num)][color_type] = v
 
@@ -281,7 +281,7 @@ class CGRread:
 
                     self.cgr_dat(g, k, atom1, atom2)
 
-                for k, v in list(colors[next(counter)].items()):
+                for k, v in colors[next(counter)].items():
                     self.parse_colors(g, k, v,
                                       {x: y for x, y in enumerate(maps[i][shift + 1: shift + 1 + len(j['atoms'])],
                                                                   start=1)})
@@ -294,7 +294,7 @@ class CGRread:
         return greaction
 
     def get_molecule(self, molecule, stereo=None):
-        g = MoleculeContainer({x: '\n'.join(y) for x, y in list(molecule['meta'].items())})
+        g = MoleculeContainer({x: '\n'.join(y) for x, y in molecule['meta'].items()})
         newmap = count(max(x['map'] for x in molecule['atoms']) + 1)
         remapped = {}
         for k, l in enumerate(molecule['atoms'], start=1):
@@ -326,7 +326,7 @@ class CGRread:
             atom2 = remapped[k['atoms'][-1]]
             CGRread.cgr_dat(g, k, atom1, atom2)
 
-        for k, v in list(molecule['colors'].items()):
+        for k, v in molecule['colors'].items():
             CGRread.parse_colors(g, k, v, remapped)
 
         return g
@@ -368,7 +368,7 @@ class CGRwrite:
                     extended.append(dict(atom=n, value=j['isotope'], type='isotope'))
 
             for k in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG'):
-                for part, s_val in list(j.get('s_%s' % k, {}).items()):
+                for part, s_val in j.get('s_%s' % k, {}).items():
                     p_val = j['p_%s' % k][part]
                     meta = self.__get_state(s_val, p_val, k, 'dyn%s' % k)
                     if meta:
@@ -383,7 +383,7 @@ class CGRwrite:
             atoms.append(dict(map=j['mark'] if self.__mark_to_map else i, charge=charge,
                               element=element, mark=j['mark'], x=x, y=y, z=z))
 
-        data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in list(j.items())) for i, j in list(colors.items())}
+        data['colors'] = {i: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in j.items()) for i, j in colors.items()}
 
         for i, l, j in g.edges(data=True):
             bond, cbond, btype = self.__cgr[j.get('s_bond')][j.get('p_bond')]
