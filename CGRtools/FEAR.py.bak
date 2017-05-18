@@ -48,7 +48,7 @@ def eratosthenes():
 
 class FEAR(object):
     def __init__(self, isotope=False, stereo=False, hyb=False, element=True, deep=0):
-        self.__primes = tuple(x for _, x in zip(list(range(1000)), eratosthenes()))
+        self.__primes = tuple(x for _, x in zip(range(1000), eratosthenes()))
         self.__isotope = isotope
         self.__stereo = stereo
         self.__deep = deep
@@ -225,7 +225,7 @@ class FEAR(object):
                       self.__primes[10 * attr['s_charge'] + attr['p_charge']] if self.__element else 1,
                       reduce(mul,
                              (self.__primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
-                              for eattr in list(g[n].values())), 1),
+                              for eattr in g[n].values()), 1),
                       self.__primes[attr['isotope']] if self.__isotope and 'isotope' in attr else 1,
                       self.__primes[10 * self.__stereo_types[attr.get('s_stereo')] +
                                     self.__stereo_types[attr.get('p_stereo')]]
@@ -233,17 +233,17 @@ class FEAR(object):
                       reduce(mul,
                              (self.__primes[10 * self.__stereo_types[eattr.get('s_stereo')] +
                                             self.__stereo_types[eattr.get('p_stereo')]]
-                              for eattr in list(g[n].values())), 1) if self.__stereo else 1)
+                              for eattr in g[n].values()), 1) if self.__stereo else 1)
                   for n, attr in g.nodes(data=True)}
 
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
-                   for x, y in sorted(list(params.items()), key=itemgetter(1))}
+                   for x, y in sorted(params.items(), key=itemgetter(1))}
 
         numb = len(set(weights.values()))
         stab = 0
 
         scaf = {}
-        for n, m in list(g.edge.items()):
+        for n, m in g.edge.items():
             scaf[n] = tuple(m)
 
         while True:
@@ -252,17 +252,17 @@ class FEAR(object):
             countprime = iter(self.__primes)
 
             tmp = {}
-            for n, m in list(scaf.items()):
+            for n, m in scaf.items():
                 """ if don't have neighbors use self weight
                 """
                 tmp[n] = reduce(mul, (weights[x] for x in m), weights[n]**2)
 
             weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
-                       for x, y in sorted(list(tmp.items()), key=itemgetter(1))}
+                       for x, y in sorted(tmp.items(), key=itemgetter(1))}
 
             numb = len(set(weights.values()))
             if numb == oldnumb:
-                x = Counter(list(weights.values()))
+                x = Counter(weights.values())
                 if x[max(x)] > 1:
                     if stab == 3:
                         break

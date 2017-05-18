@@ -102,7 +102,7 @@ class CGRreactor(object):
                 gm = self.get_cgr_matcher(g, i['substrats'])
                 for j in gm.subgraph_isomorphisms_iter():
                     res = dict(substrats=g, meta=i['meta'],
-                               products=self.__remap_group(i['products'], g, {y: x for x, y in list(j.items())})[0])
+                               products=self.__remap_group(i['products'], g, {y: x for x, y in j.items()})[0])
                     yield res
 
         return searcher
@@ -114,12 +114,12 @@ class CGRreactor(object):
         for i in rc_templates:
             gm = gis.GraphMatcher(g, i, edge_match=edge_match)
             for j in gm.subgraph_isomorphisms_iter():
-                mapping = {y: x for x, y in list(j.items())}
+                mapping = {y: x for x, y in j.items()}
                 if 3 in mapping:
                     lose_bonds[(mapping[2], mapping[1])] = g[mapping[1]][mapping[2]]
                     g.remove_edge(mapping[2], mapping[3])
                     g.remove_edge(mapping[1], mapping[2])
-                elif not any(has_path(g, *x) for x in product((y for x in lose_bonds for y in x), list(mapping.values()))):
+                elif not any(has_path(g, *x) for x in product((y for x in lose_bonds for y in x), mapping.values())):
                     # запилить проверку связности атомов 1 или 2 с lose_map атомами
                     g.remove_edge(mapping[1], mapping[2])
         components = list(connected_component_subgraphs(g))
