@@ -22,15 +22,15 @@ from itertools import chain, repeat, count
 from sys import stderr
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
-from . import MoleculeContainer
+from ..containers import MoleculeContainer
 
 
 class MRVread(CGRread):
-    def __init__(self, file, remap=True, stereo=None):
-        self.__MRWfile = file
-        self.__stereo = stereo and iter(stereo) or repeat(None)
+    def __init__(self, file, remap=True):
+        self.__file = file
         self.__data = self.__reader()
         CGRread.__init__(self, remap)
+        raise Exception('NOT IMPLEMENTED')
 
     def read(self):
         return list(self.__data)
@@ -55,13 +55,13 @@ class MRVread(CGRread):
                 print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
 
             molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9])))
-            molecule['CGR_DAT'] = self.get_data()
+            molecule['CGR_DAT'] = self._get_collected()
             molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
                                           charge=fromMDL[int(line[38:39])],
                                           map=int(line[60:63]), mark=line[54:57].strip(),
                                           x=float(line[:10]), y=float(line[10:20]), z=float(line[20:30])))
             if not mend:
-                self.collect(line)
+                self._collect(line)
             elif line.startswith('$DTYPE'):
                 mkey = line[7:].strip()
                 if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG', 'dynPHTYP',
@@ -75,16 +75,10 @@ class MRVread(CGRread):
                 if data:
                     reaction[target][mkey].append(data)
             try:
-                yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
-                    else self.get_molecule(reaction, stereo=next(self.__stereo))
+                yield self._get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
+                    else self._get_molecule(reaction, stereo=next(self.__stereo))
             except:
                 print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
-
-    def get_molecule(self, reaction, stereo=None):
-        molecule = reaction['substrats'][0]
-        molecule['meta'] = reaction['meta']
-        molecule['colors'] = reaction['colors']
-        return super(MRWread, self).get_molecule(molecule, stereo=stereo)
 
 
 class MRVwrite(CGRwrite):

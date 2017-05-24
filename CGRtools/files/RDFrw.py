@@ -18,18 +18,17 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import chain, repeat
+from itertools import chain
 from sys import stderr
 from time import strftime
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
-from . import MoleculeContainer
+from ..containers import MoleculeContainer
 
 
 class RDFread(CGRread):
-    def __init__(self, file, remap=True, stereo=None):
+    def __init__(self, file, remap=True):
         self.__file = file
-        self.__stereo = stereo and iter(stereo) or repeat(None)
         self.__data = self.__reader()
         CGRread.__init__(self, remap)
 
@@ -58,8 +57,7 @@ class RDFread(CGRread):
             elif line.startswith("$RFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
-                            else self.get_molecule(reaction, stereo=next(self.__stereo))
+                        yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -70,8 +68,7 @@ class RDFread(CGRread):
             elif line.startswith("$MFMT"):
                 if reaction:
                     try:
-                        yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
-                            else self.get_molecule(reaction, stereo=next(self.__stereo))
+                        yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
                 reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
@@ -117,52 +114,55 @@ class RDFread(CGRread):
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
             elif n <= bondcount:
                 try:
-                    molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9])))
+                    molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
                 except ValueError:
                     failkey = True
                     reaction = None
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
             elif line.startswith("M  END"):
                 mend = True
-                molecule['CGR_DAT'] = self.get_data()
+                molecule['CGR_DAT'] = self._get_collected()
                 if len(reaction['substrats']) < substrats:
                     reaction['substrats'].append(molecule)
                 elif len(reaction['products']) < products:
                     reaction['products'].append(molecule)
 
             elif n > bondcount:
-                try:
-                    if not mend:
-                        self.collect(line)
-                    elif line.startswith('$DTYPE'):
-                        mkey = line[7:].strip()
-                        if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG', 'dynPHTYP',
-                                                  'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
-                            target = 'colors'
-                        else:
-                            target = 'meta'
-                        reaction[target][mkey] = []
+                if not mend:
+                    try:
+                        self._collect(line)
+                    except ValueError:
+                        self._flush_collected()
+                        failkey = True
+                        reaction = None
+                        print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+
+                elif line.startswith('$DTYPE'):
+                    mkey = line[7:].strip()
+                    if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG', 'dynPHTYP',
+                                              'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
+                        target = 'colors'
                     elif mkey:
-                        data = line.lstrip("$DATUM").strip()
-                        if data:
-                            reaction[target][mkey].append(data)
-                except:
-                    failkey = True
-                    reaction = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                        target = 'meta'
+                    else:
+                        continue
+                    reaction[target][mkey] = []
+                elif mkey:
+                    data = line.lstrip("$DATUM").strip()
+                    if data:
+                        reaction[target][mkey].append(data)
         else:
             if reaction:
                 try:
-                    yield self.get_reaction(reaction, stereo=next(self.__stereo)) if isreaction \
-                        else self.get_molecule(reaction, stereo=next(self.__stereo))
+                    yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                 except:
                     print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
-    def get_molecule(self, reaction, stereo=None):
+    def _get_molecule(self, reaction):
         molecule = reaction['substrats'][0]
         molecule['meta'] = reaction['meta']
         molecule['colors'] = reaction['colors']
-        return super(RDFread, self).get_molecule(molecule, stereo=stereo)
+        return super(RDFread, self)._get_molecule(molecule)
 
 
 class RDFwrite(CGRwrite):

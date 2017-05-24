@@ -20,11 +20,10 @@
 #
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
 from importlib.util import find_spec
-from ..version import version
 from .main_balanser import balanser_core
 from .main_condenser import condenser_core
-from .main_fear import fear_core
 from .main_mapper import mapper_core
+from ..version import version
 
 
 def reactor_common(parser):
@@ -95,21 +94,6 @@ def condenser(subparsers):
     parser.set_defaults(func=condenser_core)
 
 
-def fear(subparsers):
-    parser = subparsers.add_parser('fear', help='reaction atom-to-atom mapping (AAM) checker',
-                                   formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(), help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'), help="RDF outputfile")
-    parser.add_argument("--deep", "-d", default=0, type=int, help="FEAR deep of scan")
-    parser.add_argument("--extralabels", "-E", action='store_true',
-                        help="generate atom hybridization and neighbors labels")
-
-    reactor_common(parser)
-    stereo_common(parser)
-
-    parser.set_defaults(func=fear_core)
-
-
 def reactmap(subparsers):
     parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)',
                                    formatter_class=ArgumentDefaultsHelpFormatter)
@@ -131,7 +115,6 @@ def argparser():
 
     condenser(subparsers)
     balanser(subparsers)
-    fear(subparsers)
     reactmap(subparsers)
 
     if find_spec('argcomplete'):

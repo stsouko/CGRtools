@@ -22,7 +22,7 @@ from sys import stderr
 from traceback import format_exc
 from ..files.RDFrw import RDFread
 from ..files.SDFrw import SDFwrite
-from ..CGRpreparer import CGRcombo
+from ..preparer import CGRcombo
 
 
 def condenser_core(**kwargs):

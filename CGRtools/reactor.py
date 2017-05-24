@@ -18,10 +18,9 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from networkx import Graph, compose, has_path, union, union_all, relabel_nodes, connected_component_subgraphs
 from itertools import product, combinations
+from networkx import Graph, compose, has_path, union, union_all, relabel_nodes, connected_component_subgraphs
 from networkx.algorithms import isomorphism as gis
-from .files.RDFrw import RDFread
 
 
 def patcher(matrix):
@@ -84,6 +83,21 @@ class CGRreactor(object):
         self.__node_match_products = gis.categorical_node_match(pcnm, [None] * len(pcnm))
         self.__edge_match_products = gis.categorical_edge_match(pcem, [None] * len(pcem))
         self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
+
+        self.__pickle = dict(stereo=stereo, hyb=hyb, neighbors=neighbors, isotope=isotope, element=element)
+
+    def pickle(self):
+        """ return config. for pickling
+        """
+        return self.__pickle
+
+    @staticmethod
+    def unpickle(config):
+        """ return CGRreactor object instance
+        """
+        if {'stereo', 'hyb', 'neighbors', 'isotope', 'element'}.difference(config):
+            raise Exception('Invalid config')
+        return CGRreactor(**config)
 
     @staticmethod
     def __reaction_center():

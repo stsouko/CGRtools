@@ -18,8 +18,9 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from .CGRcore import CGRcore
-from .CGRreactor import CGRreactor, patcher
+from .containers import MoleculeContainer
+from .core import CGRcore
+from .reactor import CGRreactor, patcher
 
 
 class CGRcombo(CGRcore):
@@ -33,16 +34,31 @@ class CGRcombo(CGRcore):
             self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
                                      extralabels=extralabels, element=element)
 
+        self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
+                             element=element, stereo=stereo, b_templates=None, m_templates=None)
     __map = None
     __bal = None
 
     def pickle(self):
         """ remove attrs incorrectly dumped with dill
         """
-        if self.__map is not None:
-            self.__bal.pickle()
+        config = self.__pickle.copy()
         if self.__bal is not None:
-            self.__bal.pickle()
+            config['b_templates'] = self.__bal.pickle()['templates']
+        if self.__map is not None:
+            config['m_templates'] = self.__map.pickle()['templates']
+        return config
+
+    @staticmethod
+    def unpickle(config):
+        """ return CGRbalancer object instance
+        """
+        if {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'b_templates', 'm_templates'}.difference(config):
+            raise Exception('Invalid config')
+        config = config.copy()
+        b_templates = [MoleculeContainer.unpickle(x) for x in config.pop('b_templates')]
+        m_templates = [MoleculeContainer.unpickle(x) for x in config.pop('m_templates')]
+        return CGRcombo(b_templates=b_templates, m_templates=m_templates, **config)
 
     def getCGR(self, data, is_merged=False):
         g = super(CGRcombo, self).getCGR(data, is_merged=is_merged)
@@ -64,9 +80,22 @@ class CGRbalancer(CGRreactor):
     __searcher = None
 
     def pickle(self):
-        """ remove attrs incorrectly dumped with dill
+        """ return config. for pickling
         """
-        self.__searcher = None
+        reactor = CGRreactor.pickle(self)
+        return dict(templates=[x.pickle(compress=False) for x in self.__templates],
+                    balance_groups=self.__balance_groups, stereo=reactor['stereo'],
+                    extralabels=reactor['neighbors'], isotope=reactor['isotope'], element=reactor['element'])
+
+    @staticmethod
+    def unpickle(config):
+        """ return CGRbalancer object instance
+        """
+        if {'templates', 'balance_groups', 'stereo', 'extralabels', 'isotope', 'element'}.difference(config):
+            raise Exception('Invalid config')
+        config = config.copy()
+        templates = [MoleculeContainer.unpickle(x) for x in config.pop('templates')]
+        return CGRbalancer(templates, **config)
 
     def prepare(self, g):
         if self.__searcher is None:

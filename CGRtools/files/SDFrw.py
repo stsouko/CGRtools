@@ -18,15 +18,14 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import chain, repeat
+from itertools import chain
 from sys import stderr
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
 
 
 class SDFread(CGRread):
-    def __init__(self, file, remap=True, stereo=None):
-        self.__stereo = stereo and iter(stereo) or repeat(None)
+    def __init__(self, file, remap=True):
         self.__file = file
         self.__data = self.__reader()
         CGRread.__init__(self, remap)
@@ -54,7 +53,7 @@ class SDFread(CGRread):
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
-                        yield self.get_molecule(molecule, stereo=next(self.__stereo))
+                        yield self._get_molecule(molecule)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
@@ -90,7 +89,7 @@ class SDFread(CGRread):
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
             elif n <= bondcount:
                 try:
-                    molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9])))
+                    molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
                 except ValueError:
                     failkey = True
                     molecule = None
@@ -98,32 +97,35 @@ class SDFread(CGRread):
 
             elif line.startswith("M  END"):
                 mend = True
-                molecule['CGR_DAT'] = self.get_data()
+                molecule['CGR_DAT'] = self._get_collected()
 
             elif molecule and n > bondcount:
-                try:
-                    if not mend:
-                        self.collect(line)
-                    elif line.startswith('>  <'):
-                        mkey = line.strip()[4:-1]
-                        if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
-                                    'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
-                            target = 'colors'
-                        else:
-                            target = 'meta'
-                        molecule[target][mkey] = []
+                if not mend:
+                    try:
+                        self._collect(line)
+                    except ValueError:
+                        self._flush_collected()
+                        failkey = True
+                        molecule = None
+                        print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                elif line.startswith('>  <'):
+                    mkey = line.rtrip()[4:-1].strip()
+                    if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
+                                'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
+                        target = 'colors'
                     elif mkey:
-                        data = line.strip()
-                        if data:
-                            molecule[target][mkey].append(data)
-                except:
-                    failkey = True
-                    molecule = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                        target = 'meta'
+                    else:
+                        continue
+                    molecule[target][mkey] = []
+                elif mkey:
+                    data = line.strip()
+                    if data:
+                        molecule[target][mkey].append(data)
         else:
             if molecule:  # True for MOL file only.
                 try:
-                    yield self.get_molecule(molecule, stereo=next(self.__stereo))
+                    yield self._get_molecule(molecule)
                 except:
                     print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 

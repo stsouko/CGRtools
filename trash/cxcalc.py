@@ -20,13 +20,13 @@
 #
 from subprocess import check_output
 
-rep_dict = dict(UNKNOWN='u', WIGGLY='u', E='e', Z='z', R='r', S='s', r='re', s='si')
+rep_dict = dict(UNKNOWN='u', WIGGLY='u', E='e', Z='z', R='r', S='s', r='re', s='si', M='m', P='p')
 
 
 def stereo(file):
     result = []
     for data in check_output(['cxcalc', 'stereoanalysis', file]).decode().rstrip().split('\n\n'):
-        structure = dict(atomstereo={}, bondstereo={})
+        structure = dict(atomstereo={}, bondstereo={}, allene={})
         if data != 'NONE':
             for x in data.split('\n'):
                 line = x.split()
@@ -36,6 +36,8 @@ def stereo(file):
                     structure['atomstereo'][int(line[1][1:-1])] = mark
                 elif line[0] == 'CISTRANS':
                     structure['bondstereo'][(int(line[1][1:-1]), int(line[2][:-1]))] = mark
+                elif line[0] == 'AXIAL':
+                    structure['allene'][(int(line[1][1:-1]), int(line[2][:-1]))] = mark
 
         result.append(structure)
     return result

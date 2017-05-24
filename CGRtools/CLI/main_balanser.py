@@ -21,7 +21,7 @@
 from sys import stderr
 from traceback import format_exc
 from ..files.RDFrw import RDFread, RDFwrite
-from ..CGRpreparer import CGRcombo
+from ..preparer import CGRcombo
 
 
 def balanser_core(**kwargs):

@@ -19,8 +19,8 @@
 #  MA 02110-1301, USA.
 #
 from os.path import join, dirname
-from ..CGRreactor import CGRreactor, patcher
 from ..files.RDFrw import RDFread
+from ..reactor import CGRreactor, patcher
 
 
 class Aromatize(CGRreactor):
