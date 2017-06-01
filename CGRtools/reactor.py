@@ -32,14 +32,13 @@ def patcher(matrix):
 
     common = set(p).intersection(s)
     for i in common:
-        for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
-                  'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(p.node[i]):
+        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(p.node[i]):
             if isinstance(p.node[i][j], dict):
                 p.node[i][j] = p.node[i][j][s.node[i][j]]
 
     for m, n, a in p.edges(data=True):
         if m in common and n in common:
-            for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
+            for j in {'s_bond', 'p_bond'}.intersection(a):
                 if isinstance(a[j], dict):
                     a[j] = a[j][s.edge[m][n][j]]
 
@@ -58,7 +57,7 @@ def simple_eq(a, b):
 
 
 class CGRreactor(object):
-    def __init__(self, stereo=False, hyb=False, neighbors=False, isotope=False, element=True):
+    def __init__(self, hyb=False, neighbors=False, isotope=False, element=True, stereo=False):
         self.__rc_template = self.__reaction_center()
 
         gnm_sp, gem_sp, pcem, pcnm = [], ['sp_bond'], ['p_bond'], ['element', 'p_charge']
@@ -71,11 +70,6 @@ class CGRreactor(object):
             gnm_sp.append('sp_neighbors')
         if hyb:
             gnm_sp.append('sp_hyb')
-        if stereo:
-            gnm_sp.append('sp_stereo')
-            gem_sp.append('sp_stereo')
-            pcem.append('p_stereo')
-            pcnm.append('p_stereo')
 
         self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [list_eq] * len(gnm_sp))
         self.__edge_match = gis.generic_node_match(gem_sp, [None] * len(gem_sp), [list_eq] * len(gem_sp))
@@ -204,8 +198,8 @@ class CGRreactor(object):
 
             common = set(matrix['products']).intersection(matrix['substrats'])
             for n in common:
-                for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
-                          'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(matrix['products'].node[n]):
+                for j in {'s_charge', 's_hyb', 's_neighbors',
+                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(matrix['products'].node[n]):
                     if isinstance(matrix['products'].node[n][j], list):
                         matrix['products'].node[n][j] = {x: y for x, y in zip(matrix['substrats'].node[n][j],
                                                                               matrix['products'].node[n][j])}
@@ -214,7 +208,7 @@ class CGRreactor(object):
 
             for m, n, a in matrix['products'].edges(data=True):
                 if m in common and n in common:
-                    for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
+                    for j in {'s_bond', 'p_bond'}.intersection(a):
                         if isinstance(a[j], list):
                             matrix['products'].edge[m][n][j] = {x: y for x, y in
                                                                 zip(matrix['substrats'].edge[m][n][j], a[j])}

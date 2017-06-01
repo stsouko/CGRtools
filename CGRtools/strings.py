@@ -58,22 +58,17 @@ def hash_cgr_string(string):
 primes = tuple(x for _, x in zip(range(1000), eratosthenes()))
 to_smiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
 hyb_types = {4: ',a', 3: ',t', 2: ',d', 1: ',s', None: ''}
-stereo_types = {None: 0, 'u': 1, 'e': 2, 'z': 3, 'r': 4, 's': 5, 're': 6, 'si': 7, 'm': 8, 'p': 9}
 
 
-def get_morgan(g, isotope=False, stereo=False, element=True):
+def get_morgan(g, isotope=False, element=True):
     newlevels = {}
     countprime = iter(primes)
 
     params = {n: (primes[elements.symbol(attr['element']).number] if element else 1,
+                  primes[attr['isotope']] if isotope and 'isotope' in attr else 1,
                   primes[10 * attr['s_charge'] + attr['p_charge']] if element else 1,
                   reduce(mul, (primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
-                               for eattr in g[n].values()), 1),
-                  primes[attr['isotope']] if isotope and 'isotope' in attr else 1,
-                  primes[10 * stereo_types[attr.get('s_stereo')] + stereo_types[attr.get('p_stereo')]]
-                  if stereo else 1,
-                  reduce(mul, (primes[10 * stereo_types[eattr.get('s_stereo')] + stereo_types[eattr.get('p_stereo')]]
-                               for eattr in g[n].values()), 1) if stereo else 1)
+                               for eattr in g[n].values()), 1))
               for n, attr in g.nodes(data=True)}
 
     weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
@@ -121,6 +116,7 @@ def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=T
     countmap = count(1)
     countcyc = count(1)
     visited = set()
+    stereo = False  # disable stereo. not implemented!
 
     def getnextatom(atoms):
         if len(atoms) == 1:

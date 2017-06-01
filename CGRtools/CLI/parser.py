@@ -32,7 +32,7 @@ def reactor_common(parser):
 
 
 def stereo_common(parser):
-    parser.add_argument("--stereo", "-s", action='store_true', help="add stereo data")
+    parser.add_argument("--stereo", "-s", action='store_true', help="use stereo data")
 
 
 def extra_common(parser):

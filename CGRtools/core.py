@@ -162,7 +162,7 @@ class CGRcore(object):
         substrats = data['substrats']
         extended_common = set()
 
-        """ remove bond, stereo, neighbors and hybridization states for common atoms.
+        """ remove bond, neighbors and hybridization states for common atoms.
         """
         for i, g in (('substrats', substrats), ('products', products)):
             for n, m in g.edges(common):
@@ -243,18 +243,13 @@ class CGRcore(object):
                                  products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True))
         return t
 
-    __popdict = dict(products=dict(edge=('s_bond', 's_stereo', 'sp_bond', 'sp_stereo'),
-                                   node=('s_charge', 's_stereo', 's_neighbors', 's_hyb',
-                                         'sp_charge', 'sp_stereo', 'sp_neighbors', 'sp_hyb'),
+    __popdict = dict(products=dict(edge=('s_bond', 'sp_bond'),
+                                   node=('s_charge', 's_neighbors', 's_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb')),
-                     substrats=dict(edge=('p_bond', 'p_stereo', 'sp_bond', 'sp_stereo'),
-                                    node=('p_charge', 'p_stereo', 'p_neighbors', 'p_hyb',
-                                          'sp_charge', 'sp_stereo', 'sp_neighbors', 'sp_hyb'),
+                     substrats=dict(edge=('p_bond', 'sp_bond'),
+                                    node=('p_charge', 'p_neighbors', 'p_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb'),
                                     ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))
 
-    __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond', p_stereo='s_stereo'),
-                                    products=dict(s_bond='p_bond', s_stereo='p_stereo')),
-                         nodes=dict(substrats=dict(p_charge='s_charge', p_stereo='s_stereo',
-                                                   p_neighbors='s_neighbors', p_hyb='s_hyb'),
-                                    products=dict(s_charge='p_charge', s_stereo='p_stereo',
-                                                  s_neighbors='p_neighbors', s_hyb='p_hyb')))
+    __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond'), products=dict(s_bond='p_bond')),
+                         nodes=dict(substrats=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
+                                    products=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb')))
