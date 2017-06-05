@@ -51,16 +51,8 @@ def patcher(matrix):
     return composed
 
 
-def list_eq(a, b):
-    return True if b is None else a in b if isinstance(b, list) else a == b
-
-
-def simple_eq(a, b):
-    return True if b is None else a == b
-
-
 class CGRreactor(object):
-    def __init__(self, hyb=False, neighbors=False, isotope=False, element=True, stereo=False):
+    def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
         self.__rc_template = self.__reaction_center()
 
         gnm_sp, gem_sp, pcem, pcnm = [], ['sp_bond'], ['p_bond'], ['element', 'p_charge']
@@ -69,32 +61,32 @@ class CGRreactor(object):
             pcnm.append('isotope')
         if element:
             gnm_sp.extend(['sp_charge', 'element'])
-        if neighbors:
+        if extralabels:
             gnm_sp.append('sp_neighbors')
-        if hyb:
             gnm_sp.append('sp_hyb')
 
-        self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [list_eq] * len(gnm_sp))
-        self.__edge_match = gis.generic_node_match(gem_sp, [None] * len(gem_sp), [list_eq] * len(gem_sp))
+        self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
+        self.__edge_match = gis.generic_node_match(gem_sp, [None] * len(gem_sp), [self.__list_eq] * len(gem_sp))
 
         self.__node_match_products = gis.categorical_node_match(pcnm, [None] * len(pcnm))
         self.__edge_match_products = gis.categorical_edge_match(pcem, [None] * len(pcem))
         self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
 
-        self.__pickle = dict(stereo=stereo, hyb=hyb, neighbors=neighbors, isotope=isotope, element=element)
+        self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
 
     def pickle(self):
         """ return config. for pickling
         """
-        return self.__pickle
+        return self.__pickle.copy()
 
-    @staticmethod
-    def unpickle(config):
+    @classmethod
+    def unpickle(cls, config):
         """ return CGRreactor object instance
         """
-        if {'stereo', 'hyb', 'neighbors', 'isotope', 'element'}.difference(config):
+        args = {'stereo', 'extralabels', 'isotope', 'element'}
+        if args.difference(config):
             raise Exception('Invalid config')
-        return CGRreactor(**config)
+        return cls(**{k: v for k, v in config.items() if k in args})
 
     @staticmethod
     def __reaction_center():
@@ -184,6 +176,14 @@ class CGRreactor(object):
                 tmp.add_edge(j[k], mapping[lose_map[k]], **lose_bonds[(k, lose_map[k])])
 
         return tmp
+
+    @staticmethod
+    def __list_eq(a, b):
+        return True if b is None else a in b if isinstance(b, list) else a == b
+
+    @staticmethod
+    def __simple_eq(a, b):
+        return True if b is None else a == b
 
     @staticmethod
     def __remap_group(g, h, mapping):

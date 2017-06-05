@@ -131,8 +131,8 @@ class SDFread(CGRread):
 
 
 class SDFwrite(CGRwrite):
-    def __init__(self, output, extralabels=False, mark_to_map=False):
-        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map)
+    def __init__(self, output, extralabels=False, mark_to_map=False, xyz=False):
+        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
         self.__file = output
         self.write = self.__write
 

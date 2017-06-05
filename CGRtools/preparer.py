@@ -35,10 +35,22 @@ class CGRcombo(CGRcore):
             self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
                                      extralabels=extralabels, element=element)
 
+        self.__init_common(cgr_type, extralabels, isotope, element, stereo)
+
+    def _init_unpickle(self, cgr_type, extralabels, b_templates, m_templates, isotope, element, stereo):
+        if b_templates:
+            self.__bal = CGRbalancer.unpickle(dict(templates=b_templates, balance_groups=True, stereo=stereo,
+                                                   isotope=isotope, extralabels=extralabels, element=element))
+        if m_templates:
+            self.__map = CGRbalancer.unpickle(dict(templates=m_templates, balance_groups=False, stereo=stereo,
+                                                   isotope=isotope, extralabels=extralabels, element=element))
+
+        self.__init_common(cgr_type, extralabels, isotope, element, stereo)
+
+    def __init_common(self, cgr_type, extralabels, isotope, element, stereo):
         self.__diss_template = self.__diss_center()
         self.__cgr_type = self.__get_cgr_type(cgr_type)
         self.__extralabels = extralabels
-
         self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
                              element=element, stereo=stereo, b_templates=None, m_templates=None)
 
@@ -52,16 +64,16 @@ class CGRcombo(CGRcore):
             config['m_templates'] = self.__map.pickle()['templates']
         return config
 
-    @staticmethod
-    def unpickle(config):
+    @classmethod
+    def unpickle(cls, config):
         """ return CGRbalancer object instance
         """
-        if {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'b_templates', 'm_templates'}.difference(config):
+        args = {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'b_templates', 'm_templates'}
+        if args.difference(config):
             raise Exception('Invalid config')
-        config = config.copy()
-        b_templates = [ReactionContainer.unpickle(x) for x in config.pop('b_templates') or []]
-        m_templates = [ReactionContainer.unpickle(x) for x in config.pop('m_templates') or []]
-        return CGRcombo(b_templates=b_templates, m_templates=m_templates, **config)
+        obj = cls.__new__(cls)  # Does not call __init__
+        obj._init_unpickle(**{k: v for k, v in config.items() if k in args})
+        return obj
 
     def getCGR(self, data):
         """
@@ -229,8 +241,7 @@ class CGRcombo(CGRcore):
 
 class CGRbalancer(CGRreactor):
     def __init__(self, templates, balance_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
-        CGRreactor.__init__(self, stereo=stereo, hyb=extralabels, neighbors=extralabels,
-                            isotope=isotope, element=element)
+        CGRreactor.__init__(self, stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
 
         self.__templates = templates
         self.__balance_groups = balance_groups
@@ -240,18 +251,18 @@ class CGRbalancer(CGRreactor):
         """
         reactor = CGRreactor.pickle(self)
         return dict(templates=[x.pickle(compress=False) for x in self.__templates],
-                    balance_groups=self.__balance_groups, stereo=reactor['stereo'],
-                    extralabels=reactor['neighbors'], isotope=reactor['isotope'], element=reactor['element'])
+                    balance_groups=self.__balance_groups, **reactor)
 
-    @staticmethod
-    def unpickle(config):
+    @classmethod
+    def unpickle(cls, config):
         """ return CGRbalancer object instance
         """
-        if {'templates', 'balance_groups', 'stereo', 'extralabels', 'isotope', 'element'}.difference(config):
+        args = {'templates', 'balance_groups', 'stereo', 'extralabels', 'isotope', 'element'}
+        if args.difference(config):
             raise Exception('Invalid config')
         config = config.copy()
-        templates = [MoleculeContainer.unpickle(x) for x in config.pop('templates')]
-        return CGRbalancer(templates, **config)
+        templates = [ReactionContainer.unpickle(x) for x in config.pop('templates')]
+        return cls(templates, **{k: v for k, v in config.items() if k in args})
 
     def prepare(self, g):
         if self.__searcher is None:

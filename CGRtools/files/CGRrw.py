@@ -321,8 +321,9 @@ class CGRread:
 
 
 class CGRwrite:
-    def __init__(self, extralabels=False, mark_to_map=False, _format='mdl'):
+    def __init__(self, extralabels=False, mark_to_map=False, xyz=False, _format='mdl'):
         self.__cgr = self.__to_cgr()
+        self.__xyz = xyz
         self.__mark_to_map = mark_to_map
         self.__is_mdl = _format == 'mdl'
         self.__format_mol = self.__get_mol if self.__is_mdl else self.__get_mrv
@@ -364,9 +365,10 @@ class CGRwrite:
                 extended.append(dict(atom=n, value=l['element'], type='atomlist'))
                 element = 'L'
 
-            dx, dy, dz = l['p_x'] - l['s_x'], l['p_y'] - l['s_y'], l['p_z'] - l['s_z']
-            if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
-                cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
+            if self.__xyz:
+                dx, dy, dz = l['p_x'] - l['s_x'], l['p_y'] - l['s_y'], l['p_z'] - l['s_z']
+                if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
+                    cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
 
             x, y, z = (l['s_x'], l['s_y'], l['s_z']) if self.__is_mdl else (l['s_x'] * 2, l['_sy'] * 2, l['s_z'] * 2)
             atoms.append(dict(map=l['mark'] if self.__mark_to_map else i, charge=charge,

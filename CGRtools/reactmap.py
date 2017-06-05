@@ -29,7 +29,7 @@ aromatize = Aromatize()
 
 class ReactMap(CGRreactor, CGRcombo):
     def __init__(self, templates, stereo=False):
-        CGRreactor.__init__(self, stereo=stereo, hyb=True, neighbors=True, isotope=True)
+        CGRreactor.__init__(self, stereo=stereo, extralabels=True, isotope=True)
         CGRcombo.__init__(self, extralabels=True)
 
         self.__core_templates = self.get_templates(templates)

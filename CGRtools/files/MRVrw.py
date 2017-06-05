@@ -82,8 +82,8 @@ class MRVread(CGRread):
 
 
 class MRVwrite(CGRwrite):
-    def __init__(self, file, extralabels=False, mark_to_map=False):
-        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, _format='mrv')
+    def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz, _format='mrv')
         self.__file = file
         self.write = self.__init_write
 
