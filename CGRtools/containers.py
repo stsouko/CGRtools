@@ -18,10 +18,19 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from collections import namedtuple
 from itertools import chain
-from networkx import Graph
+from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from .strings import get_morgan, get_cgr_string, hash_cgr_string
+
+
+CGRTemplate = namedtuple('CGRTemplate', ['substrats', 'products', 'meta'])
+
+
+class MergedReaction(namedtuple('MergedReaction', ['substrats', 'products'])):
+    def copy(self):
+        return MergedReaction(self.substrats.copy(), self.products.copy())
 
 
 class MoleculeContainer(Graph):
@@ -48,22 +57,21 @@ class MoleculeContainer(Graph):
         g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
 
         data = node_link_data(g, attrs=self.__attrs)
-        data.update(meta=self.meta, flat=list(self._flat),
-                    stereo=[list(x) for x in set((x['atoms'][0], x['atoms'][1], x.get('s'), x.get('p'))
-                                                 for x in self.stereo.values() for x in x.values())])
+        data.update(meta=self.meta,
+                    stereo=[[a1, a2, x.get('s'), x.get('p')] for (a1, a2), x in self._stereo_dict.items()])
         return data
 
     @classmethod
     def unpickle(cls, data):
         """ convert json serializable CGR into MoleculeContainer object instance 
         """
-        meta, stereo, flat = data.pop('meta'), data.pop('stereo'), data.pop('flat')
+        meta, stereo = data.pop('meta'), data.pop('stereo')
         g = node_link_graph(data, attrs=cls.__attrs)
         g.__class__ = MoleculeContainer
-        g.meta = meta
+        g.meta.update(meta)
         for s in stereo:
             g.add_stereo(*s)
-        g._flat = tuple(flat)
+
         if g.graph.pop('s_only', None):
             for _, a in g.nodes(data=True):
                 a.update(cls.__attr_sp_clone(a, cls.__node_marks))
@@ -74,16 +82,29 @@ class MoleculeContainer(Graph):
             g.fix_sp_marks()
         return g
 
+    def copy(self):
+        copy = super(MoleculeContainer, self).copy()
+        copy.meta.update(self.meta)
+        for (a1, a2), x in self._stereo_dict.items():
+            copy.add_stereo(a1, a2, x.get('s'), x.get('p'))
+        return copy
+
+    def remap(self, mapping, copy=False):
+        g = relabel_nodes(self, mapping, copy=copy)
+        old_stereo = self._stereo_dict
+        if not copy:
+            self.__stereo_dict = {}
+            self.__stereo = {}
+
+        for (a1, a2), x in old_stereo.items():
+            g.add_stereo(mapping[a1], mapping[a2], x.get('s'), x.get('p'))
+        return g
+
     @property
     def meta(self):
         if self.__meta is None:
             self.__meta = {}
         return self.__meta
-
-    @meta.setter
-    def meta(self, meta):
-        if isinstance(meta, dict):
-            self.__meta = meta
 
     @property
     def stereo(self):
@@ -91,24 +112,23 @@ class MoleculeContainer(Graph):
             self.__stereo = {}
         return self.__stereo
 
+    @property
+    def _stereo_dict(self):
+        if self.__stereo_dict is None:
+            self.__stereo_dict = {}
+        return self.__stereo_dict
+
     def add_stereo(self, atom1, atom2, s=None, p=None):
         val = {}
-        if s and self._flat[0]:
+        if s:
             val['s'] = s
-        if p and self._flat[1]:
+        if p:
             val['p'] = p
         if val and self.has_edge(atom1, atom2):
-            val['atoms'] = (atom1, atom2)
+            atoms = (atom1, atom2)
+            self._stereo_dict[atoms] = val.copy()
+            val['atoms'] = atoms
             self.stereo.setdefault(atom1, {})[atom2] = val
-
-    @property
-    def _flat(self):
-        return self.__sp_flat
-
-    @_flat.setter
-    def _flat(self, sp):
-        if isinstance(sp, tuple) and len(sp) == 2:
-            self.__sp_flat = sp
 
     def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
         return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))
@@ -242,8 +262,7 @@ class MoleculeContainer(Graph):
     __node_s = [x for x, *_ in __node_marks] + __tmp_node
     __node_sp = [y for x in __node_marks for y in x[:2]] + __tmp_node + ['p_x', 'p_y', 'p_z']
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
-    __stereo = __meta = None
-    __sp_flat = (True, True)
+    __stereo = __meta = __stereo_dict = None
 
 
 class ReactionContainer(dict):

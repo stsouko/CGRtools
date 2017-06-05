@@ -301,11 +301,11 @@ class CGRread:
             # remove dynamic stereo if bond not any [8]. INVALID SPEC.
             if m == 8 and k in cgr_dat_stereo and l in cgr_dat_stereo[k]:
                 a1, a2, s, p = cgr_dat_stereo[k][l]
-                g.add_stereo(mapping[a1], mapping[a2], s=s, p=p)
+                g.add_stereo(mapping[a1], mapping[a2], s=mdl_s_stereo and s, p=mdl_p_stereo and p)
 
             elif m == 1 and mdl_s_stereo and s in (1, 6):
                 s_mark = 1 if s == 1 else -1
-                g.add_stereo(k_map, l_map, s=s_mark, p=s_mark)
+                g.add_stereo(k_map, l_map, s=s_mark, p=mdl_p_stereo and s_mark)
 
         if colors:
             for k, v in colors.items():
@@ -366,7 +366,7 @@ class CGRwrite:
 
             dx, dy, dz = l['p_x'] - l['s_x'], l['p_y'] - l['s_y'], l['p_z'] - l['s_z']
             if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
-                cgr_dat.append(dict(atoms=(n,), value='x%s,%s,%s' % (dx, dy, dz), type='dynatom'))
+                cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
 
             x, y, z = (l['s_x'], l['s_y'], l['s_z']) if self.__is_mdl else (l['s_x'] * 2, l['_sy'] * 2, l['s_z'] * 2)
             atoms.append(dict(map=l['mark'] if self.__mark_to_map else i, charge=charge,

@@ -18,9 +18,12 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from functools import reduce
 from itertools import product, combinations
-from networkx import Graph, compose, has_path, union, union_all, relabel_nodes, connected_component_subgraphs
+from networkx import Graph, compose, has_path, connected_component_subgraphs
 from networkx.algorithms import isomorphism as gis
+from .containers import CGRTemplate
+from .core import CGRcore
 
 
 def patcher(matrix):
@@ -107,10 +110,10 @@ class CGRreactor(object):
     def get_template_searcher(self, templates):
         def searcher(g):
             for i in templates:
-                gm = self.get_cgr_matcher(g, i['substrats'])
+                gm = self.get_cgr_matcher(g, i.substrats)
                 for j in gm.subgraph_isomorphisms_iter():
-                    res = dict(substrats=g, meta=i['meta'],
-                               products=self.__remap_group(i['products'], g, {y: x for x, y in j.items()})[0])
+                    res = dict(substrats=g, meta=i.meta,
+                               products=self.__remap_group(i.products, g, {y: x for x, y in j.items()})[0])
                     yield res
 
         return searcher
@@ -177,7 +180,7 @@ class CGRreactor(object):
         for i, j in r_group_clones:
             for k in i:
                 remappedgroup, mapping = self.__remap_group(x_group[lose_map[k]], tmp, {})
-                tmp = union(tmp, remappedgroup)
+                tmp = CGRcore.union(tmp, remappedgroup)
                 tmp.add_edge(j[k], mapping[lose_map[k]], **lose_bonds[(k, lose_map[k])])
 
         return tmp
@@ -186,35 +189,32 @@ class CGRreactor(object):
     def __remap_group(g, h, mapping):
         newmap = mapping.copy()
         newmap.update({x: y for x, y in zip(set(g).difference(newmap), set(range(1, 1000)).difference(h))})
-        return relabel_nodes(g, newmap), newmap
+        return g.remap(newmap, copy=True), newmap
 
     @staticmethod
     def get_templates(raw_templates):
         templates = []
         for template in raw_templates:
-            matrix = dict(meta=template.meta.copy())
-            for i in ('products', 'substrats'):
-                matrix[i] = union_all([x.copy() for x in template[i]])
+            products = reduce(CGRcore.union, template.products).copy()
+            substrats = reduce(CGRcore.union, template.substrats).copy()
 
-            common = set(matrix['products']).intersection(matrix['substrats'])
+            common = set(products).intersection(substrats)
             for n in common:
                 for j in {'s_charge', 's_hyb', 's_neighbors',
-                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(matrix['products'].node[n]):
-                    if isinstance(matrix['products'].node[n][j], list):
-                        matrix['products'].node[n][j] = {x: y for x, y in zip(matrix['substrats'].node[n][j],
-                                                                              matrix['products'].node[n][j])}
-                for j in ('x', 'y', 'z'):
-                    matrix['products'].node[n].pop(j)
+                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.node[n]):
+                    if isinstance(products.node[n][j], list):
+                        products.node[n][j] = {x: y for x, y in zip(substrats.node[n][j], products.node[n][j])}
+                for j in ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'):
+                    products.node[n].pop(j)
 
-            for m, n, a in matrix['products'].edges(data=True):
+            for m, n, a in products.edges(data=True):
                 if m in common and n in common:
                     for j in {'s_bond', 'p_bond'}.intersection(a):
                         if isinstance(a[j], list):
-                            matrix['products'].edge[m][n][j] = {x: y for x, y in
-                                                                zip(matrix['substrats'].edge[m][n][j], a[j])}
+                            products.edge[m][n][j] = {x: y for x, y in zip(substrats.edge[m][n][j], a[j])}
 
-            relabel_nodes(matrix['substrats'], {x: x + 1000 for x in matrix['substrats']}, copy=False)
-            relabel_nodes(matrix['products'], {x: x + 1000 for x in matrix['products']}, copy=False)
+            substrats.remap({x: x + 1000 for x in substrats})
+            products.remap({x: x + 1000 for x in products})
 
-            templates.append(matrix)
+            templates.append(CGRTemplate(substrats, products, template.meta.copy()))
         return templates

@@ -18,238 +18,83 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from networkx import Graph, union_all
-from networkx.algorithms import isomorphism as gis
-from .containers import MoleculeContainer, ReactionContainer
-from .reactor import CGRreactor
+from .containers import MoleculeContainer
 
 
 class CGRcore(object):
-    def __init__(self, cgr_type='0', extralabels=False):
-        """
-        CGR condenser core
-        :param cgr_type: type of CGR. see CLI help
-        :param extralabels: if True reset hyb and neighbors marks before condensation
-        """
-        self.__diss_template = self.__diss_center()
-        self.__cgr_type = self.__get_cgr_type(cgr_type)
-        self.__extralabels = extralabels
-
-        self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels)
-
-    def pickle(self):
-        """ return config. for pickling
-        """
-        return self.__pickle
-
     @staticmethod
-    def unpickle(config):
-        """ return CGRbalancer object instance
-        """
-        if {'cgr_type', 'extralabels'}.difference(config):
-            raise Exception('Invalid config')
-        return CGRcore(**config)
+    def union(m1, m2):
+        if set(m1) & set(m2):
+            raise Exception('The node sets of m1 and m2 are not disjoint.')
 
-    def getCGR(self, data, is_merged=False):
-        """
-        condense reaction container to cgr molecule container.
-        :param data: reaction container or merge_mols structure.
-        :param is_merged: if data formed by self.merge_mols set to True.
-        :return: molecule container.
+        u = MoleculeContainer()
+        u.add_nodes_from(m1.nodes(data=True))
+        u.add_nodes_from(m2.nodes(data=True))
+        u.add_edges_from(m1.edges(data=True))
+        u.add_edges_from(m2.edges(data=True))
 
-        if cgr_type in (1, 2, 3, 4, 5, 6) return reagents or products union else return cgr. see CLI help.
-        """
-        if self.__cgr_type in (1, 2, 3, 4, 5, 6):
-            g = self.__reaction_splitter(data)
-            if self.__extralabels:
-                g.reset_query_marks()
-        else:
-            res = dict(substrats=data['substrats'].copy(),
-                       products=data['products'].copy()) if is_merged else self.merge_mols(data)
-            if self.__extralabels:
-                res['substrats'].reset_query_marks()
-                res['products'].reset_query_marks()
+        for m in (m1, m2):
+            for x in m._stereo_dict:
+                u.add_stereo(x['atoms'][0], x['atoms'][1], x.get('s'), x.get('p'))
+        return u
 
-            g = self.__compose(res)
-
-        if not is_merged:
-            g.meta.update(data.meta)
-        return g
-
-    def dissCGR(self, g):
-        tmp = ReactionContainer(meta=g.meta)
-        for category, (edge, pattern) in self.__diss_template.items():
-            components, _ = CGRreactor.get_bond_broken_graph(g, pattern, gis.categorical_edge_match(edge, None))
-            for mol in components:
-                for n, m, edge_attr in mol.edges(data=True):
-                    for i, j in self.__attrcompose['edges'][category].items():
-                        if j in edge_attr:
-                            mol[n][m][i] = edge_attr[j]
-                for n, node_attr in mol.nodes(data=True):
-                    for i, j in self.__attrcompose['nodes'][category].items():
-                        if j in node_attr:
-                            mol.node[n][i] = node_attr[j]
-                mol.fix_sp_marks()
-                tmp[category].append(mol)
-        return tmp
-
-    def __reaction_splitter(self, data):
-        data = data.copy()
-        if self.__cgr_type == 1:
-            g = union_all(data.substrats)
-        elif self.__cgr_type == 2:
-            g = union_all(data.products)
-        elif self.__cgr_type == 3:
-            g = union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
-        elif self.__cgr_type == 4:
-            g = union_all(self.__get_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 5:
-            g = union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
-        elif self.__cgr_type == 6:
-            g = union_all(self.__exc_mols(data.products, self.__needed['products']))
-        else:
-            raise Exception('Splitter Error')
-        return g or MoleculeContainer()
-
-    @staticmethod
-    def __get_mols(data, needed):
-        mols = []
-        for x in needed:
-            try:
-                mols.append(data[x])
-            except IndexError:
-                pass
-        return mols
-
-    @staticmethod
-    def __exc_mols(data, needed):
-        mols = data.copy()
-        for x in needed:
-            try:
-                mols.pop(x)
-            except IndexError:
-                pass
-        return mols
-
-    def merge_mols(self, data):
-        data = data.copy()
-        if self.__cgr_type == 0:
-            substrats = union_all(data.substrats)
-            products = union_all(data.products)
-
-        elif self.__cgr_type == 7:
-            substrats = union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
-            products = union_all(self.__get_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 8:
-            substrats = union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
-            products = union_all(self.__exc_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 9:
-            substrats = union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
-            products = union_all(self.__get_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 10:
-            substrats = union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
-            products = union_all(self.__exc_mols(data.products, self.__needed['products']))
-        else:
-            raise Exception('Merging need reagents and products')
-
-        return dict(substrats=substrats or MoleculeContainer(), products=products or MoleculeContainer())
-
-    def __compose(self, data):
+    @classmethod
+    def compose(cls, m1, m2):
         """ remove from union graphs of products or substrats data about substrats or products
         """
-        common = set(data['substrats']).intersection(data['products'])
-        products = data['products']
-        substrats = data['substrats']
+        common = set(m1).intersection(m2)
         extended_common = set()
+        new_stereo = {}
+        h = MoleculeContainer()
 
         """ remove bond, neighbors and hybridization states for common atoms.
         """
-        for i, g in (('substrats', substrats), ('products', products)):
-            for n, m in g.edges(common):
+        for i, g in (('substrats', m1), ('products', m2)):
+            pop = cls.__popdict[i]['edge']
+            s_pop = cls.__popdict[i]['stereo']
+            for n, m, attr in g.edges(common, data=True):
                 extended_common.update([n, m])
-                for j in self.__popdict[i]['edge']:
-                    g[n][m].pop(j, None)
+                attr = {k: v for k, v in attr.items() if k not in pop}
+                if attr:
+                    h.add_edge(n, m, **attr)
+                    if n in g.stereo and m in g.stereo[n]:
+                        s = g.stereo[n][m]
+                        stereo = s.get(s_pop)
+                        if stereo:
+                            new_stereo.setdefault(s['atoms'], {})[s_pop] = stereo
 
+            uniq = set(g).difference(extended_common)
+            for n, m, attr in g.edges(uniq, data=True):
+                h.add_edge(n, m, **attr)
+                if n in g.stereo and m in g.stereo[n]:
+                    s = g.stereo[n][m]
+                    new_stereo[s['atoms']] = s
+
+            pop = cls.__popdict[i]['node']
             for n in common:
-                for j in self.__popdict[i]['node']:
-                    g.node[n].pop(j, None)
+                h.add_node(n, **{k: v for k, v in g.node[n].items() if k not in pop})
 
-        """ remove neighbors and hybridization states for common frontier atoms.
-        """
-        bubble = extended_common.difference(common)
-        for i, g in (('substrats', substrats), ('products', products)):
-            for n in bubble.intersection(g):
-                for j in self.__popdict[i]['ext_node']:
-                    g.node[n].pop(j, None)
+            pop = cls.__popdict[i]['ext_node']
+            for n in extended_common.difference(common).intersection(g):
+                h.add_node(n, **{k: v for k, v in g.node[n].items() if k not in pop})
 
-        """ compose graphs. kostyl
-        """
-        g = substrats
-        g.add_nodes_from(products.nodes(data=True))
-        g.add_edges_from(products.edges(data=True))
-
-        """ remove edges without bonds
-        """
-        for n, m in g.edges(extended_common):
-            if g[n][m].get('s_bond') == g[n][m].get('p_bond') is None:
-                g.remove_edge(n, m)
+            for n in uniq:
+                h.add_node(n, **g.node[n])
 
         """ update sp_* marks
         """
-        g.fix_sp_marks(nodes_bunch=extended_common, edges_bunch=common)
-        return g
+        h.fix_sp_marks(nodes_bunch=extended_common, edges_bunch=common)
 
-    @staticmethod
-    def __diss_center():
-        g1 = Graph()
-        g2 = Graph()
+        for (a1, a2), x in new_stereo.items():
+            h.add_stereo(a1, a2, x.get('s'), x.get('p'))
 
-        g1.add_edges_from([(1, 2, dict(s_bond=None))])
-        g2.add_edges_from([(1, 2, dict(p_bond=None))])
-        return dict(substrats=('s_bond', [g1]), products=('p_bond', [g2]))
+        return h
 
-    def __get_cgr_type(self, _type):
-        needed = [int(x) for x in _type.split(',')]
-        if needed[0] == 0:
-            t = 0  # CGR
-        elif needed[0] == 1:
-            t = 1  # all reagents
-        elif needed[0] == 2:
-            t = 2  # all products
-        elif not any(True for x in needed if -200 < x < -100) and not any(True for x in needed if -300 < x < -200) and \
-                any(True for x in needed if 100 < x < 200) and any(True for x in needed if 200 < x < 300):
-            t = 7  # CGR on included parts of reagents and products
-        elif any(True for x in needed if -200 < x < -100) and any(True for x in needed if -300 < x < -200):
-            t = 8  # CGR on excluded parts of reagents and products
-        elif any(True for x in needed if -200 < x < -100) and not any(True for x in needed if -300 < x < -200) and \
-                any(True for x in needed if 200 < x < 300):
-            t = 9  # CGR on excluded part of reagents and included part of products
-        elif not any(True for x in needed if -200 < x < -100) and any(True for x in needed if -300 < x < -200) and \
-                any(True for x in needed if 100 < x < 200):
-            t = 10  # CGR on excluded part of products and included part of reagents
-        elif 100 < needed[0] < 200:
-            t = 3  # only included part of reagents
-        elif 200 < needed[0] < 300:
-            t = 4  # only included part of products
-        elif -200 < needed[0] < -100:
-            t = 5  # only excluded part of reagents
-        elif -300 < needed[0] < -200:
-            t = 6  # only excluded part of products
-        else:
-            t = 0
-
-        if t > 2:
-            self.__needed = dict(substrats=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
-                                 products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True))
-        return t
-
-    __popdict = dict(products=dict(edge=('s_bond', 'sp_bond'),
-                                   node=('s_charge', 's_neighbors', 's_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb'),
+    __popdict = dict(products=dict(edge=('s_bond', 'sp_bond'), stereo='p',
+                                   node=('s_charge', 's_neighbors', 's_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb',
+                                         's_x', 's_y', 's_z'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb')),
-                     substrats=dict(edge=('p_bond', 'sp_bond'),
-                                    node=('p_charge', 'p_neighbors', 'p_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb'),
+                     substrats=dict(edge=('p_bond', 'sp_bond'), stereo='s',
+                                    node=('p_charge', 'p_neighbors', 'p_hyb', 'sp_charge', 'sp_neighbors', 'sp_hyb',
+                                          'p_x', 'p_y', 'p_z'),
                                     ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))
-
-    __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond'), products=dict(s_bond='p_bond')),
-                         nodes=dict(substrats=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
-                                    products=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb')))

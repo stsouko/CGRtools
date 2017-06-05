@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from networkx import Graph, relabel_nodes
-from .core import CGRcore
+from .preparer import CGRcombo
 from .reactor import CGRreactor, patcher
 from .utils.aromatize import Aromatize
 
@@ -27,10 +27,10 @@ from .utils.aromatize import Aromatize
 aromatize = Aromatize()
 
 
-class ReactMap(CGRreactor, CGRcore):
+class ReactMap(CGRreactor, CGRcombo):
     def __init__(self, templates, stereo=False):
         CGRreactor.__init__(self, stereo=stereo, hyb=True, neighbors=True, isotope=True)
-        CGRcore.__init__(self, extralabels=True)
+        CGRcombo.__init__(self, extralabels=True)
 
         self.__core_templates = self.get_templates(templates)
         self.__prepare_search_patcher()
