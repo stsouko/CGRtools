@@ -46,10 +46,11 @@ class MoleculeContainer(Graph):
         """
         g = Graph()
         if compress and not self.get_center_atoms():
-            g.graph['s_only'] = True
+            s_only = True
             node_marks = self.__node_s
             edge_marks = ('s_bond',)
         else:
+            s_only = False
             node_marks = self.__node_sp
             edge_marks = ('s_bond', 'p_bond')
 
@@ -57,7 +58,7 @@ class MoleculeContainer(Graph):
         g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
 
         data = node_link_data(g, attrs=self.__attrs)
-        data.update(meta=self.meta,
+        data.update(meta=self.meta, s_only=s_only,
                     stereo=[[a1, a2, x.get('s'), x.get('p')] for (a1, a2), x in self._stereo_dict.items()])
         return data
 
@@ -65,14 +66,13 @@ class MoleculeContainer(Graph):
     def unpickle(cls, data):
         """ convert json serializable CGR into MoleculeContainer object instance 
         """
-        meta, stereo = data.pop('meta'), data.pop('stereo')
         g = node_link_graph(data, attrs=cls.__attrs)
         g.__class__ = MoleculeContainer
-        g.meta.update(meta)
-        for s in stereo:
+        g.meta.update(data['meta'])
+        for s in data['stereo']:
             g.add_stereo(*s)
 
-        if g.graph.pop('s_only', None):
+        if data['s_only']:
             for _, a in g.nodes(data=True):
                 a.update(cls.__attr_sp_clone(a, cls.__node_marks))
                 a.update(p_x=a['s_x'], p_y=a['s_y'], p_z=a['s_z'])
