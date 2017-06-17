@@ -89,6 +89,16 @@ class MoleculeContainer(Graph):
             copy.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return copy
 
+    def subgraph(self, nbunch, copy=True, meta=False):
+        sub = super(MoleculeContainer, self).subgraph(nbunch)
+        if copy:
+            sub = sub.copy()
+        if meta:
+            sub.meta.update(self.meta)
+        for (a1, a2), x in self._stereo_dict.items():
+            sub.add_stereo(a1, a2, x.get('s'), x.get('p'))
+        return sub
+
     def remap(self, mapping, copy=False):
         g = relabel_nodes(self, mapping, copy=copy)
         old_stereo = self._stereo_dict
@@ -129,6 +139,7 @@ class MoleculeContainer(Graph):
             self._stereo_dict[atoms] = val.copy()
             val['atoms'] = atoms
             self.stereo.setdefault(atom1, {})[atom2] = val
+            self.stereo.setdefault(atom2, {})[atom1] = val
 
     def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
         return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))

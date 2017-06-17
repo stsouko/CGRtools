@@ -20,7 +20,7 @@
 #
 from functools import reduce
 from itertools import product, combinations
-from networkx import Graph, compose, has_path, connected_component_subgraphs
+from networkx import Graph, compose, has_path
 from networkx.algorithms import isomorphism as gis
 from .containers import CGRTemplate
 from .core import CGRcore
@@ -48,6 +48,12 @@ def patcher(matrix):
     s.remove_edges_from(combinations(common, 2))
     composed = compose(s, p)
     composed.meta.update(s.meta)
+
+    for (a1, a2), x in s._stereo_dict.items():
+        if s.has_edge(a1, a2):
+            composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
+    for (a1, a2), x in p._stereo_dict.items():
+        composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
     return composed
 
 
@@ -125,8 +131,7 @@ class CGRreactor(object):
                 elif not any(has_path(g, *x) for x in product((y for x in lose_bonds for y in x), mapping.values())):
                     # запилить проверку связности атомов 1 или 2 с lose_map атомами
                     g.remove_edge(mapping[1], mapping[2])
-        components = list(connected_component_subgraphs(g))
-        return components, lose_bonds
+        return CGRcore.split(g), lose_bonds
 
     def clone_subgraphs(self, g):
         r_group = []

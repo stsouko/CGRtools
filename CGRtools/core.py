@@ -18,10 +18,15 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from networkx import connected_components
 from .containers import MoleculeContainer
 
 
 class CGRcore(object):
+    @staticmethod
+    def split(m, meta=False):
+        return [m.subgraph(c, meta=meta) for c in connected_components(m)]
+
     @staticmethod
     def union(m1, m2):
         if set(m1) & set(m2):
@@ -34,8 +39,8 @@ class CGRcore(object):
         u.add_edges_from(m2.edges(data=True))
 
         for m in (m1, m2):
-            for x in m._stereo_dict:
-                u.add_stereo(x['atoms'][0], x['atoms'][1], x.get('s'), x.get('p'))
+            for (a1, a2), x in m._stereo_dict.items():
+                m.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return u
 
     @classmethod
