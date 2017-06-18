@@ -370,7 +370,7 @@ class CGRwrite:
                 if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                     cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
 
-            x, y, z = (l['s_x'], l['s_y'], l['s_z']) if self.__is_mdl else (l['s_x'] * 2, l['_sy'] * 2, l['s_z'] * 2)
+            x, y, z = (l['s_x'], l['s_y'], l['s_z']) if self.__is_mdl else (l['s_x'] * 2, l['s_y'] * 2, l['s_z'] * 2)
             atoms.append(dict(map=l['mark'] if self.__mark_to_map else i, charge=charge,
                               element=element, mark=l['mark'], x=x, y=y, z=z))
 
