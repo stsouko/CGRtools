@@ -18,7 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from os.path import join, dirname
+from pathlib import Path
 from ..files.RDFrw import RDFread
 from ..reactor import CGRreactor, patcher
 
@@ -26,7 +26,8 @@ from ..reactor import CGRreactor, patcher
 class Aromatize(CGRreactor):
     def __init__(self):
         CGRreactor.__init__(self)
-        raw_templates = RDFread(open(join(dirname(__file__), 'aromatize.rdf'))).read()
+        with (Path(__file__).parent / 'aromatize.rdf').open() as f:
+            raw_templates = RDFread(f).read()
         self.__searcher = self.get_template_searcher(self.get_templates(raw_templates))
         #todo: Implement optimizations!
 

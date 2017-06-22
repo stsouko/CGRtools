@@ -136,8 +136,8 @@ class MoleculeContainer(Graph):
             val['p'] = p
         if val and self.has_edge(atom1, atom2):
             atoms = (atom1, atom2)
-            self._stereo_dict[atoms] = val.copy()
             val['atoms'] = atoms
+            self._stereo_dict[atoms] = val
             self.stereo.setdefault(atom1, {})[atom2] = val
             self.stereo.setdefault(atom2, {})[atom1] = val
 

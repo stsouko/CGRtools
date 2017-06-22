@@ -20,7 +20,7 @@
 #  MA 02110-1301, USA.
 #
 from CGRtools.version import version
-from os.path import join, dirname
+from pathlib import Path
 from setuptools import setup, find_packages
 
 setup(
@@ -37,7 +37,7 @@ setup(
     install_requires=['networkx>=2.0.dev', 'periodictable'],
     extras_require={'autocomplete': ['argcomplete']},
     dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.0.dev'],
-    long_description=open(join(dirname(__file__), 'README.md')).read(),
+    long_description=(Path(__file__).parent / 'README.md').open().read(),
     keywords="tools cgr cli",
     classifiers=['Environment :: Console',
                  'Intended Audience :: Science/Research',
