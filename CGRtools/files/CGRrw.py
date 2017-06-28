@@ -290,7 +290,6 @@ class CGRread:
             if abs(p_z) > .0001:
                 mdl_p_stereo = False
 
-        g._flat = (mdl_s_stereo, mdl_p_stereo)
         for k, l, m, s in molecule['bonds']:
             k_map, l_map = mapping[k], mapping[l]
             if m == 8 and k in cgr_dat_bond and l in cgr_dat_bond[k]:  # dynbond only for any bond accept.
@@ -322,7 +321,6 @@ class CGRread:
 
 class CGRwrite:
     def __init__(self, extralabels=False, mark_to_map=False, xyz=False, _format='mdl'):
-        self.__cgr = self.__to_cgr()
         self.__xyz = xyz
         self.__mark_to_map = mark_to_map
         self.__is_mdl = _format == 'mdl'
@@ -377,16 +375,51 @@ class CGRwrite:
         data['colors'] = {n: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in m.items()) for n, m in colors.items()}
 
         for i, j, l in g.edges(data=True):
-            bond, cbond, btype = self.__cgr[l.get('s_bond')][l.get('p_bond')]
-            """
-            if (i, j) in g.stereo:
-                cgr_dat.append({'value': g.stereo[(i, j)], 'type': 'dynstereo', 'atoms': (renum[i], renum[j])})
+            re_atoms = (renum[i], renum[j])
+            if i in g.stereo and j in g.stereo[i]:
+                ss = g.stereo[i][j]
+                stereo = {'value': '%s>%s' % (ss.get('s', 'n'), ss.get('p', 'n')), 'type': 'dynstereo',
+                          'atoms': re_atoms}
+                if ss.get('s') != ss.get('p'):
+                    s_mark = 0
+                    s_dyn = True
+                else:
+                    s_mark = self.__stereoMDL[ss['s']] if self.__is_mdl else self.__stereoMRV[ss['s']]
+                    s_dyn = False
+            else:
+                stereo = False
+                s_mark = 0
+                s_dyn = False
 
-            """
-            if btype:
-                cgr_dat.append({'value': cbond, 'type': btype, 'atoms': (renum[i], renum[j])})
+            s_bond = l.get('s_bond')
+            p_bond = l.get('p_bond')
+            if isinstance(s_bond, list):
+                if s_bond == p_bond:
+                    cgr_dat.append({'value': ','.join(s_bond), 'type': 'extrabond', 'atoms': re_atoms})
+                else:
+                    cgr_dat.append({'value': ','.join('%s>%s' % x for x in zip(s_bond, p_bond)), 'type': 'dynbond',
+                                    'atoms': re_atoms})
+                if stereo:
+                    cgr_dat.append(stereo)
+                bond = 8
+            elif s_bond != p_bond:
+                cgr_dat.append({'value': '%s>%s' % (s_bond, p_bond), 'type': 'dynbond', 'atoms': re_atoms})
+                if stereo:
+                    cgr_dat.append(stereo)
+                bond = 8
+            elif s_bond == 9:
+                cgr_dat.append({'value': 's', 'type': 'extrabond', 'atoms': re_atoms})
+                if stereo:
+                    cgr_dat.append(stereo)
+                bond = 8
+            elif s_dyn:
+                cgr_dat.append({'value': s_bond, 'type': 'extrabond', 'atoms': re_atoms})
+                cgr_dat.append(stereo)
+                bond = 8
+            else:
+                bond = s_bond
 
-            bonds.append((renum[i], renum[j], bond))
+            bonds.append((renum[i], renum[j], bond, s_mark))
 
         data['CGR'] = self.__format_mol(atoms, bonds, extended, cgr_dat)
         return data
@@ -423,7 +456,7 @@ class CGRwrite:
                              "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(atoms), len(bonds)),),
                              ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0"
                               "%(mark)3s  0%(map)3s  0  0\n" % i for i in atoms),
-                             ("%3d%3d%3s  0  0  0  0\n" % i for i in bonds), mol_prop))
+                             ("%3d%3d%3s%3d  0  0  0\n" % i for i in bonds), mol_prop))
 
     @classmethod
     def __get_mrv(cls, atoms, bonds, extended, cgr_dat):
@@ -445,9 +478,10 @@ class CGRwrite:
                                                    ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
                               for i, j in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
-                             ('<bond id="b{0}" atomRefs2="a{1[0]} a{1[1]}" '
-                              'order="{2[0]}"{2[1]}/>'.format(i, j, ('1', ' queryType="Any"') if k == '8' else (k, ''))
-                              for i, (*j, k) in enumerate(bonds, start=1)),
+                             ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
+                              .format(i, j, l, '1" queryType="Any' if k == 8 else k,
+                                      '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
+                              for i, (j, l, k, s) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
                              ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1[type]}" fieldData="{1[value]}" '
                               'atomRefs="{2}" x="{3[0]}" y="{3[1]}" '
@@ -493,17 +527,6 @@ class CGRwrite:
         return self.__toMDL.get(charge, 0) if self.__is_mdl else charge, meta
 
     @staticmethod
-    def __to_cgr():
-        ways = [None, 0, 1, 2, 3, 4, 9]
-        rep = {None: '0'}
-        rep2 = {None: 'n'}
-        cgrdict = {}
-        for x, y in product(ways, repeat=2):
-            cgrdict.setdefault(x, {})[y] = ('8', '%s>%s' % (rep.get(x, x), rep.get(y, y)), 'dynbond') if x != y else \
-                ('8', 's', 'extrabond') if x == 9 else (rep.get(x, str(x)), rep2.get(x, str(x)), None)
-        return cgrdict
-
-    @staticmethod
     def __get_position(cord):
         if len(cord) > 1:
             x = (cord[-1]['x'] + cord[0]['x']) / 2 + .2
@@ -522,3 +545,5 @@ class CGRwrite:
     __extra_marks = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in ('hyb', 'neighbors')]
     __half_table = len(mendeleyset) // 2
     __toMDL = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
+    __stereoMDL = {-1: 6, 0: 0, 1: 1, None: 0}
+    __stereoMRV = {-1: 'H', 0: 0, 1: 'W', None: 0}
