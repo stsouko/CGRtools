@@ -391,8 +391,8 @@ class CGRwrite:
                 s_mark = 0
                 s_dyn = False
 
-            s_bond = l.get('s_bond')
-            p_bond = l.get('p_bond')
+            s_bond = l.get('s_bond') or 0
+            p_bond = l.get('p_bond') or 0
             if isinstance(s_bond, list):
                 if s_bond == p_bond:
                     cgr_dat.append({'value': ','.join(s_bond), 'type': 'extrabond', 'atoms': re_atoms})

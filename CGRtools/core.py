@@ -98,8 +98,8 @@ class CGRcore(object):
         return h
 
     __popdict = dict(products=dict(edge='p_bond', stereo='p',
-                                   node=('p_charge', 'p_neighbors', 'p_hyb', 'p_x', 'p_y', 'p_z'),
+                                   node=('p_charge', 'p_neighbors', 'p_hyb', 'p_x', 'p_y', 'p_z', 'mark', 'element'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb')),
                      substrats=dict(edge='s_bond', stereo='s',
-                                    node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z'),
+                                    node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z', 'mark', 'element'),
                                     ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))
