@@ -479,7 +479,7 @@ class CGRwrite:
                               for i, j in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
                              ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
-                              .format(i, j, l, '1" queryType="Any' if k == 8 else k,
+                              .format(i, j, l, '1" queryType="Any' if k == 8 else 'A' if k == 4 else k,
                                       '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
                               for i, (j, l, k, s) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
