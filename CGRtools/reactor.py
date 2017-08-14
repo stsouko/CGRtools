@@ -58,6 +58,8 @@ def patcher(matrix):
 
 
 class CGRreactor(object):
+    """ CGR isomorphism based operations
+    """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
         self.__rc_template = self.__reaction_center()
 
