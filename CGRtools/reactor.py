@@ -35,15 +35,15 @@ def patcher(matrix):
 
     common = set(p).intersection(s)
     for i in common:
-        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(p.node[i]):
-            if isinstance(p.node[i][j], dict):
-                p.node[i][j] = p.node[i][j][s.node[i][j]]
+        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(p.nodes[i]):
+            if isinstance(p.nodes[i][j], dict):
+                p.nodes[i][j] = p.nodes[i][j][s.nodes[i][j]]
 
     for m, n, a in p.edges(data=True):
         if m in common and n in common:
             for j in {'s_bond', 'p_bond'}.intersection(a):
                 if isinstance(a[j], dict):
-                    a[j] = a[j][s.edge[m][n][j]]
+                    a[j] = a[j][s[m][n][j]]
 
     s.remove_edges_from(combinations(common, 2))
     composed = compose(s, p)
@@ -208,17 +208,17 @@ class CGRreactor(object):
             common = set(products).intersection(substrats)
             for n in common:
                 for j in {'s_charge', 's_hyb', 's_neighbors',
-                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.node[n]):
-                    if isinstance(products.node[n][j], list):
-                        products.node[n][j] = {x: y for x, y in zip(substrats.node[n][j], products.node[n][j])}
+                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.nodes[n]):
+                    if isinstance(products.nodes[n][j], list):
+                        products.nodes[n][j] = {x: y for x, y in zip(substrats.nodes[n][j], products.nodes[n][j])}
                 for j in ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'):
-                    products.node[n].pop(j)
+                    products.nodes[n].pop(j)
 
             for m, n, a in products.edges(data=True):
                 if m in common and n in common:
                     for j in {'s_bond', 'p_bond'}.intersection(a):
                         if isinstance(a[j], list):
-                            products.edge[m][n][j] = {x: y for x, y in zip(substrats.edge[m][n][j], a[j])}
+                            a[j] = {x: y for x, y in zip(substrats[m][n][j], a[j])}
 
             substrats.remap({x: x + 1000 for x in substrats})
             products.remap({x: x + 1000 for x in products})

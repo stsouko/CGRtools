@@ -18,7 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import count, product, chain
+from itertools import count, chain
 from collections import defaultdict
 from periodictable import elements
 from ..containers import ReactionContainer, MoleculeContainer
@@ -279,11 +279,11 @@ class CGRread:
                            s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
                            s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'])
 
-            if 'element' not in g.node[atom_map] and l['element'] not in ('A', '*'):
-                g.node[atom_map]['element'] = l['element']
-            if l['isotope'] and 'isotope' not in g.node[atom_map]:
+            if 'element' not in g.nodes[atom_map] and l['element'] not in ('A', '*'):
+                g.nodes[atom_map]['element'] = l['element']
+            if l['isotope'] and 'isotope' not in g.nodes[atom_map]:
                 a = elements.symbol(l['element'])
-                g.node[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
+                g.nodes[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
             if l['z'] != 0:
                 mdl_s_stereo = False
@@ -309,7 +309,7 @@ class CGRread:
         if colors:
             for k, v in colors.items():
                 for a, c in cls.__parse_colors(k, v).items():
-                    g.node[mapping[a]].update(c)
+                    g.nodes[mapping[a]].update(c)
         return g
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}

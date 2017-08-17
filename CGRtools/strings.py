@@ -28,22 +28,22 @@ from periodictable import elements
 
 def eratosthenes():
     """Yields the sequence of prime numbers via the Sieve of Eratosthenes."""
-    D = {}  # map each composite integer to its first-found prime factor
+    d = {}  # map each composite integer to its first-found prime factor
     for q in count(2):  # q gets 2, 3, 4, 5, ... ad infinitum
-        p = D.pop(q, None)
+        p = d.pop(q, None)
         if p is None:
             # q not a key in D, so q is prime, therefore, yield it
             yield q
             # mark q squared as not-prime (with q as first-found prime factor)
-            D[q * q] = q
+            d[q * q] = q
         else:
             # let x <- smallest (N*p)+q which wasn't yet known to be composite
             # we just learned x is composite, with p first-found prime factor,
             # since p is the first-found prime factor of q -- find and mark it
             x = p + q
-            while x in D:
+            while x in d:
                 x += p
-            D[x] = p
+            d[x] = p
 
 
 def hash_cgr_string(string):
@@ -78,7 +78,7 @@ def get_morgan(g, isotope=False, element=True):
     stab = 0
 
     scaf = {}
-    for n, m in g.edge.items():
+    for n, m in g.adjacency():
         scaf[n] = tuple(m)
 
     while True:
@@ -128,20 +128,20 @@ def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=T
         return nextatom
 
     def dosmarts(trace, inter, prev):
-        s_sh = '%s%s' % (stereo and g.node[inter].get('s_stereo') or '',
-                         hyb_types[g.node[inter].get('s_hyb')] if hyb else '')
-        p_sh = '%s%s' % (stereo and g.node[inter].get('p_stereo') or '',
-                         hyb_types[g.node[inter].get('p_hyb')] if hyb else '')
+        s_sh = '%s%s' % (stereo and g.nodes[inter].get('s_stereo') or '',
+                         hyb_types[g.nodes[inter].get('s_hyb')] if hyb else '')
+        p_sh = '%s%s' % (stereo and g.nodes[inter].get('p_stereo') or '',
+                         hyb_types[g.nodes[inter].get('p_hyb')] if hyb else '')
 
         smis = ['[%s%s%s%s:%d]' %
-                (isotope and g.node[inter].get('isotope') or '', element and g.node[inter]['element'] or '*',
+                (isotope and g.nodes[inter].get('isotope') or '', element and g.nodes[inter]['element'] or '*',
                  s_sh and ';%s;' % s_sh or '',
-                 element and g.node[inter]['s_charge'] and '%+d' % g.node[inter]['s_charge'] or '',
+                 element and g.nodes[inter]['s_charge'] and '%+d' % g.nodes[inter]['s_charge'] or '',
                  newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
         smip = ['[%s%s%s%s:%d]' %
-                (isotope and g.node[inter].get('isotope') or '', element and g.node[inter]['element'] or '*',
+                (isotope and g.nodes[inter].get('isotope') or '', element and g.nodes[inter]['element'] or '*',
                  p_sh and ';%s;' % p_sh or '',
-                 element and g.node[inter]['p_charge'] and '%+d' % g.node[inter]['p_charge'] or '',
+                 element and g.nodes[inter]['p_charge'] and '%+d' % g.nodes[inter]['p_charge'] or '',
                  newmaps.get(inter))]
         concat = []
         stoplist = []

@@ -40,7 +40,7 @@ class CGRcore(object):
 
         for m in (m1, m2):
             for (a1, a2), x in m._stereo_dict.items():
-                m.add_stereo(a1, a2, x.get('s'), x.get('p'))
+                u.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return u
 
     @classmethod
@@ -78,14 +78,14 @@ class CGRcore(object):
 
             pop = cls.__popdict[i]['node']
             for n in common:
-                h.add_node(n, **{k: v for k, v in g.node[n].items() if k in pop})
+                h.add_node(n, **{k: v for k, v in g.nodes[n].items() if k in pop})
 
             pop = cls.__popdict[i]['ext_node']
             for n in ext_common.difference(common):
-                h.add_node(n, **{k: v for k, v in g.node[n].items() if k not in pop})
+                h.add_node(n, **{k: v for k, v in g.nodes[n].items() if k not in pop})
 
             for n in uniq:
-                h.add_node(n, **g.node[n])
+                h.add_node(n, **g.nodes[n])
 
             extended_common.update(ext_common)
 
