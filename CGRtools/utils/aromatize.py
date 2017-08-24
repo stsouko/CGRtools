@@ -29,15 +29,20 @@ class Aromatize(CGRreactor):
         with (Path(__file__).parent / 'aromatize.rdf').open() as f:
             raw_templates = RDFread(f).read()
         self.__searcher = self.get_template_searcher(self.get_templates(raw_templates))
-        #todo: Implement optimizations!
 
-    def get(self, g):
+    def get(self, g, copy=False):
+        if copy:
+            g = g.copy()
+
         flag = False
         while True:
-            patch = next(self.__searcher(g), None)
-            if patch:
-                g = patcher(patch)
-                flag = True
-            else:
-                break
-        return g, flag
+            searcher = self.__searcher(g)
+            first_match = next(searcher, None)
+            if not first_match:
+                return g, flag
+
+            flag = True
+            g = patcher(g, first_match.patch)
+
+            for match in searcher:
+                g = patcher(g, match.patch)

@@ -26,6 +26,7 @@ from .strings import get_morgan, get_cgr_string, hash_cgr_string
 
 
 CGRTemplate = namedtuple('CGRTemplate', ['substrats', 'products', 'meta'])
+MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
 
 
 class MergedReaction(namedtuple('MergedReaction', ['substrats', 'products'])):

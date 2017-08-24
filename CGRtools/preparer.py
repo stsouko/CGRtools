@@ -264,7 +264,10 @@ class CGRbalancer(CGRreactor):
         templates = [ReactionContainer.unpickle(x) for x in config.pop('templates')]
         return cls(templates, **{k: v for k, v in config.items() if k in args})
 
-    def prepare(self, g):
+    def prepare(self, g, copy=False):
+        if copy:
+            g = g.copy()
+
         if self.__searcher is None:
             self.__searcher = self.get_template_searcher(self.get_templates(self.__templates))
 
@@ -273,13 +276,19 @@ class CGRbalancer(CGRreactor):
             g = self.clone_subgraphs(g)
 
         while True:
-            match = next(self.__searcher(g), None)
-            if match:
-                g = patcher(match)
-                if 'CGR_TEMPLATE' in match['meta']:
-                    report.append(match['meta']['CGR_TEMPLATE'])
-            else:
+            searcher = self.__searcher(g)
+            first_match = next(searcher, None)
+            if not first_match:
                 g.graph.setdefault('CGR_REPORT', []).extend(report)
                 return g
+
+            g = patcher(g, first_match.patch)
+            if 'CGR_TEMPLATE' in first_match.meta:
+                report.append(first_match.meta['CGR_TEMPLATE'])
+
+            for match in searcher:
+                g = patcher(g, match.patch)
+                if 'CGR_TEMPLATE' in match.meta:
+                    report.append(match.meta['CGR_TEMPLATE'])
 
     __searcher = None
