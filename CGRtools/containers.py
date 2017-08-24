@@ -211,7 +211,7 @@ class MoleculeContainer(Graph):
         """
         g = self.copy() if copy else self
         for i in g.nodes():
-            label = {'s_hyb': 1, 'p_hyb': 1, 'sp_hyb': 1, 's_neighbors': 0, 'p_neighbors': 0, 'sp_neighbors': 0}
+            label = dict(s_hyb=1, p_hyb=1, sp_hyb=1, s_neighbors=0, p_neighbors=0, sp_neighbors=0)
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
                 for node, bond in g[i].items():

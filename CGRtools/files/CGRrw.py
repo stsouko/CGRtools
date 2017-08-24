@@ -285,9 +285,9 @@ class CGRread:
                 a = elements.symbol(l['element'])
                 g.nodes[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
 
-            if l['z'] != 0:
+            if mdl_s_stereo and l['z'] != 0:
                 mdl_s_stereo = False
-            if abs(p_z) > .0001:
+            if mdl_p_stereo and abs(p_z) > .0001:
                 mdl_p_stereo = False
 
         for k, l, m, s in molecule['bonds']:
