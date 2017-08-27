@@ -116,11 +116,11 @@ class CGRcombo(CGRcore):
                 for n, m, edge_attr in mol.edges(data=True):
                     for i, j in self.__attrcompose['edges'][category].items():
                         if j in edge_attr:
-                            mol[n][m][i] = edge_attr[j]
+                            edge_attr[i] = edge_attr[j]
                 for n, node_attr in mol.nodes(data=True):
                     for i, j in self.__attrcompose['nodes'][category].items():
                         if j in node_attr:
-                            mol.node[n][i] = node_attr[j]
+                            node_attr[i] = node_attr[j]
                 mol.fix_sp_marks()
                 tmp[category].append(mol)
         return tmp

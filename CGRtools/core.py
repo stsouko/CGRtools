@@ -55,11 +55,12 @@ class CGRcore(object):
         """ remove bond, neighbors and hybridization states for common atoms.
         """
         for i, g in (('substrats', m1), ('products', m2)):
-            ext_common = set()
+            ext_common = common.copy()
             pop = cls.__popdict[i]['edge']
             s_pop = cls.__popdict[i]['stereo']
             for n, m, attr in g.edges(common, data=True):
-                ext_common.update([n, m])
+                ext_common.add(n)
+                ext_common.add(m)
                 bond = attr.get(pop)
                 if bond:
                     h.add_edge(n, m, **{pop: bond})
