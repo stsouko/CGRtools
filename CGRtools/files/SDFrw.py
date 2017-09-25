@@ -109,7 +109,7 @@ class SDFread(CGRread):
                         molecule = None
                         print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
                 elif line.startswith('>  <'):
-                    mkey = line.rtrip()[4:-1].strip()
+                    mkey = line.rstrip()[4:-1].strip()
                     if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
                                 'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
                         target = 'colors'
