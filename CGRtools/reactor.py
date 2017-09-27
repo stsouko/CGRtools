@@ -22,41 +22,9 @@ from functools import reduce
 from itertools import product, combinations
 from networkx import Graph, compose, has_path
 from networkx.algorithms import isomorphism as gis
+from warnings import warn
 from .containers import CGRTemplate, MatchContainer
 from .core import CGRcore
-
-
-def patcher(structure, patch):
-    """ remove edges bw common nodes. add edges from template and replace nodes data
-    :param structure: MoleculeContainer
-    :param patch: MoleculeContainer with replacement data
-    """
-    s = structure.copy()
-    p = patch.copy()
-
-    common = set(p).intersection(s)
-    for i in common:
-        pni = p.nodes[i]
-        for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(pni):
-            if isinstance(pni[j], dict):
-                pni[j] = pni[j][s.nodes[i][j]]
-
-    for m, n, a in p.edges(data=True):
-        if m in common and n in common:
-            for j in {'s_bond', 'p_bond'}.intersection(a):
-                if isinstance(a[j], dict):
-                    a[j] = a[j][s[m][n][j]]
-
-    s.remove_edges_from(combinations(common, 2))
-    composed = compose(s, p)
-    composed.meta.update(s.meta)
-
-    for (a1, a2), x in s._stereo_dict.items():
-        if s.has_edge(a1, a2):
-            composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
-    for (a1, a2), x in p._stereo_dict.items():
-        composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
-    return composed
 
 
 class CGRreactor(object):
@@ -236,3 +204,41 @@ class CGRreactor(object):
 
             templates.append(CGRTemplate(substrats, products, template.meta.copy()))
         return templates
+
+    @staticmethod
+    def patcher(structure, patch):
+        """ remove edges bw common nodes. add edges from template and replace nodes data
+        :param structure: MoleculeContainer
+        :param patch: MoleculeContainer with replacement data
+        """
+        s = structure.copy()
+        p = patch.copy()
+
+        common = set(p).intersection(s)
+        for i in common:
+            pni = p.nodes[i]
+            for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(pni):
+                if isinstance(pni[j], dict):
+                    pni[j] = pni[j][s.nodes[i][j]]
+
+        for m, n, a in p.edges(data=True):
+            if m in common and n in common:
+                for j in {'s_bond', 'p_bond'}.intersection(a):
+                    if isinstance(a[j], dict):
+                        a[j] = a[j][s[m][n][j]]
+
+        s.remove_edges_from(combinations(common, 2))
+        composed = compose(s, p)
+        composed.meta.update(s.meta)
+
+        for (a1, a2), x in s._stereo_dict.items():
+            if s.has_edge(a1, a2):
+                composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
+        for (a1, a2), x in p._stereo_dict.items():
+            composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
+        return composed
+
+
+def patcher(*args, **kwargs):
+    warn('patcher moved to CGRreactor. use patcher static method.', DeprecationWarning)
+    return CGRreactor.patcher(*args, **kwargs)

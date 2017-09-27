@@ -23,7 +23,7 @@ from collections import defaultdict
 from periodictable import elements
 from ..containers import ReactionContainer, MoleculeContainer
 
-fromMDL = {0: 0, 1: 3, 2: 2, 3: 1, 4: 0, 5: -1, 6: -2, 7: -3}
+fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
 mendeleyset = set(x.symbol for x in elements)
 
 
@@ -35,25 +35,34 @@ class FinalizedFile(Exception):
     pass
 
 
+class InvalidData(Exception):
+    pass
+
+
+class MapError(Exception):
+    pass
+
+
 class CGRread:
-    def __init__(self, remap):
+    def __init__(self, remap, ignore=False):
         self.__remap = remap
+        self.__ignore = ignore
         self.__prop = {}
 
     def _collect(self, line):
         if line.startswith('M  ALS'):
-            self.__prop[line[3:10]] = dict(atoms=[int(line[7:10])],
+            self.__prop[line[3:10]] = dict(atoms=(int(line[7:10]),),
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif line.startswith('M  ISO'):
-            self.__prop[line[3:10]] = dict(atoms=[int(line[10:13])], type='isotope', value=line[14:17].strip())
+            self.__prop[line[3:10]] = dict(atoms=(int(line[10:13]),), type='isotope', value=line[14:17].strip())
 
         elif line.startswith('M  STY'):
             for i in range(int(line[8])):
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
                     self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
         elif line.startswith('M  SAL') and int(line[7:10]) in self.__prop:
-            self.__prop[int(line[7:10])]['atoms'] = [int(line[14 + 4 * i:17 + 4 * i]) for i in range(int(line[10:13]))]
+            self.__prop[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i]) for i in range(int(line[10:13])))
         elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
             key = line.split()[-1].lower()
             if key not in self.__cgrkeys:
@@ -76,29 +85,54 @@ class CGRread:
         return prop
 
     def _get_reaction(self, reaction):
-        maps = {'substrats': [y['map'] for x in reaction['substrats'] for y in x['atoms']],
-                'products': [y['map'] for x in reaction['products'] for y in x['atoms']]}
-        length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0))) + 1)
+        spmaps = None
+        maps = {}
+        for i in ('substrats', 'products', 'reactants'):
+            maps[i] = tmp = []
+            for m in reaction[i]:
+                mm = []
+                for a in m['atoms']:
+                    am = a['map']
+                    if am and am in mm:
+                        if not self.__ignore:
+                            raise MapError('mapping in molecules should be unique')
+                        am = 0  # force unmap non unique atoms in molecules.
+                    mm.append(am)
+                tmp.extend(mm)
 
-        ''' map unmapped atoms
-        '''
-        for i in ('substrats', 'products'):
-            if 0 in maps[i]:
-                maps[i] = [j or next(length) for j in maps[i]]
+        length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0),
+                            max(maps['reactants'], default=0))) + 1)
 
-            if len(maps[i]) != len(set(maps[i])):
-                raise Exception("MapError")
-        ''' end
+        ''' map unmapped atoms.
         '''
+        for i in ('substrats', 'products', 'reactants'):
+            mi = maps[i]
+            if 0 in mi:
+                maps[i] = mi = [x or next(length) for x in mi]
+
+            if not self.__ignore and mi and len(mi) != len(set(mi)):
+                raise MapError('mapping in substrats or products or reactants should be unique')
+
+        if maps['reactants']:
+            spmaps = maps['substrats'] + maps['products']
+            d = set(maps['reactants']).intersection(spmaps)
+            if d:
+                if not self.__ignore:
+                    raise MapError('reactants has map intersection with substrats or products')
+                maps['reactants'] = [x if x not in d else next(length) for x in maps['reactants']]
+
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
         if self.__remap:
-            lose = sorted(set(range(1, next(length))).difference(maps['products']).difference(maps['substrats']),
-                          reverse=True)
+            lose = sorted(set(range(1, next(length)))
+                          .difference(spmaps or maps['substrats'] + maps['products'])
+                          .difference(maps['reactants']), reverse=True)
             if lose:
-                for k in ('substrats', 'products'):
-                    for i in lose:
-                        maps[k] = [j if j < i else j - 1 for j in maps[k]]
+                for i in ('substrats', 'products', 'reactants'):
+                    if not maps[i]:
+                        continue
+                    for j in lose:
+                        maps[i] = [x if x < j else x - 1 for x in maps[i]]
         ''' end
         '''
         rc = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
@@ -109,7 +143,7 @@ class CGRread:
             colors[int(mol_num)][color_type] = v
 
         counter = count(1)
-        for i in ('substrats', 'products'):
+        for i in ('substrats', 'products', 'reactants'):
             shift = 0
             for j in reaction[i]:
                 atom_len = len(j['atoms'])

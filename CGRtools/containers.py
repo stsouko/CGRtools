@@ -22,8 +22,7 @@ from collections import namedtuple
 from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from .strings import get_morgan, get_cgr_string, hash_cgr_string
-
+from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
 
 CGRTemplate = namedtuple('CGRTemplate', ['substrats', 'products', 'meta'])
 MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
@@ -39,6 +38,16 @@ class MoleculeContainer(Graph):
         super(MoleculeContainer, self).__init__()
         if isinstance(meta, dict):
             self.__meta = meta
+
+        self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.subgraph.__name__,
+                          self.remap.__name__, self.add_stereo.__name__, self.get_morgan.__name__,
+                          self.get_fear.__name__, self.get_fear_hash.__name__, self.get_center_atoms.__name__,
+                          self.get_environment.__name__, self.fix_sp_marks.__name__, self.reset_query_marks.__name__,
+                          self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
+                          'meta', 'stereo', 'bonds_count', 'atoms_count']  # properties names inaccessible
+
+    def __dir__(self):
+        return self.__visible
 
     def pickle(self, compress=True):
         """ return json serializable CGR
@@ -174,16 +183,75 @@ class MoleculeContainer(Graph):
 
         return list(nodes)
 
+    def __getitem__(self, item):
+        if isinstance(item, tuple):
+            a, b = item
+            if isinstance(a, slice) or isinstance(b, slice):
+                raise Exception('slices unsupported')
+            return super().__getitem__(item[0])[item[1]]
+        elif not isinstance(item, slice):
+            return self.nodes[item]
+        else:
+            raise Exception('slices unsupported')
+
+    def add_atom(self, element, mapping=None, s_charge=0, p_charge=None, mark='0',
+                 s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+        if mapping is None:
+            mapping = max(self, default=0) + 1
+        elif mapping in self:
+            raise Exception('mapping exists')
+
+        # todo: charges and elements checks.
+
+        if p_charge is None:
+            p_charge = s_charge
+        if p_x is None:
+            p_x = s_x
+        if p_y is None:
+            p_y = s_y
+        if p_z is None:
+            p_z = s_z
+
+        self.add_node(mapping, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
+                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z)
+
+    def add_bond(self, atom1, atom2, s_bond=1, p_bond=1):
+        if atom1 not in self or atom2 not in self:
+            raise Exception('atoms not found')
+        attr = {}
+        if s_bond:
+            attr['s_bond'] = s_bond
+        if p_bond:
+            attr['p_bond'] = p_bond
+        self.add_edge(atom1, atom2, **attr)
+
+    def bond(self, atom1, atom2):
+        return super().__getitem__(atom1)[atom2]
+
+    def atom(self, n):
+        return self.nodes[n]
+
+    @property
+    def bonds_count(self):
+        return self.size()
+
+    @property
+    def atoms_count(self):
+        return self.order()
+
     def get_environment(self, atoms, dante=False, deep=0):
         """ get subgraph with atoms and their neighbors
         :param atoms: list of core atoms in graph
         :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd, 
-        etc up to deep
+        etc up to deep or while new nodes available.
         :param deep: number of bonds between atoms and neighbors. 
         """
-        nodes = [atoms]
+        nodes = [set(atoms)]
         for i in range(deep):
-            nodes.append(set(chain.from_iterable(self.edges(nodes[i]))) or nodes[i])
+            n = set(chain.from_iterable(self.edges(nodes[i])))
+            if not n or n in nodes:
+                break
+            nodes.append(n)
 
         if dante:
             centers = [self.subgraph(a) for a in nodes]
@@ -197,8 +265,14 @@ class MoleculeContainer(Graph):
 
     def fix_sp_marks(self, copy=False, nodes_bunch=None, edges_bunch=None):
         g = self.copy() if copy else self
-        for n, a in g.nodes(data=True) if nodes_bunch is None else ((x, g.nodes[x]) for x in nodes_bunch):
-            a.update(self.__attr_renew(a, self.__node_marks))
+        if nodes_bunch is None:
+            for _, a in g.nodes(data=True):
+                a.update(self.__attr_renew(a, self.__node_marks))
+        else:
+            for x in g.nbunch_iter(nodes_bunch):
+                a = g.nodes[x]
+                a.update(self.__attr_renew(a, self.__node_marks))
+
         for *_, a in g.edges(nbunch=edges_bunch, data=True):
             a.update(self.__attr_renew(a, (('s_bond', 'p_bond', 'sp_bond'),)))
         return g if copy else None
@@ -206,11 +280,11 @@ class MoleculeContainer(Graph):
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms. 
-        :param copy: if True return copy of graph and keep existing without marks
+        :param copy: if True return copy of graph and keep existing as is
         :return: graph if copy True else None
         """
         g = self.copy() if copy else self
-        for i in g.nodes():
+        for i in g:
             label = dict(s_hyb=1, p_hyb=1, sp_hyb=1, s_neighbors=0, p_neighbors=0, sp_neighbors=0)
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
@@ -224,7 +298,8 @@ class MoleculeContainer(Graph):
                         label[h] = 4
                     elif b_type == 3 or (b_type == 2 and label[h] == 2):  # Если есть 3-я или две 2-х связи, то sp1
                         label[h] = 3
-                    elif b_type == 2:  # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
+                    elif b_type == 2 and label[h] != 3:
+                        # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
                         label[h] = 2
 
             for n, m, h in (('s_hyb', 'p_hyb', 'sp_hyb'), ('s_neighbors', 'p_neighbors', 'sp_neighbors')):
@@ -270,43 +345,66 @@ class MoleculeContainer(Graph):
                 new_attr[sp] = ls
         return new_attr
 
-    __node_marks = [('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'charge')]
-    __tmp_node = ['element', 'isotope', 'mark', 's_x', 's_y', 's_z']
-    __node_s = [x for x, *_ in __node_marks] + __tmp_node
-    __node_sp = [y for x in __node_marks for y in x[:2]] + __tmp_node + ['p_x', 'p_y', 'p_z']
+    __node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'charge'))
+    __tmp_node = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
+    __node_s = tuple(chain((x for x, *_ in __node_marks), __tmp_node))
+    __node_sp = tuple(chain((y for x in __node_marks for y in x[:2]), __tmp_node, ('p_x', 'p_y', 'p_z')))
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     __stereo = __meta = __stereo_dict = None
 
 
-class ReactionContainer(dict):
-    def __init__(self, substrats=None, products=None, meta=None):
-        super(ReactionContainer, self).__init__(substrats=substrats or [], products=products or [], meta=meta or {})
+class ReactionContainer(object):
+    __slots__ = ('__substrats', '__products', '__reactants', '__meta')
+
+    def __init__(self, substrats=None, products=None, reactants=None, meta=None):
+        self.__substrats = substrats or []
+        self.__products = products or []
+        self.__reactants = reactants or []
+        self.__meta = meta or {}
+
+    def __getitem__(self, item):
+        if item == 'substrats':
+            return self.__substrats
+        elif item == 'products':
+            return self.__products
+        elif item == 'reactants':
+            return self.__reactants
+        elif item == 'meta':
+            return self.__meta
+        else:
+            raise Exception('Invalid key')
 
     def pickle(self):
         """ return json serializable reaction
         """
-        return dict(substrats=[x.pickle() for x in self.substrats], meta=self.meta,
-                    products=[x.pickle() for x in self.products])
+        return dict(substrats=[x.pickle() for x in self.__substrats], meta=self.meta,
+                    products=[x.pickle() for x in self.__products], reactants=[x.pickle() for x in self.__reactants])
 
     @staticmethod
     def unpickle(data):
         """ convert json serializable reaction into ReactionContainer object instance 
         """
         return ReactionContainer(substrats=[MoleculeContainer.unpickle(x) for x in data['substrats']],
-                                 products=[MoleculeContainer.unpickle(x) for x in data['products']], meta=data['meta'])
+                                 products=[MoleculeContainer.unpickle(x) for x in data['products']], meta=data['meta'],
+                                 reactants=[MoleculeContainer.unpickle(x) for x in data.get('reactants', [])])
 
     @property
     def substrats(self):
-        return self['substrats']
+        return self.__substrats
 
     @property
     def products(self):
-        return self['products']
+        return self.__products
+
+    @property
+    def reactants(self):
+        return self.__reactants
 
     @property
     def meta(self):
-        return self['meta']
+        return self.__meta
 
     def copy(self):
-        return ReactionContainer(substrats=[x.copy() for x in self['substrats']], meta=self['meta'].copy(),
-                                 products=[x.copy() for x in self['products']])
+        return ReactionContainer(substrats=[x.copy() for x in self.__substrats], meta=self.__meta.copy(),
+                                 products=[x.copy() for x in self.__products],
+                                 reactants=[x.copy() for x in self.__reactants])

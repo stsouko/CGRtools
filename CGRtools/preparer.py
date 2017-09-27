@@ -20,12 +20,13 @@
 #
 from functools import reduce
 from networkx.algorithms import isomorphism as gis
+from warnings import warn
 from .containers import MoleculeContainer, ReactionContainer, MergedReaction
 from .core import CGRcore
 from .reactor import CGRreactor, patcher
 
 
-class CGRcombo(CGRcore):
+class CGRpreparer(CGRcore):
     def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
                  isotope=False, element=True, stereo=False):
         if b_templates:
@@ -75,7 +76,7 @@ class CGRcombo(CGRcore):
         obj._init_unpickle(**{k: v for k, v in config.items() if k in args})
         return obj
 
-    def getCGR(self, data):
+    def condense(self, data):
         """
         condense reaction container to cgr molecule container.
         :param data: reaction container or merge_mols structure.
@@ -108,7 +109,7 @@ class CGRcombo(CGRcore):
 
         return g
 
-    def dissCGR(self, g):
+    def dissociate(self, g):
         tmp = ReactionContainer(meta=g.meta)
         for category, (edge, pattern) in self.__diss_template.items():
             components, _ = CGRreactor.get_bond_broken_graph(g, pattern, gis.categorical_edge_match(edge, None))
@@ -238,6 +239,14 @@ class CGRcombo(CGRcore):
                          nodes=dict(substrats=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
                                     products=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb')))
 
+    def getCGR(self, data):  # Reverse compatibility
+        warn('getCGR name is deprecated. use condense instead', DeprecationWarning)
+        return self.condense(data)
+
+    def dissCGR(self, data):  # Reverse compatibility
+        warn('dissCGR name is deprecated. use dissociate instead', DeprecationWarning)
+        return self.dissociate(data)
+
 
 class CGRbalancer(CGRreactor):
     def __init__(self, templates, balance_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
@@ -245,6 +254,7 @@ class CGRbalancer(CGRreactor):
 
         self.__templates = templates
         self.__balance_groups = balance_groups
+        self.__searcher = self.get_template_searcher(self.get_templates(templates))
 
     def pickle(self):
         """ return config. for pickling
@@ -268,9 +278,6 @@ class CGRbalancer(CGRreactor):
         if copy:
             g = g.copy()
 
-        if self.__searcher is None:
-            self.__searcher = self.get_template_searcher(self.get_templates(self.__templates))
-
         report = []
         if self.__balance_groups:
             g = self.clone_subgraphs(g)
@@ -291,4 +298,5 @@ class CGRbalancer(CGRreactor):
                 if 'CGR_TEMPLATE' in match.meta:
                     report.append(match.meta['CGR_TEMPLATE'])
 
-    __searcher = None
+
+CGRcombo = CGRpreparer  # Reverse compatibility

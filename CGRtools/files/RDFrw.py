@@ -22,15 +22,15 @@ from itertools import chain
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, InvalidData
 from ..containers import MoleculeContainer
 
 
 class RDFread(CGRread):
-    def __init__(self, file, remap=True):
+    def __init__(self, file, remap=True, ignore=False):
         self.__file = file
         self.__data = self.__reader()
-        CGRread.__init__(self, remap)
+        CGRread.__init__(self, remap, ignore=ignore)
 
     def read(self):
         return list(self.__data)
@@ -42,15 +42,9 @@ class RDFread(CGRread):
         return next(self.__data)
 
     def __reader(self):
-        ir = -1
-        im = -1
-        atomcount = -1
-        bondcount = -1
-        failkey = True
-        reaction = None
-        isreaction = True
-        mkey = None
-        mend = False
+        ir = im = atomcount = bondcount = n = substrats = products = spr = molcount = -1
+        failkey = isreaction = True
+        reaction = molecule = mkey = None
         for n, line in enumerate(self.__file):
             if failkey and not line.startswith(("$RFMT", "$MFMT")):
                 continue
@@ -60,82 +54,92 @@ class RDFread(CGRread):
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
-                reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
                 isreaction = True
-                mkey = None
                 ir = n + 5
                 failkey = False
+                reaction = mkey = None
             elif line.startswith("$MFMT"):
                 if reaction:
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
-                reaction = {'substrats': [], 'products': [], 'meta': {}, 'colors': {}}
-                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}}
-                isreaction = False
-                substrats, products = 1, 0
+                reaction = dict(substrats=[], products=[], reactants=[], meta={}, colors={})
+                substrats, products, spr, molcount = 1, 1, 1, 1
                 mkey = None
-                mend = False
+                failkey = isreaction = False
                 im = n + 4
                 ir = -1
-                failkey = False
             elif n == ir:
                 try:
-                    substrats, products = int(line[:3]), int(line[3:6])
+                    substrats = int(line[:3])
+                    products = int(line[3:6]) + substrats
+                    spr = int(line[6:].rstrip() or 0) + products
+                    reaction = dict(substrats=[], products=[], reactants=[], meta={}, colors={})
+                    molcount = 0
                 except ValueError:
                     failkey = True
-                    reaction = None
+                    reaction = molecule = None
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-            elif line.startswith("$MOL"):
-                molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}}
-                im = n + 4
-                mend = False
-            elif n == im:
-                try:
-                    atoms = int(line[0:3])
-                    if not atoms:
-                        raise EmptyMolecule('Molecule without atoms')
-                    atomcount = atoms + im
-                    bondcount = int(line[3:6]) + atomcount
-                except (EmptyMolecule, ValueError):
-                    failkey = True
-                    reaction = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-            elif n <= atomcount:
-                try:
-                    molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                                  charge=fromMDL[int(line[38:39])],
-                                                  map=int(line[60:63]), mark=line[54:57].strip(),
-                                                  x=float(line[:10]), y=float(line[10:20]), z=float(line[20:30])))
-                except ValueError:
-                    failkey = True
-                    reaction = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-            elif n <= bondcount:
-                try:
-                    molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
-                except ValueError:
-                    failkey = True
-                    reaction = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-            elif line.startswith("M  END"):
-                mend = True
-                molecule['CGR_DAT'] = self._get_collected()
-                if len(reaction['substrats']) < substrats:
-                    reaction['substrats'].append(molecule)
-                elif len(reaction['products']) < products:
-                    reaction['products'].append(molecule)
-
-            elif n > bondcount:
-                if not mend:
+            elif reaction:
+                if line.startswith("$MOL"):
                     try:
-                        self._collect(line)
-                    except ValueError:
-                        self._flush_collected()
+                        if molcount == spr:
+                            raise InvalidData('More then defined molecules')
+                    except InvalidData:
                         failkey = True
-                        reaction = None
+                        reaction = molecule = None
                         print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+
+                    molcount += 1
+                    im = n + 4
+                elif n == im:
+                    try:
+                        atoms = int(line[0:3])
+                        if not atoms:
+                            raise EmptyMolecule('Molecule without atoms')
+                        atomcount = atoms + im
+                        bondcount = int(line[3:6]) + atomcount
+                        molecule = dict(atoms=[], bonds=[], CGR_DAT={})
+                    except (EmptyMolecule, ValueError):
+                        failkey = True
+                        reaction = molecule = None
+                        print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                elif molecule:
+                    if n <= atomcount:
+                        try:
+                            molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
+                                                          charge=fromMDL[int(line[38:39])],
+                                                          map=int(line[60:63]), mark=line[54:57].strip(),
+                                                          x=float(line[:10]), y=float(line[10:20]), z=float(line[20:30])))
+                        except ValueError:
+                            failkey = True
+                            reaction = molecule = None
+                            print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                    elif n <= bondcount:
+                        try:
+                            molecule['bonds'].append((int(line[:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
+                        except ValueError:
+                            failkey = True
+                            reaction = molecule = None
+                            print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                    elif line.startswith("M  END"):
+                        molecule['CGR_DAT'] = self._get_collected()
+                        if molcount <= substrats:
+                            reaction['substrats'].append(molecule)
+                        elif molcount <= products:
+                            reaction['products'].append(molecule)
+                        else:
+                            reaction['reactants'].append(molecule)
+                        molecule = None
+                    else:
+                        try:
+                            self._collect(line)
+                        except ValueError:
+                            self._flush_collected()
+                            failkey = True
+                            reaction = molecule = None
+                            print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
 
                 elif line.startswith('$DTYPE'):
                     mkey = line[7:].strip()
@@ -162,7 +166,7 @@ class RDFread(CGRread):
         molecule = reaction['substrats'][0]
         molecule['meta'] = reaction['meta']
         molecule['colors'] = reaction['colors']
-        return super(RDFread, self)._get_molecule(molecule)
+        return super()._get_molecule(molecule)
 
 
 class RDFwrite(CGRwrite):
