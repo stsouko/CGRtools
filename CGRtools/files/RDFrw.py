@@ -109,9 +109,9 @@ class RDFread(CGRread):
                     if n <= atomcount:
                         try:
                             molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                                          charge=fromMDL[int(line[38:39])],
-                                                          map=int(line[60:63]), mark=line[54:57].strip(),
-                                                          x=float(line[:10]), y=float(line[10:20]), z=float(line[20:30])))
+                                                          charge=fromMDL[int(line[38:39])], map=int(line[60:63]),
+                                                          mark=line[54:57].strip(), x=float(line[:10]),
+                                                          y=float(line[10:20]), z=float(line[20:30])))
                         except ValueError:
                             failkey = True
                             reaction = molecule = None

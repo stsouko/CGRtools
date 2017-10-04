@@ -19,11 +19,10 @@
 #  MA 02110-1301, USA.
 #
 from functools import reduce
-from networkx.algorithms import isomorphism as gis
 from warnings import warn
 from .containers import MoleculeContainer, ReactionContainer, MergedReaction
 from .core import CGRcore
-from .reactor import CGRreactor, patcher
+from .reactor import CGRreactor
 
 
 class CGRpreparer(CGRcore):
@@ -49,7 +48,6 @@ class CGRpreparer(CGRcore):
         self.__init_common(cgr_type, extralabels, isotope, element, stereo)
 
     def __init_common(self, cgr_type, extralabels, isotope, element, stereo):
-        self.__diss_template = self.__diss_center()
         self.__cgr_type = self.__get_cgr_type(cgr_type)
         self.__extralabels = extralabels
         self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
@@ -111,9 +109,12 @@ class CGRpreparer(CGRcore):
 
     def dissociate(self, g):
         tmp = ReactionContainer(meta=g.meta)
-        for category, (edge, pattern) in self.__diss_template.items():
-            components, _ = CGRreactor.get_bond_broken_graph(g, pattern, gis.categorical_edge_match(edge, None))
-            for mol in components:
+        for category, edge in (('substrats', 's_bond'), ('products', 'p_bond')):
+            x = g.copy()
+            for n, m in list(self.__get_broken_paths(x, edge)):
+                x.remove_edge(n, m)
+
+            for mol in self.split(x):
                 for n, m, edge_attr in mol.edges(data=True):
                     for i, j in self.__attrcompose['edges'][category].items():
                         if j in edge_attr:
@@ -150,13 +151,10 @@ class CGRpreparer(CGRcore):
         return res
 
     @staticmethod
-    def __diss_center():
-        g1 = MoleculeContainer()
-        g2 = MoleculeContainer()
-
-        g1.add_edges_from([(1, 2, dict(s_bond=None))])
-        g2.add_edges_from([(1, 2, dict(p_bond=None))])
-        return dict(substrats=('s_bond', [g1]), products=('p_bond', [g2]))
+    def __get_broken_paths(g, edge):
+        for m, n, attr in g.edges(data=True):
+            if attr.get(edge) is None:
+                yield n, m
 
     def __get_cgr_type(self, _type):
         needed = [int(x) for x in _type.split(',')]
@@ -289,14 +287,22 @@ class CGRbalancer(CGRreactor):
                 g.graph.setdefault('CGR_REPORT', []).extend(report)
                 return g
 
-            g = patcher(g, first_match.patch)
+            g = CGRreactor.patcher(g, first_match.patch)
             if 'CGR_TEMPLATE' in first_match.meta:
                 report.append(first_match.meta['CGR_TEMPLATE'])
 
             for match in searcher:
-                g = patcher(g, match.patch)
+                g = CGRreactor.patcher(g, match.patch)
                 if 'CGR_TEMPLATE' in match.meta:
                     report.append(match.meta['CGR_TEMPLATE'])
 
 
-CGRcombo = CGRpreparer  # Reverse compatibility
+class CGRcombo(object):  # Reverse compatibility
+    def __new__(cls, *args, **kwargs):
+        warn('CGRcombo deprecated. use CGRpreparer instead')
+        return CGRpreparer(*args, **kwargs)
+
+    @classmethod
+    def unpickle(cls, *args, **kwargs):
+        warn('CGRcombo deprecated. use CGRpreparer instead')
+        return CGRpreparer.unpickle(*args, **kwargs)

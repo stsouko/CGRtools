@@ -21,16 +21,17 @@
 from sys import stderr
 from traceback import format_exc
 from ..files.RDFrw import RDFread, RDFwrite
-from ..preparer import CGRcombo
+from ..preparer import CGRpreparer
 
 
 def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
-                      b_templates=RDFread(kwargs['b_templates']).read(), isotope=kwargs['isotope'],
-                      m_templates=RDFread(kwargs['m_templates']).read(), element=kwargs['element'])
+    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
+                         b_templates=RDFread(kwargs['b_templates']).read() if kwargs['b_templates'] else None,
+                         m_templates=RDFread(kwargs['m_templates']).read() if kwargs['m_templates'] else None,
+                         isotope=kwargs['isotope'], element=kwargs['element'])
 
     err = 0
     num = 0

@@ -20,10 +20,10 @@
 #
 from functools import reduce
 from itertools import product, combinations
-from networkx import Graph, compose, has_path
+from networkx import compose, has_path
 from networkx.algorithms import isomorphism as gis
 from warnings import warn
-from .containers import CGRTemplate, MatchContainer
+from .containers import CGRTemplate, MatchContainer, MoleculeContainer
 from .core import CGRcore
 
 
@@ -31,9 +31,7 @@ class CGRreactor(object):
     """ CGR isomorphism based operations
     """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
-        self.__rc_template = self.__reaction_center()
-
-        gnm_sp, gem_sp, pcem, pcnm = [], ['sp_bond'], ['p_bond'], ['element', 'p_charge']
+        gnm_sp, pcnm = [], ['element', 'p_charge']
         if isotope:
             gnm_sp.append('isotope')
             pcnm.append('isotope')
@@ -44,11 +42,10 @@ class CGRreactor(object):
             gnm_sp.append('sp_hyb')
 
         self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
-        self.__edge_match = gis.generic_node_match(gem_sp, [None] * len(gem_sp), [self.__list_eq] * len(gem_sp))
-
         self.__node_match_products = gis.categorical_node_match(pcnm, [None] * len(pcnm))
-        self.__edge_match_products = gis.categorical_edge_match(pcem, [None] * len(pcem))
-        self.__edge_match_only_bond = gis.categorical_edge_match(['s_bond', 'p_bond'], [None] * 2)
+
+        self.__edge_match = gis.generic_node_match('sp_bond', None, self.__list_eq)
+        self.__edge_match_products = gis.categorical_edge_match('p_bond', None)
 
         self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
 
@@ -66,14 +63,6 @@ class CGRreactor(object):
             raise Exception('Invalid config')
         return cls(**{k: v for k, v in config.items() if k in args})
 
-    @staticmethod
-    def __reaction_center():
-        g1 = Graph()
-        g2 = Graph()
-        g1.add_edges_from([(1, 2, dict(s_bond=1, p_bond=None)), (2, 3, dict(s_bond=None, p_bond=1))])
-        g2.add_edges_from([(1, 2, dict(s_bond=None, p_bond=1))])
-        return [g1, g2]
-
     def get_cgr_matcher(self, g, h):
         return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
 
@@ -85,7 +74,7 @@ class CGRreactor(object):
             for i in templates:
                 gm = self.get_cgr_matcher(g, i.substrats)
                 for j in gm.subgraph_isomorphisms_iter():
-                    matched_atoms = set(j.keys())
+                    matched_atoms = set(j)
                     if skip_intersection:
                         if found.intersection(matched_atoms):
                             continue
@@ -97,22 +86,50 @@ class CGRreactor(object):
 
         return searcher
 
-    @staticmethod
-    def get_bond_broken_graph(g, rc_templates, edge_match):
+    @classmethod
+    def __split_graph(cls, g):
         g = g.copy()
-        lose_bonds = {}
-        for i in rc_templates:
-            gm = gis.GraphMatcher(g, i, edge_match=edge_match)
-            for j in gm.subgraph_isomorphisms_iter():
-                mapping = {y: x for x, y in j.items()}
-                if 3 in mapping:
-                    lose_bonds[(mapping[2], mapping[1])] = g[mapping[1]][mapping[2]]
-                    g.remove_edge(mapping[2], mapping[3])
-                    g.remove_edge(mapping[1], mapping[2])
-                elif not any(has_path(g, *x) for x in product((y for x in lose_bonds for y in x), mapping.values())):
-                    # запилить проверку связности атомов 1 или 2 с lose_map атомами
-                    g.remove_edge(mapping[1], mapping[2])
-        return CGRcore.split(g), lose_bonds
+        lost_bonds = []
+        term_atoms = []
+
+        for l, n, m in list(cls.__get_substitution_paths(g)):
+            nl = (n, l)
+            if nl in lost_bonds:
+                continue
+
+            lost_bonds.append(nl)
+            g.remove_edge(n, l)
+            g.remove_edge(n, m)
+
+        for n, m in list(cls.__get_broken_paths(g)):
+            if not any(has_path(g, *x) for x in product((y for x in lost_bonds for y in x), (n, m))):
+                g.remove_edge(n, m)
+                term_atoms.append(n)
+                term_atoms.append(m)
+
+        return CGRcore.split(g), lost_bonds, term_atoms
+
+    @staticmethod
+    def __get_substitution_paths(g):
+        """
+        get atoms paths from detached atom to attached
+        :param g: MoleculeContainer
+        :return: tuple of atoms numbers
+        """
+        for n, nbrdict in g.adjacency():
+            for m, l in combinations(nbrdict, 2):
+                nms = nbrdict[m]['sp_bond']
+                nls = nbrdict[l]['sp_bond']
+                if nms == (1, None) and nls == (None, 1):
+                    yield m, n, l
+                elif nms == (None, 1) and nls == (1, None):
+                    yield l, n, m
+
+    @staticmethod
+    def __get_broken_paths(g):
+        for m, n, attr in g.edges(data=True):
+            if attr['sp_bond'] == (None, 1):
+                yield n, m
 
     def clone_subgraphs(self, g):
         r_group = []
@@ -122,44 +139,50 @@ class CGRreactor(object):
 
         ''' search bond breaks and creations
         '''
-        components, lose_bonds = self.get_bond_broken_graph(g, self.__rc_template, self.__edge_match_only_bond)
-        lose_map = {x: y for x, y in lose_bonds}
+        components, lost_bonds, term_atoms = self.__split_graph(g)
+        lost_map = {x: y for x, y in lost_bonds}
         ''' extract subgraphs and sort by group type (R or X)
         '''
-        x_terminals = set(lose_map.values())
-        r_terminals = set(lose_map)
+        x_terminals = set(lost_map.values())
+        r_terminals = set(lost_map)
 
         for i in components:
             x_terminal_atom = x_terminals.intersection(i)
-            r_terminal_atom = r_terminals.intersection(i)
-
             if x_terminal_atom:
                 x_group[x_terminal_atom.pop()] = i
-            elif r_terminal_atom:
+                continue
+
+            r_terminal_atom = r_terminals.intersection(i)
+            if r_terminal_atom:
                 r_group.append([r_terminal_atom, i])
-            else:
-                newcomponents.append(i)
+                continue
+
+            newcomponents.append(i)
         ''' search similar R groups and patch.
         '''
-        tmp = g.copy()
+        tmp = g
         for i in newcomponents:
             for k, j in r_group:
                 gm = gis.GraphMatcher(j, i, node_match=self.__node_match_products,
                                       edge_match=self.__edge_match_products)
                 ''' search for similar R-groups started from bond breaks.
                 '''
-                mapping = next((x for x in gm.subgraph_isomorphisms_iter() if k.intersection(x)), None)
+                mapping = next((x for x in gm.subgraph_isomorphisms_iter() if k.issubset(x) and
+                                all(x[y] in term_atoms for y in k)), None)
                 if mapping:
                     r_group_clones.append([k, mapping])
                     tmp = compose(tmp, self.__remap_group(j, tmp, mapping)[0])
                     break
+
+        if r_group_clones:
+            tmp.__class__ = MoleculeContainer
         ''' add lose X groups to R groups
         '''
         for i, j in r_group_clones:
             for k in i:
-                remappedgroup, mapping = self.__remap_group(x_group[lose_map[k]], tmp, {})
+                remappedgroup, mapping = self.__remap_group(x_group[lost_map[k]], tmp, {})
                 tmp = CGRcore.union(tmp, remappedgroup)
-                tmp.add_edge(j[k], mapping[lose_map[k]], **lose_bonds[(k, lose_map[k])])
+                tmp.add_edge(j[k], mapping[lost_map[k]], s_bond=1, sp_bond=(1, None))
 
         return tmp
 

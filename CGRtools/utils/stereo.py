@@ -18,6 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from importlib.util import find_spec
 
 
 def fix_stereo(g):
@@ -30,3 +31,24 @@ def fix_stereo(g):
                 pass
 
     return g
+
+
+def pyramid_volume(n, u, v, w):
+    res = {}
+    for d, kx, ky, kz in (('s', 's_x', 's_y', 's_z'), ('p', 'p_x', 'p_y', 'p_z')):
+        zx, zy, zz = n[kx], n[ky], n[kz]
+
+        ux, uy, uz = u['s_x'] - zx, u['s_y'] - zy, u['s_z'] - zz
+        vx, vy, vz = v['s_x'] - zx, v['s_y'] - zy, v['s_z'] - zz
+        wx, wy, wz = w['s_x'] - zx, w['s_y'] - zy, w['s_z'] - zz
+
+        res[d] = ux * (vy * wz - vz * wy) + \
+            uy * (vz * wx - vx * wz) + \
+            uz * (vx * wy - vy * wx)  # 14 operations / det
+
+    return res
+
+
+if find_spec('numba'):  # jitting if available
+    from numba import njit
+    pyramid_volume = njit(pyramid_volume)

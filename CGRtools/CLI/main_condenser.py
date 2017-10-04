@@ -22,16 +22,17 @@ from sys import stderr
 from traceback import format_exc
 from ..files.RDFrw import RDFread
 from ..files.SDFrw import SDFwrite
-from ..preparer import CGRcombo
+from ..preparer import CGRpreparer
 
 
 def condenser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = SDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRcombo(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
-                      b_templates=RDFread(kwargs['b_templates']).read(), isotope=kwargs['isotope'],
-                      m_templates=RDFread(kwargs['m_templates']).read(), element=kwargs['element'])
+    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
+                         b_templates=RDFread(kwargs['b_templates']).read() if kwargs['b_templates'] else None,
+                         m_templates=RDFread(kwargs['m_templates']).read() if kwargs['m_templates'] else None,
+                         element=kwargs['element'], isotope=kwargs['isotope'])
 
     err = 0
     num = 0
@@ -39,7 +40,7 @@ def condenser_core(**kwargs):
         if num % 100 == 1:
             print("reaction: %d" % num, file=stderr)
         try:
-            a = worker.getCGR(data)
+            a = worker.condense(data)
             outputdata.write(a)
         except Exception:
             err += 1

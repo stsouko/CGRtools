@@ -70,7 +70,7 @@ class SDFread(CGRread):
                         raise EmptyMolecule('Molecule without atoms')
                     atomcount = atoms + n
                     bondcount = int(line[3:6]) + atomcount
-                    molecule = {'atoms': [], 'bonds': [], 'CGR_DAT': {}, 'meta': {}, 'colors': {}}
+                    molecule = dict(atoms=[], bonds=[], CGR_DAT={}, meta={}, colors={})
                 except (EmptyMolecule, ValueError):
                     atomcount = bondcount = -1
                     failkey = True
@@ -80,7 +80,7 @@ class SDFread(CGRread):
             elif n <= atomcount:
                 try:
                     molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                                  charge=fromMDL.get(int(line[38:39]), 0),
+                                                  charge=fromMDL[int(line[38:39])],
                                                   map=int(line[60:63]), mark=line[54:57].strip(),
                                                   x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
                 except ValueError:
@@ -99,7 +99,7 @@ class SDFread(CGRread):
                 mend = True
                 molecule['CGR_DAT'] = self._get_collected()
 
-            elif molecule and n > bondcount:
+            elif molecule:
                 if not mend:
                     try:
                         self._collect(line)

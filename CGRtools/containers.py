@@ -39,14 +39,15 @@ class MoleculeContainer(Graph):
         if isinstance(meta, dict):
             self.__meta = meta
 
-        self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.subgraph.__name__,
-                          self.remap.__name__, self.add_stereo.__name__, self.get_morgan.__name__,
-                          self.get_fear.__name__, self.get_fear_hash.__name__, self.get_center_atoms.__name__,
-                          self.get_environment.__name__, self.fix_sp_marks.__name__, self.reset_query_marks.__name__,
-                          self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                          'meta', 'stereo', 'bonds_count', 'atoms_count']  # properties names inaccessible
-
     def __dir__(self):
+        if self.__visible is None:
+            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.subgraph.__name__,
+                              self.remap.__name__, self.add_stereo.__name__, self.get_morgan.__name__,
+                              self.get_fear.__name__, self.get_fear_hash.__name__, self.get_center_atoms.__name__,
+                              self.get_environment.__name__, self.fix_sp_marks.__name__,
+                              self.reset_query_marks.__name__,
+                              self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
+                              'meta', 'stereo', 'bonds_count', 'atoms_count']  # properties names inaccessible
         return self.__visible
 
     def pickle(self, compress=True):
@@ -117,6 +118,8 @@ class MoleculeContainer(Graph):
         if not copy:
             self.__stereo_dict = {}
             self.__stereo = {}
+        else:
+            g.__class__ = self.__class__
 
         for (a1, a2), x in old_stereo.items():
             g.add_stereo(mapping[a1], mapping[a2], x.get('s'), x.get('p'))
@@ -182,17 +185,6 @@ class MoleculeContainer(Graph):
                 nodes.update(n)
 
         return list(nodes)
-
-    def __getitem__(self, item):
-        if isinstance(item, tuple):
-            a, b = item
-            if isinstance(a, slice) or isinstance(b, slice):
-                raise Exception('slices unsupported')
-            return super().__getitem__(item[0])[item[1]]
-        elif not isinstance(item, slice):
-            return self.nodes[item]
-        else:
-            raise Exception('slices unsupported')
 
     def add_atom(self, element, mapping=None, s_charge=0, p_charge=None, mark='0',
                  s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
@@ -350,7 +342,7 @@ class MoleculeContainer(Graph):
     __node_s = tuple(chain((x for x, *_ in __node_marks), __tmp_node))
     __node_sp = tuple(chain((y for x in __node_marks for y in x[:2]), __tmp_node, ('p_x', 'p_y', 'p_z')))
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
-    __stereo = __meta = __stereo_dict = None
+    __stereo = __meta = __stereo_dict = __visible = None
 
 
 class ReactionContainer(object):
