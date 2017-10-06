@@ -90,7 +90,7 @@ class MRVwrite(CGRwrite):
             colors = {}
             c = count(1)
             self.__file.write('<reaction>')
-            for i, j in (('substrats', 'reactantList'), ('products', 'productList')):
+            for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
                 self.__file.write('<%s>' % j)
                 for cnext, m in zip(c, data[i]):
                     m = self.get_formatted_cgr(m)

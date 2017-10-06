@@ -22,15 +22,16 @@ from collections import namedtuple
 from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
+from warnings import warn
 from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
 
-CGRTemplate = namedtuple('CGRTemplate', ['substrats', 'products', 'meta'])
+CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
 MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
 
 
-class MergedReaction(namedtuple('MergedReaction', ['substrats', 'products'])):
+class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
     def copy(self):
-        return MergedReaction(self.substrats.copy(), self.products.copy())
+        return MergedReaction(self.reagents.copy(), self.products.copy())
 
 
 class MoleculeContainer(Graph):
@@ -346,17 +347,23 @@ class MoleculeContainer(Graph):
 
 
 class ReactionContainer(object):
-    __slots__ = ('__substrats', '__products', '__reactants', '__meta')
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta')
 
-    def __init__(self, substrats=None, products=None, reactants=None, meta=None):
-        self.__substrats = substrats or []
+    def __init__(self, substrats=None, products=None, reactants=None, meta=None, reagents=None):
+        if substrats:
+            warn('deprecated key. use reagents instead', DeprecationWarning)
+
+        self.__reagents = substrats or reagents or []
         self.__products = products or []
         self.__reactants = reactants or []
         self.__meta = meta or {}
 
     def __getitem__(self, item):
         if item == 'substrats':
-            return self.__substrats
+            warn('deprecated key. use reagents instead', DeprecationWarning)
+            return self.__reagents
+        elif item == 'reagents':
+            return self.__reagents
         elif item == 'products':
             return self.__products
         elif item == 'reactants':
@@ -369,20 +376,26 @@ class ReactionContainer(object):
     def pickle(self):
         """ return json serializable reaction
         """
-        return dict(substrats=[x.pickle() for x in self.__substrats], meta=self.meta,
+        return dict(reagents=[x.pickle() for x in self.__reagents], meta=self.meta,
                     products=[x.pickle() for x in self.__products], reactants=[x.pickle() for x in self.__reactants])
 
     @staticmethod
     def unpickle(data):
         """ convert json serializable reaction into ReactionContainer object instance 
         """
-        return ReactionContainer(substrats=[MoleculeContainer.unpickle(x) for x in data['substrats']],
+        return ReactionContainer(reagents=[MoleculeContainer.unpickle(x) for x in
+                                           (data['reagents'] if 'reagents' in data else data['substrats'])],
                                  products=[MoleculeContainer.unpickle(x) for x in data['products']], meta=data['meta'],
                                  reactants=[MoleculeContainer.unpickle(x) for x in data.get('reactants', [])])
 
     @property
-    def substrats(self):
-        return self.__substrats
+    def substrats(self):  # reverse compatibility
+        warn('deprecated key. use reagents instead', DeprecationWarning)
+        return self.__reagents
+
+    @property
+    def reagents(self):
+        return self.__reagents
 
     @property
     def products(self):
@@ -397,6 +410,6 @@ class ReactionContainer(object):
         return self.__meta
 
     def copy(self):
-        return ReactionContainer(substrats=[x.copy() for x in self.__substrats], meta=self.__meta.copy(),
+        return ReactionContainer(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
                                  products=[x.copy() for x in self.__products],
                                  reactants=[x.copy() for x in self.__reactants])

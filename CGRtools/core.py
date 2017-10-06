@@ -45,7 +45,7 @@ class CGRcore(object):
 
     @classmethod
     def compose(cls, m1, m2):
-        """ remove from union graphs of products or substrats data about substrats or products
+        """ remove from union graphs of products or reagents data about reagents or products
         """
         common = set(m1).intersection(m2)
         extended_common = set()
@@ -54,7 +54,7 @@ class CGRcore(object):
 
         """ remove bond, neighbors and hybridization states for common atoms.
         """
-        for i, g in (('substrats', m1), ('products', m2)):
+        for i, g in (('reagents', m1), ('products', m2)):
             ext_common = common.copy()
             pop = cls.__popdict[i]['edge']
             s_pop = cls.__popdict[i]['stereo']
@@ -101,6 +101,6 @@ class CGRcore(object):
     __popdict = dict(products=dict(edge='p_bond', stereo='p',
                                    node=('p_charge', 'p_neighbors', 'p_hyb', 'p_x', 'p_y', 'p_z', 'mark', 'element'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb')),
-                     substrats=dict(edge='s_bond', stereo='s',
-                                    node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z', 'mark', 'element'),
-                                    ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))
+                     reagents=dict(edge='s_bond', stereo='s',
+                                   node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z', 'mark', 'element'),
+                                   ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))

@@ -72,7 +72,7 @@ class CGRreactor(object):
                 found = set()
 
             for i in templates:
-                gm = self.get_cgr_matcher(g, i.substrats)
+                gm = self.get_cgr_matcher(g, i.reagents)
                 for j in gm.subgraph_isomorphisms_iter():
                     matched_atoms = set(j)
                     if skip_intersection:
@@ -205,14 +205,14 @@ class CGRreactor(object):
         templates = []
         for template in raw_templates:
             products = reduce(CGRcore.union, template.products).copy()
-            substrats = reduce(CGRcore.union, template.substrats).copy()
+            reagents = reduce(CGRcore.union, template.reagents).copy()
 
-            common = set(products).intersection(substrats)
+            common = set(products).intersection(reagents)
             for n in common:
                 for j in {'s_charge', 's_hyb', 's_neighbors',
                           'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.nodes[n]):
                     if isinstance(products.nodes[n][j], list):
-                        products.nodes[n][j] = {x: y for x, y in zip(substrats.nodes[n][j], products.nodes[n][j])}
+                        products.nodes[n][j] = {x: y for x, y in zip(reagents.nodes[n][j], products.nodes[n][j])}
                 for j in ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'):
                     products.nodes[n].pop(j)
 
@@ -220,12 +220,12 @@ class CGRreactor(object):
                 if m in common and n in common:
                     for j in {'s_bond', 'p_bond'}.intersection(a):
                         if isinstance(a[j], list):
-                            a[j] = {x: y for x, y in zip(substrats[m][n][j], a[j])}
+                            a[j] = {x: y for x, y in zip(reagents[m][n][j], a[j])}
 
-            substrats.remap({x: x + 1000 for x in substrats})
+            reagents.remap({x: x + 1000 for x in reagents})
             products.remap({x: x + 1000 for x in products})
 
-            templates.append(CGRTemplate(substrats, products, template.meta.copy()))
+            templates.append(CGRTemplate(reagents, products, template.meta.copy()))
         return templates
 
     @staticmethod

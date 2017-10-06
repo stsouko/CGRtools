@@ -87,7 +87,7 @@ class CGRread:
     def _get_reaction(self, reaction):
         spmaps = None
         maps = {}
-        for i in ('substrats', 'products', 'reactants'):
+        for i in ('reagents', 'products', 'reactants'):
             maps[i] = tmp = []
             for m in reaction[i]:
                 mm = []
@@ -100,35 +100,35 @@ class CGRread:
                     mm.append(am)
                 tmp.extend(mm)
 
-        length = count(max((max(maps['products'], default=0), max(maps['substrats'], default=0),
+        length = count(max((max(maps['products'], default=0), max(maps['reagents'], default=0),
                             max(maps['reactants'], default=0))) + 1)
 
         ''' map unmapped atoms.
         '''
-        for i in ('substrats', 'products', 'reactants'):
+        for i in ('reagents', 'products', 'reactants'):
             mi = maps[i]
             if 0 in mi:
                 maps[i] = mi = [x or next(length) for x in mi]
 
-            if not self.__ignore and mi and len(mi) != len(set(mi)):
-                raise MapError('mapping in substrats or products or reactants should be unique')
+            if not self.__ignore and len(mi) != len(set(mi)):
+                raise MapError('mapping in reagents or products or reactants should be unique')
 
         if maps['reactants']:
-            spmaps = maps['substrats'] + maps['products']
+            spmaps = set(maps['reagents'] + maps['products'])
             d = set(maps['reactants']).intersection(spmaps)
             if d:
                 if not self.__ignore:
-                    raise MapError('reactants has map intersection with substrats or products')
+                    raise MapError('reactants has map intersection with reagents or products')
                 maps['reactants'] = [x if x not in d else next(length) for x in maps['reactants']]
 
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
         if self.__remap:
             lose = sorted(set(range(1, next(length)))
-                          .difference(spmaps or maps['substrats'] + maps['products'])
+                          .difference(spmaps or maps['reagents'] + maps['products'])
                           .difference(maps['reactants']), reverse=True)
             if lose:
-                for i in ('substrats', 'products', 'reactants'):
+                for i in ('reagents', 'products', 'reactants'):
                     if not maps[i]:
                         continue
                     for j in lose:
@@ -143,7 +143,7 @@ class CGRread:
             colors[int(mol_num)][color_type] = v
 
         counter = count(1)
-        for i in ('substrats', 'products', 'reactants'):
+        for i in ('reagents', 'products', 'reactants'):
             shift = 0
             for j in reaction[i]:
                 atom_len = len(j['atoms'])

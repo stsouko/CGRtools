@@ -42,7 +42,7 @@ class RDFread(CGRread):
         return next(self.__data)
 
     def __reader(self):
-        ir = im = atomcount = bondcount = n = substrats = products = spr = molcount = -1
+        ir = im = atomcount = bondcount = n = reagents = products = spr = molcount = -1
         failkey = isreaction = True
         reaction = molecule = mkey = None
         for n, line in enumerate(self.__file):
@@ -64,18 +64,18 @@ class RDFread(CGRread):
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
-                reaction = dict(substrats=[], products=[], reactants=[], meta={}, colors={})
-                substrats, products, spr, molcount = 1, 1, 1, 1
+                reaction = dict(reagents=[], products=[], reactants=[], meta={}, colors={})
+                reagents, products, spr, molcount = 1, 1, 1, 1
                 mkey = None
                 failkey = isreaction = False
                 im = n + 4
                 ir = -1
             elif n == ir:
                 try:
-                    substrats = int(line[:3])
-                    products = int(line[3:6]) + substrats
+                    reagents = int(line[:3])
+                    products = int(line[3:6]) + reagents
                     spr = int(line[6:].rstrip() or 0) + products
-                    reaction = dict(substrats=[], products=[], reactants=[], meta={}, colors={})
+                    reaction = dict(reagents=[], products=[], reactants=[], meta={}, colors={})
                     molcount = 0
                 except ValueError:
                     failkey = True
@@ -125,8 +125,8 @@ class RDFread(CGRread):
                             print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
                     elif line.startswith("M  END"):
                         molecule['CGR_DAT'] = self._get_collected()
-                        if molcount <= substrats:
-                            reaction['substrats'].append(molecule)
+                        if molcount <= reagents:
+                            reaction['reagents'].append(molecule)
                         elif molcount <= products:
                             reaction['products'].append(molecule)
                         else:
@@ -163,7 +163,7 @@ class RDFread(CGRread):
                     print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
     def _get_molecule(self, reaction):
-        molecule = reaction['substrats'][0]
+        molecule = reaction['reagents'][0]
         molecule['meta'] = reaction['meta']
         molecule['colors'] = reaction['colors']
         return super()._get_molecule(molecule)
@@ -197,9 +197,9 @@ class RDFwrite(CGRwrite):
             colors = m['colors']
         else:
             self.__file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
-                              (len(data.substrats), len(data.products)))
+                              (len(data.reagents), len(data.products)))
             colors = {}
-            for cnext, m in enumerate(chain(data.substrats + data.products), start=1):
+            for cnext, m in enumerate(chain(data.reagents + data.products), start=1):
                 m = self.get_formatted_cgr(m)
                 self.__file.write('$MOL\n')
                 self.__file.write(m['CGR'])

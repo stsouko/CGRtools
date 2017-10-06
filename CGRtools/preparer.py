@@ -48,7 +48,7 @@ class CGRpreparer(CGRcore):
         self.__init_common(cgr_type, extralabels, isotope, element, stereo)
 
     def __init_common(self, cgr_type, extralabels, isotope, element, stereo):
-        self.__cgr_type = self.__get_cgr_type(cgr_type)
+        self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
         self.__extralabels = extralabels
         self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
                              element=element, stereo=stereo, b_templates=None, m_templates=None)
@@ -92,10 +92,10 @@ class CGRpreparer(CGRcore):
         else:
             res = data if is_merged else self.merge_mols(data)
             if self.__extralabels:
-                res.substrats.reset_query_marks()
+                res.reagents.reset_query_marks()
                 res.products.reset_query_marks()
 
-            g = self.compose(res.substrats, res.products)
+            g = self.compose(res.reagents, res.products)
 
         if not is_merged:
             g.meta.update(data.meta)
@@ -109,7 +109,7 @@ class CGRpreparer(CGRcore):
 
     def dissociate(self, g):
         tmp = ReactionContainer(meta=g.meta)
-        for category, edge in (('substrats', 's_bond'), ('products', 'p_bond')):
+        for category, edge in (('reagents', 's_bond'), ('products', 'p_bond')):
             x = g.copy()
             for n, m in list(self.__get_broken_paths(x, edge)):
                 x.remove_edge(n, m)
@@ -129,25 +129,25 @@ class CGRpreparer(CGRcore):
 
     def merge_mols(self, data):
         if self.__cgr_type == 0:
-            substrats = self.__union_all(data.substrats)
+            reagents = self.__union_all(data.reagents)
             products = self.__union_all(data.products)
 
         elif self.__cgr_type == 7:
-            substrats = self.__union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
+            reagents = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
             products = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
         elif self.__cgr_type == 8:
-            substrats = self.__union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
+            reagents = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
             products = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
         elif self.__cgr_type == 9:
-            substrats = self.__union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
+            reagents = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
             products = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
         elif self.__cgr_type == 10:
-            substrats = self.__union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
+            reagents = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
             products = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
         else:
             raise Exception('Merging need reagents and products')
 
-        res = MergedReaction(substrats=substrats, products=products)
+        res = MergedReaction(reagents=reagents, products=products)
         return res
 
     @staticmethod
@@ -156,7 +156,8 @@ class CGRpreparer(CGRcore):
             if attr.get(edge) is None:
                 yield n, m
 
-    def __get_cgr_type(self, _type):
+    @staticmethod
+    def __get_cgr_type(_type):
         needed = [int(x) for x in _type.split(',')]
         if needed[0] == 0:
             t = 0  # CGR
@@ -186,22 +187,23 @@ class CGRpreparer(CGRcore):
         else:
             t = 0
 
-        if t > 2:
-            self.__needed = dict(substrats=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
-                                 products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True))
-        return t
+        ind = dict(reagents=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
+                   products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True)) \
+            if t > 2 else None
+
+        return t, ind
 
     def __reaction_splitter(self, data):
         if self.__cgr_type == 1:
-            g = self.__union_all(data.substrats)
+            g = self.__union_all(data.reagents)
         elif self.__cgr_type == 2:
             g = self.__union_all(data.products)
         elif self.__cgr_type == 3:
-            g = self.__union_all(self.__get_mols(data.substrats, self.__needed['substrats']))
+            g = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
         elif self.__cgr_type == 4:
             g = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
         elif self.__cgr_type == 5:
-            g = self.__union_all(self.__exc_mols(data.substrats, self.__needed['substrats']))
+            g = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
         elif self.__cgr_type == 6:
             g = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
         else:
@@ -233,8 +235,8 @@ class CGRpreparer(CGRcore):
         return reduce(cls.union, data) if data else MoleculeContainer()
 
     __map = __bal = None
-    __attrcompose = dict(edges=dict(substrats=dict(p_bond='s_bond'), products=dict(s_bond='p_bond')),
-                         nodes=dict(substrats=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
+    __attrcompose = dict(edges=dict(reagents=dict(p_bond='s_bond'), products=dict(s_bond='p_bond')),
+                         nodes=dict(reagents=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
                                     products=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb')))
 
     def getCGR(self, data):  # Reverse compatibility
