@@ -26,20 +26,20 @@ from .main_mapper import mapper_core
 from ..version import version
 
 
-def reactor_common(parser):
+def _reactor_common(parser):
     parser.add_argument("--element", "-e", action='store_false', help="FEAR use element data")
     parser.add_argument("--isotope", "-I", action='store_true', help="FEAR use isotope data")
 
 
-def stereo_common(parser):
+def _stereo_common(parser):
     parser.add_argument("--stereo", "-s", action='store_true', help="use stereo data")
 
 
-def extra_common(parser):
+def _extra_common(parser):
     parser.add_argument("--save_extralabels", "-se", action='store_true', help="save extralabels data")
 
 
-def condenser_common(parser):
+def _condenser_common(parser):
     parser.add_argument("--cgr_type", "-t", type=str, default='0',
                         help="graph type: 0 - CGR, 1 - reagents only, 2 - products only, 101-199 - reagent 1,"
                              "2 or later, 201+ - product 1,2… (e.g. 202 - second product) -101/-199 or -201+ "
@@ -53,14 +53,14 @@ def condenser_common(parser):
                         help="generate atom hybridization and neighbors labels")
 
 
-def balanser_common(parser):
+def _balanser_common(parser):
     parser.add_argument("--m_templates", "-M", type=FileType(), default=None,
                         help="RDF with reactions remapping rules")
     parser.add_argument("--b_templates", "-B", type=FileType(), default=None,
                         help="RDF with reactions balancing rules")
 
 
-def balanser(subparsers):
+def _balanser(subparsers):
     parser = subparsers.add_parser('balanser', help='reaction balanser',
                                    formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
@@ -68,16 +68,16 @@ def balanser(subparsers):
     parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'),
                         help="RDF outputfile")
 
-    condenser_common(parser)
-    extra_common(parser)
-    stereo_common(parser)
-    balanser_common(parser)
-    reactor_common(parser)
+    _condenser_common(parser)
+    _extra_common(parser)
+    _stereo_common(parser)
+    _balanser_common(parser)
+    _reactor_common(parser)
 
     parser.set_defaults(func=balanser_core)
 
 
-def condenser(subparsers):
+def _condenser(subparsers):
     parser = subparsers.add_parser('condenser', help='CGR generator',
                                    formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
@@ -85,16 +85,16 @@ def condenser(subparsers):
     parser.add_argument("--output", "-o", default="output.sdf", type=FileType('w'),
                         help="SDF outputfile")
 
-    condenser_common(parser)
-    extra_common(parser)
-    stereo_common(parser)
-    balanser_common(parser)
-    reactor_common(parser)
+    _condenser_common(parser)
+    _extra_common(parser)
+    _stereo_common(parser)
+    _balanser_common(parser)
+    _reactor_common(parser)
 
     parser.set_defaults(func=condenser_core)
 
 
-def reactmap(subparsers):
+def _reactmap(subparsers):
     parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)',
                                    formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", default="input.rdf", type=FileType(), help="RDF inputfile")
@@ -103,7 +103,7 @@ def reactmap(subparsers):
     parser.add_argument("--dump_templates", "-d", default="dump.rdf", type=FileType('w'),
                         help="save RDF with reactions mapping rules")
 
-    stereo_common(parser)
+    _stereo_common(parser)
 
     parser.set_defaults(func=mapper_core)
 
@@ -113,9 +113,9 @@ def argparser():
     parser.add_argument("--version", "-v", action="version", version=version(), default=False)
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
 
-    condenser(subparsers)
-    balanser(subparsers)
-    reactmap(subparsers)
+    _condenser(subparsers)
+    _balanser(subparsers)
+    # _reactmap(subparsers)
 
     if find_spec('argcomplete'):
         from argcomplete import autocomplete

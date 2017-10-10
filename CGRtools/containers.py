@@ -187,11 +187,11 @@ class MoleculeContainer(Graph):
 
         return list(nodes)
 
-    def add_atom(self, element, mapping=None, s_charge=0, p_charge=None, mark='0',
+    def add_atom(self, element, _map=None, s_charge=0, p_charge=None, mark='0',
                  s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
-        if mapping is None:
-            mapping = max(self, default=0) + 1
-        elif mapping in self:
+        if _map is None:
+            _map = max(self, default=0) + 1
+        elif _map in self:
             raise Exception('mapping exists')
 
         # todo: charges and elements checks.
@@ -205,8 +205,8 @@ class MoleculeContainer(Graph):
         if p_z is None:
             p_z = s_z
 
-        self.add_node(mapping, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
-                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z)
+        self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
+                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
 
     def add_bond(self, atom1, atom2, s_bond=1, p_bond=1):
         if atom1 not in self or atom2 not in self:

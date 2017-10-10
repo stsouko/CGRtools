@@ -55,9 +55,10 @@ class CGRcore(object):
         """ remove bond, neighbors and hybridization states for common atoms.
         """
         for i, g in (('reagents', m1), ('products', m2)):
+            pdi = cls.__popdict[i]
             ext_common = common.copy()
-            pop = cls.__popdict[i]['edge']
-            s_pop = cls.__popdict[i]['stereo']
+            pop = pdi['edge']
+            s_pop = pdi['stereo']
             for n, m, attr in g.edges(common, data=True):
                 ext_common.add(n)
                 ext_common.add(m)
@@ -77,11 +78,11 @@ class CGRcore(object):
                     s = g.stereo[n][m]
                     new_stereo[s['atoms']] = s
 
-            pop = cls.__popdict[i]['node']
+            pop = pdi['node']
             for n in common:
                 h.add_node(n, **{k: v for k, v in g.nodes[n].items() if k in pop})
 
-            pop = cls.__popdict[i]['ext_node']
+            pop = pdi['ext_node']
             for n in ext_common.difference(common):
                 h.add_node(n, **{k: v for k, v in g.nodes[n].items() if k not in pop})
 
@@ -99,8 +100,9 @@ class CGRcore(object):
         return h
 
     __popdict = dict(products=dict(edge='p_bond', stereo='p',
-                                   node=('p_charge', 'p_neighbors', 'p_hyb', 'p_x', 'p_y', 'p_z', 'mark', 'element'),
+                                   node=('p_charge', 'p_neighbors', 'p_hyb', 'p_x', 'p_y', 'p_z',
+                                         'mark', 'element', 'map'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb')),
                      reagents=dict(edge='s_bond', stereo='s',
-                                   node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z', 'mark', 'element'),
+                                   node=('s_charge', 's_neighbors', 's_hyb', 's_x', 's_y', 's_z'),
                                    ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb')))

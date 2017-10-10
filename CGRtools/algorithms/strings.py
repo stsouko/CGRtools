@@ -33,11 +33,9 @@ def hash_cgr_string(string):
 
 
 def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=True):
-    newmaps = dict()
-    countmap = count(1)
-    countcyc = count(1)
     visited = set()
-    stereo = False  # disable stereo. not implemented!
+    countmap, countcyc = count(1), count(1)
+    stereo = False
 
     def getnextatom(atoms):
         if len(atoms) == 1:
@@ -49,55 +47,75 @@ def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=T
         return nextatom
 
     def dosmarts(trace, inter, prev):
-        s_sh = '%s%s' % (stereo and g.nodes[inter].get('s_stereo') or '',
-                         hyb_types[g.nodes[inter].get('s_hyb')] if hyb else '')
-        p_sh = '%s%s' % (stereo and g.nodes[inter].get('p_stereo') or '',
-                         hyb_types[g.nodes[inter].get('p_hyb')] if hyb else '')
+        gni = g.nodes[inter]
+        iso = isotope and element and gni.get('isotope')
 
-        smis = ['[%s%s%s%s:%d]' %
-                (isotope and g.nodes[inter].get('isotope') or '', element and g.nodes[inter]['element'] or '*',
-                 s_sh and ';%s;' % s_sh or '',
-                 element and g.nodes[inter]['s_charge'] and '%+d' % g.nodes[inter]['s_charge'] or '',
-                 newmaps.get(inter) or newmaps.setdefault(inter, next(countmap)))]
-        smip = ['[%s%s%s%s:%d]' %
-                (isotope and g.nodes[inter].get('isotope') or '', element and g.nodes[inter]['element'] or '*',
-                 p_sh and ';%s;' % p_sh or '',
-                 element and g.nodes[inter]['p_charge'] and '%+d' % g.nodes[inter]['p_charge'] or '',
-                 newmaps.get(inter))]
+        if stereo:
+            ss = gni.get('s_stereo')
+            ps = gni.get('p_stereo')
+            if ss:
+                s_sh = (';%%s%s;' % hyb_types[gni['s_hyb']] if hyb and gni.get('s_hyb') else ';%s;') % ss
+            else:
+                s_sh = ''
+            if ps:
+                p_sh = (';%%s%s;' % hyb_types[gni['p_hyb']] if hyb and gni.get('p_hyb') else ';%s;') % ps
+            else:
+                p_sh = ''
+        elif hyb:
+            s_sh = ';%s;' % hyb_types[gni['s_hyb']] if gni.get('s_hyb') else ''
+            p_sh = ';%s;' % hyb_types[gni['p_hyb']] if gni.get('p_hyb') else ''
+        else:
+            s_sh = p_sh = ''
+
+        if iso:
+            s_ish = '[%s%%s%s%%s]' % (gni['isotope'], s_sh)
+            p_ish = '[%s%%s%s%%s]' % (gni['isotope'], p_sh)
+        else:
+            s_ish = '[%%s%s%%s]' % s_sh if s_sh else ''
+            p_ish = '[%%s%s%%s]' % p_sh if p_sh else ''
+
+        if element:
+            ge = gni.get('element') or '*'
+            gcs = gni.get('s_charge') and '%+d' % gni['s_charge'] or ''
+            gcp = gni.get('p_charge') and '%+d' % gni['p_charge'] or ''
+            smis = [s_ish and s_ish % (ge, gcs) or gcs and '[%s%s]' % (ge, gcs) or ge != '*' and ge or '[*]']
+            smip = [p_ish and p_ish % (ge, gcp) or gcp and '[%s%s]' % (ge, gcp) or ge != '*' and ge or '[*]']
+        else:
+            smis = [s_ish % ('*', '') if s_ish else '[*]']
+            smip = [p_ish % ('*', '') if p_ish else '[*]']
+
         concat = []
         stoplist = []
         iterlist = set(g.neighbors(inter)).difference([prev])
         while iterlist:
             i = getnextatom(iterlist)
             iterlist.discard(i)
+            gii = g[inter][i]
             if i in trace:
                 if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
                     cyc = next(countcyc)
                     concat.append((i, cyc, inter))
-                    smis.append('%s%s%d' % (to_smiles[g[inter][i].get('s_bond')],
-                                            stereo and g[inter][i].get('s_stereo', '') or '', cyc))
-                    smip.append('%s%s%d' % (to_smiles[g[inter][i].get('p_bond')],
-                                            stereo and g[inter][i].get('p_stereo', '') or '', cyc))
+                    smis.append('%s%s%d' % (to_smiles[gii.get('s_bond')], stereo and gii.get('s_stereo') or '', cyc))
+                    smip.append('%s%s%d' % (to_smiles[gii.get('p_bond')], stereo and gii.get('p_stereo') or '', cyc))
                 continue
 
-            deep = dosmarts(set(chain(trace, [i])), i, inter)
-            trace.update(deep[0])
-            if deep[3]:
-                concat.extend(deep[3])
-                for j in deep[3]:
-                    if j[0] == inter:
-                        stoplist.append(j[2])
-                        smis.append('%s%s%d' % (to_smiles[g[inter][j[2]].get('s_bond')],
-                                                stereo and g[inter][j[2]].get('s_stereo', '') or '', j[1]))
-                        smip.append('%s%s%d' % (to_smiles[g[inter][j[2]].get('p_bond')],
-                                                stereo and g[inter][j[2]].get('p_stereo', '') or '', j[1]))
-            smis.extend(['(' if iterlist else ''] +
-                        ['%s%s' % (to_smiles[g[inter][i].get('s_bond')],
-                                   stereo and g[inter][i].get('s_stereo', '') or '')] + deep[1] +
+            deep0, deep1, deep2, deep3 = dosmarts(set(chain(trace, [i])), i, inter)
+            trace.update(deep0)
+            if deep3:
+                concat.extend(deep3)
+                for j0, j1, j2 in deep3:
+                    if j0 == inter:
+                        gij = g[inter][j2]
+                        stoplist.append(j2)
+                        smis.append('%s%s%d' % (to_smiles[gij.get('s_bond')],
+                                                stereo and gij.get('s_stereo') or '', j1))
+                        smip.append('%s%s%d' % (to_smiles[gij.get('p_bond')],
+                                                stereo and gij.get('p_stereo') or '', j1))
+            smis.extend(['(' if iterlist else '',
+                         '%s%s' % (to_smiles[gii.get('s_bond')], stereo and gii.get('s_stereo') or '')] + deep1 +
                         [')' if iterlist else ''])
-            smip.extend(['(' if iterlist else ''] +
-                        ['%s%s' % (to_smiles[g[inter][i].get('p_bond')],
-                                   stereo and g[inter][i].get('p_stereo', '') or '')] + deep[2] +
+            smip.extend(['(' if iterlist else '',
+                         '%s%s' % (to_smiles[gii.get('p_bond')], stereo and gii.get('p_stereo') or '')] + deep2 +
                         [')' if iterlist else ''])
         return trace, smis, smip, concat
 
@@ -113,5 +131,6 @@ def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=T
     jpsmiles = '.'.join(psmiles)
     return '%s>>%s' % (jssmiles, jpsmiles) if jssmiles != jpsmiles else jssmiles
 
+
 to_smiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
-hyb_types = {4: ',a', 3: ',t', 2: ',d', 1: ',s', None: ''}
+hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: ''}

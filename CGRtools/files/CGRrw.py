@@ -93,46 +93,52 @@ class CGRread:
                 mm = []
                 for a in m['atoms']:
                     am = a['map']
-                    if am and am in mm:
-                        if not self.__ignore:
-                            raise MapError('mapping in molecules should be unique')
-                        am = 0  # force unmap non unique atoms in molecules.
-                    mm.append(am)
-                tmp.extend(mm)
+                    if not self.__ignore and am and am in mm:
+                        raise MapError('mapping in molecules should be unique')
+                    else:
+                        mm.append(am)
+                    tmp.append(am)
 
-        length = count(max((max(maps['products'], default=0), max(maps['reagents'], default=0),
-                            max(maps['reactants'], default=0))) + 1)
+        length = count(max(max(maps['products'], default=0), max(maps['reagents'], default=0),
+                           max(maps['reactants'], default=0)) + 1)
 
         ''' map unmapped atoms.
         '''
         for i in ('reagents', 'products', 'reactants'):
-            mi = maps[i]
-            if 0 in mi:
-                maps[i] = mi = [x or next(length) for x in mi]
+            mi, used = [], []
+            for m in maps[i]:
+                k = m or next(length)
+                if k in used:
+                    if not self.__ignore:
+                        raise MapError('mapping in reagents or products or reactants should be unique')
+                    # force remap non unique atoms in molecules.
+                    mi.append((next(length), k))
+                else:
+                    mi.append((k, k))
+                    used.append(k)
 
-            if not self.__ignore and len(mi) != len(set(mi)):
-                raise MapError('mapping in reagents or products or reactants should be unique')
+            maps[i] = mi
 
         if maps['reactants']:
-            spmaps = set(maps['reagents'] + maps['products'])
-            d = set(maps['reactants']).intersection(spmaps)
+            spmaps = set(x for x, _ in chain(maps['reagents'], maps['products']))
+            d = set(x for x, _ in maps['reactants']).intersection(spmaps)
             if d:
                 if not self.__ignore:
                     raise MapError('reactants has map intersection with reagents or products')
-                maps['reactants'] = [x if x not in d else next(length) for x in maps['reactants']]
+                maps['reactants'] = [(x if x not in d else next(length), y) for x, y in maps['reactants']]
 
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
         if self.__remap:
             lose = sorted(set(range(1, next(length)))
-                          .difference(spmaps or maps['reagents'] + maps['products'])
-                          .difference(maps['reactants']), reverse=True)
+                          .difference(spmaps or (x for x, _ in chain(maps['reagents'], maps['products'])))
+                          .difference(x for x, _ in maps['reactants']), reverse=True)
             if lose:
                 for i in ('reagents', 'products', 'reactants'):
                     if not maps[i]:
                         continue
                     for j in lose:
-                        maps[i] = [x if x < j else x - 1 for x in maps[i]]
+                        maps[i] = [(x if x < j else x - 1, y) for x, y in maps[i]]
         ''' end
         '''
         rc = ReactionContainer(meta={x: '\n'.join(y) for x, y in reaction['meta'].items()})
@@ -154,9 +160,22 @@ class CGRread:
         return rc
 
     def _get_molecule(self, molecule):
-        length = count(max(x['map'] for x in molecule['atoms']) + 1)
-        remapped = {k: (k if self.__remap else l['map'] or next(length))
-                    for k, l in enumerate(molecule['atoms'], start=1)}
+        if self.__remap:
+            remapped = {k: (k, k) for k in range(1, len(molecule['atoms']) + 1)}
+        else:
+            length = count(max(x['map'] for x in molecule['atoms']) + 1)
+            remapped, used = {}, []
+            for k, l in enumerate(molecule['atoms'], start=1):
+                m = l['map'] or next(length)
+                if m in used:
+                    if not self.__ignore:
+                        raise MapError('mapping in molecules should be unique')
+
+                    remapped[k] = (next(length), m)
+                else:
+                    remapped[k] = (m, m)
+                    used.append(m)
+
         return self.__parse_molecule(molecule, remapped, meta=molecule['meta'], colors=molecule['colors'])
 
     @classmethod
@@ -293,7 +312,7 @@ class CGRread:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
 
         for k, l in enumerate(molecule['atoms'], start=1):
-            atom_map = mapping[k]
+            atom_map, parsed_map = mapping[k]
             if k in cgr_dat_atom:
                 atom_dat = cgr_dat_atom[k]
                 if 'sp_charge' not in atom_dat:
@@ -306,10 +325,10 @@ class CGRread:
                     atom_dat.update(p_x=l['x'], p_y=l['y'], p_z=l['z'])
 
                 p_z = atom_dat['p_z']
-                g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], **atom_dat)
+                g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], map=parsed_map, **atom_dat)
             else:
                 p_z = l['z']
-                g.add_node(atom_map, mark=l['mark'],
+                g.add_node(atom_map, mark=l['mark'], map=parsed_map,
                            s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
                            s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'])
 
@@ -325,7 +344,7 @@ class CGRread:
                 mdl_p_stereo = False
 
         for k, l, m, s in molecule['bonds']:
-            k_map, l_map = mapping[k], mapping[l]
+            k_map, l_map = mapping[k][0], mapping[l][0]
             if m == 8 and k in cgr_dat_bond and l in cgr_dat_bond[k]:  # dynbond only for any bond accept.
                 g.add_edge(k_map, l_map, **cgr_dat_bond[k][l])
             else:
@@ -334,7 +353,7 @@ class CGRread:
             # remove dynamic stereo if bond not any [8]. INVALID SPEC.
             if m == 8 and k in cgr_dat_stereo and l in cgr_dat_stereo[k]:
                 a1, a2, s, p = cgr_dat_stereo[k][l]
-                g.add_stereo(mapping[a1], mapping[a2], s=mdl_s_stereo and s, p=mdl_p_stereo and p)
+                g.add_stereo(mapping[a1][0], mapping[a2][0], s=mdl_s_stereo and s, p=mdl_p_stereo and p)
 
             elif m == 1 and mdl_s_stereo and s in (1, 6):
                 s_mark = 1 if s == 1 else -1
@@ -343,7 +362,7 @@ class CGRread:
         if colors:
             for k, v in colors.items():
                 for a, c in cls.__parse_colors(k, v).items():
-                    g.nodes[mapping[a]].update(c)
+                    g.nodes[mapping[a][0]].update(c)
         return g
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
