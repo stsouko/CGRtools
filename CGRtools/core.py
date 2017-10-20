@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from networkx import connected_components
-from .containers import MoleculeContainer
+from .containers import MoleculeContainer, CGRContainer
 
 
 class CGRcore(object):
@@ -32,15 +32,11 @@ class CGRcore(object):
         if set(m1) & set(m2):
             raise Exception('The node sets of m1 and m2 are not disjoint.')
 
-        u = MoleculeContainer()
+        u = CGRContainer() if isinstance(m1, CGRContainer) or isinstance(m2, CGRContainer) else MoleculeContainer()
         u.add_nodes_from(m1.nodes(data=True))
         u.add_nodes_from(m2.nodes(data=True))
         u.add_edges_from(m1.edges(data=True))
         u.add_edges_from(m2.edges(data=True))
-
-        for m in (m1, m2):
-            for (a1, a2), x in m._stereo_dict.items():
-                u.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return u
 
     @classmethod
@@ -50,7 +46,7 @@ class CGRcore(object):
         common = set(m1).intersection(m2)
         extended_common = set()
         new_stereo = {}
-        h = MoleculeContainer()
+        h = CGRContainer()
 
         """ remove bond, neighbors and hybridization states for common atoms.
         """
@@ -93,7 +89,7 @@ class CGRcore(object):
 
         """ update sp_* marks
         """
-        h.fix_sp_marks(nodes_bunch=extended_common, edges_bunch=common)
+        h.fix_data(nodes_bunch=extended_common, edges_bunch=common)
 
         for (a1, a2), x in new_stereo.items():
             h.add_stereo(a1, a2, x.get('s'), x.get('p'))

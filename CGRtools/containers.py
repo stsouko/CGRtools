@@ -36,7 +36,7 @@ class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
 
 class MoleculeContainer(Graph):
     def __init__(self, meta=None):
-        super(MoleculeContainer, self).__init__()
+        super().__init__()
         if isinstance(meta, dict):
             self.__meta = meta
 
@@ -44,86 +44,60 @@ class MoleculeContainer(Graph):
         if self.__visible is None:
             self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.subgraph.__name__,
                               self.remap.__name__, self.add_stereo.__name__, self.get_morgan.__name__,
-                              self.get_fear.__name__, self.get_fear_hash.__name__, self.get_center_atoms.__name__,
-                              self.get_environment.__name__, self.fix_sp_marks.__name__,
-                              self.reset_query_marks.__name__,
+                              self.get_fear.__name__, self.get_fear_hash.__name__,
+                              self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
                               self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                              'meta', 'stereo', 'bonds_count', 'atoms_count']  # properties names inaccessible
+                              'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
         return self.__visible
 
-    def pickle(self, compress=True):
-        """ return json serializable CGR
-        :stereo: save stereo data
-        :compres: return smaller json for molecules. don't use for queries structures!
+    def pickle(self):
+        """ return json serializable CGR or Molecule
         """
-        g = Graph()
-        if compress and not self.get_center_atoms():
-            s_only = True
-            node_marks = self.__node_s
-            edge_marks = ('s_bond',)
-        else:
+        if isinstance(self, CGRContainer):
             s_only = False
-            node_marks = self.__node_sp
-            edge_marks = ('s_bond', 'p_bond')
+            node_marks = self._node_sp
+            edge_marks = self._edge_sp
+        else:
+            s_only = True
+            node_marks = self._node_s
+            edge_marks = self._edge_s
 
+        g = Graph()
         g.add_nodes_from((n, {k: v for k, v in a.items() if k in node_marks}) for n, a in self.nodes(data=True))
         g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
 
         data = node_link_data(g, attrs=self.__attrs)
-        data.update(meta=self.meta, s_only=s_only,
-                    stereo=[[a1, a2, x.get('s'), x.get('p')] for (a1, a2), x in self._stereo_dict.items()])
+        data.update(meta=self.meta, s_only=s_only)
         return data
 
     @classmethod
     def unpickle(cls, data):
-        """ convert json serializable CGR into MoleculeContainer object instance 
+        """ convert json serializable CGR into MoleculeContainer or CGRcontainer object instance
         """
         g = node_link_graph(data, attrs=cls.__attrs)
-        g.__class__ = cls
+        g.__class__ = MoleculeContainer if data['s_only'] else CGRContainer
+        g.fix_data()
         g.meta.update(data['meta'])
-        for s in data['stereo']:
-            g.add_stereo(*s)
-
-        if data['s_only']:
-            for _, a in g.nodes(data=True):
-                a.update(cls.__attr_sp_clone(a, cls.__node_marks))
-                a.update(p_x=a['s_x'], p_y=a['s_y'], p_z=a['s_z'])
-            for *_, a in g.edges(data=True):
-                a.update(cls.__attr_sp_clone(a, (('s_bond', 'p_bond', 'sp_bond'),)))
-        else:
-            g.fix_sp_marks()
         return g
 
     def copy(self):
-        copy = super(MoleculeContainer, self).copy()
+        copy = super().copy()
         copy.__class__ = self.__class__
         copy.meta.update(self.meta)
-        for (a1, a2), x in self._stereo_dict.items():
-            copy.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return copy
 
-    def subgraph(self, nbunch, copy=True, meta=False):
-        sub = super(MoleculeContainer, self).subgraph(nbunch)
+    def subgraph(self, nbunch, meta=False):
+        sub = super().subgraph(nbunch).copy()
         sub.__class__ = self.__class__
-        if copy:
-            sub = sub.copy()
         if meta:
             sub.meta.update(self.meta)
-        for (a1, a2), x in self._stereo_dict.items():
-            sub.add_stereo(a1, a2, x.get('s'), x.get('p'))
+        sub._fix_stereo()
         return sub
 
     def remap(self, mapping, copy=False):
         g = relabel_nodes(self, mapping, copy=copy)
-        old_stereo = self._stereo_dict
-        if not copy:
-            self.__stereo_dict = {}
-            self.__stereo = {}
-        else:
+        if copy:
             g.__class__ = self.__class__
-
-        for (a1, a2), x in old_stereo.items():
-            g.add_stereo(mapping[a1], mapping[a2], x.get('s'), x.get('p'))
         return g
 
     @property
@@ -132,30 +106,14 @@ class MoleculeContainer(Graph):
             self.__meta = {}
         return self.__meta
 
-    @property
-    def stereo(self):
-        if self.__stereo is None:
-            self.__stereo = {}
-        return self.__stereo
+    def add_stereo(self, atom1, atom2, mark):
+        if self.has_edge(atom1, atom2):
+            # todo: stereo calc
+            pass
 
-    @property
-    def _stereo_dict(self):
-        if self.__stereo_dict is None:
-            self.__stereo_dict = {}
-        return self.__stereo_dict
-
-    def add_stereo(self, atom1, atom2, s=None, p=None):
-        val = {}
-        if s:
-            val['s'] = s
-        if p:
-            val['p'] = p
-        if val and self.has_edge(atom1, atom2):
-            atoms = (atom1, atom2)
-            val['atoms'] = atoms
-            self._stereo_dict[atoms] = val
-            self.stereo.setdefault(atom1, {})[atom2] = val
-            self.stereo.setdefault(atom2, {})[atom1] = val
+    def get_stereo(self, atom1, atom2):
+        # todo: implement stereo to bond projection
+        return None, None
 
     def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
         return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))
@@ -172,23 +130,7 @@ class MoleculeContainer(Graph):
         return get_cgr_string(self, weights or get_morgan(self, isotope=isotope, element=element),
                               isotope=isotope, stereo=stereo, hyb=hyb, element=element)
 
-    def get_center_atoms(self, stereo=False):
-        """ get atoms of reaction center (dynamic bonds, stereo or charges).
-        """
-        # todo: stereo
-        nodes = set()
-        for n, node_attr in self.nodes(data=True):
-            if node_attr.get('s_charge') != node_attr.get('p_charge'):
-                nodes.add(n)
-
-        for *n, node_attr in self.edges(data=True):
-            if node_attr.get('s_bond') != node_attr.get('p_bond'):
-                nodes.update(n)
-
-        return list(nodes)
-
-    def add_atom(self, element, _map=None, s_charge=0, p_charge=None, mark='0',
-                 s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+    def add_atom(self, element, s_charge, _map=None, mark='0', x=0, y=0, z=0):
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
@@ -196,30 +138,18 @@ class MoleculeContainer(Graph):
 
         # todo: charges and elements checks.
 
-        if p_charge is None:
-            p_charge = s_charge
-        if p_x is None:
-            p_x = s_x
-        if p_y is None:
-            p_y = s_y
-        if p_z is None:
-            p_z = s_z
+        self.add_node(_map, element=element, s_charge=s_charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
 
-        self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
-                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
-
-    def add_bond(self, atom1, atom2, s_bond=1, p_bond=1):
+    def add_bond(self, atom1, atom2, mark):
         if atom1 not in self or atom2 not in self:
             raise Exception('atoms not found')
-        attr = {}
-        if s_bond:
-            attr['s_bond'] = s_bond
-        if p_bond:
-            attr['p_bond'] = p_bond
-        self.add_edge(atom1, atom2, **attr)
+        if not mark:
+            raise Exception('no bond data')
+
+        self.add_edge(atom1, atom2, s_bond=mark)
 
     def bond(self, atom1, atom2):
-        return super().__getitem__(atom1)[atom2]
+        return self[atom1][atom2]
 
     def atom(self, n):
         return self.nodes[n]
@@ -253,26 +183,134 @@ class MoleculeContainer(Graph):
 
         return centers
 
-    def get_morgan(self, isotope=False, element=True):
-        return get_morgan(self, isotope=isotope, element=element)
+    def get_morgan(self, isotope=False, element=True, stereo=False):
+        return get_morgan(self, isotope=isotope, element=element, stereo=stereo)
 
-    def fix_sp_marks(self, copy=False, nodes_bunch=None, edges_bunch=None):
+    def fix_data(self, copy=False, nodes_bunch=None, edges_bunch=None):
         g = self.copy() if copy else self
-        if nodes_bunch is None:
-            for _, a in g.nodes(data=True):
-                a.update(self.__attr_renew(a, self.__node_marks))
-        else:
-            for x in g.nbunch_iter(nodes_bunch):
-                a = g.nodes[x]
-                a.update(self.__attr_renew(a, self.__node_marks))
+        for a in ((a for _, a in g.nodes(data=True)) if nodes_bunch is None else
+                  (g.nodes[x] for x in g.nbunch_iter(nodes_bunch))):
+            new = self._attr_renew(a, self._node_marks)
+            a.clear()
+            a.update(new)
 
         for *_, a in g.edges(nbunch=edges_bunch, data=True):
-            a.update(self.__attr_renew(a, (('s_bond', 'p_bond', 'sp_bond'),)))
+            new = self._attr_renew(a, self._edge_marks)
+            a.clear()
+            a.update(new)
         return g if copy else None
 
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms. 
+        :param copy: if True return copy of graph and keep existing as is
+        :return: graph if copy True else None
+        """
+        g = self.copy() if copy else self
+        b, h, n = 's_bond', 's_hyb', 's_neighbors'
+        for i in g:
+            label = dict(s_hyb=1, p_hyb=1, s_neighbors=0, p_neighbors=0)
+            #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
+            for node, bond in g[i].items():
+                b_type = bond.get(b)
+                if b_type and g.nodes[node]['element'] != 'H':
+                    label[n] += 1
+                if b_type in (1, None) or label[h] in (3, 4):
+                    continue
+                elif b_type == 4:
+                    label[h] = 4
+                elif b_type == 3 or (b_type == 2 and label[h] == 2):  # Если есть 3-я или две 2-х связи, то sp1
+                    label[h] = 3
+                elif b_type == 2 and label[h] != 3:
+                    # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
+                    label[h] = 2
+
+            g.nodes[i].update(label)
+        return g if copy else None
+
+    @staticmethod
+    def _attr_renew(attr, marks):
+        new_attr = {}
+        for s in marks:
+            ls = attr.get(s)
+            if ls is not None:
+                new_attr[s] = ls
+        return new_attr
+
+    def _fix_stereo(self):
+        pass
+
+    __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
+    __node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
+    _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo')
+    _node_s = _node_marks + __node_base
+    _edge_s = _edge_marks = ('s_bond', 's_stereo')
+    __meta = __visible = None
+
+
+class CGRContainer(MoleculeContainer):
+    def __dir__(self):
+        if self.__visible is None:
+            self.__visible = tmp = super().__dir__()
+            tmp.append(self.get_center_atoms.__name__)
+        return self.__visible
+
+    def get_center_atoms(self, stereo=False):
+        """ get atoms of reaction center (dynamic bonds, stereo or charges).
+        """
+        # todo: stereo
+        nodes = set()
+        for n, node_attr in self.nodes(data=True):
+            if node_attr.get('s_charge') != node_attr.get('p_charge'):
+                nodes.add(n)
+
+        for *n, node_attr in self.edges(data=True):
+            if node_attr.get('s_bond') != node_attr.get('p_bond'):
+                nodes.update(n)
+
+        return list(nodes)
+
+    def add_atom(self, element, s_charge, p_charge=None, _map=None, mark='0',
+                 s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+        if _map is None:
+            _map = max(self, default=0) + 1
+        elif _map in self:
+            raise Exception('mapping exists')
+
+        # todo: charges and elements checks.
+
+        if p_charge is None:
+            p_charge = s_charge
+        if p_x is None:
+            p_x = s_x
+        if p_y is None:
+            p_y = s_y
+        if p_z is None:
+            p_z = s_z
+
+        self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
+                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
+
+    def add_bond(self, atom1, atom2, s_mark, p_mark):
+        if atom1 not in self or atom2 not in self:
+            raise Exception('atoms not found')
+        attr = {}
+        if s_mark:
+            attr['s_bond'] = s_mark
+        if p_mark:
+            attr['p_bond'] = p_mark
+        if not attr:
+            raise Exception('no bonds data')
+        self.add_edge(atom1, atom2, **attr)
+
+    def add_stereo(self, atom1, atom2, s_mark, p_mark):
+        if self.has_edge(atom1, atom2):
+            # todo: stereo calc
+            pass
+
+    def reset_query_marks(self, copy=False):
+        """
+        set or reset hyb and neighbors marks to atoms.
         :param copy: if True return copy of graph and keep existing as is
         :return: graph if copy True else None
         """
@@ -301,17 +339,11 @@ class MoleculeContainer(Graph):
             g.nodes[i].update(label)
         return g if copy else None
 
-    @staticmethod
-    def __attr_sp_clone(attr, marks):
-        new_attr = {}
-        for s, p, sp in marks:
-            ls = attr.get(s)
-            if ls is not None:
-                new_attr[p] = new_attr[sp] = ls
-        return new_attr
+    def _fix_stereo(self):
+        pass
 
     @staticmethod
-    def __attr_renew(attr, marks):
+    def _attr_renew(attr, marks):
         new_attr = {}
         for s, p, sp in marks:
             ls = attr.get(s)
@@ -338,12 +370,13 @@ class MoleculeContainer(Graph):
                 new_attr[sp] = ls
         return new_attr
 
-    __node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'charge'))
-    __tmp_node = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
-    __node_s = tuple(chain((x for x, *_ in __node_marks), __tmp_node))
-    __node_sp = tuple(chain((y for x in __node_marks for y in x[:2]), __tmp_node, ('p_x', 'p_y', 'p_z')))
-    __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
-    __stereo = __meta = __stereo_dict = __visible = None
+    __node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
+    _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
+                        for mark in ('neighbors', 'hyb', 'charge', 'stereo'))
+    _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
+    _node_sp = tuple(chain((y for x in _node_marks for y in x[:2]), __node_base, ('p_x', 'p_y', 'p_z')))
+    _edge_sp = ('s_bond', 'p_bond', 's_stereo', 'p_stereo')
+    __visible = None
 
 
 class ReactionContainer(object):

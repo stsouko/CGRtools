@@ -25,15 +25,18 @@ from operator import mul, itemgetter
 from periodictable import elements
 
 
-def get_morgan(g, isotope=False, element=True):
+def get_morgan(g, isotope=False, element=True, stereo=False):
     newlevels = {}
     countprime = iter(primes)
 
     params = {n: (primes[elements.symbol(attr['element']).number] if element else 1,
                   primes[attr['isotope']] if isotope and 'isotope' in attr else 1,
-                  primes[10 * attr['s_charge'] + attr['p_charge']] if element else 1,
+                  primes[10 * attr['s_charge'] + attr.get('p_charge', 0)] if element else 1,
+                  primes[10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0)] if stereo else 1,
                   reduce(mul, (primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
-                               for eattr in g[n].values()), 1))
+                               for eattr in g[n].values()), 1),
+                  reduce(mul, (primes[10 * (eattr.get('s_stereo') or 0) + (eattr.get('p_stereo') or 0)]
+                               for eattr in g[n].values()), 1) if stereo else 1)
               for n, attr in g.nodes(data=True)}
 
     weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))

@@ -23,7 +23,7 @@ from sys import stderr
 from time import strftime
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, InvalidData
-from ..containers import MoleculeContainer
+from ..containers import MoleculeContainer, CGRContainer
 
 
 class RDFread(CGRread):
@@ -189,7 +189,7 @@ class RDFwrite(CGRwrite):
         self.write = self.__write
 
     def __write(self, data):
-        if isinstance(data, MoleculeContainer):
+        if isinstance(data, (MoleculeContainer, CGRContainer)):
             m = self.get_formatted_cgr(data)
             self.__file.write('$MFMT\n')
             self.__file.write(m['CGR'])

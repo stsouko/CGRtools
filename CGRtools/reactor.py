@@ -23,7 +23,7 @@ from itertools import product, combinations
 from networkx import compose, has_path
 from networkx.algorithms import isomorphism as gis
 from warnings import warn
-from .containers import CGRTemplate, MatchContainer, MoleculeContainer
+from .containers import CGRTemplate, MatchContainer, MoleculeContainer, CGRContainer
 from .core import CGRcore
 
 
@@ -113,7 +113,7 @@ class CGRreactor(object):
     def __get_substitution_paths(g):
         """
         get atoms paths from detached atom to attached
-        :param g: MoleculeContainer
+        :param g: CGRContainer
         :return: tuple of atoms numbers
         """
         for n, nbrdict in g.adjacency():
@@ -175,7 +175,7 @@ class CGRreactor(object):
                     break
 
         if r_group_clones:
-            tmp.__class__ = MoleculeContainer
+            tmp.__class__ = CGRContainer
         ''' add lose X groups to R groups
         '''
         for i, j in r_group_clones:
@@ -231,8 +231,8 @@ class CGRreactor(object):
     @staticmethod
     def patcher(structure, patch):
         """ remove edges bw common nodes. add edges from template and replace nodes data
-        :param structure: MoleculeContainer
-        :param patch: MoleculeContainer with replacement data
+        :param structure: MoleculeContainer or CGRContainer
+        :param patch: MoleculeContainer or CGRContainer with replacement data
         """
         s = structure.copy()
         p = patch.copy()
@@ -240,25 +240,22 @@ class CGRreactor(object):
         common = set(p).intersection(s)
         for i in common:
             pni = p.nodes[i]
-            for j in {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors'}.intersection(pni):
+            for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
+                      'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(pni):
                 if isinstance(pni[j], dict):
                     pni[j] = pni[j][s.nodes[i][j]]
 
         for m, n, a in p.edges(data=True):
             if m in common and n in common:
-                for j in {'s_bond', 'p_bond'}.intersection(a):
+                for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
                     if isinstance(a[j], dict):
                         a[j] = a[j][s[m][n][j]]
 
         s.remove_edges_from(combinations(common, 2))
         composed = compose(s, p)
+        composed.__class__ = CGRContainer if isinstance(s, CGRContainer) or isinstance(p, CGRContainer) else \
+            MoleculeContainer
         composed.meta.update(s.meta)
-
-        for (a1, a2), x in s._stereo_dict.items():
-            if s.has_edge(a1, a2):
-                composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
-        for (a1, a2), x in p._stereo_dict.items():
-            composed.add_stereo(a1, a2, x.get('s'), x.get('p'))
         return composed
 
 

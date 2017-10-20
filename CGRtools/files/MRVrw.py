@@ -22,7 +22,7 @@ from itertools import chain, count
 from sys import stderr
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
-from ..containers import MoleculeContainer
+from ..containers import MoleculeContainer, CGRContainer
 
 
 class MRVread(CGRread):
@@ -75,7 +75,7 @@ class MRVwrite(CGRwrite):
     def __write(self, data):
         self.__file.write('<MDocument><MChemicalStruct>')
 
-        if isinstance(data, MoleculeContainer):
+        if isinstance(data, (MoleculeContainer, CGRContainer)):
             m = self.get_formatted_cgr(data)
             self.__file.write('<molecule><propertyList>')
             for k, v in chain(m['colors'].items(), data.meta.items()):

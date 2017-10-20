@@ -21,7 +21,7 @@
 from itertools import count, chain
 from collections import defaultdict
 from periodictable import elements
-from ..containers import ReactionContainer, MoleculeContainer
+from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
 mendeleyset = set(x.symbol for x in elements)
@@ -62,7 +62,8 @@ class CGRread:
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
                     self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
         elif line.startswith('M  SAL') and int(line[7:10]) in self.__prop:
-            self.__prop[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i]) for i in range(int(line[10:13])))
+            self.__prop[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i])
+                                                          for i in range(int(line[10:13])))
         elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
             key = line.split()[-1].lower()
             if key not in self.__cgrkeys:
@@ -255,10 +256,6 @@ class CGRread:
         elif _type == 'dynatomneighbors':
             return cls.__parsedyn('neighbors', value)
 
-        elif _type == 'isotope':
-            tmp = value.split(',')
-            return dict(isotope=[int(x) for x in tmp] if len(tmp) > 1 else int(tmp[0]))
-
     @staticmethod
     def __parse_colors(key, colors):
         adhoc, before, res = [], [], {}
@@ -285,9 +282,9 @@ class CGRread:
 
     @classmethod
     def __parse_molecule(cls, molecule, mapping, meta=None, colors=None):
-        g = MoleculeContainer(meta=meta and {x: '\n'.join(y) for x, y in meta.items()})
-        mdl_s_stereo = mdl_p_stereo = True
-        cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo = {}, {}, {}
+        meta = meta and {x: '\n'.join(y) for x, y in meta.items()} or None
+        cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = {}, {}, {}, {}
+        any_bonds, normal_stereo, cgr_stereo = [], [], []
         for k in molecule['CGR_DAT']:
             k_type = k['type']
             if k_type == 'dynatom':
@@ -296,68 +293,90 @@ class CGRread:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
             elif k_type == 'dynstereo':
                 s_stereo, p_stereo = (cls.__stereolabels[x] for x in k['value'].split('>'))
-                a1, a2 = k['atoms']
-                val = (a1, a2, s_stereo, p_stereo)
-                cgr_dat_stereo.setdefault(a1, {})[a2] = val
-                cgr_dat_stereo.setdefault(a2, {})[a1] = val
+                cgr_dat_stereo[k['atoms']] = (s_stereo, p_stereo)
             elif k_type in ('dynbond', 'extrabond'):
                 val = cls.__parsedyn('bond', k['value']) if k_type == 'dynbond' else cls.__parselist('bond', k['value'])
                 if val:
                     a1, a2 = k['atoms']
                     cgr_dat_bond.setdefault(a1, {})[a2] = val
                     cgr_dat_bond.setdefault(a2, {})[a1] = val
+            elif k_type == 'isotope':
+                tmp = k['value'].split(',')
+                if len(tmp) > 1:
+                    cgr_dat_atom.setdefault(k['atoms'][0], {})['isotope'] = [int(x) for x in tmp]
+                else:
+                    isotope_dat[k['atoms'][0]] = int(tmp[0])
             else:
                 val = cls.__cgr_dat(k_type, k['value'])
                 if val:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
 
+        is_cgr = True if cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo else False
+        g = CGRContainer(meta=meta) if is_cgr else MoleculeContainer(meta=meta)
+
         for k, l in enumerate(molecule['atoms'], start=1):
             atom_map, parsed_map = mapping[k]
-            if k in cgr_dat_atom:
-                atom_dat = cgr_dat_atom[k]
-                if 'sp_charge' not in atom_dat:
-                    atom_dat.update(s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'])
-                if 'p_x' in atom_dat:
-                    atom_dat['p_x'] += l['x']
-                    atom_dat['p_y'] += l['y']
-                    atom_dat['p_z'] += l['z']
-                else:
-                    atom_dat.update(p_x=l['x'], p_y=l['y'], p_z=l['z'])
+            if is_cgr:
+                if k in cgr_dat_atom:
+                    atom_dat = cgr_dat_atom[k]
+                    if 'sp_charge' not in atom_dat:
+                        lc = l['charge']
+                        atom_dat.update(s_charge=lc, p_charge=lc, sp_charge=lc)
+                    if 'p_x' in atom_dat:
+                        atom_dat['p_x'] += l['x']
+                        atom_dat['p_y'] += l['y']
+                        atom_dat['p_z'] += l['z']
+                    else:
+                        atom_dat.update(p_x=l['x'], p_y=l['y'], p_z=l['z'])
 
-                p_z = atom_dat['p_z']
-                g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], map=parsed_map, **atom_dat)
+                    g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], map=parsed_map, **atom_dat)
+                else:
+                    lc = l['charge']
+                    g.add_node(atom_map, mark=l['mark'], map=parsed_map,
+                               s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
+                               s_charge=lc, p_charge=lc, sp_charge=lc)
             else:
-                p_z = l['z']
                 g.add_node(atom_map, mark=l['mark'], map=parsed_map,
-                           s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
-                           s_charge=l['charge'], p_charge=l['charge'], sp_charge=l['charge'])
+                           s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=l['charge'])
 
             if 'element' not in g.nodes[atom_map] and l['element'] not in ('A', '*'):
                 g.nodes[atom_map]['element'] = l['element']
-            if l['isotope'] and 'isotope' not in g.nodes[atom_map]:
+            if (l['isotope'] or k in isotope_dat) and 'isotope' not in g.nodes[atom_map]:
                 a = elements.symbol(l['element'])
-                g.nodes[atom_map]['isotope'] = max((a[x].abundance, x) for x in a.isotopes)[1] + l['isotope']
-
-            if mdl_s_stereo and l['z'] != 0:
-                mdl_s_stereo = False
-            if mdl_p_stereo and abs(p_z) > .0001:
-                mdl_p_stereo = False
+                isotope_dat.get(k) or l['isotope']
+                g.nodes[atom_map]['isotope'] = max((a[x].abundance, x)
+                                                   for x in a.isotopes)[1] + (isotope_dat.get(k) or l['isotope'])
 
         for k, l, m, s in molecule['bonds']:
             k_map, l_map = mapping[k][0], mapping[l][0]
-            if m == 8 and k in cgr_dat_bond and l in cgr_dat_bond[k]:  # dynbond only for any bond accept.
-                g.add_edge(k_map, l_map, **cgr_dat_bond[k][l])
+            if is_cgr:
+                if m == 8 and k in cgr_dat_bond and l in cgr_dat_bond[k]:  # dynbond only for any bond accept.
+                    g.add_edge(k_map, l_map, **cgr_dat_bond[k][l])
+                else:
+                    g.add_edge(k_map, l_map, s_bond=m, p_bond=m, sp_bond=m)
+                if m == 8:
+                    any_bonds.append((k, l))
+                    any_bonds.append((l, k))
             else:
-                g.add_edge(k_map, l_map, s_bond=m, p_bond=m, sp_bond=m)
+                g.add_edge(k_map, l_map, s_bond=m)
 
-            # remove dynamic stereo if bond not any [8]. INVALID SPEC.
-            if m == 8 and k in cgr_dat_stereo and l in cgr_dat_stereo[k]:
-                a1, a2, s, p = cgr_dat_stereo[k][l]
-                g.add_stereo(mapping[a1][0], mapping[a2][0], s=mdl_s_stereo and s, p=mdl_p_stereo and p)
+            if s in (1, 6) and m in (1, 4):
+                s_mark = cls.__stereolabels[s]
+                if is_cgr:
+                    cgr_stereo.append((k_map, l_map, s_mark))
+                else:
+                    normal_stereo.append((k_map, l_map, s_mark))
 
-            elif m == 1 and mdl_s_stereo and s in (1, 6):
-                s_mark = 1 if s == 1 else -1
-                g.add_stereo(k_map, l_map, s=s_mark, p=mdl_p_stereo and s_mark)
+        for (k, l), (s_mark, p_mark) in cgr_dat_stereo.items():
+            if (k, l) in any_bonds:  # remove dynamic stereo if bond not any [8]. INVALID SPEC.
+                k_map, l_map = mapping[k][0], mapping[l][0]
+                g.add_stereo(k_map, l_map, s_mark, p_mark)
+
+        for k_map, l_map, s_mark in normal_stereo:
+            g.add_stereo(k_map, l_map, s_mark)
+
+        for k_map, l_map, s_mark in cgr_stereo:
+            g.add_stereo(k_map, l_map, s_mark, s_mark)
 
         if colors:
             for k, v in colors.items():
@@ -369,7 +388,7 @@ class CGRread:
     __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1,
                      atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1, dynstereo=2)
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
-    __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None}
+    __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None, 1: 1, 6: -1}
 
 
 class CGRwrite:
@@ -381,12 +400,13 @@ class CGRwrite:
         self.__atomprop = self.__extra_marks if extralabels else []
 
     def get_formatted_cgr(self, g):
+        is_cgr = isinstance(g, CGRContainer)
         data = dict(meta=g.meta.copy())
         cgr_dat, extended, atoms, bonds = [], [], [], []
         renum, colors = {}, {}
         for n, (i, l) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
-            charge, meta = self.__charge(l.get('s_charge'), l.get('p_charge'))
+            charge, meta = self.__charge(l['s_charge'], (l['p_charge'] if is_cgr else l['s_charge']))
             element = l.get('element', 'A')
 
             if meta:
@@ -416,7 +436,7 @@ class CGRwrite:
                 extended.append(dict(atom=n, value=l['element'], type='atomlist'))
                 element = 'L'
 
-            if self.__xyz:
+            if self.__xyz and is_cgr:
                 dx, dy, dz = l['p_x'] - l['s_x'], l['p_y'] - l['s_y'], l['p_z'] - l['s_z']
                 if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                     cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
@@ -429,15 +449,14 @@ class CGRwrite:
 
         for i, j, l in g.edges(data=True):
             re_atoms = (renum[i], renum[j])
-            if i in g.stereo and j in g.stereo[i]:
-                ss = g.stereo[i][j]
-                stereo = {'value': '%s>%s' % (ss.get('s', 'n'), ss.get('p', 'n')), 'type': 'dynstereo',
-                          'atoms': re_atoms}
-                if ss.get('s') != ss.get('p'):
+            s_stereo, p_stereo = g.get_stereo(i, j)
+            if s_stereo or p_stereo:
+                stereo = {'value': '%s>%s' % (s_stereo or 'n', p_stereo or 'n'), 'type': 'dynstereo', 'atoms': re_atoms}
+                if s_stereo != p_stereo:
                     s_mark = 0
                     s_dyn = True
                 else:
-                    s_mark = self.__stereoMDL[ss['s']] if self.__is_mdl else self.__stereoMRV[ss['s']]
+                    s_mark = self.__stereoMDL[s_stereo] if self.__is_mdl else self.__stereoMRV[s_stereo]
                     s_dyn = False
             else:
                 stereo = False
@@ -445,7 +464,7 @@ class CGRwrite:
                 s_dyn = False
 
             s_bond = l.get('s_bond') or 0
-            p_bond = l.get('p_bond') or 0
+            p_bond = l.get('p_bond') or 0 if is_cgr else s_bond
             if isinstance(s_bond, list):
                 if s_bond == p_bond:
                     cgr_dat.append({'value': ','.join(s_bond), 'type': 'extrabond', 'atoms': re_atoms})
