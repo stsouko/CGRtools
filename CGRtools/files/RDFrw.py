@@ -23,6 +23,7 @@ from sys import stderr
 from time import strftime
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, InvalidData
+from .MDLmol import MOLformat
 from ..containers import MoleculeContainer, CGRContainer
 
 
@@ -169,7 +170,7 @@ class RDFread(CGRread):
         return super()._get_molecule(molecule)
 
 
-class RDFwrite(CGRwrite):
+class RDFwrite(MOLformat, CGRwrite):
     def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
         self.__file = file
@@ -208,3 +209,7 @@ class RDFwrite(CGRwrite):
 
         for p in chain(colors.items(), data.meta.items()):
             self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)
+
+    @staticmethod
+    def _get_position(cord):
+        return CGRwrite._get_position(cord)

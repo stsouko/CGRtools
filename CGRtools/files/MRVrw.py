@@ -21,7 +21,7 @@
 from itertools import chain, count
 from sys import stderr
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, mendeleyset
 from ..containers import MoleculeContainer, CGRContainer
 
 
@@ -47,7 +47,7 @@ class MRVread(CGRread):
 
 class MRVwrite(CGRwrite):
     def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
-        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz, _format='mrv')
+        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
         self.__file = file
         self.write = self.__init_write
 
@@ -109,3 +109,41 @@ class MRVwrite(CGRwrite):
             self.__file.write('</propertyList></reaction>')
 
         self.__file.write('</MChemicalStruct></MDocument>')
+
+    @classmethod
+    def _format_mol(cls, atoms, bonds, extended, cgr_dat):
+        isotope = {}
+        atom_query = {}
+        for i in extended:
+            if i['type'] == 'isotope':
+                isotope[i['atom']] = ' isotope="%d"' % i['value']
+            elif i['type'] == 'atomlist':
+                atom_query[i['atom']] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in
+                                                                           mendeleyset.difference(i['value']))
+                                                                          if len(i['value']) > cls._half_table else
+                                                                          i['value'])
+
+        return ''.join(chain(('<atomArray>',),
+                             ('<atom id="a{0}" elementType="{1[element]}" x3="{1[x]:.4f}" y3="{1[y]:.4f}" '
+                              'z3="{1[z]:.4f}" mrvMap="{1[map]}" formalCharge="{1[charge]}"'
+                              '{2}{3}{4}/>'.format(i, j, isotope.get(i, ''), atom_query.get(i, ''),
+                                                   ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
+                              for i, j in enumerate(atoms, start=1)),
+                             ('</atomArray><bondArray>',),
+                             ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
+                              .format(i, j, l, '1" queryType="Any' if k == 8 else 'A' if k == 4 else k,
+                                      '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
+                              for i, (j, l, k, s) in enumerate(bonds, start=1)),
+                             ('</bondArray>',),
+                             ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1[type]}" fieldData="{1[value]}" '
+                              'atomRefs="{2}" x="{3[0]}" y="{3[1]}" '
+                              '/>'.format(i, j, ' '.join('a%d' % x for x in j['atoms']),
+                                          cls._get_position([atoms[i - 1] for i in j['atoms']]))
+                              for i, j in enumerate(cgr_dat, start=1))))
+
+    @staticmethod
+    def _xyz_convert(x, y, z):
+        return x * 2, y * 2, z * 2
+
+    _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
+    _charge_map = {}

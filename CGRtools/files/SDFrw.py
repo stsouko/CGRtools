@@ -22,6 +22,7 @@ from itertools import chain
 from sys import stderr
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
+from .MDLmol import MOLformat
 
 
 class SDFread(CGRread):
@@ -130,7 +131,7 @@ class SDFread(CGRread):
                     print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
 
-class SDFwrite(CGRwrite):
+class SDFwrite(MOLformat, CGRwrite):
     def __init__(self, output, extralabels=False, mark_to_map=False, xyz=False):
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
         self.__file = output
@@ -152,3 +153,7 @@ class SDFwrite(CGRwrite):
         for i in chain(m['colors'].items(), m['meta'].items()):
             self.__file.write(">  <%s>\n%s\n" % i)
         self.__file.write("$$$$\n")
+
+    @staticmethod
+    def _get_position(cord):
+        return CGRwrite._get_position(cord)

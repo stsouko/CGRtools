@@ -53,14 +53,9 @@ class MoleculeContainer(Graph):
     def pickle(self):
         """ return json serializable CGR or Molecule
         """
-        if isinstance(self, CGRContainer):
-            s_only = False
-            node_marks = self._node_sp
-            edge_marks = self._edge_sp
-        else:
-            s_only = True
-            node_marks = self._node_s
-            edge_marks = self._edge_s
+        s_only = not isinstance(self, CGRContainer)
+        node_marks = self._node_save
+        edge_marks = self._edge_save
 
         g = Graph()
         g.add_nodes_from((n, {k: v for k, v in a.items() if k in node_marks}) for n, a in self.nodes(data=True))
@@ -190,9 +185,11 @@ class MoleculeContainer(Graph):
         g = self.copy() if copy else self
         for a in ((a for _, a in g.nodes(data=True)) if nodes_bunch is None else
                   (g.nodes[x] for x in g.nbunch_iter(nodes_bunch))):
-            new = self._attr_renew(a, self._node_marks)
+            sp_new = self._attr_renew(a, self._node_marks)
+            cm_new = self.__node_attr_clear(a)
             a.clear()
-            a.update(new)
+            a.update(sp_new)
+            a.update(cm_new)
 
         for *_, a in g.edges(nbunch=edges_bunch, data=True):
             new = self._attr_renew(a, self._edge_marks)
@@ -237,14 +234,23 @@ class MoleculeContainer(Graph):
                 new_attr[s] = ls
         return new_attr
 
+    @classmethod
+    def __node_attr_clear(cls, attr):
+        new_attr = {}
+        for s in cls._node_base:
+            ls = attr.get(s)
+            if ls is not None:
+                new_attr[s] = ls
+        return new_attr
+
     def _fix_stereo(self):
         pass
 
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
-    __node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
+    _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
     _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo')
-    _node_s = _node_marks + __node_base
-    _edge_s = _edge_marks = ('s_bond', 's_stereo')
+    _node_save = _node_marks + _node_base
+    _edge_save = _edge_marks = ('s_bond', 's_stereo')
     __meta = __visible = None
 
 
@@ -365,17 +371,21 @@ class CGRContainer(MoleculeContainer):
                 new_attr[s] = [x for x, _ in new_attr[sp]]
                 new_attr[p] = [x for _, x in new_attr[sp]]
             elif ls != lp:
+                if ls is not None:
+                    new_attr[s] = ls
+                if lp is not None:
+                    new_attr[p] = lp
                 new_attr[sp] = (ls, lp)
             elif ls is not None:
-                new_attr[sp] = ls
+                new_attr[sp] = new_attr[s] = new_attr[p] = ls
         return new_attr
 
-    __node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
+    _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
     _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
                         for mark in ('neighbors', 'hyb', 'charge', 'stereo'))
     _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
-    _node_sp = tuple(chain((y for x in _node_marks for y in x[:2]), __node_base, ('p_x', 'p_y', 'p_z')))
-    _edge_sp = ('s_bond', 'p_bond', 's_stereo', 'p_stereo')
+    _node_save = tuple(chain((y for x in _node_marks for y in x[:2]), _node_base))
+    _edge_save = ('s_bond', 'p_bond', 's_stereo', 'p_stereo')
     __visible = None
 
 
