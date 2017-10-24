@@ -23,6 +23,7 @@ from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
+from . import InvalidData
 from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
@@ -129,7 +130,7 @@ class MoleculeContainer(Graph):
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
-            raise Exception('mapping exists')
+            raise InvalidData('mapping exists')
 
         # todo: charges and elements checks.
 
@@ -137,9 +138,9 @@ class MoleculeContainer(Graph):
 
     def add_bond(self, atom1, atom2, mark):
         if atom1 not in self or atom2 not in self:
-            raise Exception('atoms not found')
+            raise InvalidData('atoms not found')
         if not mark:
-            raise Exception('no bond data')
+            raise InvalidData('no bond data')
 
         self.add_edge(atom1, atom2, s_bond=mark)
 
@@ -281,7 +282,7 @@ class CGRContainer(MoleculeContainer):
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
-            raise Exception('mapping exists')
+            raise InvalidData('mapping exists')
 
         # todo: charges and elements checks.
 
@@ -299,14 +300,14 @@ class CGRContainer(MoleculeContainer):
 
     def add_bond(self, atom1, atom2, s_mark, p_mark):
         if atom1 not in self or atom2 not in self:
-            raise Exception('atoms not found')
+            raise InvalidData('atoms not found')
         attr = {}
         if s_mark:
             attr['s_bond'] = s_mark
         if p_mark:
             attr['p_bond'] = p_mark
         if not attr:
-            raise Exception('no bonds data')
+            raise InvalidData('no bonds data')
         self.add_edge(atom1, atom2, **attr)
 
     def add_stereo(self, atom1, atom2, s_mark, p_mark):

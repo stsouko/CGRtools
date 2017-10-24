@@ -28,10 +28,11 @@ from ..containers import MoleculeContainer, CGRContainer
 
 
 class RDFread(CGRread):
-    def __init__(self, file, remap=True, ignore=False):
+    def __init__(self, file, remap=True, ignore=False, is_template=False):
         self.__file = file
         self.__data = self.__reader()
-        CGRread.__init__(self, remap, ignore=ignore)
+        self.__ignore = ignore
+        CGRread.__init__(self, remap, ignore=ignore, is_template=is_template)
 
     def read(self):
         return list(self.__data)
@@ -97,7 +98,7 @@ class RDFread(CGRread):
                 elif n == im:
                     try:
                         atoms = int(line[0:3])
-                        if not atoms:
+                        if not (atoms or self.__ignore):
                             raise EmptyMolecule('Molecule without atoms')
                         atomcount = atoms + im
                         bondcount = int(line[3:6]) + atomcount

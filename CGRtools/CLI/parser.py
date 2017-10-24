@@ -54,10 +54,9 @@ def _condenser_common(parser):
 
 
 def _balanser_common(parser):
-    parser.add_argument("--m_templates", "-M", type=FileType(), default=None,
-                        help="RDF with reactions remapping rules")
-    parser.add_argument("--b_templates", "-B", type=FileType(), default=None,
-                        help="RDF with reactions balancing rules")
+    parser.add_argument("--templates", "-T", type=FileType(), default=None,
+                        help="RDF with reactions standardizing rules")
+    parser.add_argument("--balance", "-B", action='store_true', help="Balance reactions")
 
 
 def _balanser(subparsers):

@@ -21,31 +21,45 @@
 from functools import reduce
 from itertools import product, combinations
 from networkx import compose, has_path
-from networkx.algorithms import isomorphism as gis
+from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
+                                             categorical_edge_match)
 from warnings import warn
+from . import InvalidConfig, InvalidData
 from .containers import CGRTemplate, MatchContainer, MoleculeContainer, CGRContainer
 from .core import CGRcore
+
+
+class InvalidTemplate(Exception):
+    pass
 
 
 class CGRreactor(object):
     """ CGR isomorphism based operations
     """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
-        gnm_sp, pcnm = [], ['element', 'p_charge']
+        gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge']
         if isotope:
             gnm_sp.append('isotope')
-            pcnm.append('isotope')
+            gnm_s.append('isotope')
+            cnm_p.append('isotope')
         if element:
             gnm_sp.extend(['sp_charge', 'element'])
+            gnm_s.extend(['s_charge', 'element'])
         if extralabels:
-            gnm_sp.append('sp_neighbors')
-            gnm_sp.append('sp_hyb')
+            gnm_sp.extend(['sp_neighbors', 'sp_hyb'])
+            gnm_s.extend(['s_neighbors', 's_hyb'])
+        if stereo:
+            gnm_sp.append('sp_stereo')
+            gnm_s.append('s_stereo')
+            cnm_p.append('p_stereo')
 
-        self.__node_match = gis.generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
-        self.__node_match_products = gis.categorical_node_match(pcnm, [None] * len(pcnm))
+        self.__node_match = generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
+        self.__node_match_reagents = generic_node_match(gnm_s, [None] * len(gnm_s), [self.__list_eq] * len(gnm_s))
+        self.__node_match_products = categorical_node_match(cnm_p, [None] * len(cnm_p))
 
-        self.__edge_match = gis.generic_node_match('sp_bond', None, self.__list_eq)
-        self.__edge_match_products = gis.categorical_edge_match('p_bond', None)
+        self.__edge_match = generic_node_match('sp_bond', None, self.__list_eq)
+        self.__edge_match_reagents = generic_node_match('s_bond', None, self.__list_eq)
+        self.__edge_match_products = categorical_edge_match('p_bond', None)
 
         self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
 
@@ -60,11 +74,18 @@ class CGRreactor(object):
         """
         args = {'stereo', 'extralabels', 'isotope', 'element'}
         if args.difference(config):
-            raise Exception('Invalid config')
+            raise InvalidConfig('Invalid config')
         return cls(**{k: v for k, v in config.items() if k in args})
 
     def get_cgr_matcher(self, g, h):
-        return gis.GraphMatcher(g, h, node_match=self.__node_match, edge_match=self.__edge_match)
+        if isinstance(g, MoleculeContainer):
+            nm = self.__node_match_reagents
+            em = self.__node_match_reagents
+        else:
+            nm = self.__node_match
+            em = self.__edge_match
+
+        return GraphMatcher(g, h, node_match=nm, edge_match=em)
 
     def get_template_searcher(self, templates):
         def searcher(g, skip_intersection=True):
@@ -132,6 +153,9 @@ class CGRreactor(object):
                 yield n, m
 
     def clone_subgraphs(self, g):
+        if not isinstance(g, CGRContainer):
+            raise InvalidData('only CGRContainer acceptable')
+
         r_group = []
         x_group = {}
         r_group_clones = []
@@ -163,8 +187,8 @@ class CGRreactor(object):
         tmp = g
         for i in newcomponents:
             for k, j in r_group:
-                gm = gis.GraphMatcher(j, i, node_match=self.__node_match_products,
-                                      edge_match=self.__edge_match_products)
+                gm = GraphMatcher(j, i, node_match=self.__node_match_products,
+                                  edge_match=self.__edge_match_products)
                 ''' search for similar R-groups started from bond breaks.
                 '''
                 mapping = next((x for x in gm.subgraph_isomorphisms_iter() if k.issubset(x) and
@@ -200,12 +224,19 @@ class CGRreactor(object):
         newmap.update({x: y for x, y in zip(set(g).difference(newmap), set(range(1, 1000)).difference(h))})
         return g.remap(newmap, copy=True), newmap
 
+    @classmethod
+    def get_templates(cls, raw_templates):
+        warn('get_templates name deprecated. use prepare_templates instead', DeprecationWarning)
+        return cls.prepare_templates(raw_templates)
+
     @staticmethod
-    def get_templates(raw_templates):
+    def prepare_templates(raw_templates):
         templates = []
         for template in raw_templates:
             products = reduce(CGRcore.union, template.products).copy()
             reagents = reduce(CGRcore.union, template.reagents).copy()
+            if isinstance(reagents, MoleculeContainer) or isinstance(products, MoleculeContainer):
+                raise InvalidTemplate('Templates should be CGRContainers')
 
             common = set(products).intersection(reagents)
             for n in common:

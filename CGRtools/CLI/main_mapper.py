@@ -47,3 +47,5 @@ def mapper_core(**kwargs):
         dump.write(i)
 
     print('%d from %d reactions mapped' % (num - err, num), file=stderr)
+
+    return 0 if num and not err else 1 if num - err else 2

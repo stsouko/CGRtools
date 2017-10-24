@@ -19,6 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from networkx import connected_components
+from . import InvalidData
 from .containers import MoleculeContainer, CGRContainer
 
 
@@ -30,7 +31,7 @@ class CGRcore(object):
     @classmethod
     def union(cls, m1, m2):
         if set(m1) & set(m2):
-            raise Exception('The node sets of m1 and m2 are not disjoint.')
+            raise InvalidData('The node sets of m1 and m2 are not disjoint.')
 
         u = CGRContainer() if isinstance(m1, CGRContainer) or isinstance(m2, CGRContainer) else MoleculeContainer()
 

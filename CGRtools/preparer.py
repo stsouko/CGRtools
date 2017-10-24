@@ -20,29 +20,24 @@
 #
 from functools import reduce
 from warnings import warn
+from . import InvalidConfig, InvalidData
 from .containers import MoleculeContainer, ReactionContainer, MergedReaction
 from .core import CGRcore
 from .reactor import CGRreactor
 
 
 class CGRpreparer(CGRcore):
-    def __init__(self, cgr_type='0', extralabels=False, b_templates=None, m_templates=None,
+    def __init__(self, cgr_type='0', extralabels=False, balance=False, templates=None,
                  isotope=False, element=True, stereo=False):
-        if b_templates:
-            self.__bal = CGRbalancer(b_templates, balance_groups=True, stereo=stereo, isotope=isotope,
-                                     extralabels=extralabels, element=element)
-        if m_templates:
-            self.__map = CGRbalancer(m_templates, balance_groups=False, stereo=stereo, isotope=isotope,
+        if templates:
+            self.__bal = CGRbalancer(templates, balance_groups=balance, stereo=stereo, isotope=isotope,
                                      extralabels=extralabels, element=element)
 
         self.__init_common(cgr_type, extralabels, isotope, element, stereo)
 
-    def _init_unpickle(self, cgr_type, extralabels, b_templates, m_templates, isotope, element, stereo):
-        if b_templates:
-            self.__bal = CGRbalancer.unpickle(dict(templates=b_templates, balance_groups=True, stereo=stereo,
-                                                   isotope=isotope, extralabels=extralabels, element=element))
-        if m_templates:
-            self.__map = CGRbalancer.unpickle(dict(templates=m_templates, balance_groups=False, stereo=stereo,
+    def _init_unpickle(self, cgr_type, extralabels, templates, isotope, element, stereo):
+        if templates:
+            self.__bal = CGRbalancer.unpickle(dict(templates=templates, balance_groups=True, stereo=stereo,
                                                    isotope=isotope, extralabels=extralabels, element=element))
 
         self.__init_common(cgr_type, extralabels, isotope, element, stereo)
@@ -51,25 +46,24 @@ class CGRpreparer(CGRcore):
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
         self.__extralabels = extralabels
         self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
-                             element=element, stereo=stereo, b_templates=None, m_templates=None)
+                             element=element, stereo=stereo, templates=None)
 
     def pickle(self):
         """ remove attrs incorrectly dumped with dill
         """
         config = self.__pickle.copy()
         if self.__bal is not None:
-            config['b_templates'] = self.__bal.pickle()['templates']
-        if self.__map is not None:
-            config['m_templates'] = self.__map.pickle()['templates']
+            config['templates'] = self.__bal.pickle()['templates']
+
         return config
 
     @classmethod
     def unpickle(cls, config):
         """ return CGRbalancer object instance
         """
-        args = {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'b_templates', 'm_templates'}
-        if args.difference(config):
-            raise Exception('Invalid config')
+        args = {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'templates'}
+        if not args.issubset(config):
+            raise InvalidConfig('Invalid config')
         obj = cls.__new__(cls)  # Does not call __init__
         obj._init_unpickle(**{k: v for k, v in config.items() if k in args})
         return obj
@@ -85,7 +79,7 @@ class CGRpreparer(CGRcore):
         is_merged = isinstance(data, MergedReaction)
         if self.__cgr_type in (1, 2, 3, 4, 5, 6):
             if is_merged:
-                raise Exception('invalid data')
+                raise InvalidData('invalid data')
             g = self.__reaction_splitter(data)
             if self.__extralabels:
                 g.reset_query_marks()
@@ -100,8 +94,6 @@ class CGRpreparer(CGRcore):
         if not is_merged:
             g.meta.update(data.meta)
 
-        if self.__map is not None:
-            g = self.__map.prepare(g)
         if self.__bal is not None:
             g = self.__bal.prepare(g)
 
@@ -109,22 +101,46 @@ class CGRpreparer(CGRcore):
 
     def dissociate(self, g):
         tmp = ReactionContainer(meta=g.meta)
-        for category, edge in (('reagents', 's_bond'), ('products', 'p_bond')):
-            x = g.copy()
-            for n, m in list(self.__get_broken_paths(x, edge)):
-                x.remove_edge(n, m)
 
-            for mol in self.split(x):
-                for n, m, edge_attr in mol.edges(data=True):
-                    for i, j in self.__attrcompose['edges'][category].items():
-                        if j in edge_attr:
-                            edge_attr[i] = edge_attr[j]
-                for n, node_attr in mol.nodes(data=True):
-                    for i, j in self.__attrcompose['nodes'][category].items():
-                        if j in node_attr:
-                            node_attr[i] = node_attr[j]
-                mol.fix_sp_marks()
-                tmp[category].append(mol)
+        x = g.copy()
+        for n, m in self.__get_broken_paths(g, 's_bond'):
+            x.remove_edge(n, m)
+
+        for mol in self.split(x):
+            for *_, edge_attr in mol.edges(data=True):
+                edge_attr.pop('p_bond')
+                edge_attr.pop('p_stereo', None)
+            for _, node_attr in mol.nodes(data=True):
+                for i in ('p_x', 'p_y', 'p_z', 'p_neighbors', 'p_hyb', 'p_charge'):
+                    node_attr.pop(i, None)
+
+            mol.fix_sp_marks()
+            tmp['reagents'].append(mol)
+
+        x = g.copy()
+        for n, m in self.__get_broken_paths(g, 'p_bond'):
+            x.remove_edge(n, m)
+
+        for mol in self.split(x):
+            for *_, edge_attr in mol.edges(data=True):
+                edge_attr['s_bond'] = edge_attr.pop('p_bond')
+                s = edge_attr.pop('p_stereo', None)
+                if s:
+                    edge_attr['s_stereo'] = s
+                else:
+                    edge_attr.pop('s_stereo', None)
+            for _, node_attr in mol.nodes(data=True):
+                for i, j in (('p_x', 's_x'), ('p_y', 's_y'), ('p_z', 's_z'), ('p_neighbors', 's_neighbors'),
+                             ('p_hyb', 's_hyb'), ('p_charge', 's_charge')):
+                    mark = node_attr.pop(i, None)
+                    if mark is not None:
+                        node_attr[j] = mark
+                    else:
+                        node_attr.pop(j, None)
+
+            mol.fix_sp_marks()
+            tmp['products'].append(mol)
+
         return tmp
 
     def merge_mols(self, data):
@@ -145,7 +161,7 @@ class CGRpreparer(CGRcore):
             reagents = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
             products = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
         else:
-            raise Exception('Merging need reagents and products')
+            raise InvalidData('Merging need reagents and products')
 
         res = MergedReaction(reagents=reagents, products=products)
         return res
@@ -207,7 +223,7 @@ class CGRpreparer(CGRcore):
         elif self.__cgr_type == 6:
             g = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
         else:
-            raise Exception('Splitter Error')
+            raise InvalidData('Splitter Error')
         return g
 
     @staticmethod
@@ -234,10 +250,7 @@ class CGRpreparer(CGRcore):
     def __union_all(cls, data):
         return reduce(cls.union, data) if data else MoleculeContainer()
 
-    __map = __bal = None
-    __attrcompose = dict(edges=dict(reagents=dict(p_bond='s_bond'), products=dict(s_bond='p_bond')),
-                         nodes=dict(reagents=dict(p_charge='s_charge', p_neighbors='s_neighbors', p_hyb='s_hyb'),
-                                    products=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb')))
+    __bal = None
 
     def getCGR(self, data):  # Reverse compatibility
         warn('getCGR name is deprecated. use condense instead', DeprecationWarning)
@@ -248,13 +261,13 @@ class CGRpreparer(CGRcore):
         return self.dissociate(data)
 
 
-class CGRbalancer(CGRreactor):
-    def __init__(self, templates, balance_groups=True, stereo=False, extralabels=False, isotope=False, element=True):
-        CGRreactor.__init__(self, stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
+class CGRstandardizer(CGRreactor):
+    def __init__(self, templates, balance_groups=False, **kwargs):
+        CGRreactor.__init__(self, **kwargs)
 
         self.__templates = templates
         self.__balance_groups = balance_groups
-        self.__searcher = self.get_template_searcher(self.get_templates(templates))
+        self.__searcher = self.get_template_searcher(self.prepare_templates(templates))
 
     def pickle(self):
         """ return config. for pickling
@@ -268,8 +281,8 @@ class CGRbalancer(CGRreactor):
         """ return CGRbalancer object instance
         """
         args = {'templates', 'balance_groups', 'stereo', 'extralabels', 'isotope', 'element'}
-        if args.difference(config):
-            raise Exception('Invalid config')
+        if not args.issubset(config):
+            raise InvalidConfig('Invalid config')
         config = config.copy()
         templates = [ReactionContainer.unpickle(x) for x in config.pop('templates')]
         return cls(templates, **{k: v for k, v in config.items() if k in args})
@@ -286,7 +299,8 @@ class CGRbalancer(CGRreactor):
             searcher = self.__searcher(g)
             first_match = next(searcher, None)
             if not first_match:
-                g.graph.setdefault('CGR_REPORT', []).extend(report)
+                if report:
+                    g.graph.setdefault('CGR_REPORT', []).extend(report)
                 return g
 
             g = CGRreactor.patcher(g, first_match.patch)
@@ -308,3 +322,14 @@ class CGRcombo(object):  # Reverse compatibility
     def unpickle(cls, *args, **kwargs):
         warn('CGRcombo deprecated. use CGRpreparer instead')
         return CGRpreparer.unpickle(*args, **kwargs)
+
+
+class CGRbalancer(object):  # Reverse compatibility
+    def __new__(cls, *args, **kwargs):
+        warn('CGRbalancer deprecated. use CGRstandardizer instead')
+        return CGRstandardizer(*args, **kwargs)
+
+    @classmethod
+    def unpickle(cls, *args, **kwargs):
+        warn('CGRbalancer deprecated. use CGRstandardizer instead')
+        return CGRstandardizer.unpickle(*args, **kwargs)

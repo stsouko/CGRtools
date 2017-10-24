@@ -46,9 +46,10 @@ class MapError(Exception):
 
 
 class CGRread:
-    def __init__(self, remap, ignore=False):
+    def __init__(self, remap, ignore=False, is_template=False):
         self.__remap = remap
         self.__ignore = ignore
+        self.__is_template = is_template
         self.__prop = {}
 
     def _collect(self, line):
@@ -282,22 +283,22 @@ class CGRread:
                     res[a].setdefault('p_%s' % key[3:], {})[p] = v2
         return res
 
-    @classmethod
-    def __parse_molecule(cls, molecule, mapping, meta=None, colors=None):
+    def __parse_molecule(self, molecule, mapping, meta=None, colors=None):
         meta = meta and {x: '\n'.join(y) for x, y in meta.items()} or None
         cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = {}, {}, {}, {}
         any_bonds, normal_stereo, cgr_stereo = [], [], []
         for k in molecule['CGR_DAT']:
             k_type = k['type']
             if k_type == 'dynatom':
-                val = cls.__cgr_atom_dat(k['value'], molecule['atoms'][k['atoms'][0] - 1]['charge'])
+                val = self.__cgr_atom_dat(k['value'], molecule['atoms'][k['atoms'][0] - 1]['charge'])
                 if val:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
             elif k_type == 'dynstereo':
-                s_stereo, p_stereo = (cls.__stereolabels[x] for x in k['value'].split('>'))
+                s_stereo, p_stereo = (self.__stereolabels[x] for x in k['value'].split('>'))
                 cgr_dat_stereo[k['atoms']] = (s_stereo, p_stereo)
             elif k_type in ('dynbond', 'extrabond'):
-                val = cls.__parsedyn('bond', k['value']) if k_type == 'dynbond' else cls.__parselist('bond', k['value'])
+                val = self.__parsedyn('bond', k['value']) if k_type == 'dynbond' else \
+                    self.__parselist('bond', k['value'])
                 if val:
                     a1, a2 = k['atoms']
                     cgr_dat_bond.setdefault(a1, {})[a2] = val
@@ -309,11 +310,11 @@ class CGRread:
                 else:
                     isotope_dat[k['atoms'][0]] = int(tmp[0])
             else:
-                val = cls.__cgr_dat(k_type, k['value'])
+                val = self.__cgr_dat(k_type, k['value'])
                 if val:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
 
-        is_cgr = True if cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo else False
+        is_cgr = True if self.__is_template or cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo else False
         g = CGRContainer(meta=meta) if is_cgr else MoleculeContainer(meta=meta)
 
         for k, l in enumerate(molecule['atoms'], start=1):
@@ -362,7 +363,7 @@ class CGRread:
                 g.add_edge(k_map, l_map, s_bond=m)
 
             if s in (1, 6) and m in (1, 4):
-                s_mark = cls.__stereolabels[s]
+                s_mark = self.__stereolabels[s]
                 if is_cgr:
                     cgr_stereo.append((k_map, l_map, s_mark))
                 else:
@@ -381,7 +382,7 @@ class CGRread:
 
         if colors:
             for k, v in colors.items():
-                for a, c in cls.__parse_colors(k, v).items():
+                for a, c in self.__parse_colors(k, v).items():
                     g.nodes[mapping[a][0]].update(c)
         return g
 

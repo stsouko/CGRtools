@@ -29,9 +29,9 @@ def balanser_core(**kwargs):
     outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
     worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
-                         b_templates=RDFread(kwargs['b_templates']).read() if kwargs['b_templates'] else None,
-                         m_templates=RDFread(kwargs['m_templates']).read() if kwargs['m_templates'] else None,
-                         isotope=kwargs['isotope'], element=kwargs['element'])
+                         templates=RDFread(kwargs['templates'],
+                                           is_template=True).read() if kwargs['b_templates'] else None,
+                         balance=kwargs['balance'], element=kwargs['element'], isotope=kwargs['isotope'])
 
     err = 0
     num = 0
@@ -39,10 +39,12 @@ def balanser_core(**kwargs):
         if num % 100 == 1:
             print("reaction: %d" % num, file=stderr)
         try:
-            a = worker.getCGR(data)
-            a = worker.dissCGR(a)
+            a = worker.condense(data)
+            a = worker.dissociate(a)
             outputdata.write(a)
         except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
     print('%d from %d reactions balanced' % (num - err, num), file=stderr)
+
+    return 0 if num and not err else 1 if num - err else 2
