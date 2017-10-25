@@ -191,7 +191,7 @@ class RDFwrite(MOLformat, CGRwrite):
         self.write = self.__write
 
     def __write(self, data):
-        if isinstance(data, (MoleculeContainer, CGRContainer)):
+        if isinstance(data, MoleculeContainer):
             m = self.get_formatted_cgr(data)
             self.__file.write('$MFMT\n')
             self.__file.write(m['CGR'])

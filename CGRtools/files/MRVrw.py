@@ -75,7 +75,7 @@ class MRVwrite(CGRwrite):
     def __write(self, data):
         self.__file.write('<MDocument><MChemicalStruct>')
 
-        if isinstance(data, (MoleculeContainer, CGRContainer)):
+        if isinstance(data, MoleculeContainer):
             m = self.get_formatted_cgr(data)
             self.__file.write('<molecule><propertyList>')
             for k, v in chain(m['colors'].items(), data.meta.items()):

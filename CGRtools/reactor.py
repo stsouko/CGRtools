@@ -78,7 +78,7 @@ class CGRreactor(object):
         return cls(**{k: v for k, v in config.items() if k in args})
 
     def get_cgr_matcher(self, g, h):
-        if isinstance(g, MoleculeContainer):
+        if not isinstance(g, CGRContainer):
             nm = self.__node_match_reagents
             em = self.__node_match_reagents
         else:
@@ -235,7 +235,7 @@ class CGRreactor(object):
         for template in raw_templates:
             products = reduce(CGRcore.union, template.products).copy()
             reagents = reduce(CGRcore.union, template.reagents).copy()
-            if isinstance(reagents, MoleculeContainer) or isinstance(products, MoleculeContainer):
+            if not (isinstance(reagents, CGRContainer) and isinstance(products, CGRContainer)):
                 raise InvalidTemplate('Templates should be CGRContainers')
 
             common = set(products).intersection(reagents)
@@ -265,28 +265,30 @@ class CGRreactor(object):
         :param structure: MoleculeContainer or CGRContainer
         :param patch: MoleculeContainer or CGRContainer with replacement data
         """
-        s = structure.copy()
-        p = patch.copy()
+        node_marks = ['s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark']
+        bond_marks = ['s_bond', 's_stereo']
+        if isinstance(structure, CGRContainer):
+            p = CGRContainer()
+            node_marks.extend(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
+            bond_marks.extend(('p_bond', 'p_stereo'))
+        else:
+            p = MoleculeContainer()
 
-        common = set(p).intersection(s)
+        common = set(patch).intersection(structure)
         for i in common:
-            pni = p.nodes[i]
-            for j in {'s_charge', 's_hyb', 's_neighbors', 's_stereo',
-                      'p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'}.intersection(pni):
-                if isinstance(pni[j], dict):
-                    pni[j] = pni[j][s.nodes[i][j]]
+            p.add_node(i, **{x: y[structure.nodes[i][x]] if isinstance(y, dict) else y
+                             for x, y in patch.nodes[i].items() if x in node_marks})
 
-        for m, n, a in p.edges(data=True):
+        for m, n, a in patch.edges(data=True):
             if m in common and n in common:
-                for j in {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}.intersection(a):
-                    if isinstance(a[j], dict):
-                        a[j] = a[j][s[m][n][j]]
+                p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
+                                    for x, y in a.items() if x in bond_marks})
 
+        s = structure.copy()
         s.remove_edges_from(combinations(common, 2))
         composed = compose(s, p)
-        composed.__class__ = CGRContainer if isinstance(s, CGRContainer) or isinstance(p, CGRContainer) else \
-            MoleculeContainer
-        composed.meta.update(s.meta)
+        composed.__class__ = CGRContainer if isinstance(structure, CGRContainer) else MoleculeContainer
+        composed.meta.update(structure.meta)
         return composed
 
 

@@ -46,9 +46,9 @@ class CGRcore(object):
             for n, attr in m.nodes(data=True):
                 u.add_node(n, p_x=attr['s_x'], p_y=attr['s_y'], p_z=attr['s_z'], **cls.__fix_attr(attr, u._node_marks))
 
-        if isinstance(u, CGRContainer) and isinstance(m1, MoleculeContainer):
+        if isinstance(u, CGRContainer) and not isinstance(m1, CGRContainer):
             fix(m1)
-        elif isinstance(u, CGRContainer) and isinstance(m2, MoleculeContainer):
+        elif isinstance(u, CGRContainer) and not isinstance(m2, CGRContainer):
             fix(m2)
         return u
 
@@ -70,7 +70,7 @@ class CGRcore(object):
 
         """ remove bond, neighbors and hybridization states for common atoms.
         """
-        for i, g in (('reagents', m1), ('non_cgr' if isinstance(m2, MoleculeContainer) else 'products', m2)):
+        for i, g in (('reagents', m1), ('products' if isinstance(m2, CGRContainer) else 'non_cgr', m2)):
             pdi = cls.__popdict[i]
             ext_common = common.copy()
             e_pop, n_pop, x_pop = pdi['edge'], pdi['node'], pdi['ext_node']
