@@ -18,12 +18,12 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
-from . import InvalidData
+from . import InvalidData, InvalidAtom
 from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
@@ -145,10 +145,27 @@ class MoleculeContainer(Graph):
         self.add_edge(atom1, atom2, s_bond=mark)
 
     def bond(self, atom1, atom2):
-        return self[atom1][atom2]
+        if self.__bond_cache is None:
+            self.__bond_cache = defaultdict(dict)
+        if atom2 not in self.__bond_cache[atom1]:
+            try:
+                tmp = self[atom1][atom2]
+                res = self._bond_container(**{x: tmp.get(y) for x, y in self._bond_marks.items()})
+                self.__bond_cache[atom1][atom2] = self.__bond_cache[atom2][atom1] = res
+            except KeyError:
+                raise InvalidAtom('atom or bond not found')
+        return self.__bond_cache[atom1][atom2]
 
     def atom(self, n):
-        return self.nodes[n]
+        if self.__atom_cache is None:
+            self.__atom_cache = {}
+        if n not in self.__atom_cache:
+            try:
+                tmp = self.nodes[n]
+                self.__atom_cache[n] = self._atom_container(**{x: tmp.get(y) for x, y in self._atom_marks.items()})
+            except KeyError:
+                raise InvalidAtom('atom not found')
+        return self.__atom_cache[n]
 
     @property
     def bonds_count(self):
@@ -248,11 +265,17 @@ class MoleculeContainer(Graph):
         pass
 
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
+    _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
+                       element='element', isotope='isotope', mark='mark')
+    _bond_marks = dict(bond='s_bond', stereo='s_stereo')
+    _atom_container = namedtuple('AtomContainer', ['element', 'isotope', 'charge', 'mark', 'stereo',
+                                                   'neighbors', 'hyb'])
+    _bond_container = namedtuple('BondContainer', ['bond', 'stereo'])
     _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
     _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo')
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
-    __meta = __visible = None
+    __meta = __visible = __atom_cache = __bond_cache = None
 
 
 class CGRContainer(MoleculeContainer):
@@ -381,12 +404,21 @@ class CGRContainer(MoleculeContainer):
                 new_attr[sp] = new_attr[s] = new_attr[p] = ls
         return new_attr
 
-    _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
     _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
-                        for mark in ('neighbors', 'hyb', 'charge', 'stereo'))
+                        for mark in ('charge', 'stereo', 'neighbors', 'hyb'))
     _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
-    _node_save = tuple(chain((y for x in _node_marks for y in x[:2]), _node_base))
-    _edge_save = ('s_bond', 'p_bond', 's_stereo', 'p_stereo')
+
+    __tmp1 = ('element', 'isotope', 'mark')
+    __tmp2 = tuple(y for x in _node_marks for y in x[:2])
+    __tmp3 = __tmp1 + __tmp2
+
+    _node_base = __tmp1 + ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
+    _node_save = __tmp2 + _node_base
+    _edge_save = tuple(y for x in _edge_marks for y in x[:2])
+    _atom_marks = {x: x for x in __tmp3}
+    _bond_marks = {x: x for x in _edge_save}
+    _atom_container = namedtuple('AtomContainer', __tmp3)
+    _bond_container = namedtuple('BondContainer', _edge_save)
     __visible = None
 
 

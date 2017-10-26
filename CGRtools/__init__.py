@@ -26,3 +26,7 @@ class InvalidConfig(Exception):
 
 class InvalidData(Exception):
     pass
+
+
+class InvalidAtom(Exception):
+    pass
