@@ -34,7 +34,7 @@ setup(
     description='CGR tools',
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
     package_data={'CGRtools.utils': ['aromatize.rdf']},
-    install_requires=['networkx>=2.0,<2.1', 'periodictable'],
+    install_requires=['networkx>=2.0,<2.1'],
     extras_require={'autocomplete': ['argcomplete']},
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     keywords="tools cgr cli",

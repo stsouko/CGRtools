@@ -268,9 +268,8 @@ class MoleculeContainer(Graph):
     _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
                        element='element', isotope='isotope', mark='mark')
     _bond_marks = dict(bond='s_bond', stereo='s_stereo')
-    _atom_container = namedtuple('AtomContainer', ['element', 'isotope', 'charge', 'mark', 'stereo',
-                                                   'neighbors', 'hyb'])
-    _bond_container = namedtuple('BondContainer', ['bond', 'stereo'])
+    _atom_container = namedtuple('Atom', ['element', 'isotope', 'charge', 'mark', 'stereo', 'neighbors', 'hyb'])
+    _bond_container = namedtuple('Bond', ['bond', 'stereo'])
     _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
     _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo')
     _node_save = _node_marks + _node_base
@@ -417,8 +416,8 @@ class CGRContainer(MoleculeContainer):
     _edge_save = tuple(y for x in _edge_marks for y in x[:2])
     _atom_marks = {x: x for x in __tmp3}
     _bond_marks = {x: x for x in _edge_save}
-    _atom_container = namedtuple('AtomContainer', __tmp3)
-    _bond_container = namedtuple('BondContainer', _edge_save)
+    _atom_container = namedtuple('Atom', __tmp3)
+    _bond_container = namedtuple('Bond', _edge_save)
     __visible = None
 
 

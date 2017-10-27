@@ -21,12 +21,12 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
-from periodictable import elements
 from typing import Tuple
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
+from ..periodictable import elements, isotopes
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
-mendeleyset = set(x.symbol for x in elements)
+mendeleyset = set(elements)
 
 
 class EmptyMolecule(Exception):
@@ -58,7 +58,10 @@ class CGRread:
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
         elif line.startswith('M  ISO'):
-            self.__prop[line[3:10]] = dict(atoms=(int(line[10:13]),), type='isotope', value=line[14:17].strip())
+            for i in range(int(line[6:9])):
+                atom = int(line[10 + i * 8:13 + i * 8])
+                self.__prop['ISO %d' % atom] = dict(atoms=(atom,), type='isotope',
+                                                    value=line[14 + i * 8:17 + i * 8].strip())
 
         elif line.startswith('M  STY'):
             for i in range(int(line[8])):
@@ -342,12 +345,13 @@ class CGRread:
                 g.add_node(atom_map, mark=l['mark'], map=parsed_map,
                            s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=l['charge'])
 
-            if 'element' not in g.nodes[atom_map] and l['element'] not in ('A', '*'):
-                g.nodes[atom_map]['element'] = l['element']
-            if (l['isotope'] or k in isotope_dat) and 'isotope' not in g.nodes[atom_map]:
-                a = elements.symbol(l['element'])
-                g.nodes[atom_map]['isotope'] = max((a[x].abundance, x)
-                                                   for x in a.isotopes)[1] + (isotope_dat.get(k) or l['isotope'])
+            gna = g.nodes[atom_map]
+            if 'element' not in gna and l['element'] not in ('A', '*'):
+                gna['element'] = l['element']
+            if l['isotope'] and 'isotope' not in gna:
+                gna['isotope'] = isotopes[l['element']] + l['isotope']
+            elif k in isotope_dat and 'isotope' not in gna:
+                gna['isotope'] = isotope_dat[k]
 
         for k, l, m, s in molecule['bonds']:
             k_map, l_map = mapping[k][0], mapping[l][0]
