@@ -112,22 +112,22 @@ class MRVwrite(CGRwrite):
 
     @classmethod
     def _format_mol(cls, atoms, bonds, extended, cgr_dat):
-        isotope = {}
-        atom_query = {}
+        isotope, atom_query, radical = {}, {}, {}
         for i in extended:
-            if i['type'] == 'isotope':
-                isotope[i['atom']] = ' isotope="%d"' % i['value']
-            elif i['type'] == 'atomlist':
-                atom_query[i['atom']] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in
-                                                                           mendeleyset.difference(i['value']))
-                                                                          if len(i['value']) > cls._half_table else
-                                                                          i['value'])
+            it, iv, ia = i['type'], i['value'], i['atom']
+            if it == 'isotope':
+                isotope[ia] = ' isotope="%d"' % iv
+            elif it == 'atomlist':
+                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in mendeleyset.difference(iv))
+                                                                    if len(iv) > cls._half_table else iv)
+            elif it == 'radical':
+                radical[ia] = ' radical="%d"' % iv
 
         return ''.join(chain(('<atomArray>',),
                              ('<atom id="a{0}" elementType="{1[element]}" x3="{1[x]:.4f}" y3="{1[y]:.4f}" '
-                              'z3="{1[z]:.4f}" mrvMap="{1[map]}" formalCharge="{1[charge]}"'
-                              '{2}{3}{4}/>'.format(i, j, isotope.get(i, ''), atom_query.get(i, ''),
-                                                   ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
+                              'z3="{1[z]:.4f}" mrvMap="{1[map]}" formalCharge="{1[charge]}"{2}{3}{4}{5}/>'
+                              .format(i, j, radical.get(i, ''), isotope.get(i, ''), atom_query.get(i, ''),
+                                      ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
                               for i, j in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
                              ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
@@ -146,4 +146,5 @@ class MRVwrite(CGRwrite):
         return x * 2, y * 2, z * 2
 
     _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
-    _charge_map = {}
+    _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
+    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}

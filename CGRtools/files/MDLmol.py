@@ -29,14 +29,15 @@ class MOLformat:
     def _format_mol(cls, atoms, bonds, extended, cgr_dat):
         mol_prop = []
         for i in extended:
-            if i['type'] == 'isotope':
-                mol_prop.append('M  ISO  1 %3d %3d\n' % (i['atom'], i['value']))
-            elif i['type'] == 'atomlist':
-                atomslist, _type = (mendeleyset.difference(i['value']), 'T') \
-                    if len(i['value']) > cls._half_table else (i['value'], 'F')
-
-                mol_prop.append('M  ALS %3d%3d %s %s\n' % (i['atom'], len(atomslist), _type,
+            it, iv, ia = i['type'], i['value'], i['atom']
+            if it == 'isotope':
+                mol_prop.append('M  ISO  1 %3d %3d\n' % (ia, iv))
+            elif it == 'atomlist':
+                atomslist, _type = (mendeleyset.difference(iv), 'T') if len(iv) > cls._half_table else (iv, 'F')
+                mol_prop.append('M  ALS %3d%3d %s %s\n' % (ia, len(atomslist), _type,
                                                            ''.join('%-4s' % x for x in atomslist)))
+            elif it == 'radical':
+                mol_prop.append('M  RAD  1 %3d %3d\n' % (ia, iv))
 
         for j in count():
             sty = len(cgr_dat[j * 8:j * 8 + 8])
@@ -71,3 +72,4 @@ class MOLformat:
     _half_table = None
     _stereo_map = {-1: 6, 0: 0, 1: 1, None: 0}
     _charge_map = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
+    _radical_map = {2: 2, 1: 1, 3: 3}

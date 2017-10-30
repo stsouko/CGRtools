@@ -25,6 +25,7 @@ from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
 from . import InvalidData, InvalidAtom
 from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
+from .periodictable import elements
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
 MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
@@ -43,9 +44,9 @@ class MoleculeContainer(Graph):
 
     def __dir__(self):
         if self.__visible is None:
-            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.subgraph.__name__,
-                              self.remap.__name__, self.add_stereo.__name__, self.get_morgan.__name__,
-                              self.get_fear.__name__, self.get_fear_hash.__name__,
+            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__,
+                              self.substructure.__name__, self.remap.__name__, self.add_stereo.__name__,
+                              self.get_morgan.__name__, self.get_fear.__name__, self.get_fear_hash.__name__,
                               self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
                               self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
                               'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
@@ -82,7 +83,7 @@ class MoleculeContainer(Graph):
         copy.meta.update(self.meta)
         return copy
 
-    def subgraph(self, nbunch, meta=False):
+    def substructure(self, nbunch, meta=False):
         sub = super().subgraph(nbunch).copy()
         sub.__class__ = self.__class__
         if meta:
@@ -102,15 +103,6 @@ class MoleculeContainer(Graph):
             self.__meta = {}
         return self.__meta
 
-    def add_stereo(self, atom1, atom2, mark):
-        if self.has_edge(atom1, atom2):
-            # todo: stereo calc
-            pass
-
-    def get_stereo(self, atom1, atom2):
-        # todo: implement stereo to bond projection
-        return None, None
-
     def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
         return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))
 
@@ -126,15 +118,19 @@ class MoleculeContainer(Graph):
         return get_cgr_string(self, weights or get_morgan(self, isotope=isotope, element=element),
                               isotope=isotope, stereo=stereo, hyb=hyb, element=element)
 
-    def add_atom(self, element, s_charge, _map=None, mark='0', x=0, y=0, z=0):
+    def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
+        if element not in elements:
+            raise InvalidData('element %s - not exists' % element)
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
 
-        # todo: charges and elements checks.
+        # todo: charges checks.
 
-        self.add_node(_map, element=element, s_charge=s_charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
+        self.add_node(_map, element=element, s_charge=charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
+        if radical:
+            self.nodes[_map]['s_radical'] = radical
 
     def add_bond(self, atom1, atom2, mark):
         if atom1 not in self or atom2 not in self:
@@ -143,6 +139,11 @@ class MoleculeContainer(Graph):
             raise InvalidData('no bond data')
 
         self.add_edge(atom1, atom2, s_bond=mark)
+
+    def add_stereo(self, atom1, atom2, mark):
+        if self.has_edge(atom1, atom2):
+            # todo: stereo calc
+            pass
 
     def bond(self, atom1, atom2):
         if self.__bond_cache is None:
@@ -167,6 +168,10 @@ class MoleculeContainer(Graph):
                 raise InvalidAtom('atom not found')
         return self.__atom_cache[n]
 
+    def get_stereo(self, atom1, atom2):
+        # todo: implement stereo to bond projection
+        return None, None
+
     @property
     def bonds_count(self):
         return self.size()
@@ -190,9 +195,9 @@ class MoleculeContainer(Graph):
             nodes.append(n)
 
         if dante:
-            centers = [self.subgraph(a) for a in nodes]
+            centers = [self.substructure(a) for a in nodes]
         else:
-            centers = self.subgraph(nodes[-1])
+            centers = self.substructure(nodes[-1])
 
         return centers
 
@@ -223,7 +228,7 @@ class MoleculeContainer(Graph):
         """
         g = self.copy() if copy else self
         b, h, n = 's_bond', 's_hyb', 's_neighbors'
-        for i in g:
+        for i, attr in g.nodes(data=True):
             label = dict(s_hyb=1, p_hyb=1, s_neighbors=0, p_neighbors=0)
             #  hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for node, bond in g[i].items():
@@ -240,7 +245,7 @@ class MoleculeContainer(Graph):
                     # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
                     label[h] = 2
 
-            g.nodes[i].update(label)
+            attr.update(label)
         return g if copy else None
 
     @staticmethod
@@ -266,15 +271,20 @@ class MoleculeContainer(Graph):
 
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
-                       element='element', isotope='isotope', mark='mark')
+                       element='element', isotope='isotope', mark='mark', radical='s_radical')
     _bond_marks = dict(bond='s_bond', stereo='s_stereo')
-    _atom_container = namedtuple('Atom', ['element', 'isotope', 'charge', 'mark', 'stereo', 'neighbors', 'hyb'])
+    _atom_container = namedtuple('Atom', ['element', 'isotope', 'mark', 'charge', 'stereo', 'radical',
+                                          'neighbors', 'hyb'])
     _bond_container = namedtuple('Bond', ['bond', 'stereo'])
     _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
-    _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo')
+    _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo', 's_radical')
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
     __meta = __visible = __atom_cache = __bond_cache = None
+
+    def subgraph(self, *args, **kwargs):
+        warn('subgraph name is deprecated. use sustructure instead', DeprecationWarning)
+        return self.substructure(*args, **kwargs)
 
 
 class CGRContainer(MoleculeContainer):
@@ -287,26 +297,28 @@ class CGRContainer(MoleculeContainer):
     def get_center_atoms(self, stereo=False):
         """ get atoms of reaction center (dynamic bonds, stereo or charges).
         """
-        # todo: stereo
         nodes = set()
-        for n, node_attr in self.nodes(data=True):
-            if node_attr.get('s_charge') != node_attr.get('p_charge'):
+        for n, attr in self.nodes(data=True):
+            if attr['s_charge'] != attr['p_charge'] or attr.get('s_radical') != attr.get('p_radical') or \
+                   stereo and attr.get('s_stereo') != attr.get('p_stereo'):
                 nodes.add(n)
 
-        for *n, node_attr in self.edges(data=True):
-            if node_attr.get('s_bond') != node_attr.get('p_bond'):
+        for *n, attr in self.edges(data=True):
+            if attr.get('s_bond') != attr.get('p_bond') or stereo and attr.get('s_stereo') != attr.get('p_stereo'):
                 nodes.update(n)
 
         return list(nodes)
 
-    def add_atom(self, element, s_charge, p_charge=None, _map=None, mark='0',
+    def add_atom(self, element, s_charge, p_charge=None, s_radical=None, p_radical=None, _map=None, mark='0',
                  s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+        if element not in elements:
+            raise InvalidData('element %s - not exists' % element)
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
 
-        # todo: charges and elements checks.
+        # todo: charges checks.
 
         if p_charge is None:
             p_charge = s_charge
@@ -320,17 +332,21 @@ class CGRContainer(MoleculeContainer):
         self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
                       s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
 
+        if s_radical:
+            self.nodes[_map]['s_radical'] = s_radical
+        if p_radical:
+            self.nodes[_map]['p_radical'] = p_radical
+
     def add_bond(self, atom1, atom2, s_mark, p_mark):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
-        attr = {}
+        if not (s_mark or p_mark):
+            raise InvalidData('empty bonds not allowed')
+
         if s_mark:
-            attr['s_bond'] = s_mark
+            self.add_edge(atom1, atom2, s_bond=s_mark)
         if p_mark:
-            attr['p_bond'] = p_mark
-        if not attr:
-            raise InvalidData('no bonds data')
-        self.add_edge(atom1, atom2, **attr)
+            self.add_edge(atom1, atom2, p_bond=p_mark)
 
     def add_stereo(self, atom1, atom2, s_mark, p_mark):
         if self.has_edge(atom1, atom2):
@@ -404,7 +420,7 @@ class CGRContainer(MoleculeContainer):
         return new_attr
 
     _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
-                        for mark in ('charge', 'stereo', 'neighbors', 'hyb'))
+                        for mark in ('charge', 'stereo', 'radical', 'neighbors', 'hyb'))
     _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
 
     __tmp1 = ('element', 'isotope', 'mark')

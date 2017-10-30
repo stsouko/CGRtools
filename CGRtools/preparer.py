@@ -99,49 +99,9 @@ class CGRpreparer(CGRcore):
 
         return g
 
-    def dissociate(self, g):
-        tmp = ReactionContainer(meta=g.meta)
-
-        x = g.copy()
-        for n, m in self.__get_broken_paths(g, 's_bond'):
-            x.remove_edge(n, m)
-
-        for mol in self.split(x):
-            for *_, edge_attr in mol.edges(data=True):
-                edge_attr.pop('p_bond')
-                edge_attr.pop('p_stereo', None)
-            for _, node_attr in mol.nodes(data=True):
-                for i in ('p_x', 'p_y', 'p_z', 'p_neighbors', 'p_hyb', 'p_charge'):
-                    node_attr.pop(i, None)
-
-            mol.fix_sp_marks()
-            tmp['reagents'].append(mol)
-
-        x = g.copy()
-        for n, m in self.__get_broken_paths(g, 'p_bond'):
-            x.remove_edge(n, m)
-
-        for mol in self.split(x):
-            for *_, edge_attr in mol.edges(data=True):
-                edge_attr['s_bond'] = edge_attr.pop('p_bond')
-                s = edge_attr.pop('p_stereo', None)
-                if s:
-                    edge_attr['s_stereo'] = s
-                else:
-                    edge_attr.pop('s_stereo', None)
-            for _, node_attr in mol.nodes(data=True):
-                for i, j in (('p_x', 's_x'), ('p_y', 's_y'), ('p_z', 's_z'), ('p_neighbors', 's_neighbors'),
-                             ('p_hyb', 's_hyb'), ('p_charge', 's_charge')):
-                    mark = node_attr.pop(i, None)
-                    if mark is not None:
-                        node_attr[j] = mark
-                    else:
-                        node_attr.pop(j, None)
-
-            mol.fix_sp_marks()
-            tmp['products'].append(mol)
-
-        return tmp
+    @classmethod
+    def dissociate(cls, g):
+        return cls.decompose(g)
 
     def merge_mols(self, data):
         if self.__cgr_type == 0:
@@ -165,12 +125,6 @@ class CGRpreparer(CGRcore):
 
         res = MergedReaction(reagents=reagents, products=products)
         return res
-
-    @staticmethod
-    def __get_broken_paths(g, edge):
-        for m, n, attr in g.edges(data=True):
-            if attr.get(edge) is None:
-                yield n, m
 
     @staticmethod
     def __get_cgr_type(_type):

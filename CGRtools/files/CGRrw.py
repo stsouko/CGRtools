@@ -57,11 +57,13 @@ class CGRread:
             self.__prop[line[3:10]] = dict(atoms=(int(line[7:10]),),
                                            type='atomlist' if line[14] == 'F' else 'atomnotlist',
                                            value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
-        elif line.startswith('M  ISO'):
+
+        elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
+            _type = self.__ctf_data[line[3]]
             for i in range(int(line[6:9])):
                 atom = int(line[10 + i * 8:13 + i * 8])
-                self.__prop['ISO %d' % atom] = dict(atoms=(atom,), type='isotope',
-                                                    value=line[14 + i * 8:17 + i * 8].strip())
+                self.__prop['%s_%d' % (_type, atom)] = dict(atoms=(atom,), type=_type,
+                                                            value=line[14 + i * 8:17 + i * 8].strip())
 
         elif line.startswith('M  STY'):
             for i in range(int(line[8])):
@@ -218,29 +220,24 @@ class CGRread:
             return dict.fromkeys(cls.__marks[name], tmp)
 
     @classmethod
-    def __cgr_atom_dat(cls, value, charge):
-        key = value[0]
-        if key == 'c':  # update atom charges from CGR
-            diff = [int(x) for x in value[1:].split(',')]
-            if len(diff) > 1:
-                if diff[0] == 0:  # for list of charges c0,1,-2,+3...
-                    tmp = [charge + x for x in diff]
-                    if len(set(tmp)) == len(tmp):
-                        return dict(s_charge=tmp, p_charge=tmp, sp_charge=tmp)
-                elif len(diff) % 2 == 1:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
-                    s = [charge] + [charge + x for x in diff[1::2]]
-                    p = [charge + x for x in diff[::2]]
-                    tmp = list(zip(s, p))
-                    if len(set(tmp)) == len(tmp):
-                        return dict(s_charge=s, p_charge=p, sp_charge=tmp)
-            else:
-                tmp = diff[0]
-                if tmp:
-                    p = charge + tmp
-                    return dict(s_charge=charge, p_charge=p, sp_charge=(charge, p))
-        elif key == 'x':
-            x, y, z = (float(x) for x in value[1:].split(','))
-            return dict(p_x=x, p_y=y, p_z=z)
+    def __parse_cgr_atom(cls, value, base, mark):
+        diff = [int(x) for x in value]
+        if len(diff) > 1:
+            if diff[0] == 0:  # for list of charges c0,1,-2,+3...
+                tmp = [base + x for x in diff]
+                if len(set(tmp)) == len(tmp):
+                    return {'s_%s' % mark: tmp, 'p_%s' % mark: tmp, 'sp_%s' % mark: tmp}
+            elif len(diff) % 2 == 1:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
+                s = [base] + [base + x for x in diff[1::2]]
+                p = [base + x for x in diff[::2]]
+                tmp = list(zip(s, p))
+                if len(set(tmp)) == len(tmp):
+                    return {'s_%s' % mark: s, 'p_%s' % mark: p, 'sp_%s' % mark: tmp}
+        else:
+            tmp = diff[0]
+            if tmp:
+                p = base + tmp
+                return {'s_%s' % mark: base, 'p_%s' % mark: p, 'sp_%s' % mark: (base, p)}
 
     @classmethod
     def __cgr_dat(cls, _type, value):
@@ -290,12 +287,30 @@ class CGRread:
         meta = meta and {x: '\n'.join(y) for x, y in meta.items()} or None
         cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = {}, {}, {}, {}
         any_bonds, normal_stereo, cgr_stereo = [], [], []
+        charge_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'charge'}
+        radical_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'radical'}
+
         for k in molecule['CGR_DAT']:
             k_type = k['type']
-            if k_type == 'dynatom':
-                val = self.__cgr_atom_dat(k['value'], molecule['atoms'][k['atoms'][0] - 1]['charge'])
-                if val:
-                    cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
+            if k_type in ('charge', 'radical'):
+                continue
+            elif k_type == 'dynatom':
+                key = k['value'][0]
+                value = k['value'][1:].split(',')
+                a1 = k['atoms'][0]
+                if key == 'x':
+                    x, y, z = (float(x) for x in value)
+                    cgr_dat_atom.setdefault(a1, {}).update(p_x=x, p_y=y, p_z=z)
+                else:
+                    if key == 'c':
+                        val = self.__parse_cgr_atom(value, charge_dat.get(a1, molecule['atoms'][a1 - 1]['charge']),
+                                                    'charge')
+                    elif key == 'r':
+                        val = self.__parse_cgr_atom(value, radical_dat.get(a1, 0), 'radical')
+                    else:
+                        val = None
+                    if val:
+                        cgr_dat_atom.setdefault(a1, {}).update(val)
             elif k_type == 'dynstereo':
                 s_stereo, p_stereo = (self.__stereolabels[x] for x in k['value'].split('>'))
                 cgr_dat_stereo[k['atoms']] = (s_stereo, p_stereo)
@@ -326,7 +341,7 @@ class CGRread:
                 if k in cgr_dat_atom:
                     atom_dat = cgr_dat_atom[k]
                     if 'sp_charge' not in atom_dat:
-                        lc = l['charge']
+                        lc = charge_dat.get(k, l['charge'])
                         atom_dat.update(s_charge=lc, p_charge=lc, sp_charge=lc)
                     if 'p_x' in atom_dat:
                         atom_dat['p_x'] += l['x']
@@ -337,21 +352,28 @@ class CGRread:
 
                     g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], map=parsed_map, **atom_dat)
                 else:
-                    lc = l['charge']
-                    g.add_node(atom_map, mark=l['mark'], map=parsed_map,
-                               s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'],
-                               s_charge=lc, p_charge=lc, sp_charge=lc)
+                    lc = charge_dat.get(k, l['charge'])
+                    g.add_node(atom_map, mark=l['mark'], map=parsed_map, s_charge=lc, p_charge=lc, sp_charge=lc,
+                               s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'])
             else:
                 g.add_node(atom_map, mark=l['mark'], map=parsed_map,
-                           s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=l['charge'])
+                           s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=charge_dat.get(k, l['charge']))
 
             gna = g.nodes[atom_map]
             if 'element' not in gna and l['element'] not in ('A', '*'):
                 gna['element'] = l['element']
+
             if l['isotope'] and 'isotope' not in gna:
                 gna['isotope'] = isotopes[l['element']] + l['isotope']
             elif k in isotope_dat and 'isotope' not in gna:
                 gna['isotope'] = isotope_dat[k]
+
+            if k in radical_dat and 's_radical' not in gna:
+                val = radical_dat[k]
+                if is_cgr:
+                    gna.update(s_radical=val, p_radical=val, sp_radical=val)
+                else:
+                    gna['s_radical'] = val
 
         for k, l, m, s in molecule['bonds']:
             k_map, l_map = mapping[k][0], mapping[l][0]
@@ -391,8 +413,9 @@ class CGRread:
         return g
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
-    __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1,
+    __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1, charge=1, radical=1,
                      atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1, dynstereo=2)
+    __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
     __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None, 1: 1, 6: -1}
 
@@ -410,12 +433,20 @@ class CGRwrite:
         renum, colors = {}, {}
         for n, (i, l) in enumerate(g.nodes(data=True), start=1):
             renum[i] = n
-            charge, meta = self.__charge(l['s_charge'], (l['p_charge'] if is_cgr else l['s_charge']))
             element = l.get('element', 'A')
 
+            charge, meta = self.__dyn_atom(l['s_charge'], (l['p_charge'] if is_cgr else l['s_charge']), 'c')
             if meta:
                 meta['atoms'] = (n,)
                 cgr_dat.append(meta)
+
+            radical, meta = self.__dyn_atom(l.get('s_radical', 0),
+                                            (l.get('p_radical', 0) if is_cgr else l.get('s_radical', 0)), 'r')
+            if meta:
+                meta['atoms'] = (n,)
+                cgr_dat.append(meta)
+            if radical:
+                extended.append(dict(atom=n, value=radical, type='radical'))
 
             for s_key, p_key, _, a_key, d_key in self.__atomprop:
                 meta = self.__get_state(l.get(s_key), l.get(p_key), a_key, d_key)
@@ -524,23 +555,28 @@ class CGRwrite:
 
         return _val and {'value': _val, 'type': _type}
 
-    def __charge(self, s, p):
-        charge = s
+    @classmethod
+    def __dyn_atom(cls, s, p, mark):
         if isinstance(s, list):
-            charge = s[0]
+            value = s[0]
             if s == p:
-                meta = dict(type='dynatom', value='c0%s' % ','.join(str(x) for x in s[1:])) if len(s) > 1 else None
+                meta = dict(type='dynatom',
+                            value='%s0%s' % (mark, ','.join(str(x) for x in s[1:]))) if len(s) > 1 else None
             elif s[0] != p[0]:
-                meta = dict(type='dynatom', value='c%s' % ','.join(chain(['%+d' % (p[0] - charge)],
-                                                                         ('%+d,%+d' % (x - charge, y - charge)
-                                                                          for x, y in zip(s[1:], p[1:]) if x != y))))
+                meta = dict(type='dynatom',
+                            value='%s%s' % (mark, ','.join(chain(('%+d' % (p[0] - value),),
+                                                                 ('%+d,%+d' % (x - value, y - value) for x, y in
+                                                                  zip(s[1:], p[1:]) if x != y)))))
             else:
                 meta = None
         elif p != s:
-            meta = dict(value='c%+d' % (p - s), type='dynatom')
+            meta = dict(value='%s%+d' % (mark, (p - s)), type='dynatom')
+            value = s
         else:
             meta = None
-        return self._charge_map.get(charge, 0), meta
+            value = s
+        res = cls._charge_map.get(value, 0) if mark == 'c' else cls._radical_map.get(value, 0)
+        return res, meta
 
     @staticmethod
     def _get_position(cord):
@@ -564,5 +600,5 @@ class CGRwrite:
         pass
 
     _half_table = len(mendeleyset) // 2
-    _stereo_map = _charge_map = None
+    _stereo_map = _charge_map = _radical_map = None
     __extra_marks = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in ('hyb', 'neighbors')]

@@ -20,13 +20,13 @@
 #
 from networkx import connected_components
 from . import InvalidData
-from .containers import MoleculeContainer, CGRContainer
+from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
 class CGRcore(object):
     @staticmethod
     def split(m, meta=False):
-        return [m.subgraph(c, meta=meta) for c in connected_components(m)]
+        return [m.substructure(c, meta=meta) for c in connected_components(m)]
 
     @classmethod
     def union(cls, m1, m2):
@@ -52,14 +52,6 @@ class CGRcore(object):
             fix(m2)
         return u
 
-    @staticmethod
-    def __fix_attr(attr, marks):
-        tmp = {}
-        for s, p, sp in marks:
-            if s in attr:
-                tmp[p] = tmp[sp] = attr[s]
-        return tmp
-
     @classmethod
     def compose(cls, m1, m2):
         """ remove from union graphs of products or reagents data about reagents or products
@@ -74,6 +66,7 @@ class CGRcore(object):
             pdi = cls.__popdict[i]
             ext_common = common.copy()
             e_pop, n_pop, x_pop = pdi['edge'], pdi['node'], pdi['ext_node']
+
             for n, m, attr in g.edges(common, data=True):
                 ext_common.add(n)
                 ext_common.add(m)
@@ -82,37 +75,104 @@ class CGRcore(object):
                     h.add_edge(n, m, **bond)
 
             uniq = set(g).difference(ext_common)
+            is_cgr = isinstance(g, CGRContainer)
             for n, m, attr in g.edges(uniq, data=True):
-                h.add_edge(n, m, **attr)
+                if is_cgr:
+                    tmp = attr
+                else:
+                    tmp = dict(p_bond=attr['s_bond'], **attr)
+                    if attr.get('s_stereo'):
+                        tmp['p_stereo'] = attr['s_stereo']
+                h.add_edge(n, m, **tmp)
 
             for n in common:
                 h.add_node(n, **{n_pop[k]: v for k, v in g.nodes[n].items() if k in n_pop})
 
             for n in ext_common.difference(common):
-                h.add_node(n, **{n_pop[k]: v for k, v in g.nodes[n].items() if k not in x_pop})
+                h.add_node(n, **{k: v for k, v in
+                                 (g.nodes[n] if is_cgr else cls.__replicate_node_sp(g.nodes[n])).items()
+                                 if k not in x_pop})
 
             for n in uniq:
-                h.add_node(n, **g.nodes[n])
+                h.add_node(n, **(g.nodes[n] if is_cgr else cls.__replicate_node_sp(g.nodes[n])))
 
             extended_common.update(ext_common)
 
         """ update sp_* marks
         """
-        h.fix_data(nodes_bunch=extended_common, edges_bunch=common)
+        h.fix_data()
         return h
+
+    @classmethod
+    def decompose(cls, g):
+        tmp = ReactionContainer(meta=g.meta)
+
+        x = g.copy()
+        x.__class__ = MoleculeContainer
+        for n, m in cls.__get_broken_paths(g, 's_bond'):
+            x.remove_edge(n, m)
+
+        for mol in cls.split(x):
+            mol.fix_data()
+            tmp.reagents.append(mol)
+
+        x = g.copy()
+        x.__class__ = MoleculeContainer
+        for n, m in cls.__get_broken_paths(g, 'p_bond'):
+            x.remove_edge(n, m)
+
+        for mol in cls.split(x):
+            for *_, edge_attr in mol.edges(data=True):
+                edge_attr['s_bond'] = edge_attr.get('p_bond', None)
+                s = edge_attr.get('p_stereo')
+                if s:
+                    edge_attr['s_stereo'] = s
+                else:
+                    edge_attr.pop('s_stereo', None)
+            for _, node_attr in mol.nodes(data=True):
+                for i, j in (('p_x', 's_x'), ('p_y', 's_y'), ('p_z', 's_z'), ('p_neighbors', 's_neighbors'),
+                             ('p_hyb', 's_hyb'), ('p_charge', 's_charge'), ('p_radical', 's_radical')):
+                    mark = node_attr.get(i)
+                    if mark is not None:
+                        node_attr[j] = mark
+                    else:
+                        node_attr.pop(j, None)
+
+            mol.fix_data()
+            tmp.products.append(mol)
+
+        return tmp
+
+    @staticmethod
+    def __fix_attr(attr, marks):
+        tmp = {}
+        for s, p, sp in marks:
+            if s in attr:
+                tmp[p] = tmp[sp] = attr[s]
+        return tmp
+
+    @staticmethod
+    def __replicate_node_sp(attr):
+        return dict(p_charge=attr['s_charge'], p_x=attr['s_x'], p_y=attr['s_y'], p_z=attr['s_z'],
+                    p_neighbors=attr.get('s_neighbors'), p_hyb=attr.get('s_hyb'), p_radical=attr.get('s_radical'),
+                    p_stereo=attr.get('s_stereo'), **attr)
+
+    @staticmethod
+    def __get_broken_paths(g, edge):
+        for m, n, attr in g.edges(data=True):
+            if attr.get(edge) is None:
+                yield n, m
 
     __popdict = dict(products=dict(edge=dict(p_bond='p_bond', p_stereo='p_stereo'),
                                    ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb'),
                                    node=dict(p_charge='p_charge', p_neighbors='p_neighbors', p_hyb='p_hyb', p_x='p_x',
-                                             p_y='p_y', p_z='p_z', p_stereo='p_stereo',
-                                             mark='mark', element='element', map='map')),
+                                             p_y='p_y', p_z='p_z', p_stereo='p_stereo', p_radical='p_radical')),
                      reagents=dict(edge=dict(s_bond='s_bond', s_stereo='s_stereo'),
                                    ext_node=('p_neighbors', 'p_hyb', 'sp_neighbors', 'sp_hyb'),
                                    node=dict(s_charge='s_charge', s_neighbors='s_neighbors', s_hyb='s_hyb', s_x='s_x',
-                                             s_y='s_y', s_z='s_z', s_stereo='s_stereo',
+                                             s_y='s_y', s_z='s_z', s_stereo='s_stereo', s_radical='s_radical',
                                              mark='mark', element='element', map='map')),
                      non_cgr=dict(edge=dict(s_bond='p_bond', s_stereo='p_stereo'),
-                                  ext_node=('sp_neighbors', 'sp_hyb'),
+                                  ext_node=('s_neighbors', 's_hyb', 'sp_neighbors', 'sp_hyb'),
                                   node=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb', s_x='p_x',
-                                            s_y='p_y', s_z='p_z', s_stereo='p_stereo',
-                                            mark='mark', element='element', map='map')))
+                                            s_y='p_y', s_z='p_z', s_stereo='p_stereo', s_radical='p_radical')))

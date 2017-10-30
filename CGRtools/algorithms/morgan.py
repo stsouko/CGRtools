@@ -29,9 +29,10 @@ def get_morgan(g, isotope=False, element=True, stereo=False):
     newlevels = {}
     countprime = iter(primes)
 
-    params = {n: (primes[elements.index[attr['element']]] if element else 1,
+    params = {n: (primes[elements.index(attr['element'])] if element else 1,
                   primes[attr['isotope']] if isotope and 'isotope' in attr else 1,
                   primes[10 * attr['s_charge'] + attr.get('p_charge', 0)] if element else 1,
+                  primes[10 * attr.get('s_radical') + attr.get('p_radical', 0)] if element else 1,
                   primes[10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0)] if stereo else 1,
                   reduce(mul, (primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
                                for eattr in g[n].values()), 1),
