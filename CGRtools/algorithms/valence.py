@@ -109,12 +109,9 @@ class Valence:
     def __prepare_valence_rules(cls):
         out = {}
         for a, c, r, v, h in cls.__valence:
-            x = range(v - h, v + 1) if h and v else [v]
-            if isinstance(a, tuple):
-                for i in a:
-                    out.setdefault((i, c, r), []).extend(x)
-            else:
-                out.setdefault((a, c, r), []).extend(x)
+            x = range(v - h, v + 1) if h else [v]
+            for i in (a if isinstance(a, tuple) else [a]):
+                out.setdefault((i, c, r), []).extend(x)
         return out
 
     @classmethod
@@ -122,14 +119,9 @@ class Valence:
         out = {}
         for a, c, r, v, h in cls.__valence:
             if h:
-                x = [(v - i, i) for i in range(1, h + 1)]
-                if isinstance(a, tuple):
-                    for i in a:
-                        for j, k in x:
-                            out[(i, c, r, j)] = k
-                else:
-                    for j, k in x:
-                        out[(a, c, r, j)] = k
+                for k in range(1, h + 1):
+                    for i in (a if isinstance(a, tuple) else [a]):
+                        out[(i, c, r, v - k)] = k
         return out
 
     # http://onlinelibrarystatic.wiley.com/marvin/help/sci/ValenceCalculator.html

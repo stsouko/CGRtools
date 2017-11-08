@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from collections import namedtuple, defaultdict
-from itertools import chain
+from itertools import chain, repeat, zip_longest
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
@@ -50,6 +50,7 @@ class MoleculeContainer(Graph, Valence):
                               self.get_morgan.__name__, self.get_fear.__name__, self.get_fear_hash.__name__,
                               self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
                               self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
+                              self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
                               'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
         return self.__visible
 
@@ -134,8 +135,9 @@ class MoleculeContainer(Graph, Valence):
         self.add_node(_map, element=element, s_charge=charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
         if radical:
             self.nodes[_map]['s_radical'] = radical
+        return _map
 
-    def add_bond(self, atom1, atom2, mark, ignore=False):
+    def add_bond(self, atom1, atom2, mark, *, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
         if self.has_edge(atom1, atom2):
@@ -146,24 +148,6 @@ class MoleculeContainer(Graph, Valence):
         if not ignore:
             self._check_bonding(atom1, atom2, mark)
         self.add_edge(atom1, atom2, s_bond=mark)
-
-    def _check_bonding(self, atom1, atom2, mark, label='s'):
-        for atom, reverse in ((atom1, atom2), (atom2, atom1)):
-            a = self.nodes[atom]
-            lb = '%s_bond' % label
-            lc = '%s_charge' % label
-            lr = '%s_radical' % label
-            try:
-                if not self._check_valence(a['element'], a[lc],
-                                           [x[lb] for x in self[atom].values() if x.get(lb)] + [mark],
-                                           radical=self._radical_map[a.get(lr)]):
-                    raise InvalidData('valence error')
-            except ValenceError:
-                tmp = [(y[lb], self.nodes[x]['element'])
-                       for x, y in self[atom].items() if y.get(lb)] + [(mark, self.nodes[reverse]['element'])]
-                if not self._check_valence(a['element'], a[lc], [x for x, _ in tmp], self._radical_map[a.get(lr)],
-                                           neighbors=[x for _, x in tmp]):
-                    raise InvalidData('valence error')
 
     def add_stereo(self, atom1, atom2, mark):
         if self.has_edge(atom1, atom2):
@@ -273,6 +257,49 @@ class MoleculeContainer(Graph, Valence):
             attr.update(label)
         return g if copy else None
 
+    def implicify_hydrogens(self):
+        """
+        remove explicit hydrogent if possible
+        :return: number of removed hydrogens
+        """
+        explicit = {}
+        c = 0
+        for n, attr in self.nodes(data=True):
+            if attr['element'] == 'H':
+                m = next(self.neighbors(n))
+                if self.nodes[m]['element'] != 'H':
+                    explicit.setdefault(m, []).append(n)
+
+        for n, h in explicit.items():
+            atom = self.nodes[n]
+            implicit = self._get_implicit_h(atom['element'], atom['s_charge'],
+                                            [y['s_bond'] for x, y in self[n].items() if x not in h],
+                                            radical=atom.get('s_radical', 0))
+            if implicit:
+                for x in h:
+                    self.remove_node(x)
+                    c += 1
+        return c
+
+    def explicify_hydrogens(self):
+        """
+        add explicit hydrogens to atoms
+        :return: number of added atoms
+        """
+        tmp = []
+        for n, attr in self.nodes(data=True):
+            if attr['element'] != 'H':
+                for _ in range(self.atom_implicit_h(n)):
+                    tmp.append(n)
+        for n in tmp:
+            self.add_bond(n, self.add_atom('H', 0), 1)
+        return len(tmp)
+
+    def atom_implicit_h(self, atom):
+        attr = self.nodes[atom]
+        return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],
+                                    radical=self._radical_map[attr.get('s_radical')])
+
     @staticmethod
     def _attr_renew(attr, marks):
         new_attr = {}
@@ -282,6 +309,27 @@ class MoleculeContainer(Graph, Valence):
                 new_attr[s] = ls
         return new_attr
 
+    def _fix_stereo(self):
+        pass
+
+    def _check_bonding(self, atom1, atom2, mark, label='s'):
+        for atom, reverse in ((atom1, atom2), (atom2, atom1)):
+            a = self.nodes[atom]
+            lb = '%s_bond' % label
+            lc = '%s_charge' % label
+            lr = '%s_radical' % label
+            try:
+                if not self._check_valence(a['element'], a[lc],
+                                           [x[lb] for x in self[atom].values() if x.get(lb)] + [mark],
+                                           radical=self._radical_map[a.get(lr)]):
+                    raise InvalidData('valence error')
+            except ValenceError:
+                tmp = [(y[lb], self.nodes[x]['element'])
+                       for x, y in self[atom].items() if y.get(lb)] + [(mark, self.nodes[reverse]['element'])]
+                if not self._check_valence(a['element'], a[lc], [x for x, _ in tmp], self._radical_map[a.get(lr)],
+                                           neighbors=[x for _, x in tmp]):
+                    raise InvalidData('valence error')
+
     @classmethod
     def __node_attr_clear(cls, attr):
         new_attr = {}
@@ -290,9 +338,6 @@ class MoleculeContainer(Graph, Valence):
             if ls is not None:
                 new_attr[s] = ls
         return new_attr
-
-    def _fix_stereo(self):
-        pass
 
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
@@ -367,8 +412,9 @@ class CGRContainer(MoleculeContainer):
             self.nodes[_map]['s_radical'] = s_radical
         if p_radical:
             self.nodes[_map]['p_radical'] = p_radical
+        return _map
 
-    def add_bond(self, atom1, atom2, s_mark, p_mark, ignore=False):
+    def add_bond(self, atom1, atom2, s_mark, p_mark, *, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
         if self.has_edge(atom1, atom2):
@@ -427,6 +473,72 @@ class CGRContainer(MoleculeContainer):
             g.nodes[i].update(label)
         return g if copy else None
 
+    def implicify_hydrogens(self):
+        """
+        remove explicit hydrogent if possible
+        :return: number of removed hydrogens
+        """
+        explicit = {}
+        hydrogens = set()
+        for_remove = []
+        c = 0
+        for n, attr in self.nodes(data=True):
+            if attr['element'] == 'H':
+                for m in self.neighbors(n):
+                    if self.nodes[m]['element'] != 'H':
+                        explicit.setdefault(m, []).append(n)
+                    else:
+                        hydrogens.add(m)
+                        hydrogens.add(n)
+
+        for n, h in explicit.items():
+            atom = self.nodes[n]
+            s_bonds = [y['s_bond'] for x, y in self[n].items() if x not in h and y.get('s_bond')]
+            p_bonds = [y['p_bond'] for x, y in self[n].items() if x not in h and y.get('p_bond')]
+            s_implicit = self._get_implicit_h(atom['element'], atom['s_charge'], s_bonds, atom.get('s_radical', 0))
+            p_implicit = self._get_implicit_h(atom['element'], atom['p_charge'], p_bonds, atom.get('p_radical', 0))
+
+            if not s_implicit and any(self[n][x].get('s_bond') for x in h):
+                hydrogens.update(h)
+            elif not p_implicit and any(self[n][x].get('p_bond') for x in h):
+                hydrogens.update(h)
+            else:
+                for x in h:
+                    for_remove.append(x)
+
+        for x in for_remove:
+            if x not in hydrogens:
+                self.remove_node(x)
+                c += 1
+        return c
+
+    def explicify_hydrogens(self):
+        """
+        add explicit hydrogens to atoms
+        :return: number of added atoms
+        """
+        tmp = []
+        for n, attr in self.nodes(data=True):
+            if attr['element'] != 'H':
+                si, pi = self.atom_implicit_h(n)
+                if si or pi:
+                    for s_mark, p_mark in zip_longest(repeat(1, si), repeat(1, pi)):
+                        tmp.append((n, s_mark, p_mark))
+
+        for n, s_mark, p_mark in tmp:
+            self.add_bond(n, self.add_atom('H', 0), s_mark, p_mark)
+        return len(tmp)
+
+    def atom_implicit_h(self, atom):
+        attr = self.nodes[atom]
+        si = self._get_implicit_h(attr['element'], attr['s_charge'],
+                                  [x['s_bond'] for x in self[atom].values() if x.get('s_bond')],
+                                  radical=self._radical_map[attr.get('s_radical')])
+        pi = self._get_implicit_h(attr['element'], attr['p_charge'],
+                                  [x['p_bond'] for x in self[atom].values() if x.get('p_bond')],
+                                  radical=self._radical_map[attr.get('p_radical')])
+        return self.__implicit_container(si, pi)
+
     def _fix_stereo(self):
         pass
 
@@ -477,6 +589,7 @@ class CGRContainer(MoleculeContainer):
     _bond_marks = {x: x for x in _edge_save}
     _atom_container = namedtuple('Atom', __tmp3)
     _bond_container = namedtuple('Bond', _edge_save)
+    __implicit_container = namedtuple('ImplicitH', ('s_implicit', 'p_implicit'))
     __visible = None
 
 
