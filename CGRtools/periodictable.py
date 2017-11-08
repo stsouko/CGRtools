@@ -40,7 +40,17 @@ _table = '''  1 H                                                               
             272 Rg 285 Cn 286 Nh 289 Fl 289 Mc 293 Lv 294 Ts 294 Og
          '''
 
+_groups = ((1, 3, 11, 19, 37, 55, 87),
+           (4, 12, 20, 38, 56, 88),
+           (21, 39) + tuple(range(57, 72)) + tuple(range(89, 104))) + \
+          tuple((22 + x, 40 + x, 72 + x, 104 + x) for x in range(9)) + \
+          tuple((5 + x, 12 + x, 31 + x, 49 + x, 81 + x, 113 + x) for x in range(5)) + ((2, 10, 18, 36, 54, 86, 118), )
+
+_periods = ((1, 2), range(3, 11), range(11, 19), range(19, 37), range(37, 55), range(55, 87), range(87, 119))
+
 _atoms = _table.split()
 
 elements = tuple(_atoms[1::2])
 isotopes = {k: int(v) for k, v in zip(elements, _atoms[::2])}
+groups = {n: tuple(elements[y - 1] for y in x) for n, x in enumerate(_groups, start=1)}
+periods = {n: tuple(elements[y - 1] for y in x) for n, x in enumerate(_periods, start=1)}
