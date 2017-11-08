@@ -131,7 +131,7 @@ class MRVwrite(CGRwrite):
                               for i, j in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
                              ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
-                              .format(i, j, l, '1" queryType="Any' if k == 8 else 'A' if k == 4 else k,
+                              .format(i, j, l, cls.__bond_map[k],
                                       '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
                               for i, (j, l, k, s) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
@@ -148,3 +148,4 @@ class MRVwrite(CGRwrite):
     _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
     _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
     _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
+    __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3'}

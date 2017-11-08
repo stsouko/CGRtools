@@ -32,7 +32,13 @@ class Valence:
         self.__valence_rules = self.__prepare_valence_rules()
         self.__implicit_rules = self.__prepare_implicit_h_rules()
 
-    def check_valence(self, element, charge, bonds, radical=None, neighbors=None):
+    def _check_charge_radical(self, element, charge, radical=None):
+        if radical is None:
+            radical = 0
+
+        return (element, charge, radical) in self.__valence_rules
+
+    def _check_valence(self, element, charge, bonds, radical=None, neighbors=None):
         if radical is None:
             radical = 0
 
@@ -53,7 +59,7 @@ class Valence:
                 raise ValenceError()
             return any(y == 'O' for x, y in zip(bonds, neighbors) if x == 2)
 
-        if element == 'Xe' and charge == 0:
+        if element == 'Xe' and charge == 0 and len_bonds > 0:
             # XeF2, XeF4, XeF6, XeO3, XeO4, XeOF4, XeO2F2, XeO3F2
             if neighbors is None:
                 raise ValenceError()
@@ -88,7 +94,7 @@ class Valence:
 
         return sum_bonds in self.__valence_rules.get((element, charge, radical), [])
 
-    def get_implicit_h(self, element, charge, bonds, radical=None):
+    def _get_implicit_h(self, element, charge, bonds, radical=None):
         if radical is None:
             radical = 0
 
@@ -294,4 +300,4 @@ class Valence:
         (('He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rd'), 0, 0, 0, 0)
     )
 
-    __aromatic = ('B', 'C', 'N', 'P', 'O')
+    __aromatic = ('B', 'C', 'N', 'P', 'O', 'S')

@@ -21,3 +21,4 @@
 from .morgan import get_morgan
 from .sssr import find_sssr
 from .strings import get_cgr_string, hash_cgr_string
+from .valence import Valence, ValenceError

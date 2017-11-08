@@ -24,7 +24,7 @@ from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
 from . import InvalidData, InvalidAtom
-from .algorithms import get_morgan, get_cgr_string, hash_cgr_string
+from .algorithms import get_morgan, get_cgr_string, hash_cgr_string, Valence, ValenceError
 from .periodictable import elements
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
@@ -36,9 +36,10 @@ class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
         return MergedReaction(self.reagents.copy(), self.products.copy())
 
 
-class MoleculeContainer(Graph):
+class MoleculeContainer(Graph, Valence):
     def __init__(self, meta=None):
-        super().__init__()
+        Graph.__init__(self)
+        Valence.__init__(self)
         if isinstance(meta, dict):
             self.__meta = meta
 
@@ -125,20 +126,44 @@ class MoleculeContainer(Graph):
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
-
-        # todo: charges checks.
+        if radical not in (None, 1, 2, 3):
+            raise InvalidData('only monovalent (2), bivalent (1 singlet, 3 triplet) or None accepted')
+        if not self._check_charge_radical(element, charge, radical=self._radical_map[radical]):
+            raise InvalidData('charge and/or radical values impossible for this element')
 
         self.add_node(_map, element=element, s_charge=charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
         if radical:
             self.nodes[_map]['s_radical'] = radical
 
-    def add_bond(self, atom1, atom2, mark):
+    def add_bond(self, atom1, atom2, mark, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
-        if not mark:
-            raise InvalidData('no bond data')
+        if self.has_edge(atom1, atom2):
+            raise InvalidData('bond exists')
+        if mark not in (1, 2, 3, 4, 9):
+            raise InvalidData('invalid bond mark')
 
+        if not ignore:
+            self._check_bonding(atom1, atom2, mark)
         self.add_edge(atom1, atom2, s_bond=mark)
+
+    def _check_bonding(self, atom1, atom2, mark, label='s'):
+        for atom, reverse in ((atom1, atom2), (atom2, atom1)):
+            a = self.nodes[atom]
+            lb = '%s_bond' % label
+            lc = '%s_charge' % label
+            lr = '%s_radical' % label
+            try:
+                if not self._check_valence(a['element'], a[lc],
+                                           [x[lb] for x in self[atom].values() if x.get(lb)] + [mark],
+                                           radical=self._radical_map[a.get(lr)]):
+                    raise InvalidData('valence error')
+            except ValenceError:
+                tmp = [(y[lb], self.nodes[x]['element'])
+                       for x, y in self[atom].items() if y.get(lb)] + [(mark, self.nodes[reverse]['element'])]
+                if not self._check_valence(a['element'], a[lc], [x for x, _ in tmp], self._radical_map[a.get(lr)],
+                                           neighbors=[x for _, x in tmp]):
+                    raise InvalidData('valence error')
 
     def add_stereo(self, atom1, atom2, mark):
         if self.has_edge(atom1, atom2):
@@ -280,6 +305,8 @@ class MoleculeContainer(Graph):
     _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo', 's_radical')
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
+    _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
+    _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
     __meta = __visible = __atom_cache = __bond_cache = None
 
     def subgraph(self, *args, **kwargs):
@@ -317,8 +344,8 @@ class CGRContainer(MoleculeContainer):
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
-
-        # todo: charges checks.
+        if s_radical not in (None, 1, 2, 3) or p_radical not in (None, 1, 2, 3):
+            raise InvalidData('only monovalent (2), bivalent (1 singlet, 3 triplet) or None accepted')
 
         if p_charge is None:
             p_charge = s_charge
@@ -329,6 +356,10 @@ class CGRContainer(MoleculeContainer):
         if p_z is None:
             p_z = s_z
 
+        if not (self._check_charge_radical(element, s_charge, radical=self._radical_map[s_radical]) and
+                self._check_charge_radical(element, p_charge, radical=self._radical_map[p_radical])):
+            raise InvalidData('charge and/or radical values impossible for this element')
+
         self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
                       s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
 
@@ -337,11 +368,23 @@ class CGRContainer(MoleculeContainer):
         if p_radical:
             self.nodes[_map]['p_radical'] = p_radical
 
-    def add_bond(self, atom1, atom2, s_mark, p_mark):
+    def add_bond(self, atom1, atom2, s_mark, p_mark, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
+        if self.has_edge(atom1, atom2):
+            raise InvalidData('bond exists')
         if not (s_mark or p_mark):
             raise InvalidData('empty bonds not allowed')
+
+        if s_mark not in (1, 2, 3, 4, 9, None):
+            raise InvalidData('invalid bond mark')
+        elif not ignore and s_mark:
+            self._check_bonding(atom1, atom2, s_mark)
+
+        if p_mark not in (1, 2, 3, 4, 9, None):
+            raise InvalidData('invalid bond mark')
+        elif not ignore and p_mark:
+            self._check_bonding(atom1, atom2, p_mark, label='p')
 
         if s_mark:
             self.add_edge(atom1, atom2, s_bond=s_mark)
