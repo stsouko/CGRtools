@@ -18,6 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from ..periodictable import types
 
 
 class ValenceError(Exception):
@@ -31,6 +32,9 @@ class Valence:
     def __init__(self):
         self.__valence_rules = self.__prepare_valence_rules()
         self.__implicit_rules = self.__prepare_implicit_h_rules()
+        self._metals = types['alkali'] + types['alkaline'] + types['transition'] + types['post_transition'] + \
+                       types['lanthanide'] + types['actinide']
+        self.__inorganic =
 
     def _check_charge_radical(self, element, charge, radical=None):
         if radical is None:
@@ -105,6 +109,18 @@ class Valence:
 
         return self.__implicit_rules.get((element, charge, radical, sum_bonds), 0)
 
+    def _ionizable_bonds(self, element, charge, bonds, neighbors, radical=None):
+        if not neighbors:
+            raise ValenceError('atom should contain bonded neighbors')
+
+        if element in types['alkali'] and neighbors[0] != 'H':
+            return 0
+        elif element in types['alkaline']:
+            return tuple(n for n, x in enumerate(neighbors) if x != 'H') or None
+        elif element in types['transition']
+        else:
+            return None
+
     @classmethod
     def __prepare_valence_rules(cls):
         out = {}
@@ -168,10 +184,10 @@ class Valence:
         (('B', 'Al', 'Ga', 'In', 'Tl'), 0, 1, 2, 2),
         (('B', 'Al', 'Ga', 'In', 'Tl'), 0, 2, 1, 1),
         #  ·Me2+ and :̣Me+ are allowed.
-        (('Al', 'Ga', 'In', 'Th'), 2, 1, 0, 0),
-        (('Al', 'Ga', 'In', 'Th'), 1, 2, 0, 0),
+        (('Al', 'Ga', 'In', 'Tl'), 2, 1, 0, 0),
+        (('Al', 'Ga', 'In', 'Tl'), 1, 2, 0, 0),
         # RMe+·
-        (('B', 'Al', 'Ga', 'In', 'Th'), 1, 1, 1, 1),
+        (('B', 'Al', 'Ga', 'In', 'Tl'), 1, 1, 1, 1),
 
         # elemental
         (('Sn', 'Pb'), 0, 0, 0, 0),
@@ -289,7 +305,9 @@ class Valence:
         (('F', 'Cl', 'Br', 'I', 'At'), -1, 0, 0, 0),
         (('F', 'Cl', 'Br', 'I', 'At'), 0, 1, 0, 0),
 
-        (('He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rd'), 0, 0, 0, 0)
+        (('He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn'), 0, 0, 0, 0)
     )
 
     __aromatic = ('B', 'C', 'N', 'P', 'O', 'S')
+
+    __inorganic_molecules = {'transition': ('Mn,=O,=O,=O,-O', 'Mn,=O,=O')}

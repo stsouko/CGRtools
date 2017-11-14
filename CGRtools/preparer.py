@@ -21,7 +21,7 @@
 from functools import reduce
 from warnings import warn
 from . import InvalidConfig, InvalidData
-from .containers import MoleculeContainer, ReactionContainer, MergedReaction, CGRContainer
+from .containers import MoleculeContainer, ReactionContainer, MergedReaction
 from .core import CGRcore
 from .reactor import CGRreactor
 
@@ -125,14 +125,6 @@ class CGRpreparer(CGRcore):
 
         res = MergedReaction(reagents=reagents, products=products)
         return res
-
-    def split_salts(self, g):
-        is_cgr = isinstance(g, CGRContainer)
-        for m, n, attr in g.edges(data=True):
-            atom1 = g.nodes[m]['element']
-            atom2 = g.nodes[n]['element']
-
-        return g
 
     @staticmethod
     def __get_cgr_type(_type):

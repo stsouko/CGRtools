@@ -127,11 +127,10 @@ class CGRcore(object):
                     reverse_ext.setdefault(j, {}).setdefault(i, []).append(n)
 
         if reverse_ext:
-            dnr = dnc = 0  # common atoms radicals or charges total changes
+            dnr = 0  # common atoms radicals or charges total changes
             for n in common:
                 attr = h.nodes[n]
                 dnr += cls.__radical_map[attr.get('p_radical')] - cls.__radical_map[attr.get('s_radical')]
-                dnc += attr['p_charge'] - attr['s_charge']
 
         for n, sp in reverse_ext.items():
             atom = h.nodes[n]
@@ -197,11 +196,17 @@ class CGRcore(object):
                     for _, m in zip(range(dc - dh), isp['products']):  # electrophyle substitution
                         attr = h.nodes[m]
                         attr['s_charge'] = attr.get('s_charge', attr['p_charge']) + 1
+                    for m in sp.get('reagents', []):
+                        attr = h.nodes[m]
+                        attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
 
                 elif dh > 0 and 0 <= dc < dh:  # charge increase and protonation less
                     for _, m in zip(range(dh - dc), isp['reagents']):  # cation elimination and anion protonation
                         attr = h.nodes[m]
                         attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
+                    for m in sp.get('products', []):
+                        attr = h.nodes[m]
+                        attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
 
                 elif dc > 0 >= dh:  # charge increasing and deprotonation (if exists).
                     for x in range(dc - dh):
@@ -219,6 +224,18 @@ class CGRcore(object):
                     for _, m in zip(range(dh - dc), isp['reagents']):  # cation elimination
                         attr = h.nodes[m]
                         attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
+                    for m in sp.get('products', []):
+                        attr = h.nodes[m]
+                        attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+
+                else:
+                    # restore charge and radical marks. we don't know what to do.
+                    for m in sp.get('reagents', []):
+                        attr = h.nodes[m]
+                        attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                    for m in sp.get('products', []):
+                        attr = h.nodes[m]
+                        attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
 
         """ update sp_* marks
         """

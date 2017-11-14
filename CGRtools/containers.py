@@ -295,6 +295,11 @@ class MoleculeContainer(Graph, Valence):
             self.add_bond(n, self.add_atom('H', 0), 1)
         return len(tmp)
 
+    def split_ions(self):
+        for n, attr in self.nodes(data=True):
+            if attr['element'] in self._metals:
+                pass
+
     def atom_implicit_h(self, atom):
         attr = self.nodes[atom]
         return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],
