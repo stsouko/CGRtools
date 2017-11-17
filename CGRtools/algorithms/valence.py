@@ -34,7 +34,6 @@ class Valence:
         self.__implicit_rules = self.__prepare_implicit_h_rules()
         self._metals = types['alkali'] + types['alkaline'] + types['transition'] + types['post_transition'] + \
                        types['lanthanide'] + types['actinide']
-        self.__inorganic =
 
     def _check_charge_radical(self, element, charge, radical=None):
         if radical is None:
@@ -46,7 +45,7 @@ class Valence:
         if radical is None:
             radical = 0
 
-        sum_bonds = sum(bonds)
+        sum_bonds = self.__bonds_sum(bonds)
         len_bonds = len(bonds)
 
         if element in ('S', 'Se', 'Te', 'Po') and charge == -1 and len_bonds == 3:
@@ -102,12 +101,16 @@ class Valence:
         if radical is None:
             radical = 0
 
-        sum_bonds = sum(bonds)
+        sum_bonds = self.__bonds_sum(bonds)
 
         if element == 'N' and charge == 0 and sum_bonds == 4:
             return 1
 
         return self.__implicit_rules.get((element, charge, radical, sum_bonds), 0)
+
+    @classmethod
+    def __bonds_sum(cls, bonds):
+        return int(sum(cls.__bonds[x] for x in bonds))
 
     def _ionizable_bonds(self, element, charge, bonds, neighbors, radical=None):
         if not neighbors:
@@ -117,9 +120,8 @@ class Valence:
             return 0
         elif element in types['alkaline']:
             return tuple(n for n, x in enumerate(neighbors) if x != 'H') or None
-        elif element in types['transition']
-        else:
-            return None
+        elif element in types['transition']:
+            pass
 
     @classmethod
     def __prepare_valence_rules(cls):
@@ -311,3 +313,4 @@ class Valence:
     __aromatic = ('B', 'C', 'N', 'P', 'O', 'S')
 
     __inorganic_molecules = {'transition': ('Mn,=O,=O,=O,-O', 'Mn,=O,=O')}
+    __bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1}
