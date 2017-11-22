@@ -21,32 +21,13 @@
 from importlib.util import find_spec
 
 
-def fix_stereo(g):
-    g.reset_query_marks()
-    weights = g.get_morgan()
-
-    for atom, attr in g.nodes(data=True):
-        if attr['element'] in ('C', 'Si'):
-            if attr['s_neighbors'] in (3, 4) and attr['s_hyb'] == 1:
-                pass
-
-    return g
-
-
 def pyramid_volume(n, u, v, w):
-    res = {}
-    for d, kx, ky, kz in (('s', 's_x', 's_y', 's_z'), ('p', 'p_x', 'p_y', 'p_z')):
-        zx, zy, zz = n[kx], n[ky], n[kz]
+    nx, ny, nz = n[0], n[1], n[2]
+    ux, uy, uz = u[0] - nx, u[1] - ny, u[2] - nz
+    vx, vy, vz = v[0] - nx, v[1] - ny, v[2] - nz
+    wx, wy, wz = w[0] - nx, w[1] - ny, w[2] - nz
 
-        ux, uy, uz = u['s_x'] - zx, u['s_y'] - zy, u['s_z'] - zz
-        vx, vy, vz = v['s_x'] - zx, v['s_y'] - zy, v['s_z'] - zz
-        wx, wy, wz = w['s_x'] - zx, w['s_y'] - zy, w['s_z'] - zz
-
-        res[d] = ux * (vy * wz - vz * wy) + \
-            uy * (vz * wx - vx * wz) + \
-            uz * (vx * wy - vy * wx)  # 14 operations / det
-
-    return res
+    return ux * (vy * wz - vz * wy) + uy * (vz * wx - vx * wz) + uz * (vx * wy - vy * wx)
 
 
 if find_spec('numba'):  # jitting if available

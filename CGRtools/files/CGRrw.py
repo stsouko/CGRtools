@@ -22,6 +22,7 @@ from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
 from typing import Tuple
+from .. import InvalidStereo, InvalidAtom
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 from ..periodictable import elements, isotopes
 
@@ -286,7 +287,7 @@ class CGRread:
     def __parse_molecule(self, molecule, mapping, meta=None, colors=None):
         meta = meta and {x: '\n'.join(y) for x, y in meta.items()} or None
         cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = {}, {}, {}, {}
-        any_bonds, normal_stereo, cgr_stereo = [], [], []
+        any_bonds, normal_stereo = [], []
         charge_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'charge'}
         radical_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'radical'}
 
@@ -390,21 +391,44 @@ class CGRread:
 
             if s in (1, 6) and m in (1, 4):
                 s_mark = self.__stereolabels[s]
-                if is_cgr:
-                    cgr_stereo.append((k_map, l_map, s_mark))
-                else:
-                    normal_stereo.append((k_map, l_map, s_mark))
+                normal_stereo.append((k_map, l_map, s_mark))
 
-        for (k, l), (s_mark, p_mark) in cgr_dat_stereo.items():
-            if (k, l) in any_bonds:  # remove dynamic stereo if bond not any [8]. INVALID SPEC.
-                k_map, l_map = mapping[k][0], mapping[l][0]
-                g.add_stereo(k_map, l_map, s_mark, p_mark)
+        while True:
+            failed_cgr_dat_stereo = {}
+            for (k, l), (s_mark, p_mark) in cgr_dat_stereo.items():
+                if (k, l) in any_bonds:  # remove dynamic stereo if bond not any [8]. INVALID SPEC.
+                    k_map, l_map = mapping[k][0], mapping[l][0]
+                    try:
+                        g.add_stereo(k_map, l_map, s_mark, p_mark)
+                    except InvalidStereo as e:
+                        print(e)
+                        failed_cgr_dat_stereo[(k, l)] = (s_mark, p_mark)
+                    except InvalidAtom as e:
+                        if not self.__ignore:
+                            raise
+                        print(e)
 
-        for k_map, l_map, s_mark in normal_stereo:
-            g.add_stereo(k_map, l_map, s_mark)
+            failed_normal_stereo = []
+            for k_map, l_map, s_mark in normal_stereo:
+                try:
+                    if is_cgr:
+                        g.add_stereo(k_map, l_map, s_mark, s_mark)
+                    else:
+                        g.add_stereo(k_map, l_map, s_mark)
+                except InvalidStereo as e:
+                    print(e)
+                    failed_normal_stereo.append((k_map, l_map, s_mark))
+                except InvalidAtom as e:
+                    if not self.__ignore:
+                        raise
+                    print(e)
 
-        for k_map, l_map, s_mark in cgr_stereo:
-            g.add_stereo(k_map, l_map, s_mark, s_mark)
+            if failed_cgr_dat_stereo and len(cgr_dat_stereo) > len(failed_cgr_dat_stereo) or \
+                    failed_normal_stereo and len(normal_stereo) > len(failed_normal_stereo):
+                cgr_dat_stereo = failed_cgr_dat_stereo
+                normal_stereo = failed_normal_stereo
+                continue
+            break
 
         if colors:
             for k, v in colors.items():
@@ -483,8 +507,13 @@ class CGRwrite:
         data['colors'] = {n: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in m.items()) for n, m in colors.items()}
 
         for i, j, l in g.edges(data=True):
-            re_atoms = (renum[i], renum[j])
             s_stereo, p_stereo = g.get_stereo(i, j)
+            if not (s_stereo or p_stereo):
+                s_stereo, p_stereo = g.get_stereo(j, i)
+                if s_stereo or p_stereo:
+                    i, j = j, i
+
+            re_atoms = (renum[i], renum[j])
             if s_stereo or p_stereo:
                 stereo = {'value': '%s>%s' % (s_stereo or 'n', p_stereo or 'n'), 'type': 'dynstereo', 'atoms': re_atoms}
                 if s_stereo != p_stereo:
@@ -526,7 +555,7 @@ class CGRwrite:
             else:
                 bond = s_bond
 
-            bonds.append((renum[i], renum[j], bond, s_mark))
+            bonds.append((*re_atoms, bond, s_mark))
 
         data['CGR'] = self._format_mol(atoms, bonds, extended, cgr_dat)
         return data

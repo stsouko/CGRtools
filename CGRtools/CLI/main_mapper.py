@@ -21,7 +21,7 @@
 from sys import stderr
 from traceback import format_exc
 from ..files.RDFrw import RDFread, RDFwrite
-from ..reactmap import ReactMap
+from ..utils.reactmap import ReactMap
 
 
 def mapper_core(**kwargs):

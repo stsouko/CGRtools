@@ -94,6 +94,8 @@ types = {'alkali': groups[1][1:], 'alkaline': groups[2], 'actinide': periods[7][
          'diatomic': (groups[1][0], groups[15][0], groups[16][0]) + groups[17][:4], 'noble': groups[18][:-1],
          'unknown': periods[7][22:25] + periods[7][26:]}
 
+
+# negativity fill
 # lanthanoids fix
 for x, l, r in zip(periods[6][3:14:2], periods[6][2:13:2], periods[6][4:15:2]):
     if negativity[x] is None:

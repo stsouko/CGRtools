@@ -19,9 +19,9 @@
 #  MA 02110-1301, USA.
 #
 from networkx import Graph, relabel_nodes
-from .preparer import CGRpreparer
-from .reactor import CGRreactor, patcher
-from .utils.aromatize import Aromatize
+from .aromatize import Aromatize
+from ..preparer import CGRpreparer
+from ..reactor import CGRreactor, patcher
 
 
 aromatize = Aromatize()

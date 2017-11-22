@@ -59,7 +59,7 @@ def get_morgan(g, isotope=False, element=True, stereo=False):
         for n, m in scaf.items():
             """ if don't have neighbors use self weight
             """
-            tmp[n] = reduce(mul, (weights[x] for x in m), weights[n]**2)
+            tmp[n] = reduce(mul, (weights[x] for x in m), weights[n])
 
         weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                    for x, y in sorted(tmp.items(), key=itemgetter(1))}

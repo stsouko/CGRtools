@@ -30,3 +30,7 @@ class InvalidData(Exception):
 
 class InvalidAtom(Exception):
     pass
+
+
+class InvalidStereo(Exception):
+    pass
