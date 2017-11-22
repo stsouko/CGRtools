@@ -507,9 +507,16 @@ class CGRwrite:
         data['colors'] = {n: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in m.items()) for n, m in colors.items()}
 
         for i, j, l in g.edges(data=True):
-            s_stereo, p_stereo = g.get_stereo(i, j)
+            if is_cgr:
+                s_stereo, p_stereo = g.get_stereo(i, j)
+            else:
+                s_stereo = p_stereo = g.get_stereo(i, j)
+
             if not (s_stereo or p_stereo):
-                s_stereo, p_stereo = g.get_stereo(j, i)
+                if is_cgr:
+                    s_stereo, p_stereo = g.get_stereo(j, i)
+                else:
+                    s_stereo = p_stereo = g.get_stereo(j, i)
                 if s_stereo or p_stereo:
                     i, j = j, i
 
