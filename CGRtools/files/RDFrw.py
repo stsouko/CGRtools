@@ -24,7 +24,7 @@ from time import strftime
 from traceback import format_exc
 from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, InvalidData
 from .MDLmol import MOLformat
-from ..containers import MoleculeContainer, CGRContainer
+from ..containers import MoleculeContainer
 
 
 class RDFread(CGRread):

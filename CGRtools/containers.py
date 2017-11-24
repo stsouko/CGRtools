@@ -487,6 +487,10 @@ class CGRContainer(MoleculeContainer):
             tmp.append(self.get_center_atoms.__name__)
         return self.__visible
 
+    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
+        return get_cgr_string(self, weights or get_morgan(self, isotope=isotope, element=element),
+                              isotope=isotope, stereo=stereo, hyb=hyb, element=element, is_cgr=True)
+
     def get_center_atoms(self, stereo=False):
         """ get atoms of reaction center (dynamic bonds, stereo or charges).
         """
