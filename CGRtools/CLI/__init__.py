@@ -25,6 +25,6 @@ def launcher():
     _argparser = argparser()
     args = _argparser.parse_args()
     if 'func' in args:
-        return args.func(**vars(args))
+        return args.func(**{k: v for k, v in vars(args) if k != 'func'})
     else:
         _argparser.print_help()

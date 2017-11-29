@@ -20,6 +20,7 @@
 #
 from hashlib import md5, sha256
 from itertools import chain, count
+from warnings import warn
 
 
 def hash_cgr_string(string):
@@ -33,18 +34,19 @@ def hash_cgr_string(string):
 
 
 class CGRstring:
-    def __init__(self, isotope=False, stereo=False, hyb=False, element=True):
+    def __init__(self, isotope=False, stereo=False, hyb=False, element=True, is_cgr=False):
         self.__isotope = element and isotope
         self.__stereo = stereo
         self.__hyb = hyb
         self.__element = element
+        self.__get_smi = self.__cgr_smi if is_cgr else self.__mol_smi
+        self.__is_cgr = is_cgr
 
-    def __call__(self, g, weights, is_cgr=False):
+    def __call__(self, g, weights):
         self.__weights = weights
         self.__visited = visited = set()
         self.__countmap, self.__countcyc = count(1), count(1)
         self.__g = g
-        self.__get_smi = self.__cgr_smi if is_cgr else self.__mol_smi
 
         has_next = g
         ssmiles, psmiles = [], []
@@ -52,12 +54,12 @@ class CGRstring:
             firstatom = self.__get_next_atom(has_next)
             smirks = self.__do_cgr_smarts({firstatom}, firstatom, firstatom)
             ssmiles.append(''.join(smirks[1]))
-            if is_cgr:
+            if self.__is_cgr:
                 psmiles.append(''.join(smirks[2]))
             has_next = set(g).difference(visited)
 
         jssmiles = '.'.join(ssmiles)
-        if is_cgr:
+        if self.__is_cgr:
             jpsmiles = '.'.join(psmiles)
             return '%s>>%s' % (jssmiles, jpsmiles) if jssmiles != jpsmiles else jssmiles
 
@@ -187,5 +189,6 @@ class CGRstring:
 
 
 def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=True, is_cgr=False):
-    s = CGRstring(isotope, stereo, hyb, element)
-    return s(g, weights, is_cgr)
+    warn('deprecated function. use CGRstring class instead', DeprecationWarning)
+    s = CGRstring(isotope, stereo, hyb, element, is_cgr)
+    return s(g, weights)

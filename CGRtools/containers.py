@@ -24,7 +24,7 @@ from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
 from . import InvalidData, InvalidAtom, InvalidStereo
-from .algorithms import get_morgan, get_cgr_string, hash_cgr_string, Valence, ValenceError, pyramid_volume
+from .algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, ValenceError, pyramid_volume
 from .periodictable import elements
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
@@ -117,8 +117,8 @@ class MoleculeContainer(Graph, Valence):
         :param element: set elements marks
         :return: string representation of CGR
         """
-        return get_cgr_string(self, weights or get_morgan(self, isotope=isotope, element=element),
-                              isotope=isotope, stereo=stereo, hyb=hyb, element=element)
+        return CGRstring(isotope, stereo, hyb, element)(self, weights or get_morgan(self, isotope=isotope,
+                                                                                    element=element))
 
     def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
         if element not in elements:
@@ -183,7 +183,7 @@ class MoleculeContainer(Graph, Valence):
             vol = pyramid_volume(*((y['s_x'], y['s_y'], 0 if x != atom2 else mark) for x, y in
                                    ((x, self.nodes[x])for x in (chain((atom1,), order) if implicit else order))))
             if not vol:
-                raise InvalidStereo('Unknown')
+                raise InvalidStereo('unknown')
 
             self.nodes[atom1]['s_stereo'] = vol > 0 and 1 or -1
             self.__weights = None
@@ -488,8 +488,8 @@ class CGRContainer(MoleculeContainer):
         return self.__visible
 
     def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
-        return get_cgr_string(self, weights or get_morgan(self, isotope=isotope, element=element),
-                              isotope=isotope, stereo=stereo, hyb=hyb, element=element, is_cgr=True)
+        return CGRstring(isotope, stereo, hyb, element, True)(self, weights or get_morgan(self, isotope=isotope,
+                                                                                          element=element))
 
     def get_center_atoms(self, stereo=False):
         """ get atoms of reaction center (dynamic bonds, stereo or charges).

@@ -29,11 +29,11 @@ def get_morgan(g, isotope=False, element=True, stereo=False):
     newlevels = {}
     countprime = iter(primes)
 
-    params = {n: (primes[elements.index(attr['element'])] if element else 1,
-                  primes[attr['isotope']] if isotope and 'isotope' in attr else 1,
-                  primes[10 * attr['s_charge'] + attr.get('p_charge', 0)] if element else 1,
-                  primes[10 * (attr.get('s_radical') or 0) + (attr.get('p_radical') or 0)] if element else 1,
-                  primes[10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0)] if stereo else 1,
+    params = {n: (elements.index(attr['element']) if element else 1,
+                  attr.get('isotope', 1) if isotope else 1,
+                  10 * attr['s_charge'] + attr.get('p_charge', 0) if element else 1,
+                  10 * (attr.get('s_radical') or 0) + (attr.get('p_radical') or 0) if element else 1,
+                  10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0) if stereo else 1,
                   reduce(mul, (primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
                                for eattr in g[n].values()), 1),
                   reduce(mul, (primes[10 * (eattr.get('s_stereo') or 0) + (eattr.get('p_stereo') or 0)]
@@ -57,8 +57,6 @@ def get_morgan(g, isotope=False, element=True, stereo=False):
 
         tmp = {}
         for n, m in scaf.items():
-            """ if don't have neighbors use self weight
-            """
             tmp[n] = reduce(mul, (weights[x] for x in m), weights[n])
 
         weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
