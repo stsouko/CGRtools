@@ -23,7 +23,7 @@ from itertools import repeat, zip_longest
 from networkx.readwrite.json_graph import node_link_graph
 from .molecule import MoleculeContainer
 from .. import InvalidData
-from ..algorithms import get_morgan, CGRstring
+from ..algorithms import CGRstring
 from ..periodictable import elements
 
 
@@ -43,14 +43,17 @@ class CGRContainer(MoleculeContainer):
     def unpickle(cls, data):
         """ convert json serializable CGR into MoleculeContainer or CGRcontainer object instance
         """
-        tmp = node_link_graph(data, attrs=cls.__attrs)
+        tmp = node_link_graph(data, attrs=cls._attrs)
         g = MoleculeContainer(tmp, data['meta']) if data['s_only'] else CGRContainer(tmp, data['meta'])
         g.fix_data()
         return g
 
-    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
-        return CGRstring(isotope, stereo, hyb, element, True)(self, weights or get_morgan(self, isotope=isotope,
-                                                                                          element=element))
+    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        if flush_cache or self._fears is None:
+            self._fears = {}
+        k = (isotope, element, stereo, hyb)
+        return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element, True)
+            (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
     def get_center_atoms(self, stereo=False):
         """ get atoms of reaction center (dynamic bonds, stereo or charges).
@@ -98,6 +101,8 @@ class CGRContainer(MoleculeContainer):
             self.nodes[_map]['s_radical'] = s_radical
         if p_radical:
             self.nodes[_map]['p_radical'] = p_radical
+
+        self._weights = self._fears = self._pickle = None
         return _map
 
     def add_bond(self, atom1, atom2, s_mark, p_mark, *, ignore=False):
@@ -123,10 +128,13 @@ class CGRContainer(MoleculeContainer):
         if p_mark:
             self.add_edge(atom1, atom2, p_bond=p_mark)
 
+        self._weights = self._fears = self._pickle = None
+
     def add_stereo(self, atom1, atom2, s_mark, p_mark):
         if self.has_edge(atom1, atom2):
             # todo: stereo calc
             pass
+        self._weights = self._fears = self._pickle = None
 
     def reset_query_marks(self, copy=False):
         """
@@ -157,6 +165,7 @@ class CGRContainer(MoleculeContainer):
                 label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
 
             g.nodes[i].update(label)
+        self._fears = self._pickle = None
         return g if copy else None
 
     def implicify_hydrogens(self):
@@ -196,6 +205,8 @@ class CGRContainer(MoleculeContainer):
             if x not in hydrogens:
                 self.remove_node(x)
                 c += 1
+
+        self._weights = self._fears = self._pickle = None
         return c
 
     def explicify_hydrogens(self):
@@ -213,6 +224,8 @@ class CGRContainer(MoleculeContainer):
 
         for n, s_mark, p_mark in tmp:
             self.add_bond(n, self.add_atom('H', 0), s_mark, p_mark)
+
+        self._weights = self._fears = self._pickle = None
         return len(tmp)
 
     def atom_implicit_h(self, atom):
@@ -226,7 +239,7 @@ class CGRContainer(MoleculeContainer):
         return self.__implicit_container(si, pi)
 
     def _fix_stereo(self):
-        pass
+        self._weights = self._fears = self._pickle = None
 
     @staticmethod
     def _attr_renew(attr, marks):

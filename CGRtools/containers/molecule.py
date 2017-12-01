@@ -56,7 +56,7 @@ class MoleculeContainer(Graph, Valence):
         g.add_nodes_from((n, {k: v for k, v in a.items() if k in node_marks}) for n, a in self.nodes(data=True))
         g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
 
-        data = node_link_data(g, attrs=self.__attrs)
+        data = node_link_data(g, attrs=self._attrs)
         data.update(meta=self.meta, s_only=True)
         return data
 
@@ -67,7 +67,7 @@ class MoleculeContainer(Graph, Valence):
         if not data['s_only']:
             raise InvalidData('pickled data is invalid molecule. try cgr.unpickle')
 
-        g = MoleculeContainer(node_link_graph(data, attrs=cls.__attrs), data['meta'])
+        g = MoleculeContainer(node_link_graph(data, attrs=cls._attrs), data['meta'])
         g.fix_data()
         return g
 
@@ -94,17 +94,21 @@ class MoleculeContainer(Graph, Valence):
     def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
         return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))
 
-    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
+    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
         :param weights: dict of atoms in keys and orders in values
         :param isotope: set isotope marks
         :param stereo: set stereo marks
         :param hyb: set hybridization mark of atom
         :param element: set elements marks
+        :param flush_cache: recalculate fear if True
         :return: string representation of CGR
         """
-        return CGRstring(isotope, stereo, hyb, element)(self, weights or get_morgan(self, isotope=isotope,
-                                                                                    element=element))
+        if flush_cache or self._fears is None:
+            self._fears = {}
+        k = (isotope, element, stereo, hyb)
+        return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element)
+            (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
     def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
         if element not in elements:
@@ -121,7 +125,8 @@ class MoleculeContainer(Graph, Valence):
         self.add_node(_map, element=element, s_charge=charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
         if radical:
             self.nodes[_map]['s_radical'] = radical
-        self.__weights = None
+
+        self._weights = self._fears = self._pickle = None
         return _map
 
     def add_bond(self, atom1, atom2, mark, *, ignore=False):
@@ -135,7 +140,7 @@ class MoleculeContainer(Graph, Valence):
         if not ignore:
             self._check_bonding(atom1, atom2, mark)
         self.add_edge(atom1, atom2, s_bond=mark)
-        self.__weights = None
+        self._weights = self._fears = self._pickle = None
 
     def add_stereo(self, atom1, atom2, mark):
         if not self.has_edge(atom1, atom2):
@@ -167,12 +172,12 @@ class MoleculeContainer(Graph, Valence):
 
             order = sorted(neighbors, key=weights.get)
             vol = pyramid_volume(*((y['s_x'], y['s_y'], 0 if x != atom2 else mark) for x, y in
-                                   ((x, self.nodes[x])for x in (chain((atom1,), order) if implicit else order))))
+                                   ((x, self.nodes[x]) for x in (chain((atom1,), order) if implicit else order))))
             if not vol:
                 raise InvalidStereo('unknown')
 
             self.nodes[atom1]['s_stereo'] = vol > 0 and 1 or -1
-            self.__weights = None
+            self._weights = self._fears = self._pickle = None
 
     def bond(self, atom1, atom2):
         if self.__bond_cache is None:
@@ -278,12 +283,12 @@ class MoleculeContainer(Graph, Valence):
 
         return centers
 
-    def get_morgan(self, isotope=False, element=True, stereo=False):
-        if self.__weights is None:
-            self.__weights = {}
+    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False):
+        if flush_cache or self._weights is None:
+            self._weights = {}
         k = (isotope, element, stereo)
-        return self.__weights.get(k) or self.__weights.setdefault(k, get_morgan(self, isotope=isotope, element=element,
-                                                                                stereo=stereo))
+        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope=isotope, element=element,
+                                                                              stereo=stereo))
 
     def fix_data(self, copy=False, nodes_bunch=None, edges_bunch=None):
         g = self.copy() if copy else self
@@ -302,7 +307,7 @@ class MoleculeContainer(Graph, Valence):
 
         if copy:
             return g
-        self.__weights = None
+        self._weights = self._fears = self._pickle = None
 
     def reset_query_marks(self, copy=False):
         """
@@ -330,6 +335,7 @@ class MoleculeContainer(Graph, Valence):
                     label[h] = 2
 
             attr.update(label)
+        self._fears = self._pickle = None
         return g if copy else None
 
     def implicify_hydrogens(self):
@@ -354,7 +360,7 @@ class MoleculeContainer(Graph, Valence):
                 for x in h:
                     self.remove_node(x)
                     c += 1
-        self.__weights = None
+        self._weights = self._fears = self._pickle = None
         return c
 
     def explicify_hydrogens(self):
@@ -370,14 +376,14 @@ class MoleculeContainer(Graph, Valence):
         for n in tmp:
             self.add_bond(n, self.add_atom('H', 0), 1)
 
-        self.__weights = None
+        self._weights = self._fears = self._pickle = None
         return len(tmp)
 
     def split_ions(self):
         for n, attr in self.nodes(data=True):
             if attr['element'] in self._metals:
                 pass
-        self.__weights = None
+        self._weights = self._fears = self._pickle = None
 
     def atom_implicit_h(self, atom):
         attr = self.nodes[atom]
@@ -417,7 +423,7 @@ class MoleculeContainer(Graph, Valence):
                 else:
                     pass
 
-            self.__weights = None
+            self._weights = self._fears = self._pickle = None
 
     def _check_bonding(self, atom1, atom2, mark, label='s'):
         for atom, reverse in ((atom1, atom2), (atom2, atom1)):
@@ -446,7 +452,15 @@ class MoleculeContainer(Graph, Valence):
                 new_attr[s] = ls
         return new_attr
 
-    __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
+    def __str__(self):
+        return self.get_fear(isotope=True, stereo=True)
+
+    def __repr__(self):
+        if self._pickle is None:
+            self._pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
+        return self._pickle
+
+    _attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
                        element='element', isotope='isotope', mark='mark', radical='s_radical')
     _bond_marks = dict(bond='s_bond', stereo='s_stereo')
@@ -459,7 +473,7 @@ class MoleculeContainer(Graph, Valence):
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
     _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
     _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
-    __meta = __visible = __atom_cache = __bond_cache = __weights = __stereo_cache = None
+    __meta = __visible = __atom_cache = __bond_cache = __stereo_cache = _weights = _fears = _pickle = None
 
     def subgraph(self, *args, **kwargs):
         warn('subgraph name is deprecated. use sustructure instead', DeprecationWarning)
