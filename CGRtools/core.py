@@ -25,7 +25,7 @@ from . import InvalidData
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
-class CGRcore(object):
+class CGRcore:
     @staticmethod
     def split(m, meta=False):
         return [m.substructure(c, meta=meta) for c in connected_components(m)]

@@ -267,7 +267,7 @@ class CGRstandardizer(CGRreactor):
                     report.append(match.meta['CGR_TEMPLATE'])
 
 
-class CGRcombo(object):  # Reverse compatibility
+class CGRcombo:  # Reverse compatibility
     def __new__(cls, *args, **kwargs):
         warn('CGRcombo deprecated. use CGRpreparer instead')
         return CGRpreparer(*args, **kwargs)
@@ -278,7 +278,7 @@ class CGRcombo(object):  # Reverse compatibility
         return CGRpreparer.unpickle(*args, **kwargs)
 
 
-class CGRbalancer(object):  # Reverse compatibility
+class CGRbalancer:  # Reverse compatibility
     def __new__(cls, *args, **kwargs):
         warn('CGRbalancer deprecated. use CGRstandardizer instead')
         return CGRstandardizer(*args, **kwargs)

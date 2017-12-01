@@ -33,7 +33,7 @@ class InvalidTemplate(Exception):
     pass
 
 
-class CGRreactor(object):
+class CGRreactor:
     """ CGR isomorphism based operations
     """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
