@@ -239,6 +239,7 @@ class CGRContainer(MoleculeContainer):
         return self.__implicit_container(si, pi)
 
     def _fix_stereo(self):
+        # todo: implement
         self._weights = self._fears = self._pickle = None
 
     @staticmethod

@@ -30,8 +30,8 @@ class CGRpreparer(CGRcore):
     def __init__(self, cgr_type='0', extralabels=False, balance=False, templates=None,
                  isotope=False, element=True, stereo=False):
         if templates:
-            self.__bal = CGRbalancer(templates, balance_groups=balance, stereo=stereo, isotope=isotope,
-                                     extralabels=extralabels, element=element)
+            self.__bal = CGRstandardizer(templates, balance_groups=balance, stereo=stereo, isotope=isotope,
+                                         extralabels=extralabels, element=element)
 
         self.__init_common(cgr_type, extralabels, isotope, element, stereo)
 
@@ -53,7 +53,8 @@ class CGRpreparer(CGRcore):
         """
         config = self.__pickle.copy()
         if self.__bal is not None:
-            config['templates'] = self.__bal.pickle()['templates']
+            tmp = self.__bal.pickle()
+            config.update(templates=tmp['templates'], balance=tmp['balance'])
 
         return config
 
@@ -227,19 +228,18 @@ class CGRstandardizer(CGRreactor):
         """ return config. for pickling
         """
         reactor = CGRreactor.pickle(self)
-        return dict(templates=[x.pickle(compress=False) for x in self.__templates],
-                    balance_groups=self.__balance_groups, **reactor)
+        return dict(templates=[x.pickle() for x in self.__templates], balance_groups=self.__balance_groups, **reactor)
 
     @classmethod
     def unpickle(cls, config):
         """ return CGRbalancer object instance
         """
-        args = {'templates', 'balance_groups', 'stereo', 'extralabels', 'isotope', 'element'}
+        args = {'templates', 'balance_groups'}
         if not args.issubset(config):
             raise InvalidConfig('Invalid config')
         config = config.copy()
         templates = [ReactionContainer.unpickle(x) for x in config.pop('templates')]
-        return cls(templates, **{k: v for k, v in config.items() if k in args})
+        return cls(templates, **config)
 
     def prepare(self, g, copy=False):
         if copy:
@@ -268,14 +268,19 @@ class CGRstandardizer(CGRreactor):
 
 
 class CGRcombo:  # Reverse compatibility
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, cgr_type='0', extralabels=False, isotope=False, element=True, stereo=False,
+                b_templates=None, m_templates=None):
         warn('CGRcombo deprecated. use CGRpreparer instead')
-        return CGRpreparer(*args, **kwargs)
+        if b_templates or m_templates:
+            warn('b_templates and m_templates now merged to single list of patterns with kwarg: templates. '
+                 'for stoichemist balancing use balance kwarg in CGRpreparer')
+
+        return CGRpreparer(cgr_type=cgr_type, extralabels=extralabels, balance=False, templates=None,
+                           isotope=isotope, element=element, stereo=stereo)
 
     @classmethod
     def unpickle(cls, *args, **kwargs):
-        warn('CGRcombo deprecated. use CGRpreparer instead')
-        return CGRpreparer.unpickle(*args, **kwargs)
+        raise Exception('CGRcombo unpickle incompatible with CGRpreparer')
 
 
 class CGRbalancer:  # Reverse compatibility

@@ -22,17 +22,17 @@ from itertools import chain
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, InvalidData
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, InvalidData, WithMixin
 from .MDLmol import MOLformat
 from ..containers import MoleculeContainer
 
 
-class RDFread(CGRread):
+class RDFread(CGRread, WithMixin):
     def __init__(self, file, remap=True, ignore=False, is_template=False):
-        self.__file = file
+        WithMixin.__init__(self, file)
+        CGRread.__init__(self, remap, ignore, is_template=is_template)
         self.__data = self.__reader()
         self.__ignore = ignore
-        CGRread.__init__(self, remap, ignore=ignore, is_template=is_template)
 
     def read(self):
         return list(self.__data)
@@ -47,7 +47,7 @@ class RDFread(CGRread):
         ir = im = atomcount = bondcount = n = reagents = products = spr = molcount = -1
         failkey = isreaction = True
         reaction = molecule = mkey = None
-        for n, line in enumerate(self.__file):
+        for n, line in enumerate(self._file):
             if failkey and not line.startswith(("$RFMT", "$MFMT")):
                 continue
             elif line.startswith("$RFMT"):
@@ -171,45 +171,37 @@ class RDFread(CGRread):
         return super()._get_molecule(molecule)
 
 
-class RDFwrite(MOLformat, CGRwrite):
+class RDFwrite(MOLformat, CGRwrite, WithMixin):
     def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+        WithMixin.__init__(self, file, 'w')
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
-        self.__file = file
         self.write = self.__init_write
 
-    def close(self):
-        self.write = self.__write_adhoc
-        self.__file.close()
-
-    @staticmethod
-    def __write_adhoc(_):
-        raise FinalizedFile('Writer closed')
-
     def __init_write(self, data):
-        self.__file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
+        self._file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
         self.__write(data)
         self.write = self.__write
 
     def __write(self, data):
         if isinstance(data, MoleculeContainer):
             m = self.get_formatted_cgr(data)
-            self.__file.write('$MFMT\n')
-            self.__file.write(m['CGR'])
-            self.__file.write("M  END\n")
+            self._file.write('$MFMT\n')
+            self._file.write(m['CGR'])
+            self._file.write("M  END\n")
             colors = m['colors']
         else:
-            self.__file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
-                              (len(data.reagents), len(data.products)))
+            self._file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
+                             (len(data.reagents), len(data.products)))
             colors = {}
             for cnext, m in enumerate(chain(data.reagents + data.products), start=1):
                 m = self.get_formatted_cgr(m)
-                self.__file.write('$MOL\n')
-                self.__file.write(m['CGR'])
-                self.__file.write("M  END\n")
+                self._file.write('$MOL\n')
+                self._file.write(m['CGR'])
+                self._file.write("M  END\n")
                 colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
 
         for p in chain(colors.items(), data.meta.items()):
-            self.__file.write('$DTYPE %s\n$DATUM %s\n' % p)
+            self._file.write('$DTYPE %s\n$DATUM %s\n' % p)
 
     @staticmethod
     def _get_position(cord):

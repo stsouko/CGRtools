@@ -73,9 +73,9 @@ class CGRreactor:
         """ return CGRreactor object instance
         """
         args = {'stereo', 'extralabels', 'isotope', 'element'}
-        if args.difference(config):
+        if args != set(config):
             raise InvalidConfig('Invalid config')
-        return cls(**{k: v for k, v in config.items() if k in args})
+        return cls(**config)
 
     def get_cgr_matcher(self, g, h):
         if not isinstance(g, CGRContainer):

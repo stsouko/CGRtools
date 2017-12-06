@@ -19,17 +19,15 @@
 #  MA 02110-1301, USA.
 #
 from itertools import chain, count
-from sys import stderr
-from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile, mendeleyset
-from ..containers import MoleculeContainer, CGRContainer
+from .CGRrw import CGRread, CGRwrite, WithMixin, mendeleyset
+from ..containers import MoleculeContainer
 
 
-class MRVread(CGRread):
-    def __init__(self, file, remap=True):
-        self.__file = file
+class MRVread(CGRread, WithMixin):
+    def __init__(self, file, remap=True, ignore=False):
+        WithMixin.__init__(self, file)
+        CGRread.__init__(self, remap, ignore)
         self.__data = self.__reader()
-        CGRread.__init__(self, remap)
         raise Exception('NOT IMPLEMENTED')
 
     def read(self):
@@ -45,70 +43,63 @@ class MRVread(CGRread):
         pass
 
 
-class MRVwrite(CGRwrite):
+class MRVwrite(CGRwrite, WithMixin):
     def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+        WithMixin.__init__(self, file)
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
-        self.__file = file
         self.write = self.__init_write
-
-    __finalized = False
 
     def close(self):
         if not self.__finalized:
             self.finalize()
-        self.__file.close()
+        super().close()
 
     def finalize(self):
-        self.__file.write('</cml>')
-        self.write = self.__write_adhoc
+        self._file.write('</cml>')
         self.__finalized = True
 
-    @staticmethod
-    def __write_adhoc(_):
-        raise FinalizedFile('Writer closed')
-
     def __init_write(self, data):
-        self.__file.write('<cml>')
+        self._file.write('<cml>')
         self.__write(data)
         self.write = self.__write
 
     def __write(self, data):
-        self.__file.write('<MDocument><MChemicalStruct>')
+        self._file.write('<MDocument><MChemicalStruct>')
 
         if isinstance(data, MoleculeContainer):
             m = self.get_formatted_cgr(data)
-            self.__file.write('<molecule><propertyList>')
+            self._file.write('<molecule><propertyList>')
             for k, v in chain(m['colors'].items(), data.meta.items()):
                 if '\n' in v:
                     v = '<![CDATA[%s]]>' % v
-                self.__file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
+                self._file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
 
-            self.__file.write('</propertyList>')
-            self.__file.write(m['CGR'])
-            self.__file.write('</molecule>')
+            self._file.write('</propertyList>')
+            self._file.write(m['CGR'])
+            self._file.write('</molecule>')
         else:
             colors = {}
             c = count(1)
-            self.__file.write('<reaction>')
+            self._file.write('<reaction>')
             for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
-                self.__file.write('<%s>' % j)
+                self._file.write('<%s>' % j)
                 for cnext, m in zip(c, data[i]):
                     m = self.get_formatted_cgr(m)
-                    self.__file.write('<molecule>')
-                    self.__file.write(m['CGR'])
-                    self.__file.write('</molecule>')
+                    self._file.write('<molecule>')
+                    self._file.write(m['CGR'])
+                    self._file.write('</molecule>')
                     colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
-                self.__file.write('</%s>' % j)
+                self._file.write('</%s>' % j)
 
-            self.__file.write('<propertyList>')
+            self._file.write('<propertyList>')
             for k, v in chain(colors.items(), data.meta.items()):
                 if '\n' in v:
                     v = '<![CDATA[%s]]>' % v
-                    self.__file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
+                    self._file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
 
-            self.__file.write('</propertyList></reaction>')
+            self._file.write('</propertyList></reaction>')
 
-        self.__file.write('</MChemicalStruct></MDocument>')
+        self._file.write('</MChemicalStruct></MDocument>')
 
     @classmethod
     def _format_mol(cls, atoms, bonds, extended, cgr_dat):
@@ -149,3 +140,4 @@ class MRVwrite(CGRwrite):
     _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
     _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3'}
+    __finalized = False

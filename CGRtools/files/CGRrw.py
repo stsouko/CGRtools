@@ -46,6 +46,36 @@ class MapError(Exception):
     pass
 
 
+class WithMixin:
+    def __init__(self, file, mode='r'):
+        if mode not in ('r', 'w'):
+            raise Exception('invalid mode')
+        if not file:
+            raise Exception('invalid file')
+        if isinstance(file, str):
+            self._file = open(file, mode)
+        elif hasattr(file, 'read') and file.mode == mode:
+            self._file = file
+        else:
+            raise Exception('invalid file')
+        self.__write = mode == 'w'
+
+    def close(self):
+        if self.__write:
+            self.write = self.__write_adhoc
+        self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    @staticmethod
+    def __write_adhoc(_):
+        raise FinalizedFile('file closed')
+
+
 class CGRread:
     def __init__(self, remap, ignore=False, is_template=False):
         self.__remap = remap

@@ -175,6 +175,9 @@ class ReactionContainer:
 
         return self.__fear[k]
 
+    def flush_cache(self):
+        self.__pickle = self.__fear = None
+
     def __str__(self):
         return self.get_fear(True, True)
 

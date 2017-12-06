@@ -51,10 +51,15 @@ class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
                                       '{%s}' % p if isinstance(self.products, CGRContainer) else p)
         return self.__fear
 
+    def flush_cache(self):
+        self.__pickle = self.__fear = None
+
     def __str__(self):
         return self.get_fear(True, True)
 
     def __repr__(self):
-        return '%s(%s, %s)' % (self.__class__.__name__, repr(self.reagents), repr(self.products))
+        if self.__pickle is None:
+            self.__pickle = '%s(%s, %s)' % (self.__class__.__name__, repr(self.reagents), repr(self.products))
+        return self.__pickle
 
-    __fear = None
+    __fear = __pickle = None

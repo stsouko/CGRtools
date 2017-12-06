@@ -390,6 +390,9 @@ class MoleculeContainer(Graph, Valence):
         return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],
                                     radical=self._radical_map[attr.get('s_radical')])
 
+    def flush_cache(self):
+        self._weights = self._fears = self._pickle = None
+
     @staticmethod
     def _attr_renew(attr, marks):
         new_attr = {}

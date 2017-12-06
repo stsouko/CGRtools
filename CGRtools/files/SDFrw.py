@@ -21,15 +21,15 @@
 from itertools import chain
 from sys import stderr
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, FinalizedFile
+from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, WithMixin
 from .MDLmol import MOLformat
 
 
-class SDFread(CGRread):
-    def __init__(self, file, remap=True):
-        self.__file = file
+class SDFread(CGRread, WithMixin):
+    def __init__(self, file, remap=True, ignore=False):
+        WithMixin.__init__(self, file)
+        CGRread.__init__(self, remap, ignore)
         self.__data = self.__reader()
-        CGRread.__init__(self, remap)
 
     def read(self):
         return list(self.__data)
@@ -48,7 +48,7 @@ class SDFread(CGRread):
         mkey = None
         molecule = None
         mend = False
-        for n, line in enumerate(self.__file):
+        for n, line in enumerate(self._file):
             if failkey and not line.startswith("$$$$"):
                 continue
             elif line.startswith("$$$$"):
@@ -131,28 +131,20 @@ class SDFread(CGRread):
                     print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
 
-class SDFwrite(MOLformat, CGRwrite):
-    def __init__(self, output, extralabels=False, mark_to_map=False, xyz=False):
+class SDFwrite(MOLformat, CGRwrite, WithMixin):
+    def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+        WithMixin.__init__(self, file, 'w')
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
-        self.__file = output
         self.write = self.__write
-
-    def close(self):
-        self.write = self.__write_adhoc
-        self.__file.close()
-
-    @staticmethod
-    def __write_adhoc(_):
-        raise FinalizedFile('Writer closed')
 
     def __write(self, data):
         m = self.get_formatted_cgr(data)
-        self.__file.write(m['CGR'])
-        self.__file.write("M  END\n")
+        self._file.write(m['CGR'])
+        self._file.write("M  END\n")
 
         for i in chain(m['colors'].items(), m['meta'].items()):
-            self.__file.write(">  <%s>\n%s\n" % i)
-        self.__file.write("$$$$\n")
+            self._file.write(">  <%s>\n%s\n" % i)
+        self._file.write("$$$$\n")
 
     @staticmethod
     def _get_position(cord):
