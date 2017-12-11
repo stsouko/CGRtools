@@ -45,7 +45,7 @@ class MRVread(CGRread, WithMixin):
 
 class MRVwrite(CGRwrite, WithMixin):
     def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
-        WithMixin.__init__(self, file)
+        WithMixin.__init__(self, file, 'w')
         CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
         self.write = self.__init_write
 

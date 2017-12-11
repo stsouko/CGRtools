@@ -91,8 +91,8 @@ class MoleculeContainer(Graph, Valence):
             self.__meta = {}
         return self.__meta
 
-    def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True):
-        return hash_cgr_string(self.get_fear(weights=weights, isotope=isotope, stereo=stereo, hyb=hyb, element=element))
+    def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        return hash_cgr_string(self.get_fear(weights, isotope, stereo, hyb, element, flush_cache))
 
     def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
@@ -109,6 +109,12 @@ class MoleculeContainer(Graph, Valence):
         k = (isotope, element, stereo, hyb)
         return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element)
             (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
+
+    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False):
+        if flush_cache or self._weights is None:
+            self._weights = {}
+        k = (isotope, element, stereo)
+        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope, element, stereo))
 
     def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
         if element not in elements:
@@ -282,13 +288,6 @@ class MoleculeContainer(Graph, Valence):
             centers = self.substructure(nodes[-1])
 
         return centers
-
-    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False):
-        if flush_cache or self._weights is None:
-            self._weights = {}
-        k = (isotope, element, stereo)
-        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope=isotope, element=element,
-                                                                              stereo=stereo))
 
     def fix_data(self, copy=False, nodes_bunch=None, edges_bunch=None):
         g = self.copy() if copy else self

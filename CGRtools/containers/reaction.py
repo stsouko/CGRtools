@@ -20,6 +20,7 @@
 #
 from warnings import warn
 from .cgr import CGRContainer
+from ..algorithms import hash_cgr_string
 
 
 class MindfulList:
@@ -150,6 +151,9 @@ class ReactionContainer:
         return ReactionContainer(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
                                  products=[x.copy() for x in self.__products],
                                  reactants=[x.copy() for x in self.__reactants])
+
+    def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        return hash_cgr_string(self.get_fear(isotope, stereo, hyb, element, flush_cache))
 
     def get_fear(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """

@@ -22,6 +22,7 @@ from collections import namedtuple
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .reaction import ReactionContainer
+from ..algorithms import hash_cgr_string
 
 
 CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
@@ -31,6 +32,9 @@ MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
 class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
     def copy(self):
         return MergedReaction(self.reagents.copy(), self.products.copy())
+
+    def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        return hash_cgr_string(self.get_fear(isotope, stereo, hyb, element, flush_cache))
 
     def get_fear(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
