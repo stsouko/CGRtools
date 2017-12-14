@@ -25,7 +25,7 @@ from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_matc
                                              categorical_edge_match)
 from warnings import warn
 from . import InvalidConfig, InvalidData
-from .containers import CGRTemplate, MatchContainer, MoleculeContainer, CGRContainer
+from .containers import CGRTemplate, MatchContainer, CGRContainer
 from .core import CGRcore
 
 
@@ -80,7 +80,7 @@ class CGRreactor:
     def get_cgr_matcher(self, g, h):
         if not isinstance(g, CGRContainer):
             nm = self.__node_match_reagents
-            em = self.__node_match_reagents
+            em = self.__edge_match_reagents
         else:
             nm = self.__node_match
             em = self.__edge_match
@@ -260,19 +260,18 @@ class CGRreactor:
         return templates
 
     @staticmethod
-    def patcher(structure, patch):
+    def patcher(structure, patch, copy=True):
         """ remove edges bw common nodes. add edges from template and replace nodes data
         :param structure: MoleculeContainer or CGRContainer
         :param patch: MoleculeContainer or CGRContainer with replacement data
+        :param copy: return copy of graph
         """
         node_marks = ['s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark']
         bond_marks = ['s_bond', 's_stereo']
         if isinstance(structure, CGRContainer):
-            p = CGRContainer()
             node_marks.extend(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
             bond_marks.extend(('p_bond', 'p_stereo'))
-        else:
-            p = MoleculeContainer()
+        p = structure.__class__()
 
         common = set(patch).intersection(structure)
         for i in common:
@@ -284,11 +283,9 @@ class CGRreactor:
                 p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
                                     for x, y in a.items() if x in bond_marks})
 
-        s = structure.copy()
+        s = structure.copy() if copy else structure
         s.remove_edges_from(combinations(common, 2))
-        composed = compose(s, p)
-        composed.__class__ = CGRContainer if isinstance(structure, CGRContainer) else MoleculeContainer
-        composed.meta.update(structure.meta)
+        composed = s.__class__(compose(s, p), structure.meta)
         return composed
 
 

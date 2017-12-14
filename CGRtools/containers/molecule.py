@@ -378,12 +378,6 @@ class MoleculeContainer(Graph, Valence):
         self._weights = self._fears = self._pickle = None
         return len(tmp)
 
-    def split_ions(self):
-        for n, attr in self.nodes(data=True):
-            if attr['element'] in self._metals:
-                pass
-        self._weights = self._fears = self._pickle = None
-
     def atom_implicit_h(self, atom):
         attr = self.nodes[atom]
         return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],

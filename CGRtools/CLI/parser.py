@@ -22,7 +22,6 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
 from importlib.util import find_spec
 from .main_balanser import balanser_core
 from .main_condenser import condenser_core
-from .main_mapper import mapper_core
 from ..version import version
 
 
@@ -93,20 +92,6 @@ def _condenser(subparsers):
     parser.set_defaults(func=condenser_core)
 
 
-def _reactmap(subparsers):
-    parser = subparsers.add_parser('reactmap', help='reaction atom-to-atom mapper (AAM)',
-                                   formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(), help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'), help="RDF outputfile")
-    parser.add_argument("--templates", "-t", type=FileType(), help="RDF with reactions mapping rules")
-    parser.add_argument("--dump_templates", "-d", default="dump.rdf", type=FileType('w'),
-                        help="save RDF with reactions mapping rules")
-
-    _stereo_common(parser)
-
-    parser.set_defaults(func=mapper_core)
-
-
 def argparser():
     parser = ArgumentParser(description="CGRtools", epilog="(c) Dr. Ramil Nugmanov", prog='cgrtools')
     parser.add_argument("--version", "-v", action="version", version=version(), default=False)
@@ -114,7 +99,6 @@ def argparser():
 
     _condenser(subparsers)
     _balanser(subparsers)
-    # _reactmap(subparsers)
 
     if find_spec('argcomplete'):
         from argcomplete import autocomplete

@@ -18,7 +18,6 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from ..periodictable import types
 
 
 class ValenceError(Exception):
@@ -32,8 +31,6 @@ class Valence:
     def __init__(self):
         self.__valence_rules = self.__prepare_valence_rules()
         self.__implicit_rules = self.__prepare_implicit_h_rules()
-        self._metals = types['alkali'] + types['alkaline'] + types['transition'] + types['post_transition'] + \
-                       types['lanthanide'] + types['actinide']
 
     def _check_charge_radical(self, element, charge, radical=None):
         if radical is None:
@@ -111,17 +108,6 @@ class Valence:
     @classmethod
     def __bonds_sum(cls, bonds):
         return int(sum(cls.__bonds[x] for x in bonds))
-
-    def _ionizable_bonds(self, element, charge, bonds, neighbors, radical=None):
-        if not neighbors:
-            raise ValenceError('atom should contain bonded neighbors')
-
-        if element in types['alkali'] and neighbors[0] != 'H':
-            return 0
-        elif element in types['alkaline']:
-            return tuple(n for n, x in enumerate(neighbors) if x != 'H') or None
-        elif element in types['transition']:
-            pass
 
     @classmethod
     def __prepare_valence_rules(cls):

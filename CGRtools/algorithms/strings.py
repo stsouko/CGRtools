@@ -165,7 +165,6 @@ class CGRstring:
             deep0, deep1, deep2, deep3 = self.__do_cgr_smarts(set(chain(trace, [i])), i, inter)
             trace.update(deep0)
             if deep3:
-                concat.extend(deep3)
                 for j0, j1, j2 in deep3:
                     if j0 == inter:
                         gij = g[inter][j2]
@@ -175,6 +174,8 @@ class CGRstring:
                         if smip:
                             smip.append('%s%s%d' % (to_smiles[gij.get('p_bond')],
                                                     stereo and gij.get('p_stereo') or '', j1))
+                    else:
+                        concat.append((j0, j1, j2))
             smis.extend(['(' if iterlist else '',
                          '%s%s' % (to_smiles[gii.get('s_bond')], stereo and gii.get('s_stereo') or '')] + deep1 +
                         [')' if iterlist else ''])

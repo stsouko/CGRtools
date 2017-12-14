@@ -19,12 +19,12 @@
 #  MA 02110-1301, USA.
 #
 from networkx import Graph, relabel_nodes
-from .aromatize import Aromatize
+from .aromatizer import Aromatizer
 from ..preparer import CGRpreparer
 from ..reactor import CGRreactor, patcher
 
 
-aromatize = Aromatize()
+aromatize = Aromatizer()
 
 
 class ReactMap(CGRreactor, CGRpreparer):
