@@ -22,7 +22,7 @@ from collections import namedtuple
 from itertools import repeat, zip_longest
 from networkx.readwrite.json_graph import node_link_graph
 from .molecule import MoleculeContainer
-from .. import InvalidData
+from .. import InvalidData, InvalidAtom, InvalidStereo
 from ..algorithms import CGRstring
 from ..periodictable import elements
 
@@ -131,10 +131,49 @@ class CGRContainer(MoleculeContainer):
         self._weights = self._fears = self._pickle = None
 
     def add_stereo(self, atom1, atom2, s_mark, p_mark):
-        if self.has_edge(atom1, atom2):
-            # todo: stereo calc
-            pass
-        self._weights = self._fears = self._pickle = None
+        if s_mark not in (1, -1) and p_mark not in (1, -1):
+            raise InvalidData('stereo marks invalid')
+        if not self.has_edge(atom1, atom2):
+            raise InvalidAtom('atom or bond not found')
+
+        n_atom1 = self.nodes[atom1]
+        if n_atom1.get('s_stereo') or n_atom1.get('p_stereo'):
+            raise InvalidStereo('atom has stereo. change impossible')
+
+        tmp_s = [(x, y['s_bond']) for x, y in self[atom1].items() if y.get('s_bond')]
+        tmp_p = [(x, y['p_bond']) for x, y in self[atom1].items() if y.get('p_bond')]
+        neighbors = [x for x, _ in tmp_s]
+
+        if s_mark and (n_atom1['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors)):
+            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+        elif p_mark and (n_atom1['p_z'] or any(self.nodes[x]['p_z'] for x in neighbors)):
+            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+
+        neighbors_e = [self.nodes[x]['element'] for x in neighbors]
+        implicit_s, implicit_p = self.atom_implicit_h(atom1)
+        if s_mark and (implicit_s > 1 or implicit_s == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
+            raise InvalidStereo('stereo impossible. too many H atoms')
+        elif p_mark and (implicit_p > 1 or implicit_p == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
+            raise InvalidStereo('stereo impossible. too many H atoms')
+
+        if s_mark:
+            bonds = [x for _, x in tmp_s]
+            total = implicit_s + len(neighbors)
+            if total == 4:  # tetrahedron
+                self._tetrahedron_parse(atom1, atom2, s_mark, neighbors, bonds, implicit_s)
+            else:
+                raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+        if p_mark:
+            bonds = [x for _, x in tmp_p]
+            total = implicit_p + len(neighbors)
+            if total == 4:  # tetrahedron
+                self._tetrahedron_parse(atom1, atom2, p_mark, neighbors, bonds, implicit_p, label='p')
+            else:
+                raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+
+    def get_stereo(self, atom1, atom2):
+        # todo: implement
+        return None, None
 
     def reset_query_marks(self, copy=False):
         """

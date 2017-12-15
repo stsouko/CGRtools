@@ -110,11 +110,11 @@ class MoleculeContainer(Graph, Valence):
         return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element)
             (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
-    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False):
+    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False, labels=None):
         if flush_cache or self._weights is None:
             self._weights = {}
-        k = (isotope, element, stereo)
-        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope, element, stereo))
+        k = (isotope, element, stereo, labels)
+        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope, element, stereo, labels))
 
     def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
         if element not in elements:
@@ -149,6 +149,8 @@ class MoleculeContainer(Graph, Valence):
         self._weights = self._fears = self._pickle = None
 
     def add_stereo(self, atom1, atom2, mark):
+        if mark not in (1, -1):
+            raise InvalidData('stereo mark invalid')
         if not self.has_edge(atom1, atom2):
             raise InvalidAtom('atom or bond not found')
 
@@ -169,21 +171,30 @@ class MoleculeContainer(Graph, Valence):
         bonds = [x for _, x in tmp]
         total = implicit + len(neighbors)
         if total == 4:  # tetrahedron
-            if any(x != 1 for x in bonds):
-                raise InvalidStereo('only single bonded tetrahedron acceptable')
+            self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit)
+        else:
+            raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
 
-            weights = self.get_morgan(stereo=True)
-            if len(neighbors) != len(set(weights[x] for x in neighbors)):
-                raise InvalidStereo('stereo impossible. neighbors equivalent')
+    def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
+        if any(x != 1 for x in bonds):
+            raise InvalidStereo('only single bonded tetrahedron acceptable')
 
-            order = sorted(neighbors, key=weights.get)
-            vol = pyramid_volume(*((y['s_x'], y['s_y'], 0 if x != atom2 else mark) for x, y in
-                                   ((x, self.nodes[x]) for x in (chain((atom1,), order) if implicit else order))))
-            if not vol:
-                raise InvalidStereo('unknown')
+        weights = self.get_morgan(stereo=True, labels=label)
+        if len(neighbors) != len(set(weights[x] for x in neighbors)):
+            raise InvalidStereo('stereo impossible. neighbors equivalent')
 
-            self.nodes[atom1]['s_stereo'] = vol > 0 and 1 or -1
-            self._weights = self._fears = self._pickle = None
+        l_x = '%s_x' % label
+        l_y = '%s_y' % label
+        l_stereo = '%s_stereo' % label
+
+        order = sorted(neighbors, key=weights.get)
+        vol = pyramid_volume(*((y[l_x], y[l_y], 0 if x != atom2 else mark) for x, y in
+                               ((x, self.nodes[x]) for x in (chain((atom1,), order) if implicit else order))))
+        if not vol:
+            raise InvalidStereo('unknown')
+
+        self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
+        self._weights = self._fears = self._pickle = None
 
     def bond(self, atom1, atom2):
         if self.__bond_cache is None:

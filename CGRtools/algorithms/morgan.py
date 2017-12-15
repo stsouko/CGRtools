@@ -25,18 +25,44 @@ from operator import mul, itemgetter
 from ..periodictable import elements
 
 
-def get_morgan(g, isotope=False, element=True, stereo=False):
+def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
     newlevels = {}
     countprime = iter(primes)
+    if labels is None:
+        s_charge = 's_charge'
+        p_charge = 'p_charge'
+        s_radical = 's_radical'
+        p_radical = 'p_radical'
+        s_stereo = 's_stereo'
+        p_stereo = 'p_stereo'
+        s_bond = 's_bond'
+        p_bond = 'p_bond'
+    elif len(labels) == 2:
+        s, p = labels
+        s_charge = '%s_charge' % s
+        p_charge = '%s_charge' % p
+        s_radical = '%s_radical' % s
+        p_radical = '%s_radical' % p
+        s_stereo = '%s_stereo' % s
+        p_stereo = '%s_stereo' % p
+        s_bond = '%s_bond' % s
+        p_bond = '%s_bond' % p
+    else:
+        s = labels[0]
+        s_charge = '%s_charge' % s
+        s_radical = '%s_radical' % s
+        s_stereo = '%s_stereo' % s
+        s_bond = '%s_bond' % s
+        p_charge = p_radical = p_stereo = p_bond = None
 
     params = {n: (elements.index(attr['element']) if element else 1,
                   attr.get('isotope', 1) if isotope else 1,
-                  10 * attr['s_charge'] + attr.get('p_charge', 0) if element else 1,
-                  10 * (attr.get('s_radical') or 0) + (attr.get('p_radical') or 0) if element else 1,
-                  10 * (attr.get('s_stereo') or 0) + (attr.get('p_stereo') or 0) if stereo else 1,
-                  reduce(mul, (primes[10 * (eattr.get('s_bond') or 0) + (eattr.get('p_bond') or 0)]
+                  10 * attr[s_charge] + attr.get(p_charge, 0) if element else 1,
+                  10 * (attr.get(s_radical) or 0) + (attr.get(p_radical) or 0) if element else 1,
+                  10 * (attr.get(s_stereo) or 0) + (attr.get(p_stereo) or 0) if stereo else 1,
+                  reduce(mul, (primes[10 * (eattr.get(s_bond) or 0) + (eattr.get(p_bond) or 0)]
                                for eattr in g[n].values()), 1),
-                  reduce(mul, (primes[10 * (eattr.get('s_stereo') or 0) + (eattr.get('p_stereo') or 0)]
+                  reduce(mul, (primes[10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)]
                                for eattr in g[n].values()), 1) if stereo else 1)
               for n, attr in g.nodes(data=True)}
 
