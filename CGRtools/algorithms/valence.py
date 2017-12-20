@@ -18,13 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-
-
-class ValenceError(Exception):
-    __message = 'need neighbors atoms for validation in order of bonds connections'
-
-    def __init__(self, message=None):
-        super().__init__(message or self.__message)
+from ..exceptions import ValenceError
 
 
 class Valence:

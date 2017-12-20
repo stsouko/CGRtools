@@ -18,16 +18,14 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import defaultdict
-from itertools import product, permutations
-
-
 """ SSSR calculation. based on:
-    Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009). 
-    A robust method for searching the smallest set of smallest rings with a path-included distance matrix. 
-    Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358. 
+    Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009).
+    A robust method for searching the smallest set of smallest rings with a path-included distance matrix.
+    Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
     http://doi.org/10.1073/pnas.0813040106
 """
+from collections import defaultdict
+from itertools import product, permutations
 
 
 def find_sssr(g):

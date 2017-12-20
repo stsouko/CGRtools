@@ -20,7 +20,7 @@
 #
 from sys import stderr
 from traceback import format_exc
-from ..files.RDFrw import RDFread, RDFwrite
+from ..files import RDFread, RDFwrite
 from ..preparer import CGRpreparer
 
 
@@ -42,7 +42,7 @@ def balanser_core(**kwargs):
             a = worker.condense(data)
             a = worker.dissociate(a)
             outputdata.write(a)
-        except Exception:
+        except:
             err += 1
             print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
     print('%d from %d reactions balanced' % (num - err, num), file=stderr)

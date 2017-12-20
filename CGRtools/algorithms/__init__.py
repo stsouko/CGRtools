@@ -18,8 +18,11 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+"""
+Module implements Molecules and CGRs analysis and representation algorithms
+"""
 from .morgan import get_morgan
 from .sssr import find_sssr
 from .strings import hash_cgr_string, CGRstring
-from .valence import Valence, ValenceError
+from .valence import Valence
 from .stereo import pyramid_volume

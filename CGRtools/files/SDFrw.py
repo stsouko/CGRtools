@@ -21,8 +21,9 @@
 from itertools import chain
 from sys import stderr
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, WithMixin
+from .CGRrw import CGRread, CGRwrite, fromMDL, WithMixin
 from .MDLmol import MOLformat
+from ..exceptions import EmptyMolecule
 
 
 class SDFread(CGRread, WithMixin):

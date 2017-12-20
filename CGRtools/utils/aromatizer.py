@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from pathlib import Path
-from ..files.RDFrw import RDFread
+from ..files import RDFread
 from ..reactor import CGRreactor
 
 

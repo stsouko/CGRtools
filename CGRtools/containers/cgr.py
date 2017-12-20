@@ -22,8 +22,8 @@ from collections import namedtuple
 from itertools import repeat, zip_longest
 from networkx.readwrite.json_graph import node_link_graph
 from .molecule import MoleculeContainer
-from .. import InvalidData, InvalidAtom, InvalidStereo
 from ..algorithms import CGRstring
+from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import elements
 
 

@@ -22,42 +22,27 @@ from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
 from typing import Tuple
-from .. import InvalidStereo, InvalidAtom
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
+from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
 from ..periodictable import elements, isotopes
+
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
 mendeleyset = set(elements)
 
 
-class EmptyMolecule(Exception):
-    pass
-
-
-class FinalizedFile(Exception):
-    pass
-
-
-class InvalidData(Exception):
-    pass
-
-
-class MapError(Exception):
-    pass
-
-
 class WithMixin:
     def __init__(self, file, mode='r'):
         if mode not in ('r', 'w'):
-            raise Exception('invalid mode')
+            raise InvalidConfig('invalid mode')
         if not file:
-            raise Exception('invalid file')
+            raise InvalidConfig('invalid file')
         if isinstance(file, str):
             self._file = open(file, mode)
         elif hasattr(file, 'read') and file.mode == mode:
             self._file = file
         else:
-            raise Exception('invalid file')
+            raise InvalidConfig('invalid file')
         self.__write = mode == 'w'
 
     def close(self):

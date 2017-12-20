@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,5 +20,40 @@
 #
 
 
-def version():
-    return '2.8.5'
+class InvalidConfig(Exception):
+    pass
+
+
+class InvalidData(Exception):
+    pass
+
+
+class InvalidAtom(Exception):
+    pass
+
+
+class InvalidStereo(Exception):
+    pass
+
+
+class InvalidTemplate(Exception):
+    pass
+
+
+class EmptyMolecule(Exception):
+    pass
+
+
+class FinalizedFile(Exception):
+    pass
+
+
+class MapError(Exception):
+    pass
+
+
+class ValenceError(Exception):
+    __message = 'need neighbors atoms for validation in order of bonds connections'
+
+    def __init__(self, message=None):
+        super().__init__(message or self.__message)

@@ -109,7 +109,7 @@ class ReactionContainer:
         elif item == 'meta':
             return self.__meta
         else:
-            raise Exception('Invalid key')
+            raise Exception('invalid key: %s' % item)
 
     def pickle(self):
         """ return json serializable reaction

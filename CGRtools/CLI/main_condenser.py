@@ -20,8 +20,7 @@
 #
 from sys import stderr
 from traceback import format_exc
-from ..files.RDFrw import RDFread
-from ..files.SDFrw import SDFwrite
+from ..files import RDFread, SDFwrite
 from ..preparer import CGRpreparer
 
 
@@ -42,7 +41,7 @@ def condenser_core(**kwargs):
         try:
             a = worker.condense(data)
             outputdata.write(a)
-        except Exception:
+        except:
             err += 1
             print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
     print('%d from %d reactions condensed' % (num - err, num), file=stderr)

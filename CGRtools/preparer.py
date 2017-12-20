@@ -20,9 +20,9 @@
 #
 from functools import reduce
 from warnings import warn
-from . import InvalidConfig, InvalidData
 from .containers import MoleculeContainer, ReactionContainer, MergedReaction
 from .core import CGRcore
+from .exceptions import InvalidConfig, InvalidData
 from .reactor import CGRreactor
 
 

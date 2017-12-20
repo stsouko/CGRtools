@@ -24,13 +24,9 @@ from networkx import compose, has_path
 from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
                                              categorical_edge_match)
 from warnings import warn
-from . import InvalidConfig, InvalidData
 from .containers import CGRTemplate, MatchContainer, CGRContainer
 from .core import CGRcore
-
-
-class InvalidTemplate(Exception):
-    pass
+from .exceptions import InvalidConfig, InvalidData, InvalidTemplate
 
 
 class CGRreactor:

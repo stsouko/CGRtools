@@ -22,6 +22,7 @@ from collections import Counter
 from functools import reduce
 from itertools import count
 from operator import mul, itemgetter
+from ..exceptions import InvalidConfig
 from ..periodictable import elements
 
 
@@ -58,7 +59,7 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
     elif len(labels) == 2:
         s, p = labels
         if not (s == 's' and p == 'p' or s == 'p' and p == 's'):
-            raise Exception('invalid labels')
+            raise InvalidConfig('invalid labels')
         s_charge = '%s_charge' % s
         p_charge = '%s_charge' % p
         s_radical = '%s_radical' % s
@@ -70,7 +71,7 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
     else:
         s = labels[0]
         if s not in 'sp':
-            raise Exception('invalid labels')
+            raise InvalidConfig('invalid labels')
         s_charge = '%s_charge' % s
         s_radical = '%s_radical' % s
         s_stereo = '%s_stereo' % s

@@ -23,8 +23,8 @@ from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from warnings import warn
-from .. import InvalidData, InvalidAtom, InvalidStereo
-from ..algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, ValenceError, pyramid_volume
+from ..algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, pyramid_volume
+from ..exceptions import InvalidData, InvalidAtom, InvalidStereo, ValenceError
 from ..periodictable import elements
 
 

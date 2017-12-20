@@ -21,8 +21,8 @@
 from collections import defaultdict
 from itertools import cycle
 from networkx import connected_components
-from . import InvalidData
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
+from .exceptions import InvalidData
 
 
 class CGRcore:

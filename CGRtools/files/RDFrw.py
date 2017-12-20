@@ -22,9 +22,10 @@ from itertools import chain
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, EmptyMolecule, InvalidData, WithMixin
+from .CGRrw import CGRread, CGRwrite, fromMDL, WithMixin
 from .MDLmol import MOLformat
 from ..containers import MoleculeContainer
+from ..exceptions import EmptyMolecule, InvalidData
 
 
 class RDFread(CGRread, WithMixin):
