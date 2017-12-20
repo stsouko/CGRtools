@@ -26,8 +26,26 @@ from ..periodictable import elements
 
 
 def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
-    newlevels = {}
-    countprime = iter(primes)
+    """
+    Morgan like algorithm for graph nodes ordering
+
+    :param g: (CGR|Molecule)Container
+    :param isotope: differentiate isotopes
+    :param element: differentiate elements and charges
+    :param stereo: differentiate stereo atoms and bonds
+    :param labels: for MoleculeContainer usable only default value, None, ('s',) or 's'.
+                   for CGRContainer labels allow to control ordering.
+
+                   if labels = ('s',) or 's':
+                       ordering is equal to reagents ordering of reaction from which CGR is created.
+                   if labels = ('p',) or 'p':
+                       ordering is equal to products ordering.
+                   if labels = ('s', 'p') or 'sp' or None:
+                       ordering is default for given CGR
+                   labels = ('p', 's') or 'ps':
+                       ordering equal to reversed CGR. CGR of back reaction.
+    :return: dict of atom: weights
+    """
     if labels is None:
         s_charge = 's_charge'
         p_charge = 'p_charge'
@@ -39,6 +57,8 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
         p_bond = 'p_bond'
     elif len(labels) == 2:
         s, p = labels
+        if not (s == 's' and p == 'p' or s == 'p' and p == 's'):
+            raise Exception('invalid labels')
         s_charge = '%s_charge' % s
         p_charge = '%s_charge' % p
         s_radical = '%s_radical' % s
@@ -49,6 +69,8 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
         p_bond = '%s_bond' % p
     else:
         s = labels[0]
+        if s not in 'sp':
+            raise Exception('invalid labels')
         s_charge = '%s_charge' % s
         s_radical = '%s_radical' % s
         s_stereo = '%s_stereo' % s
@@ -61,11 +83,13 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
                   10 * (attr.get(s_radical) or 0) + (attr.get(p_radical) or 0) if element else 1,
                   10 * (attr.get(s_stereo) or 0) + (attr.get(p_stereo) or 0) if stereo else 1,
                   reduce(mul, (primes[10 * (eattr.get(s_bond) or 0) + (eattr.get(p_bond) or 0)]
-                               for eattr in g[n].values()), 1),
+                               for eattr in g[n].values() if p_bond or eattr.get(s_bond)), 1),
                   reduce(mul, (primes[10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)]
-                               for eattr in g[n].values()), 1) if stereo else 1)
+                               for eattr in g[n].values() if p_bond or eattr.get(s_bond)), 1) if stereo else 1)
               for n, attr in g.nodes(data=True)}
 
+    newlevels = {}
+    countprime = iter(primes)
     weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                for x, y in sorted(params.items(), key=itemgetter(1))}
 
@@ -74,7 +98,7 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
 
     scaf = {}
     for n, m in g.adjacency():
-        scaf[n] = tuple(m)
+        scaf[n] = tuple(i for i, j in m.items() if p_bond or j.get(s_bond))
 
     while True:
         oldnumb = numb

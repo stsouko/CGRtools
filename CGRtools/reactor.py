@@ -93,7 +93,7 @@ class CGRreactor:
                 found = set()
 
             for i in templates:
-                gm = self.get_cgr_matcher(g, i.reagents)
+                gm = self.get_cgr_matcher(g, i.pattern)
                 for j in gm.subgraph_isomorphisms_iter():
                     matched_atoms = set(j)
                     if skip_intersection:
@@ -102,8 +102,8 @@ class CGRreactor:
                         else:
                             found.update(matched_atoms)
 
-                    yield MatchContainer(mapping=list(matched_atoms), meta=i.meta,
-                                         patch=self.__remap_group(i.products, g, {y: x for x, y in j.items()})[0])
+                    yield MatchContainer(list(matched_atoms),
+                                         self.__remap_group(i.patch, g, {y: x for x, y in j.items()})[0], i.meta)
 
         return searcher
 
@@ -231,6 +231,9 @@ class CGRreactor:
 
     @staticmethod
     def prepare_templates(raw_templates):
+        s_marks = {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors', 's_stereo', 'p_stereo'}
+        b_marks = {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}
+        x_marks = ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
         templates = []
         for template in raw_templates:
             products = reduce(CGRcore.union, template.products).copy()
@@ -238,20 +241,33 @@ class CGRreactor:
             if not (isinstance(reagents, CGRContainer) and isinstance(products, CGRContainer)):
                 raise InvalidTemplate('Templates should be CGRContainers')
 
+            uncommon = set(products).difference(reagents)
+            for n in uncommon:  # if unique atoms in patch has variable properties exception is raised
+                pnn = products.nodes[n]
+                for j in s_marks.intersection(pnn):
+                    if isinstance(pnn[j], list):
+                        raise InvalidTemplate("uncommon atoms can't be variable")
+
             common = set(products).intersection(reagents)
             for n in common:
-                for j in {'s_charge', 's_hyb', 's_neighbors',
-                          'p_charge', 'p_hyb', 'p_neighbors'}.intersection(products.nodes[n]):
-                    if isinstance(products.nodes[n][j], list):
-                        products.nodes[n][j] = {x: y for x, y in zip(reagents.nodes[n][j], products.nodes[n][j])}
-                for j in ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'):
-                    products.nodes[n].pop(j)
+                pnn = products.nodes[n]
+                rnn = reagents.nodes[n]
+                for j in s_marks.intersection(pnn):
+                    if isinstance(pnn[j], list):
+                        pnn[j] = dict(zip(rnn[j], pnn[j]))
+                for j in x_marks:
+                    pnn.pop(j)
 
             for m, n, a in products.edges(data=True):
                 if m in common and n in common:
-                    for j in {'s_bond', 'p_bond'}.intersection(a):
+                    rmn = reagents[m][n]
+                    for j in b_marks.intersection(a):
                         if isinstance(a[j], list):
-                            a[j] = {x: y for x, y in zip(reagents[m][n][j], a[j])}
+                            a[j] = dict(zip(rmn[j], a[j]))
+                else:
+                    for j in b_marks.intersection(a):
+                        if isinstance(a[j], list):
+                            raise InvalidTemplate("uncommon bonds can't be variable")
 
             reagents.remap({x: x + 1000 for x in reagents})
             products.remap({x: x + 1000 for x in products})
@@ -271,22 +287,19 @@ class CGRreactor:
         if isinstance(structure, CGRContainer):
             node_marks.extend(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
             bond_marks.extend(('p_bond', 'p_stereo'))
+
         p = structure.__class__()
-
-        common = set(patch).intersection(structure)
-        for i in common:
+        for i, attr in patch.nodes(data=True):
             p.add_node(i, **{x: y[structure.nodes[i][x]] if isinstance(y, dict) else y
-                             for x, y in patch.nodes[i].items() if x in node_marks})
+                             for x, y in attr.items() if x in node_marks})
 
-        for m, n, a in patch.edges(data=True):
-            if m in common and n in common:
-                p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
-                                    for x, y in a.items() if x in bond_marks})
+        for m, n, attr in patch.edges(data=True):
+            p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
+                                for x, y in attr.items() if x in bond_marks})
 
         s = structure.copy() if copy else structure
-        s.remove_edges_from(combinations(common, 2))
-        composed = s.__class__(compose(s, p), structure.meta)
-        return composed
+        s.remove_edges_from(combinations(set(patch).intersection(structure), 2))
+        return s.__class__(compose(s, p), structure.meta)
 
 
 def patcher(*args, **kwargs):

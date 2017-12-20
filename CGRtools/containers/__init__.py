@@ -18,6 +18,9 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+"""
+Module implements all internal structures, which represents: molecules, reactions, CGR and some
+"""
 from collections import namedtuple
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
@@ -25,8 +28,20 @@ from .reaction import ReactionContainer
 from ..algorithms import hash_cgr_string
 
 
-CGRTemplate = namedtuple('CGRTemplate', ['reagents', 'products', 'meta'])
-MatchContainer = namedtuple('MatchContainer', ['mapping', 'meta', 'patch'])
+CGRTemplate = namedtuple('CGRTemplate', ['pattern', 'patch', 'meta'])
+MatchContainer = namedtuple('MatchContainer', ['mapping', 'patch', 'meta'])
+
+CGRTemplate.__doc__ = '''Container for [sub]structure queries. 
+                         Contains query structure and [sub]structure for replacement of found atoms and bonds'''
+CGRTemplate.pattern.__doc__ = 'query structure. CGRContainer'
+CGRTemplate.patch.__doc__ = '''replacement structure. CGRContainer. 
+                               Atom-to-atom mapping can be intersect with query at least in one atom.
+                               replacement example for ketones:
+                               
+                               * pattern = C[C:1](=[O:2])C, patch = [C:1]=[N:2], result = C[C:1](=[N:2])C
+                               * pattern = C[C:1](=[O:2])C, patch = [C:1]=N, result = C[C:1](=[O:2])(=N)C
+                            '''
+CGRTemplate.meta.__doc__ = MatchContainer.meta.__doc__ = '''dictionary of metadata. DTYPE-DATUM in RDF etc'''
 
 
 class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products'])):
