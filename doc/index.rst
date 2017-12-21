@@ -1,15 +1,9 @@
 Welcome to CGRtools's documentation!
 ====================================
 
+Molecules and Reactions manipulation based on CGR approach
+
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
-   api
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   CGRtools

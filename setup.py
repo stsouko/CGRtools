@@ -23,6 +23,7 @@ from CGRtools.version import version
 from pathlib import Path
 from setuptools import setup, find_packages
 
+
 setup(
     name='CGRtools',
     version=version(),
@@ -33,9 +34,9 @@ setup(
     author_email='stsouko@live.ru',
     description='CGR tools',
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
-    package_data={'CGRtools.utils': ['aromatize.rdf']},
+    package_data={'CGRtools.utils': ['aromatize.rdf', 'dearomatize.rdf']},
     install_requires=['networkx>=2.0,<2.1'],
-    extras_require={'autocomplete': ['argcomplete']},
+    extras_require={'autocomplete': ['argcomplete'], 'sphinx': ['sphinx>=1.6']},
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     keywords="tools cgr cli",
     classifiers=['Environment :: Console',
@@ -47,6 +48,11 @@ setup(
                  'Operating System :: OS Independent',
                  'Programming Language :: Python',
                  'Programming Language :: Python :: 3',
-                 'Programming Language :: Python :: 3.5',
-                 ]
+                 'Programming Language :: Python :: 3.5'],
+    command_options={'build_sphinx': {'project': ('setup.py', 'CGRtools'),
+                                      'version': ('setup.py', version()), 'source_dir': ('setup.py', 'doc'),
+                                      'build_dir':  ('setup.py', 'build/doc'),
+                                      'all_files': ('setup.py', True),
+                                      'copyright': ('setup.py', 'Dr. Ramil Nugmanov <stsouko@live.ru>')},
+                     'easy_install': {'allow_hosts': ('setup.py', 'github.com, pypi.python.org')}},
 )
