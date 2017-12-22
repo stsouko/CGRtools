@@ -27,55 +27,69 @@ from .reactor import CGRreactor
 
 
 class CGRpreparer(CGRcore):
-    def __init__(self, cgr_type='0', extralabels=False, balance=False, templates=None,
-                 isotope=False, element=True, stereo=False):
-        if templates:
-            self.__bal = CGRstandardizer(templates, balance_groups=balance, stereo=stereo, isotope=isotope,
-                                         extralabels=extralabels, element=element)
+    """main object for CGR creation and manipulation"""
+    def __init__(self, cgr_type='0', extralabels=False, templates=None, **kwargs):
+        """
+        :param cgr_type: control condensation procedure:
 
-        self.__init_common(cgr_type, extralabels, isotope, element, stereo)
+            * 0 - CGR
+            * 1 - reagents only
+            * 2 - products only
+            * 101-199 - reagent 1,2 or later
+            * 201+ - product 1,2… (e.g. 202 - second product)
+            * -101/-199 or -201/-299 - exclude reagent or product
 
-    def _init_unpickle(self, cgr_type, extralabels, templates, isotope, element, stereo):
-        if templates:
-            self.__bal = CGRbalancer.unpickle(dict(templates=templates, balance_groups=True, stereo=stereo,
-                                                   isotope=isotope, extralabels=extralabels, element=element))
+            comma-separated list of selected or excluded reagents/products also supported:
 
-        self.__init_common(cgr_type, extralabels, isotope, element, stereo)
+            * 101,102 - only first and second molecules of reagents
+            * -101,[-]103 <second [-] no sense> - exclude 1st and 3rd molecules of reagents
 
-    def __init_common(self, cgr_type, extralabels, isotope, element, stereo):
+            also supported CGR on parts of reagents or/and products molecules. e.g. 101,102,-201 - CGR on only first and
+            second reagents molecules with all products molecules excluding first
+        :param extralabels: [re]create query labels in Graphs before condensation. also see CGRreactor init and
+            reset_query_marks in MoleculeContainer
+        :param templates: see CGRstandardizer init. if not None extralabels automatically will be True
+        :param kwargs: see CGRstandardizer init
+        """
+        if templates is not None:
+            extralabels = True
+            self.__bal = CGRstandardizer(templates, extralabels=extralabels, **kwargs)
+
+        self.__init_common(cgr_type, extralabels)
+
+    def _init_unpickle(self, cgr_type, extralabels, templates, **kwargs):
+        if templates is not None:
+            self.__bal = CGRstandardizer.unpickle(dict(templates=templates, extralabels=True, **kwargs))
+        self.__init_common(cgr_type, extralabels)
+
+    def __init_common(self, cgr_type, extralabels):
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
         self.__extralabels = extralabels
-        self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, isotope=isotope,
-                             element=element, stereo=stereo, templates=None)
+        self.__pickle = dict(cgr_type=cgr_type, extralabels=extralabels, templates=None)
 
     def pickle(self):
-        """ remove attrs incorrectly dumped with dill
-        """
+        """return json serializable config of object"""
         config = self.__pickle.copy()
         if self.__bal is not None:
-            tmp = self.__bal.pickle()
-            config.update(templates=tmp['templates'], balance=tmp['balance'])
-
+            config.update(self.__bal.pickle())
         return config
 
     @classmethod
     def unpickle(cls, config):
-        """ return CGRbalancer object instance
-        """
-        args = {'cgr_type', 'stereo', 'extralabels', 'isotope', 'element', 'templates'}
+        """restore CGRbalancer object instance from json-config"""
+        args = {'cgr_type', 'extralabels', 'templates'}
         if not args.issubset(config):
             raise InvalidConfig('Invalid config')
-        obj = cls.__new__(cls)  # Does not call __init__
-        obj._init_unpickle(**{k: v for k, v in config.items() if k in args})
+        obj = cls.__new__(cls)
+        obj._init_unpickle(**config)
         return obj
 
     def condense(self, data):
         """
-        condense reaction container to cgr molecule container.
-        :param data: reaction container or merge_mols structure.
-        :return: molecule container.
+        condense reaction container to CGR. see init for details about cgr_type
 
-        if cgr_type in (1, 2, 3, 4, 5, 6) return reagents or products union else return cgr. see CLI help.
+        :param data: ReactionContainer or MergedReaction object
+        :return: CGRContainer
         """
         is_merged = isinstance(data, MergedReaction)
         if self.__cgr_type in (1, 2, 3, 4, 5, 6):
@@ -92,8 +106,7 @@ class CGRpreparer(CGRcore):
 
             g = self.compose(res.reagents, res.products)
 
-        if not is_merged:
-            g.meta.update(data.meta)
+        g.meta.update(data.meta)
 
         if self.__bal is not None:
             g = self.__bal.prepare(g)
@@ -124,7 +137,7 @@ class CGRpreparer(CGRcore):
         else:
             raise InvalidData('Merging need reagents and products')
 
-        res = MergedReaction(reagents=reagents, products=products)
+        res = MergedReaction(reagents=reagents, products=products, meta=data.meta)
         return res
 
     @staticmethod
@@ -205,29 +218,51 @@ class CGRpreparer(CGRcore):
     def __union_all(cls, data):
         return reduce(cls.union, data) if data else MoleculeContainer()
 
-    __bal = None
+    __bal = __visible = None
 
     def getCGR(self, data):  # Reverse compatibility
+        """deprecated. see condense"""
         warn('getCGR name is deprecated. use condense instead', DeprecationWarning)
         return self.condense(data)
 
     def dissCGR(self, data):  # Reverse compatibility
+        """deprecated. see dissociate"""
         warn('dissCGR name is deprecated. use dissociate instead', DeprecationWarning)
         return self.dissociate(data)
 
 
 class CGRstandardizer(CGRreactor):
+    """CGR standardization and reaction balancing"""
     def __init__(self, templates, balance_groups=False, **kwargs):
-        CGRreactor.__init__(self, **kwargs)
+        """
+        :param templates: CGRTemplates. rules for graph modifications. can be False
+        :param balance_groups: if True: for unbalanced reactions contains multiple attached functional groups in
+            products and one of them described in reagents - will be restored information about all equal groups.
+            for example:
+
+                R + B1-X-> B'1-R'-B'2 + X'
+
+            where B' is transformed B, R and X same.
+            we know what B'1 and B'2 is equal and B'1 is transformed B1 =>
+            this groups most likely appeared from a single reagent. we can add copy of B-X to reagents.
+            results will be:
+
+                R + B1-X1 + B2-X2 -> B'1-R'-B'2 + X'1 + X'2
+
+        :param kwargs: see CGRreactor init
+        """
+        super().__init__(**kwargs)
 
         self.__templates = templates
         self.__balance_groups = balance_groups
-        self.__searcher = self.get_template_searcher(self.prepare_templates(templates))
+        if templates:
+            self.__searcher = self.get_template_searcher(self.prepare_templates(templates))
+            self.__searching = True
 
     def pickle(self):
         """ return config. for pickling
         """
-        reactor = CGRreactor.pickle(self)
+        reactor = super().pickle()
         return dict(templates=[x.pickle() for x in self.__templates], balance_groups=self.__balance_groups, **reactor)
 
     @classmethod
@@ -249,13 +284,13 @@ class CGRstandardizer(CGRreactor):
         if self.__balance_groups:
             g = self.clone_subgraphs(g)
 
-        while True:
+        while self.__searching:
             searcher = self.__searcher(g)
             first_match = next(searcher, None)
             if not first_match:
                 if report:
                     g.graph.setdefault('CGR_REPORT', []).extend(report)
-                return g
+                break
 
             g = CGRreactor.patcher(g, first_match.patch)
             if 'CGR_TEMPLATE' in first_match.meta:
@@ -265,17 +300,21 @@ class CGRstandardizer(CGRreactor):
                 g = CGRreactor.patcher(g, match.patch)
                 if 'CGR_TEMPLATE' in match.meta:
                     report.append(match.meta['CGR_TEMPLATE'])
+        return g
+
+    __searcher = None
+    __searching = False
 
 
 class CGRcombo:  # Reverse compatibility
     def __new__(cls, cgr_type='0', extralabels=False, isotope=False, element=True, stereo=False,
                 b_templates=None, m_templates=None):
-        warn('CGRcombo deprecated. use CGRpreparer instead')
+        warn('CGRcombo deprecated and can be work incorrectly. use CGRpreparer instead')
         if b_templates or m_templates:
             warn('b_templates and m_templates now merged to single list of patterns with kwarg: templates. '
-                 'for stoichemist balancing use balance kwarg in CGRpreparer')
+                 'for stoichemist balancing use balance_groups kwarg in CGRpreparer')
 
-        return CGRpreparer(cgr_type=cgr_type, extralabels=extralabels, balance=False, templates=None,
+        return CGRpreparer(cgr_type=cgr_type, extralabels=extralabels, balance_groups=False, templates=None,
                            isotope=isotope, element=element, stereo=stereo)
 
     @classmethod
@@ -292,3 +331,6 @@ class CGRbalancer:  # Reverse compatibility
     def unpickle(cls, *args, **kwargs):
         warn('CGRbalancer deprecated. use CGRstandardizer instead')
         return CGRstandardizer.unpickle(*args, **kwargs)
+
+
+__all__ = [CGRpreparer.__name__, CGRstandardizer.__name__]

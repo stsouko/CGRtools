@@ -18,6 +18,7 @@ master_doc = 'index'
 language = None
 pygments_style = 'sphinx'
 todo_include_todos = False
+autoclass_content = 'both'
 
 html_theme = 'alabaster'
 html_theme_options = {'github_user': 'stsouko', 'github_repo': 'CGRtools', 'show_related': True}

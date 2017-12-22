@@ -28,6 +28,7 @@ from ..periodictable import elements
 
 
 class CGRContainer(MoleculeContainer):
+    """storage for CGRs. has similar to molecules behavior"""
     def __dir__(self):
         if self.__visible is None:
             self.__visible = tmp = super().__dir__()
@@ -35,20 +36,30 @@ class CGRContainer(MoleculeContainer):
         return self.__visible
 
     def pickle(self):
+        """return json serializable CGR"""
         data = super().pickle()
         data['s_only'] = False
         return data
 
     @classmethod
     def unpickle(cls, data):
-        """ convert json serializable CGR into MoleculeContainer or CGRcontainer object instance
-        """
+        """convert json serializable CGR or Molecule into MoleculeContainer or CGRcontainer object instance"""
         tmp = node_link_graph(data, attrs=cls._attrs)
         g = MoleculeContainer(tmp, data['meta']) if data['s_only'] else CGRContainer(tmp, data['meta'])
         g.fix_data()
         return g
 
     def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        """
+        return string representation of CGR
+
+        :param weights: dict with custom order of atoms in string
+        :param isotope: set isotope marks
+        :param stereo: set stereo marks
+        :param hyb: set hybridization mark of atom
+        :param element: set elements marks
+        :param flush_cache: recalculate fear if True
+        """
         if flush_cache or self._fears is None:
             self._fears = {}
         k = (isotope, element, stereo, hyb)
@@ -56,7 +67,7 @@ class CGRContainer(MoleculeContainer):
             (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
     def get_center_atoms(self, stereo=False):
-        """ get atoms of reaction center (dynamic bonds, stereo or charges).
+        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
         """
         nodes = set()
         for n, attr in self.nodes(data=True):
@@ -72,6 +83,19 @@ class CGRContainer(MoleculeContainer):
 
     def add_atom(self, element, s_charge, p_charge=None, s_radical=None, p_radical=None, _map=None, mark='0',
                  s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+        """
+        add new atom into CGR
+
+        :param element: atom element symbol
+        :param s_charge: reagents side charge
+        :param p_charge: products side charge
+        :param s_radical: reagents side radical
+        :param p_radical: products side radical
+        :param _map: atom map number in CGR. can be omitted
+        :param mark: Fragmentor mark
+        :param s_x,s_y,s_z,p_x,p_y,p_z: atom coordinates for reagents and products sides
+        :return: atom map number
+        """
         if element not in elements:
             raise InvalidData('element %s - not exists' % element)
         if _map is None:
@@ -178,6 +202,7 @@ class CGRContainer(MoleculeContainer):
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms.
+
         :param copy: if True return copy of graph and keep existing as is
         :return: graph if copy True else None
         """
@@ -210,6 +235,7 @@ class CGRContainer(MoleculeContainer):
     def implicify_hydrogens(self):
         """
         remove explicit hydrogent if possible
+
         :return: number of removed hydrogens
         """
         explicit = {}
@@ -251,6 +277,7 @@ class CGRContainer(MoleculeContainer):
     def explicify_hydrogens(self):
         """
         add explicit hydrogens to atoms
+
         :return: number of added atoms
         """
         tmp = []

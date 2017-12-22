@@ -33,6 +33,12 @@ class CGRreactor:
     """ CGR isomorphism based operations
     """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
+        """
+        :param extralabels: compare hybridization and neighbors count marks on isomorphism procedure
+        :param isotope: compare isotope marks on isomorphism procedure
+        :param element: compare elements symbols and charges on isomorphism procedure
+        :param stereo: compare stereo marks on isomorphism procedure
+        """
         gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge']
         if isotope:
             gnm_sp.append('isotope')
@@ -98,8 +104,7 @@ class CGRreactor:
                         else:
                             found.update(matched_atoms)
 
-                    yield MatchContainer(list(matched_atoms),
-                                         self.__remap_group(i.patch, g, {y: x for x, y in j.items()})[0], i.meta)
+                    yield MatchContainer(j, self.__remap_group(i.patch, g, {y: x for x, y in j.items()})[0], i.meta)
 
         return searcher
 
@@ -130,6 +135,7 @@ class CGRreactor:
     def __get_substitution_paths(g):
         """
         get atoms paths from detached atom to attached
+
         :param g: CGRContainer
         :return: tuple of atoms numbers
         """
@@ -232,6 +238,10 @@ class CGRreactor:
         x_marks = ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
         templates = []
         for template in raw_templates:
+            if isinstance(template, CGRTemplate):
+                templates.append(template)
+                continue
+
             products = reduce(CGRcore.union, template.products).copy()
             reagents = reduce(CGRcore.union, template.reagents).copy()
             if not (isinstance(reagents, CGRContainer) and isinstance(products, CGRContainer)):
@@ -274,6 +284,7 @@ class CGRreactor:
     @staticmethod
     def patcher(structure, patch, copy=True):
         """ remove edges bw common nodes. add edges from template and replace nodes data
+
         :param structure: MoleculeContainer or CGRContainer
         :param patch: MoleculeContainer or CGRContainer with replacement data
         :param copy: return copy of graph
@@ -301,3 +312,6 @@ class CGRreactor:
 def patcher(*args, **kwargs):
     warn('patcher moved to CGRreactor. use patcher static method.', DeprecationWarning)
     return CGRreactor.patcher(*args, **kwargs)
+
+
+__all__ = [CGRreactor.__name__]

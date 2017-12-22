@@ -19,8 +19,7 @@
 #  MA 02110-1301, USA.
 #
 """
-CGRtools main module.
+aggregated for wildcard imports CGRpreparer, CGRstandardizer and CGRreactor classes.
 """
-
 from .preparer import CGRpreparer, CGRstandardizer
 from .reactor import CGRreactor

@@ -29,7 +29,14 @@ from ..periodictable import elements
 
 
 class MoleculeContainer(Graph, Valence):
+    """storage for Molecules"""
     def __init__(self, data=None, meta=None):
+        """
+        new molecule object creation or copy of data object
+
+        :param data: MoleculeContainer [CGRContainer] or NX Graph object or other supported by NX for initialization
+        :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
+        """
         Graph.__init__(self, data)
         Valence.__init__(self)
         if isinstance(meta, dict):
@@ -280,10 +287,11 @@ class MoleculeContainer(Graph, Valence):
         return self.order()
 
     def get_environment(self, atoms, dante=False, deep=0):
-        """ get subgraph with atoms and their neighbors
+        """
+        get subgraph with atoms and their neighbors
+
         :param atoms: list of core atoms in graph
-        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
-        etc up to deep or while new nodes available.
+        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd, etc up to deep or while new nodes available.
         :param deep: number of bonds between atoms and neighbors.
         """
         nodes = [set(atoms)]
@@ -322,6 +330,7 @@ class MoleculeContainer(Graph, Valence):
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms.
+
         :param copy: if True return copy of graph and keep existing as is
         :return: graph if copy True else None
         """
@@ -351,6 +360,7 @@ class MoleculeContainer(Graph, Valence):
     def implicify_hydrogens(self):
         """
         remove explicit hydrogent if possible
+
         :return: number of removed hydrogens
         """
         explicit = {}
@@ -376,6 +386,7 @@ class MoleculeContainer(Graph, Valence):
     def explicify_hydrogens(self):
         """
         add explicit hydrogens to atoms
+
         :return: number of added atoms
         """
         tmp = []

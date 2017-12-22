@@ -24,11 +24,13 @@ from ..algorithms import hash_cgr_string
 
 
 class MindfulList:
+    """list with self-checks of modification. need for control of ReactionContainer caches actuality"""
     def __init__(self, data=None):
         self.__data = [] if data is None else data
         self.__check = True
 
     def get_state(self):
+        """return True if structure data list changed from previous checking time"""
         tmp = self.__check
         self.__check = False
         return tmp
@@ -83,9 +85,19 @@ class MindfulList:
 
 
 class ReactionContainer:
+    """reaction storage. contains reagents, products and reactants lists"""
     __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__fear', '__pickle')
 
-    def __init__(self, substrats=None, products=None, reactants=None, meta=None, reagents=None):
+    def __init__(self, reagents=None, products=None, reactants=None, meta=None, substrats=None):
+        """
+        new empty or filled reaction object creation
+
+        :param reagents: list of MoleculeContainers [or CGRContainers] in left side of reaction
+        :param products: right side of reaction. see reagents
+        :param reactants: middle side of reaction: solvents, catalysts, etc. see reagents
+        :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
+
+        """
         if substrats:
             warn('deprecated key. use reagents instead', DeprecationWarning)
 
@@ -112,15 +124,13 @@ class ReactionContainer:
             raise Exception('invalid key: %s' % item)
 
     def pickle(self):
-        """ return json serializable reaction
-        """
+        """return json serializable reaction"""
         return dict(reagents=[x.pickle() for x in self.__reagents], meta=self.meta,
                     products=[x.pickle() for x in self.__products], reactants=[x.pickle() for x in self.__reactants])
 
     @staticmethod
     def unpickle(data):
-        """ convert json serializable reaction into ReactionContainer object instance
-        """
+        """convert json serializable reaction into ReactionContainer object instance"""
         return ReactionContainer(reagents=[CGRContainer.unpickle(x) for x in
                                            (data['reagents'] if 'reagents' in data else data['substrats'])],
                                  products=[CGRContainer.unpickle(x) for x in data['products']], meta=data['meta'],
@@ -133,39 +143,53 @@ class ReactionContainer:
 
     @property
     def reagents(self):
+        """reagents list. see products"""
         return self.__reagents
 
     @property
     def products(self):
+        """list of CGRs or/and Molecules in products side"""
         return self.__products
 
     @property
     def reactants(self):
+        """reactants list. see products"""
         return self.__reactants
 
     @property
     def meta(self):
+        """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
 
     def copy(self):
+        """
+        get copy of object
+
+        :return: ReactionContainer
+        """
         return ReactionContainer(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
                                  products=[x.copy() for x in self.__products],
                                  reactants=[x.copy() for x in self.__reactants])
 
     def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        """
+        get 40bytes hash of fear string. see get_fear
+
+        :return: bytes
+        """
         return hash_cgr_string(self.get_fear(isotope, stereo, hyb, element, flush_cache))
 
     def get_fear(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
-        return fear of reaction with molecules in same order.
-        CAUTION: if reaction contains CGRs. fear will be unobvious.
+        return string representation of reaction with molecules
+        in order same as in lists of reagents, reactants, products.
+        CAUTION: if reaction contains CGRs. fear will be unobvious
 
         :param isotope: set isotope marks
         :param stereo: set stereo marks
         :param hyb: set hybridization mark of atom
         :param element: set elements marks
         :param flush_cache: recalculate fear if True
-        :return: string representation of Reaction
         """
         if flush_cache or self.__fear is None or any(x.get_state() for x in
                                                      (self.__reagents, self.__reactants, self.__products)):
@@ -176,10 +200,10 @@ class ReactionContainer:
             self.__fear[k] = '%s>%s>%s' % tuple('.'.join('{%s}' % str(x) if isinstance(x, CGRContainer) else str(x)
                                                          for x in l)
                                                 for l in (self.__reagents, self.__reactants, self.__products))
-
         return self.__fear[k]
 
     def flush_cache(self):
+        """clear cached fears and representation strings. use if structures objects in reaction object changed"""
         self.__pickle = self.__fear = None
 
     def __str__(self):
@@ -189,3 +213,6 @@ class ReactionContainer:
         if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
             self.__pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
         return self.__pickle
+
+
+__all__ = [ReactionContainer.__name__]
