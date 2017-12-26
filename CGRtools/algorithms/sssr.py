@@ -18,87 +18,53 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-""" SSSR calculation. based on:
+""" SSSR calculation. based on idea from:
     Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009).
     A robust method for searching the smallest set of smallest rings with a path-included distance matrix.
     Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
     http://doi.org/10.1073/pnas.0813040106
 """
-from collections import defaultdict
-from itertools import product, permutations
+from networkx import shortest_simple_paths
+from itertools import combinations
 
 
 def find_sssr(g):
     """
     SSSR search.
-    
-    
+
     :param g: Molecule Container 
-    :return: list of sets of edges or None. edges coded as nodes labels.
+    :return: list of lists of rings nodes or None.
     """
     n_sssr = g.number_of_edges() - len(g) + 1
     if not n_sssr:
         return None
 
-    n_ringidx, c_sssr = 0, []
-    for c_num, p1ij, p2ij in _make_c_set(*_make_dist_pids_matrices(g)):
-        if c_num % 2:
-            c1 = p1ij[0]
-            lc1 = len(c1)
-            for c2 in p2ij:
-                c = c1.symmetric_difference(c2)
-                if len(c) == lc1 + len(c2):
-                    c_sssr.append(c)
-                    n_ringidx += 1
-                if n_ringidx == n_sssr:
-                    return c_sssr
-        else:
-            for c1, c2 in zip(p1ij, p1ij[1:]):
-                c = c1.union(c2)
-                if c not in c_sssr:
-                    c_sssr.append(c)
-                    n_ringidx += 1
-                if n_ringidx == n_sssr:
-                    return c_sssr
+    pid1 = {}
+    pid2 = {}
 
+    for ij in combinations(g, 2):
+        for path in shortest_simple_paths(g, *ij):  # slowest part of algorithm
+            if ij not in pid1:
+                pid1[ij] = [path]
+                ls = len(path)
+                continue
 
-def _make_dist_pids_matrices(g):
-    dist = defaultdict(lambda: defaultdict(lambda: float('inf')))
-    pid1 = defaultdict(lambda: defaultdict(list))
-    pid2 = defaultdict(lambda: defaultdict(list))
-    for i in g:
-        dist[i][i] = 0
-    for i, j in g.edges():
-        dist[i][j] = dist[j][i] = 1
-        pid1[i][j] = pid1[j][i] = [{(i, j) if i < j else (j, i)}]
-
-    for k, i, j in permutations(g, 3):
-        pid_sum = [x.union(y) for x, y in product(pid1[i][k], pid1[k][j])] or pid1[i][k] or pid1[k][j]
-        if pid_sum:
-            dij = dist[i][j]
-            dist_sum = dist[i][k] + dist[k][j]
-            if dij > dist_sum:
-                if dij == dist_sum + 1:
-                    pid2[i][j] = pid1[i][j]
+            lp = len(path)
+            if lp == ls:
+                pid1[ij].append(path)
+            elif lp == ls + 1:
+                if ij not in pid2:
+                    pid2[ij] = [path]
                 else:
-                    pid2[i][j] = []
+                    pid2[ij].append(path)
+            else:
+                break
 
-                dist[i][j] = dist_sum
-                pid1[i][j] = pid_sum
-            elif dij == dist_sum:
-                    pid1[i][j].extend(pid_sum)
-            elif dij == dist_sum - 1:
-                pid2[i][j].extend(pid_sum)
-
-    return dist, pid1, pid2
-
-
-def _make_c_set(dist, pid1, pid2):
     c_set = []
-    for i, j in permutations(dist, 2):
-        dij = dist[i][j]
-        p1ij = pid1[i][j]
-        p2ij = pid2[i][j]
+    for ij, p1ij in pid1.items():
+        dij = len(p1ij[0]) - 1
+        p2ij = pid2.get(ij)
+
         if not p2ij and len(p1ij) == 1:
             continue
 
@@ -108,4 +74,27 @@ def _make_c_set(dist, pid1, pid2):
 
         c_set.append((c_num, p1ij, p2ij))
 
-    return sorted(c_set)
+    n_ringidx, c_sssr = 0, {}
+    for c_num, p1ij, p2ij in sorted(c_set):
+        if c_num % 2:
+            c1 = p1ij[0]
+            cs1 = set(c1)
+            for c2 in p2ij:
+                if len(cs1.intersection(c2)) == 2:
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        n_ringidx += 1
+                    if n_ringidx == n_sssr:
+                        return list(c_sssr.values())
+        else:
+            for c1, c2 in zip(p1ij, p1ij[1:]):
+                if len(set(c1).intersection(c2)) == 2:
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        n_ringidx += 1
+                    if n_ringidx == n_sssr:
+                        return list(c_sssr.values())
