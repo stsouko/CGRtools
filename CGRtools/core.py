@@ -32,6 +32,15 @@ class CGRcore:
 
     @classmethod
     def union(cls, m1, m2):
+        """
+        union 2 disjoint graphs
+
+        Note: possible data corruption if graphs has mutable attrs. use copy for prevent
+
+        :param m1: Molecule or CGR Container 1
+        :param m2: Molecule or CGR Container 2
+        :return: united Molecule or CGR Container without metadata from m1 and m2
+        """
         if set(m1) & set(m2):
             raise InvalidData('The node sets of m1 and m2 are not disjoint.')
 
@@ -56,14 +65,17 @@ class CGRcore:
 
     @classmethod
     def compose(cls, m1, m2, balance=False):
-        """ remove from union graphs of products or reagents data about reagents or products
+        """
+        compose 2 graphs to CGR
+
+        :param m1: Molecule or CGR Container 1
+        :param m2: Molecule or CGR Container 2
+        :return: CGRContainer
         """
         common = set(m1).intersection(m2)
         h = CGRContainer()
         unbalanced = {}
 
-        """ remove bond, neighbors and hybridization states for common atoms.
-        """
         for i, g in (('reagents', m1), ('products', m2)):
             is_cgr = isinstance(g, CGRContainer)
             pdi = cls.__popdict[i][is_cgr]
@@ -315,8 +327,7 @@ class CGRcore:
     def decompose(cls, g):
         tmp = ReactionContainer(meta=g.meta)
 
-        x = g.copy()
-        x.__class__ = MoleculeContainer
+        x = MoleculeContainer(g)
         for n, m in cls.__get_broken_paths(g, 's_bond'):
             x.remove_edge(n, m)
 
@@ -324,8 +335,7 @@ class CGRcore:
             mol.fix_data()
             tmp.reagents.append(mol)
 
-        x = g.copy()
-        x.__class__ = MoleculeContainer
+        x = MoleculeContainer(g)
         for n, m in cls.__get_broken_paths(g, 'p_bond'):
             x.remove_edge(n, m)
 
@@ -355,7 +365,7 @@ class CGRcore:
     def __fix_attr(attr, marks):
         tmp = {}
         for s, p, sp in marks:
-            if s in attr:
+            if attr.get(s):
                 tmp[p] = tmp[sp] = attr[s]
         return tmp
 

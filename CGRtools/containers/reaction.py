@@ -167,9 +167,9 @@ class ReactionContainer:
 
         :return: ReactionContainer
         """
-        return ReactionContainer(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
-                                 products=[x.copy() for x in self.__products],
-                                 reactants=[x.copy() for x in self.__reactants])
+        return self.__class__(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
+                              products=[x.copy() for x in self.__products],
+                              reactants=[x.copy() for x in self.__reactants])
 
     def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """

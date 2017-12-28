@@ -42,7 +42,7 @@ class MergedReaction(namedtuple('MergedReaction', ['reagents', 'products', 'meta
 
         :return: MergedReaction
         """
-        return MergedReaction(self.reagents.copy(), self.products.copy(), self.meta.copy())
+        return self.__class__(self.reagents.copy(), self.products.copy(), self.meta.copy())
 
     def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """

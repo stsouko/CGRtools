@@ -229,12 +229,13 @@ class CGRContainer(MoleculeContainer):
                 label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
 
             g.nodes[i].update(label)
+        if copy:
+            return g
         self._fears = self._pickle = None
-        return g if copy else None
 
     def implicify_hydrogens(self):
         """
-        remove explicit hydrogent if possible
+        remove explicit hydrogens if possible
 
         :return: number of removed hydrogens
         """

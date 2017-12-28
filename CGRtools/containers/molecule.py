@@ -22,7 +22,6 @@ from collections import namedtuple, defaultdict
 from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from warnings import warn
 from ..algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, pyramid_volume
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo, ValenceError
 from ..periodictable import elements
@@ -39,8 +38,11 @@ class MoleculeContainer(Graph, Valence):
         """
         Graph.__init__(self, data)
         Valence.__init__(self)
-        if isinstance(meta, dict):
-            self.__meta = meta
+        if meta is not None:
+            if isinstance(meta, dict):
+                self.__meta = meta
+            else:
+                raise InvalidData('metadata can be dictionary')
 
     def __dir__(self):
         if self.__visible is None:
@@ -72,24 +74,35 @@ class MoleculeContainer(Graph, Valence):
         """ convert json serializable CGR into MoleculeContainer object instance
         """
         if not data['s_only']:
-            raise InvalidData('pickled data is invalid molecule. try cgr.unpickle')
+            raise InvalidData('pickled data is invalid molecule. try CGRContainer.unpickle')
 
         g = MoleculeContainer(node_link_graph(data, attrs=cls._attrs), data['meta'])
         g.fix_data()
         return g
 
     def copy(self):
-        return self.__class__(self, self.meta)
+        copy = super().copy()
+        copy.meta.update(self.meta)
+        return copy
 
     def substructure(self, nbunch, meta=False):
-        sub = self.__class__(super().subgraph(nbunch), self.meta if meta else None)
+        """
+        create substructure containing atoms from nbunch list
+
+        Notes: for prevent of data corruption in original structure, create copy of substructure. actual for templates
+
+        :param nbunch: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :return: Molecule or CGR container
+        """
+        sub = self.__class__(self.subgraph(nbunch), self.meta if meta else None)
         sub._fix_stereo()
         return sub
 
     def remap(self, mapping, copy=False):
         g = relabel_nodes(self, mapping, copy=copy)
         if copy:
-            g = self.__class__(g, self.meta)
+            g.meta.update(self.meta)
         return g
 
     @property
@@ -209,10 +222,11 @@ class MoleculeContainer(Graph, Valence):
         if atom2 not in self.__bond_cache[atom1]:
             try:
                 tmp = self[atom1][atom2]
-                res = self._bond_container(**{x: tmp.get(y) for x, y in self._bond_marks.items()})
-                self.__bond_cache[atom1][atom2] = self.__bond_cache[atom2][atom1] = res
             except KeyError:
                 raise InvalidAtom('atom or bond not found')
+
+            res = self._bond_container(**{x: tmp.get(y) for x, y in self._bond_marks.items()})
+            self.__bond_cache[atom1][atom2] = self.__bond_cache[atom2][atom1] = res
         return self.__bond_cache[atom1][atom2]
 
     def atom(self, n):
@@ -221,9 +235,10 @@ class MoleculeContainer(Graph, Valence):
         if n not in self.__atom_cache:
             try:
                 tmp = self.nodes[n]
-                self.__atom_cache[n] = self._atom_container(**{x: tmp.get(y) for x, y in self._atom_marks.items()})
             except KeyError:
                 raise InvalidAtom('atom not found')
+
+            self.__atom_cache[n] = self._atom_container(**{x: tmp.get(y) for x, y in self._atom_marks.items()})
         return self.__atom_cache[n]
 
     def get_stereo(self, atom1, atom2):
@@ -354,8 +369,10 @@ class MoleculeContainer(Graph, Valence):
                     label[h] = 2
 
             attr.update(label)
+
+        if copy:
+            return g
         self._fears = self._pickle = None
-        return g if copy else None
 
     def implicify_hydrogens(self):
         """
@@ -408,6 +425,11 @@ class MoleculeContainer(Graph, Valence):
     def flush_cache(self):
         self._weights = self._fears = self._pickle = None
 
+    def fresh_copy(self):
+        """return a fresh copy graph with the same data structure but without atoms, bonds and metadata.
+        """
+        return self.__class__()
+
     @staticmethod
     def _attr_renew(attr, marks):
         new_attr = {}
@@ -418,6 +440,8 @@ class MoleculeContainer(Graph, Valence):
         return new_attr
 
     def _fix_stereo(self):
+        pass
+        """
         tetrahedrons = []
         for atom, attr in self.nodes(data=True):
             neighbors = [self.nodes[x]['element'] for x in self.neighbors(atom)]
@@ -442,6 +466,7 @@ class MoleculeContainer(Graph, Valence):
                     pass
 
             self._weights = self._fears = self._pickle = None
+        """
 
     def _check_bonding(self, atom1, atom2, mark, label='s'):
         for atom, reverse in ((atom1, atom2), (atom2, atom1)):
@@ -492,7 +517,3 @@ class MoleculeContainer(Graph, Valence):
     _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
     _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
     __meta = __visible = __atom_cache = __bond_cache = __stereo_cache = _weights = _fears = _pickle = None
-
-    def subgraph(self, *args, **kwargs):
-        warn('subgraph name is deprecated. use sustructure instead', DeprecationWarning)
-        return self.substructure(*args, **kwargs)

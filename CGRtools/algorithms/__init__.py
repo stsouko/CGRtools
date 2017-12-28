@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 """
-Module implements Molecules and CGRs analysis and representation algorithms
+implements Molecules and CGRs analysis and representation algorithms
 """
 from .morgan import get_morgan
 from .sssr import find_sssr
