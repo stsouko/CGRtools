@@ -24,6 +24,11 @@ from ..reactor import CGRreactor
 
 
 class Aromatizer(CGRreactor):
+    def __dir__(self):
+        if self.__visible is None:
+            self.__visible = [self.get.__name__]
+        return self.__visible
+
     def __init__(self):
         CGRreactor.__init__(self)
         p = Path(__file__).parent
@@ -58,3 +63,8 @@ class Aromatizer(CGRreactor):
 
             for match in searcher:
                 g = self.patcher(g, match.patch)
+
+    def get(self, *args, **kwargs):
+        return self.__call__(*args, **kwargs)
+
+    __visible = None

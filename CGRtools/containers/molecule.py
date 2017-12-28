@@ -46,12 +46,13 @@ class MoleculeContainer(Graph, Valence):
 
     def __dir__(self):
         if self.__visible is None:
-            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__,
-                              self.substructure.__name__, self.remap.__name__, self.add_stereo.__name__,
+            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
+                              self.flush_cache.__name__, self.substructure.__name__,  self.add_stereo.__name__,
                               self.get_morgan.__name__, self.get_fear.__name__, self.get_fear_hash.__name__,
                               self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
                               self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
                               self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
+                              self.atom_implicit_h.__name__,
                               'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
         return self.__visible
 
