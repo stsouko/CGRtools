@@ -22,6 +22,7 @@ from collections import namedtuple, defaultdict
 from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
+from warnings import warn
 from ..algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, pyramid_volume
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo, ValenceError
 from ..periodictable import elements
@@ -48,7 +49,7 @@ class MoleculeContainer(Graph, Valence):
         if self.__visible is None:
             self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
                               self.flush_cache.__name__, self.substructure.__name__,  self.add_stereo.__name__,
-                              self.get_morgan.__name__, self.get_fear.__name__, self.get_fear_hash.__name__,
+                              self.get_morgan.__name__, self.get_signature.__name__, self.get_signature_hash.__name__,
                               self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
                               self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
                               self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
@@ -112,23 +113,23 @@ class MoleculeContainer(Graph, Valence):
             self.__meta = {}
         return self.__meta
 
-    def get_fear_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
-        return hash_cgr_string(self.get_fear(weights, isotope, stereo, hyb, element, flush_cache))
+    def get_signature_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+        return hash_cgr_string(self.get_signature(weights, isotope, stereo, hyb, element, flush_cache))
 
-    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
         :param weights: dict of atoms in keys and orders in values
         :param isotope: set isotope marks
         :param stereo: set stereo marks
         :param hyb: set hybridization mark of atom
         :param element: set elements marks
-        :param flush_cache: recalculate fear if True
+        :param flush_cache: recalculate signature if True
         :return: string representation of CGR
         """
-        if flush_cache or self._fears is None:
-            self._fears = {}
+        if flush_cache or self._signatures is None:
+            self._signatures = {}
         k = (isotope, element, stereo, hyb)
-        return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element)
+        return self._signatures.get(k) or self._signatures.setdefault(k, CGRstring(isotope, stereo, hyb, element)
             (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
     def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False, labels=None):
@@ -153,7 +154,7 @@ class MoleculeContainer(Graph, Valence):
         if radical:
             self.nodes[_map]['s_radical'] = radical
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return _map
 
     def add_bond(self, atom1, atom2, mark, *, ignore=False):
@@ -167,7 +168,7 @@ class MoleculeContainer(Graph, Valence):
         if not ignore:
             self._check_bonding(atom1, atom2, mark)
         self.add_edge(atom1, atom2, s_bond=mark)
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     def add_stereo(self, atom1, atom2, mark):
         if mark not in (1, -1):
@@ -215,7 +216,7 @@ class MoleculeContainer(Graph, Valence):
             raise InvalidStereo('unknown')
 
         self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     def bond(self, atom1, atom2):
         if self.__bond_cache is None:
@@ -341,7 +342,7 @@ class MoleculeContainer(Graph, Valence):
 
         if copy:
             return g
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     def reset_query_marks(self, copy=False):
         """
@@ -373,7 +374,7 @@ class MoleculeContainer(Graph, Valence):
 
         if copy:
             return g
-        self._fears = self._pickle = None
+        self._signatures = self._pickle = None
 
     def implicify_hydrogens(self):
         """
@@ -398,7 +399,7 @@ class MoleculeContainer(Graph, Valence):
                 for x in h:
                     self.remove_node(x)
                     c += 1
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return c
 
     def explicify_hydrogens(self):
@@ -415,7 +416,7 @@ class MoleculeContainer(Graph, Valence):
         for n in tmp:
             self.add_bond(n, self.add_atom('H', 0), 1)
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return len(tmp)
 
     def atom_implicit_h(self, atom):
@@ -424,7 +425,7 @@ class MoleculeContainer(Graph, Valence):
                                     radical=self._radical_map[attr.get('s_radical')])
 
     def flush_cache(self):
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     def fresh_copy(self):
         """return a fresh copy graph with the same data structure but without atoms, bonds and metadata.
@@ -466,7 +467,7 @@ class MoleculeContainer(Graph, Valence):
                 else:
                     pass
 
-            self._weights = self._fears = self._pickle = None
+            self._weights = self._signatures = self._pickle = None
         """
 
     def _check_bonding(self, atom1, atom2, mark, label='s'):
@@ -497,7 +498,7 @@ class MoleculeContainer(Graph, Valence):
         return new_attr
 
     def __str__(self):
-        return self.get_fear(isotope=True, stereo=True)
+        return self.get_signature(isotope=True, stereo=True)
 
     def __repr__(self):
         if self._pickle is None:
@@ -517,4 +518,12 @@ class MoleculeContainer(Graph, Valence):
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
     _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
     _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
-    __meta = __visible = __atom_cache = __bond_cache = __stereo_cache = _weights = _fears = _pickle = None
+    __meta = __visible = __atom_cache = __bond_cache = __stereo_cache = _weights = _signatures = _pickle = None
+
+    def get_fear_hash(self, *args, **kwargs):
+        warn('use get_signature_hash instead', DeprecationWarning)
+        return self.get_signature_hash(*args, **kwargs)
+
+    def get_fear(self, *args, **kwargs):
+        warn('use get_signature instead', DeprecationWarning)
+        return self.get_signature(*args, **kwargs)

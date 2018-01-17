@@ -235,7 +235,7 @@ class CGRstandardizer(CGRreactor):
     """CGR standardization and reaction balancing"""
     def __init__(self, templates, balance_groups=False, **kwargs):
         """
-        :param templates: CGRTemplates. rules for graph modifications. can be False
+        :param templates: CGRTemplates. rules for graph modifications. possible be False
         :param balance_groups: if True: for unbalanced reactions contains multiple attached functional groups in
             products and one of them described in reagents - will be restored information about all equal groups.
             for example:

@@ -64,6 +64,9 @@ class MindfulList:
         self.__data.append(obj)
         return self
 
+    def __add__(self, other):
+        return self.__class__(self.__data + list(other))
+
     def __getitem__(self, index):
         return self.__data[index]
 
@@ -86,7 +89,7 @@ class MindfulList:
 
 class ReactionContainer:
     """reaction storage. contains reagents, products and reactants lists"""
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__fear', '__pickle')
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__signatures', '__pickle')
 
     def __init__(self, reagents=None, products=None, reactants=None, meta=None, substrats=None):
         """
@@ -105,7 +108,7 @@ class ReactionContainer:
         self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
         self.__meta = meta or {}
-        self.__fear = {}
+        self.__signatures = {}
         self.__pickle = None
 
     def __getitem__(self, item):
@@ -171,48 +174,58 @@ class ReactionContainer:
                               products=[x.copy() for x in self.__products],
                               reactants=[x.copy() for x in self.__reactants])
 
-    def get_fear_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
-        get 40bytes hash of fear string. see get_fear
+        get 40bytes hash of signature string. see get_signature
 
         :return: bytes
         """
-        return hash_cgr_string(self.get_fear(isotope, stereo, hyb, element, flush_cache))
+        return hash_cgr_string(self.get_signature(isotope, stereo, hyb, element, flush_cache))
 
-    def get_fear(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
         return string representation of reaction with molecules
         in order same as in lists of reagents, reactants, products.
-        CAUTION: if reaction contains CGRs. fear will be unobvious
+        CAUTION: if reaction contains CGRs. signature will be unobvious
 
         :param isotope: set isotope marks
         :param stereo: set stereo marks
         :param hyb: set hybridization mark of atom
         :param element: set elements marks
-        :param flush_cache: recalculate fear if True
+        :param flush_cache: recalculate signature if True
         """
-        if flush_cache or self.__fear is None or any(x.get_state() for x in
-                                                     (self.__reagents, self.__reactants, self.__products)):
-            self.__fear = {}
+        if flush_cache or self.__signatures is None or any(x.get_state() for x in
+                                                           (self.__reagents, self.__reactants, self.__products)):
+            self.__signatures = {}
 
         k = (isotope, element, stereo, hyb)
-        if k not in self.__fear:
-            self.__fear[k] = '%s>%s>%s' % tuple('.'.join('{%s}' % str(x) if isinstance(x, CGRContainer) else str(x)
-                                                         for x in l)
-                                                for l in (self.__reagents, self.__reactants, self.__products))
-        return self.__fear[k]
+        if k not in self.__signatures:
+            self.__signatures[k] = '%s>%s>%s' % tuple('.'.join('{%s}' % x if isinstance(x, CGRContainer) else str(x)
+                                                               for x in
+                                                               (m.get_signature(isotope=isotope, stereo=stereo, hyb=hyb,
+                                                                                element=element) for m in ml))
+                                                      for ml in (self.__reagents, self.__reactants, self.__products))
+        return self.__signatures[k]
 
     def flush_cache(self):
-        """clear cached fears and representation strings. use if structures objects in reaction object changed"""
-        self.__pickle = self.__fear = None
+        """clear cached signatures and representation strings. use if structures objects in reaction object changed"""
+        self.__pickle = self.__signatures = None
 
     def __str__(self):
-        return self.get_fear(True, True)
+        return self.get_signature(True, True)
 
     def __repr__(self):
         if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
             self.__pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
         return self.__pickle
+
+    def get_fear_hash(self, *args, **kwargs):
+        warn('use get_signature_hash instead', DeprecationWarning)
+        return self.get_signature_hash(*args, **kwargs)
+
+    def get_fear(self, *args, **kwargs):
+        warn('use get_signature instead', DeprecationWarning)
+        return self.get_signature(*args, **kwargs)
 
 
 __all__ = [ReactionContainer.__name__]

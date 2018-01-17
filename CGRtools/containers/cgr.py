@@ -49,7 +49,7 @@ class CGRContainer(MoleculeContainer):
         g.fix_data()
         return g
 
-    def get_fear(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
         """
         return string representation of CGR
 
@@ -58,12 +58,12 @@ class CGRContainer(MoleculeContainer):
         :param stereo: set stereo marks
         :param hyb: set hybridization mark of atom
         :param element: set elements marks
-        :param flush_cache: recalculate fear if True
+        :param flush_cache: recalculate signature if True
         """
-        if flush_cache or self._fears is None:
-            self._fears = {}
+        if flush_cache or self._signatures is None:
+            self._signatures = {}
         k = (isotope, element, stereo, hyb)
-        return self._fears.get(k) or self._fears.setdefault(k, CGRstring(isotope, stereo, hyb, element, True)
+        return self._signatures.get(k) or self._signatures.setdefault(k, CGRstring(isotope, stereo, hyb, element, True)
             (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
 
     def get_center_atoms(self, stereo=False):
@@ -126,7 +126,7 @@ class CGRContainer(MoleculeContainer):
         if p_radical:
             self.nodes[_map]['p_radical'] = p_radical
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return _map
 
     def add_bond(self, atom1, atom2, s_mark, p_mark, *, ignore=False):
@@ -152,7 +152,7 @@ class CGRContainer(MoleculeContainer):
         if p_mark:
             self.add_edge(atom1, atom2, p_bond=p_mark)
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     def add_stereo(self, atom1, atom2, s_mark, p_mark):
         if s_mark not in (1, -1) and p_mark not in (1, -1):
@@ -231,7 +231,7 @@ class CGRContainer(MoleculeContainer):
             g.nodes[i].update(label)
         if copy:
             return g
-        self._fears = self._pickle = None
+        self._signatures = self._pickle = None
 
     def implicify_hydrogens(self):
         """
@@ -272,7 +272,7 @@ class CGRContainer(MoleculeContainer):
                 self.remove_node(x)
                 c += 1
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return c
 
     def explicify_hydrogens(self):
@@ -292,7 +292,7 @@ class CGRContainer(MoleculeContainer):
         for n, s_mark, p_mark in tmp:
             self.add_bond(n, self.add_atom('H', 0), s_mark, p_mark)
 
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
         return len(tmp)
 
     def atom_implicit_h(self, atom):
@@ -307,7 +307,7 @@ class CGRContainer(MoleculeContainer):
 
     def _fix_stereo(self):
         # todo: implement
-        self._weights = self._fears = self._pickle = None
+        self._weights = self._signatures = self._pickle = None
 
     @staticmethod
     def _attr_renew(attr, marks):
