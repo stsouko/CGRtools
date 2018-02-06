@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 #
 from collections import namedtuple
 from itertools import repeat, zip_longest
-from networkx.readwrite.json_graph import node_link_graph
 from .molecule import MoleculeContainer
 from ..algorithms import CGRstring
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
@@ -44,42 +43,13 @@ class CGRContainer(MoleculeContainer):
     @classmethod
     def unpickle(cls, data):
         """convert json serializable CGR or Molecule into MoleculeContainer or CGRcontainer object instance"""
-        tmp = node_link_graph(data, attrs=cls._attrs)
-        g = MoleculeContainer(tmp, data['meta']) if data['s_only'] else CGRContainer(tmp, data['meta'])
+        graph, meta = super().unpickle(data)
+        g = MoleculeContainer(graph, meta) if data['s_only'] else cls(graph, meta)
         g.fix_data()
         return g
 
-    def get_signature(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
-        """
-        return string representation of CGR
-
-        :param weights: dict with custom order of atoms in string
-        :param isotope: set isotope marks
-        :param stereo: set stereo marks
-        :param hyb: set hybridization mark of atom
-        :param element: set elements marks
-        :param flush_cache: recalculate signature if True
-        """
-        if flush_cache or self._signatures is None:
-            self._signatures = {}
-        k = (isotope, element, stereo, hyb)
-        return self._signatures.get(k) or self._signatures.setdefault(k, CGRstring(isotope, stereo, hyb, element, True)
-            (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
-
-    def get_center_atoms(self, stereo=False):
-        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
-        """
-        nodes = set()
-        for n, attr in self.nodes(data=True):
-            if attr['s_charge'] != attr['p_charge'] or attr.get('s_radical') != attr.get('p_radical') or \
-                   stereo and attr.get('s_stereo') != attr.get('p_stereo'):
-                nodes.add(n)
-
-        for *n, attr in self.edges(data=True):
-            if attr.get('s_bond') != attr.get('p_bond') or stereo and attr.get('s_stereo') != attr.get('p_stereo'):
-                nodes.update(n)
-
-        return list(nodes)
+    def _signature_generator(self, *args, **kwargs):
+        return CGRstring(*args, is_cgr=True, **kwargs)
 
     def add_atom(self, element, s_charge, p_charge=None, s_radical=None, p_radical=None, _map=None, mark='0',
                  s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
@@ -126,7 +96,7 @@ class CGRContainer(MoleculeContainer):
         if p_radical:
             self.nodes[_map]['p_radical'] = p_radical
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return _map
 
     def add_bond(self, atom1, atom2, s_mark, p_mark, *, ignore=False):
@@ -152,7 +122,7 @@ class CGRContainer(MoleculeContainer):
         if p_mark:
             self.add_edge(atom1, atom2, p_bond=p_mark)
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
 
     def add_stereo(self, atom1, atom2, s_mark, p_mark):
         if s_mark not in (1, -1) and p_mark not in (1, -1):
@@ -199,6 +169,21 @@ class CGRContainer(MoleculeContainer):
         # todo: implement
         return None, None
 
+    def get_center_atoms(self, stereo=False):
+        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
+        """
+        nodes = set()
+        for n, attr in self.nodes(data=True):
+            if attr['s_charge'] != attr['p_charge'] or attr.get('s_radical') != attr.get('p_radical') or \
+                   stereo and attr.get('s_stereo') != attr.get('p_stereo'):
+                nodes.add(n)
+
+        for *n, attr in self.edges(data=True):
+            if attr.get('s_bond') != attr.get('p_bond') or stereo and attr.get('s_stereo') != attr.get('p_stereo'):
+                nodes.update(n)
+
+        return list(nodes)
+
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms.
@@ -231,7 +216,7 @@ class CGRContainer(MoleculeContainer):
             g.nodes[i].update(label)
         if copy:
             return g
-        self._signatures = self._pickle = None
+        self.flush_cache()
 
     def implicify_hydrogens(self):
         """
@@ -272,7 +257,7 @@ class CGRContainer(MoleculeContainer):
                 self.remove_node(x)
                 c += 1
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return c
 
     def explicify_hydrogens(self):
@@ -292,7 +277,7 @@ class CGRContainer(MoleculeContainer):
         for n, s_mark, p_mark in tmp:
             self.add_bond(n, self.add_atom('H', 0), s_mark, p_mark)
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return len(tmp)
 
     def atom_implicit_h(self, atom):
@@ -307,7 +292,7 @@ class CGRContainer(MoleculeContainer):
 
     def _fix_stereo(self):
         # todo: implement
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
 
     @staticmethod
     def _attr_renew(attr, marks):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,57 +18,34 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 from itertools import chain
-from networkx import Graph, relabel_nodes
-from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from warnings import warn
-from ..algorithms import get_morgan, CGRstring, hash_cgr_string, Valence, pyramid_volume
+from .common import BaseContainer
+from ..algorithms import CGRstring, Valence, pyramid_volume
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo, ValenceError
 from ..periodictable import elements
 
 
-class MoleculeContainer(Graph, Valence):
+class MoleculeContainer(BaseContainer, Valence):
     """storage for Molecules"""
-    def __init__(self, data=None, meta=None):
+    def __init__(self, *args, **kwargs):
         """
         new molecule object creation or copy of data object
-
-        :param data: MoleculeContainer [CGRContainer] or NX Graph object or other supported by NX for initialization
-        :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
         """
-        Graph.__init__(self, data)
+        BaseContainer.__init__(self, *args, **kwargs)
         Valence.__init__(self)
-        if meta is not None:
-            if isinstance(meta, dict):
-                self.__meta = meta
-            else:
-                raise InvalidData('metadata can be dictionary')
 
     def __dir__(self):
         if self.__visible is None:
-            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
-                              self.flush_cache.__name__, self.substructure.__name__,  self.add_stereo.__name__,
-                              self.get_morgan.__name__, self.get_signature.__name__, self.get_signature_hash.__name__,
-                              self.get_environment.__name__, self.fix_data.__name__, self.reset_query_marks.__name__,
-                              self.atom.__name__, self.bond.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                              self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
-                              self.atom_implicit_h.__name__,
-                              'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
+            self.__visible = tmp = super().__dir__()
+            tmp.extend([self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
+                        self.atom_implicit_h.__name__, self.reset_query_marks.__name__])
         return self.__visible
 
     def pickle(self):
-        """ return json serializable CGR or Molecule
-        """
-        node_marks = self._node_save
-        edge_marks = self._edge_save
-
-        g = Graph()
-        g.add_nodes_from((n, {k: v for k, v in a.items() if k in node_marks}) for n, a in self.nodes(data=True))
-        g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
-
-        data = node_link_data(g, attrs=self._attrs)
-        data.update(meta=self.meta, s_only=True)
+        """return json serializable Molecule"""
+        data = super().pickle()
+        data['s_only'] = True
         return data
 
     @classmethod
@@ -78,65 +55,15 @@ class MoleculeContainer(Graph, Valence):
         if not data['s_only']:
             raise InvalidData('pickled data is invalid molecule. try CGRContainer.unpickle')
 
-        g = MoleculeContainer(node_link_graph(data, attrs=cls._attrs), data['meta'])
+        graph, meta = super().unpickle(data)
+        g = cls(graph, meta)
         g.fix_data()
         return g
 
-    def copy(self):
-        copy = super().copy()
-        copy.meta.update(self.meta)
-        return copy
-
-    def substructure(self, nbunch, meta=False):
-        """
-        create substructure containing atoms from nbunch list
-
-        Notes: for prevent of data corruption in original structure, create copy of substructure. actual for templates
-
-        :param nbunch: list of atoms numbers of substructure
-        :param meta: if True metadata will be copied to substructure
-        :return: Molecule or CGR container
-        """
-        sub = self.__class__(self.subgraph(nbunch), self.meta if meta else None)
+    def substructure(self, *args, **kwargs):
+        sub = super().substructure(*args, **kwargs)
         sub._fix_stereo()
         return sub
-
-    def remap(self, mapping, copy=False):
-        g = relabel_nodes(self, mapping, copy=copy)
-        if copy:
-            g.meta.update(self.meta)
-        return g
-
-    @property
-    def meta(self):
-        if self.__meta is None:
-            self.__meta = {}
-        return self.__meta
-
-    def get_signature_hash(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
-        return hash_cgr_string(self.get_signature(weights, isotope, stereo, hyb, element, flush_cache))
-
-    def get_signature(self, weights=None, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
-        """
-        :param weights: dict of atoms in keys and orders in values
-        :param isotope: set isotope marks
-        :param stereo: set stereo marks
-        :param hyb: set hybridization mark of atom
-        :param element: set elements marks
-        :param flush_cache: recalculate signature if True
-        :return: string representation of CGR
-        """
-        if flush_cache or self._signatures is None:
-            self._signatures = {}
-        k = (isotope, element, stereo, hyb)
-        return self._signatures.get(k) or self._signatures.setdefault(k, CGRstring(isotope, stereo, hyb, element)
-            (self, weights or self.get_morgan(isotope, element, stereo, flush_cache)))
-
-    def get_morgan(self, isotope=False, element=True, stereo=False, flush_cache=False, labels=None):
-        if flush_cache or self._weights is None:
-            self._weights = {}
-        k = (isotope, element, stereo, labels)
-        return self._weights.get(k) or self._weights.setdefault(k, get_morgan(self, isotope, element, stereo, labels))
 
     def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
         if element not in elements:
@@ -154,7 +81,7 @@ class MoleculeContainer(Graph, Valence):
         if radical:
             self.nodes[_map]['s_radical'] = radical
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return _map
 
     def add_bond(self, atom1, atom2, mark, *, ignore=False):
@@ -168,7 +95,23 @@ class MoleculeContainer(Graph, Valence):
         if not ignore:
             self._check_bonding(atom1, atom2, mark)
         self.add_edge(atom1, atom2, s_bond=mark)
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
+
+    def delete_atom(self, n):
+        """
+        implementation of atom removing
+        """
+        # todo: stereo fixing
+        self.remove_node(n)
+        self.reset_query_marks()
+
+    def delete_bond(self, n, m):
+        """
+        implementation of bond removing
+        """
+        # todo: stereo fixing
+        self.remove_edge(n, m)
+        self.reset_query_marks()
 
     def add_stereo(self, atom1, atom2, mark):
         if mark not in (1, -1):
@@ -196,52 +139,6 @@ class MoleculeContainer(Graph, Valence):
             self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit)
         else:
             raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
-
-    def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
-        if any(x != 1 for x in bonds):
-            raise InvalidStereo('only single bonded tetrahedron acceptable')
-
-        weights = self.get_morgan(stereo=True, labels=label)
-        if len(neighbors) != len(set(weights[x] for x in neighbors)):
-            raise InvalidStereo('stereo impossible. neighbors equivalent')
-
-        l_x = '%s_x' % label
-        l_y = '%s_y' % label
-        l_stereo = '%s_stereo' % label
-
-        order = sorted(neighbors, key=weights.get)
-        vol = pyramid_volume(*((y[l_x], y[l_y], 0 if x != atom2 else mark) for x, y in
-                               ((x, self.nodes[x]) for x in (chain((atom1,), order) if implicit else order))))
-        if not vol:
-            raise InvalidStereo('unknown')
-
-        self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
-        self._weights = self._signatures = self._pickle = None
-
-    def bond(self, atom1, atom2):
-        if self.__bond_cache is None:
-            self.__bond_cache = defaultdict(dict)
-        if atom2 not in self.__bond_cache[atom1]:
-            try:
-                tmp = self[atom1][atom2]
-            except KeyError:
-                raise InvalidAtom('atom or bond not found')
-
-            res = self._bond_container(**{x: tmp.get(y) for x, y in self._bond_marks.items()})
-            self.__bond_cache[atom1][atom2] = self.__bond_cache[atom2][atom1] = res
-        return self.__bond_cache[atom1][atom2]
-
-    def atom(self, n):
-        if self.__atom_cache is None:
-            self.__atom_cache = {}
-        if n not in self.__atom_cache:
-            try:
-                tmp = self.nodes[n]
-            except KeyError:
-                raise InvalidAtom('atom not found')
-
-            self.__atom_cache[n] = self._atom_container(**{x: tmp.get(y) for x, y in self._atom_marks.items()})
-        return self.__atom_cache[n]
 
     def get_stereo(self, atom1, atom2):
         if self.__stereo_cache is None:
@@ -295,55 +192,6 @@ class MoleculeContainer(Graph, Valence):
 
         return self.__stereo_cache.get((atom1, atom2), None)
 
-    @property
-    def bonds_count(self):
-        return self.size()
-
-    @property
-    def atoms_count(self):
-        return self.order()
-
-    def get_environment(self, atoms, dante=False, deep=0):
-        """
-        get subgraph with atoms and their neighbors
-
-        :param atoms: list of core atoms in graph
-        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd, etc up to deep or while new nodes available.
-        :param deep: number of bonds between atoms and neighbors.
-        """
-        nodes = [set(atoms)]
-        for i in range(deep):
-            n = set(chain.from_iterable(self.edges(nodes[i])))
-            if not n or n in nodes:
-                break
-            nodes.append(n)
-
-        if dante:
-            centers = [self.substructure(a) for a in nodes]
-        else:
-            centers = self.substructure(nodes[-1])
-
-        return centers
-
-    def fix_data(self, copy=False, nodes_bunch=None, edges_bunch=None):
-        g = self.copy() if copy else self
-        for a in ((a for _, a in g.nodes(data=True)) if nodes_bunch is None else
-                  (g.nodes[x] for x in g.nbunch_iter(nodes_bunch))):
-            sp_new = self._attr_renew(a, self._node_marks)
-            cm_new = self.__node_attr_clear(a)
-            a.clear()
-            a.update(sp_new)
-            a.update(cm_new)
-
-        for *_, a in g.edges(nbunch=edges_bunch, data=True):
-            new = self._attr_renew(a, self._edge_marks)
-            a.clear()
-            a.update(new)
-
-        if copy:
-            return g
-        self._weights = self._signatures = self._pickle = None
-
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms.
@@ -374,11 +222,11 @@ class MoleculeContainer(Graph, Valence):
 
         if copy:
             return g
-        self._signatures = self._pickle = None
+        self.flush_cache()
 
     def implicify_hydrogens(self):
         """
-        remove explicit hydrogent if possible
+        remove explicit hydrogen if possible
 
         :return: number of removed hydrogens
         """
@@ -399,7 +247,7 @@ class MoleculeContainer(Graph, Valence):
                 for x in h:
                     self.remove_node(x)
                     c += 1
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return c
 
     def explicify_hydrogens(self):
@@ -416,7 +264,7 @@ class MoleculeContainer(Graph, Valence):
         for n in tmp:
             self.add_bond(n, self.add_atom('H', 0), 1)
 
-        self._weights = self._signatures = self._pickle = None
+        self.flush_cache()
         return len(tmp)
 
     def atom_implicit_h(self, atom):
@@ -424,13 +272,26 @@ class MoleculeContainer(Graph, Valence):
         return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],
                                     radical=self._radical_map[attr.get('s_radical')])
 
-    def flush_cache(self):
-        self._weights = self._signatures = self._pickle = None
+    def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
+        if any(x != 1 for x in bonds):
+            raise InvalidStereo('only single bonded tetrahedron acceptable')
 
-    def fresh_copy(self):
-        """return a fresh copy graph with the same data structure but without atoms, bonds and metadata.
-        """
-        return self.__class__()
+        weights = self.get_morgan(stereo=True, labels=label)
+        if len(neighbors) != len(set(weights[x] for x in neighbors)):
+            raise InvalidStereo('stereo impossible. neighbors equivalent')
+
+        l_x = '%s_x' % label
+        l_y = '%s_y' % label
+        l_stereo = '%s_stereo' % label
+
+        order = sorted(neighbors, key=weights.get)
+        vol = pyramid_volume(*((y[l_x], y[l_y], 0 if x != atom2 else mark) for x, y in
+                               ((x, self.nodes[x]) for x in (chain((atom1,), order) if implicit else order))))
+        if not vol:
+            raise InvalidStereo('unknown')
+
+        self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
+        self.flush_cache()
 
     @staticmethod
     def _attr_renew(attr, marks):
@@ -440,6 +301,9 @@ class MoleculeContainer(Graph, Valence):
             if ls is not None:
                 new_attr[s] = ls
         return new_attr
+
+    def _signature_generator(self, *args, **kwargs):
+        return CGRstring(*args, **kwargs)
 
     def _fix_stereo(self):
         pass
@@ -488,24 +352,6 @@ class MoleculeContainer(Graph, Valence):
                                            neighbors=[x for _, x in tmp]):
                     raise InvalidData('valence error')
 
-    @classmethod
-    def __node_attr_clear(cls, attr):
-        new_attr = {}
-        for s in cls._node_base:
-            ls = attr.get(s)
-            if ls is not None:
-                new_attr[s] = ls
-        return new_attr
-
-    def __str__(self):
-        return self.get_signature(isotope=True, stereo=True)
-
-    def __repr__(self):
-        if self._pickle is None:
-            self._pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
-        return self._pickle
-
-    _attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
                        element='element', isotope='isotope', mark='mark', radical='s_radical')
     _bond_marks = dict(bond='s_bond', stereo='s_stereo')
@@ -518,12 +364,4 @@ class MoleculeContainer(Graph, Valence):
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
     _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
     _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
-    __meta = __visible = __atom_cache = __bond_cache = __stereo_cache = _weights = _signatures = _pickle = None
-
-    def get_fear_hash(self, *args, **kwargs):
-        warn('use get_signature_hash instead', DeprecationWarning)
-        return self.get_signature_hash(*args, **kwargs)
-
-    def get_fear(self, *args, **kwargs):
-        warn('use get_signature instead', DeprecationWarning)
-        return self.get_signature(*args, **kwargs)
+    __visible = __stereo_cache = None

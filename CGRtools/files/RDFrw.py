@@ -99,11 +99,13 @@ class RDFread(CGRread, WithMixin):
                 elif n == im:
                     try:
                         atoms = int(line[0:3])
-                        if not (atoms or self.__ignore):
+                        if not atoms:
+                            if self.__ignore:
+                                continue
                             raise EmptyMolecule('Molecule without atoms')
                         atomcount = atoms + im
                         bondcount = int(line[3:6]) + atomcount
-                        molecule = dict(atoms=[], bonds=[], CGR_DAT={})
+                        molecule = dict(atoms=[], bonds=[], CGR_DAT=[])
                     except (EmptyMolecule, ValueError):
                         failkey = True
                         reaction = molecule = None

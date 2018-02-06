@@ -34,10 +34,11 @@ def hash_cgr_string(string):
 
 
 class CGRstring:
-    def __init__(self, isotope=False, stereo=False, hyb=False, element=True, is_cgr=False):
+    def __init__(self, element=True, isotope=False, stereo=False, hybridization=False, neighbors=False, is_cgr=False):
         self.__isotope = element and isotope
         self.__stereo = stereo
-        self.__hyb = hyb
+        self.__hyb = hybridization
+        self.__neighbors = neighbors
         self.__element = element
         self.__get_smi = self.__cgr_smi if is_cgr else self.__mol_smi
         self.__is_cgr = is_cgr
@@ -76,67 +77,46 @@ class CGRstring:
         return nextatom
 
     def __mol_smi(self, gni):
-        if self.__stereo:
-            ss = gni.get('s_stereo')
-            if ss:
-                s_sh = (';%%s%s;' % self.__hyb_types[gni['s_hyb']] if self.__hyb and gni.get('s_hyb') else ';%s;') % ss
-            else:
-                s_sh = ''
-        elif self.__hyb:
-            s_sh = ';%s;' % self.__hyb_types[gni['s_hyb']] if gni.get('s_hyb') else ''
-        else:
-            s_sh = ''
-
-        if self.__isotope and gni.get('isotope'):
-            s_ish = '[%s%%s%s%%s]' % (gni['isotope'], s_sh)
-        else:
-            s_ish = '[%%s%s%%s]' % s_sh if s_sh else ''
-
-        if self.__element:
-            ge = gni.get('element') or '*'
-            gcs = gni.get('s_charge') and '%+d' % gni['s_charge'] or ''
-            smis = [s_ish and s_ish % (ge, gcs) or gcs and '[%s%s]' % (ge, gcs) or ge != '*' and ge or '[*]']
-        else:
-            smis = [s_ish % ('*', '') if s_ish else '[*]']
-
-        return smis, None
+        return self.__get_sp_smi(gni, 's_stereo', 's_hyb', 's_neighbors', 's_charge'), None
 
     def __cgr_smi(self, gni):
-        if self.__stereo:
-            ss = gni.get('s_stereo')
-            ps = gni.get('p_stereo')
-            if ss:
-                s_sh = (';%%s%s;' % self.__hyb_types[gni['s_hyb']] if self.__hyb and gni.get('s_hyb') else ';%s;') % ss
-            else:
-                s_sh = ''
-            if ps:
-                p_sh = (';%%s%s;' % self.__hyb_types[gni['p_hyb']] if self.__hyb and gni.get('p_hyb') else ';%s;') % ps
-            else:
-                p_sh = ''
-        elif self.__hyb:
-            s_sh = ';%s;' % self.__hyb_types[gni['s_hyb']] if gni.get('s_hyb') else ''
-            p_sh = ';%s;' % self.__hyb_types[gni['p_hyb']] if gni.get('p_hyb') else ''
-        else:
-            s_sh = p_sh = ''
+        return self.__get_sp_smi(gni, 's_stereo', 's_hyb', 's_neighbors', 's_charge'), \
+               self.__get_sp_smi(gni, 'p_stereo', 'p_hyb', 'p_neighbors', 'p_charge')
 
-        if self.__isotope and gni.get('isotope'):
-            s_ish = '[%s%%s%s%%s]' % (gni['isotope'], s_sh)
-            p_ish = '[%s%%s%s%%s]' % (gni['isotope'], p_sh)
-        else:
-            s_ish = '[%%s%s%%s]' % s_sh if s_sh else ''
-            p_ish = '[%%s%s%%s]' % p_sh if p_sh else ''
+    def __get_sp_smi(self, gni, stereo, hyb, neighbors, charge):
+        smi = []
+        if self.__stereo and gni.get(stereo):
+            smi.append(self.__stereo_types[gni[stereo]])
+        if self.__hyb and gni.get(hyb):
+            smi.append(self.__hyb_types[gni[hyb]])
+        if self.__neighbors and gni.get(neighbors):
+            smi.append(str(gni[neighbors]))
+        if smi:
+            smi.append(';')
+            smi.insert(0, ';')
 
         if self.__element:
             ge = gni.get('element') or '*'
-            gcs = gni.get('s_charge') and '%+d' % gni['s_charge'] or ''
-            gcp = gni.get('p_charge') and '%+d' % gni['p_charge'] or ''
-            smis = [s_ish and s_ish % (ge, gcs) or gcs and '[%s%s]' % (ge, gcs) or ge != '*' and ge or '[*]']
-            smip = [p_ish and p_ish % (ge, gcp) or gcp and '[%s%s]' % (ge, gcp) or ge != '*' and ge or '[*]']
-        else:
-            smis = [s_ish % ('*', '') if s_ish else '[*]']
-            smip = [p_ish % ('*', '') if p_ish else '[*]']
+            gcs = gni.get(charge)
+            if gcs:
+                if abs(gcs) == 1:
+                    gcs = '+' if gcs > 0 else '-'
+                else:
+                    gcs = '%+d' % gcs
+                smi.append(gcs)
 
-        return smis, smip
+            smi.insert(0, ge)
+        else:
+            smi.insert(0, '*')
+
+        if self.__isotope and gni.get('isotope'):
+            smi.insert(0, str(gni['isotope']))
+
+        if len(smi) != 1 or smi[0] == '*':
+            smi.insert(0, '[')
+            smi.append(']')
+
+        return ''.join(smi)
 
     def __do_cgr_smarts(self, trace, inter, prev):
         g = self.__g
@@ -144,7 +124,8 @@ class CGRstring:
         to_smiles = self.__to_smiles
         stereo = self.__stereo
 
-        smis, smip = self.__get_smi(self.__g.nodes[inter])
+        s_atom, p_atom = self.__get_smi(self.__g.nodes[inter])
+        smis, smip = [s_atom], [p_atom]
         concat = []
         stoplist = []
         iterlist = set(g.neighbors(inter)).difference([prev])
@@ -187,6 +168,7 @@ class CGRstring:
 
     __to_smiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
     __hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: ''}
+    __stereo_types = {1: '@', -1: '@@'}
 
 
 def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=True, is_cgr=False):

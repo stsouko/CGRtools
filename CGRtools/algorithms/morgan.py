@@ -26,7 +26,7 @@ from ..exceptions import InvalidConfig
 from ..periodictable import elements
 
 
-def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
+def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False, labels=('s', 'p')):
     """
     Morgan like algorithm for graph nodes ordering
 
@@ -34,6 +34,8 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
     :param isotope: differentiate isotopes
     :param element: differentiate elements and charges
     :param stereo: differentiate stereo atoms and bonds
+    :param hybridization: differentiate hybridization of atoms
+    :param neighbors: differentiate neighbors of atoms. useful for queries structures
     :param labels: for MoleculeContainer usable only default value, None, ('s',) or 's'.
                    for CGRContainer labels allow to control ordering.
 
@@ -56,6 +58,10 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
         p_stereo = 'p_stereo'
         s_bond = 's_bond'
         p_bond = 'p_bond'
+        s_hyb = 's_hyb'
+        p_hyb = 'p_hyb'
+        s_neighbors = 's_neighbors'
+        p_neighbors = 'p_neighbors'
     elif len(labels) == 2:
         s, p = labels
         if not (s == 's' and p == 'p' or s == 'p' and p == 's'):
@@ -68,6 +74,10 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
         p_stereo = '%s_stereo' % p
         s_bond = '%s_bond' % s
         p_bond = '%s_bond' % p
+        s_hyb = '%s_hyb' % s
+        p_hyb = '%s_hyb' % p
+        s_neighbors = '%s_neighbors' % s
+        p_neighbors = '%s_neighbors' % p
     else:
         s = labels[0]
         if s not in 'sp':
@@ -76,13 +86,17 @@ def get_morgan(g, isotope=False, element=True, stereo=False, labels=('s', 'p')):
         s_radical = '%s_radical' % s
         s_stereo = '%s_stereo' % s
         s_bond = '%s_bond' % s
-        p_charge = p_radical = p_stereo = p_bond = None
+        s_hyb = '%s_hyb' % s
+        s_neighbors = '%s_neighbors' % s
+        p_charge = p_radical = p_stereo = p_bond = p_hyb = p_neighbors = None
 
     params = {n: (elements.index(attr['element']) if element else 1,
                   attr.get('isotope', 1) if isotope else 1,
                   10 * attr[s_charge] + attr.get(p_charge, 0) if element else 1,
                   10 * (attr.get(s_radical) or 0) + (attr.get(p_radical) or 0) if element else 1,
                   10 * (attr.get(s_stereo) or 0) + (attr.get(p_stereo) or 0) if stereo else 1,
+                  10 * (attr.get(s_hyb) or 0) + (attr.get(p_hyb) or 0) if hybridization else 1,
+                  10 * (attr.get(s_neighbors) or 0) + (attr.get(p_neighbors) or 0) if neighbors else 1,
                   reduce(mul, (primes[10 * (eattr.get(s_bond) or 0) + (eattr.get(p_bond) or 0)]
                                for eattr in g[n].values() if p_bond or eattr.get(s_bond)), 1),
                   reduce(mul, (primes[10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)]
