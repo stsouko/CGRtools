@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,4 +20,4 @@
 #
 from .SDFrw import SDFwrite, SDFread
 from .RDFrw import RDFwrite, RDFread
-from .MRVrw import MRVwrite
+from .MRVrw import MRVwrite, MRVread

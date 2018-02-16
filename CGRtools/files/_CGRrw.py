@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -33,7 +33,7 @@ mendeleyset = set(elements)
 
 class WithMixin:
     def __init__(self, file, mode='r'):
-        if mode not in ('r', 'w'):
+        if mode not in ('r', 'w', 'rb'):
             raise InvalidConfig('invalid mode')
         if not file:
             raise InvalidConfig('invalid file')
@@ -62,52 +62,10 @@ class WithMixin:
 
 
 class CGRread:
-    def __init__(self, remap, ignore=False, is_template=False):
+    def __init__(self, remap=True, ignore=False, is_template=False):
         self.__remap = remap
         self.__ignore = ignore
         self.__is_template = is_template
-        self.__prop = {}
-
-    def _collect(self, line):
-        if line.startswith('M  ALS'):
-            self.__prop[line[3:10]] = dict(atoms=(int(line[7:10]),),
-                                           type='atomlist' if line[14] == 'F' else 'atomnotlist',
-                                           value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
-
-        elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
-            _type = self.__ctf_data[line[3]]
-            for i in range(int(line[6:9])):
-                atom = int(line[10 + i * 8:13 + i * 8])
-                self.__prop['%s_%d' % (_type, atom)] = dict(atoms=(atom,), type=_type,
-                                                            value=line[14 + i * 8:17 + i * 8].strip())
-
-        elif line.startswith('M  STY'):
-            for i in range(int(line[8])):
-                if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
-                    self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
-        elif line.startswith('M  SAL') and int(line[7:10]) in self.__prop:
-            self.__prop[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i])
-                                                          for i in range(int(line[10:13])))
-        elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
-            key = line.split()[-1].lower()
-            if key not in self.__cgrkeys:
-                self.__prop.pop(int(line[7:10]))
-            else:
-                self.__prop[int(line[7:10])]['type'] = key
-        elif line.startswith('M  SED') and int(line[7:10]) in self.__prop:
-            self.__prop[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
-
-    def _flush_collected(self):
-        self.__prop.clear()
-
-    def _get_collected(self):
-        prop = []
-        for i in self.__prop.values():
-            if len(i['atoms']) == self.__cgrkeys[i['type']]:
-                prop.append(i)
-
-        self.__prop.clear()
-        return prop
 
     def _get_reaction(self, reaction):
         spmaps = None
@@ -379,10 +337,11 @@ class CGRread:
             if 'element' not in gna and l['element'] not in ('A', '*'):
                 gna['element'] = l['element']
 
-            if l['isotope'] and 'isotope' not in gna:
-                gna['isotope'] = isotopes[l['element']] + l['isotope']
-            elif k in isotope_dat and 'isotope' not in gna:
-                gna['isotope'] = isotope_dat[k]
+            if 'isotope' not in gna:
+                if k in isotope_dat:
+                    gna['isotope'] = isotope_dat[k]
+                elif l['isotope']:
+                    gna['isotope'] = isotopes[l['element']] + l['isotope']
 
             if k in radical_dat and 's_radical' not in gna:
                 val = radical_dat[k]
@@ -452,11 +411,8 @@ class CGRread:
         return g
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
-    __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1, charge=1, radical=1,
-                     atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1, dynstereo=2)
-    __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
-    __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None, 1: 1, 6: -1}
+    __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None, 1: 1, 6: -1, -1: -1}
 
 
 class CGRwrite:
@@ -606,8 +562,7 @@ class CGRwrite:
 
         return _val and {'value': _val, 'type': _type}
 
-    @classmethod
-    def __dyn_atom(cls, s, p, mark):
+    def __dyn_atom(self, s, p, mark):
         if isinstance(s, list):
             value = s[0]
             if s == p:
@@ -626,7 +581,7 @@ class CGRwrite:
         else:
             meta = None
             value = s
-        res = cls._charge_map.get(value, 0) if mark == 'c' else cls._radical_map.get(value, 0)
+        res = self._charge_map.get(value, 0) if mark == 'c' else self._radical_map.get(value, 0)
         return res, meta
 
     @staticmethod
@@ -650,6 +605,20 @@ class CGRwrite:
     def _xyz_convert(x, y, z) -> Tuple[int, int, int]:
         pass
 
+    @property
+    @abstractmethod
+    def _stereo_map(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _charge_map(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _radical_map(self):
+        pass
+
     _half_table = len(mendeleyset) // 2
-    _stereo_map = _charge_map = _radical_map = None
     __extra_marks = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in ('hyb', 'neighbors')]

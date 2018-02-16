@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,17 +18,43 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from itertools import chain, count
-from .CGRrw import CGRread, CGRwrite, WithMixin, mendeleyset
+from collections import defaultdict
+from itertools import chain, count, repeat
+from lxml.etree import iterparse, QName
+from sys import stderr
+from ._CGRrw import CGRread, CGRwrite, WithMixin, mendeleyset
 from ..containers import MoleculeContainer
 
 
+def xml_dict(parent_element):
+    out = {}
+    if parent_element.items():
+        out.update({'@%s' % x: y for x, y in parent_element.items()})
+    if parent_element.text:
+        text = parent_element.text.strip()
+        if text:
+            out['$'] = text
+
+    if parent_element:
+        elements_grouped = defaultdict(list)
+        for element in parent_element:
+            elements_grouped[QName(element).localname].append(element)
+
+        for element_tag, element_group in elements_grouped.items():
+            if len(element_group) == 1:
+                out[element_tag] = xml_dict(element_group[0])
+            else:
+                out[element_tag] = [xml_dict(x) for x in element_group]
+
+    return out
+
+
 class MRVread(CGRread, WithMixin):
-    def __init__(self, file, remap=True, ignore=False):
-        WithMixin.__init__(self, file)
-        CGRread.__init__(self, remap, ignore)
+    def __init__(self, file, remap=True, ignore=False, is_template=False):
+        WithMixin.__init__(self, file, 'rb')
+        CGRread.__init__(self, remap, ignore, is_template=is_template)
         self.__data = self.__reader()
-        raise Exception('NOT IMPLEMENTED')
+        self.__ignore = ignore
 
     def read(self):
         return list(self.__data)
@@ -40,7 +66,67 @@ class MRVread(CGRread, WithMixin):
         return next(self.__data)
 
     def __reader(self):
-        pass
+        for n, (_, element) in enumerate(iterparse(self._file, tag='{*}MChemicalStruct')):
+            parsed = xml_dict(element)
+            element.clear()
+            if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
+                parsed['molecule']
+            elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
+                isreaction = True
+            else:
+                print('MChemicalStruct %d invalid' % n, file=stderr)
+                continue
+
+            yield
+
+    @classmethod
+    def __parse_molecule(cls, data):
+        molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={}, colors={})
+        atom_map = {}
+        if 'atom' in data['atomArray']:
+            for n, atom in enumerate(data['atomArray']['atom'], start=1):
+                atom_map[atom['@id']] = n
+                molecule['atoms'].append(dict(element=atom['@elementType'], isotope=0,
+                                              charge=int(atom.get('@formalCharge', 0)),
+                                              map=int(atom.get('@mrvMap', 0)), mark=atom.get('@ISIDAmark', '0'),
+                                              x=float(atom['@x3'] if '@x3' in atom else atom['@x2']),
+                                              y=float(atom['@y3'] if '@y3' in atom else atom['@y2']),
+                                              z=float(atom['@z3'] if '@z3' in atom else atom.get('@z2', 0))))
+                if '@isotope' in atom:
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=atom['@isotope']))
+                if '@mrvQueryProps' in atom:
+                    _type = atom['@mrvQueryProps'][1]
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else
+                                                                     'atomnotlist',
+                                                    value=atom['@mrvQueryProps'][2:].split(_type)))
+        else:
+            atom = data['atomArray']
+            for n, (_id, el, iz, ch, mp, mk, x, y, z) in \
+                    enumerate(zip(atom['@id'].split(), atom['@elementType'].split(),
+                                  atom['@isotope'].split() if '@isotope' in atom else repeat('0'),
+                                  atom['@formalCharge'].split() if '@formalCharge' in atom else repeat(0),
+                                  atom['@mrvMap'].split() if '@mrvMap' in atom else repeat(0),
+                                  atom['@ISIDAmark'].split() if '@ISIDAmark' in atom else repeat('0'),
+                                  (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
+                                  (atom['@y3'] if '@y3' in atom else atom['@y2']).split(),
+                                  (atom['@z3'].split() if '@z3' in atom else
+                                   atom['@z2'].split() if '@z2' in atom else repeat(0))), start=1):
+                atom_map[_id] = n
+                molecule['atoms'].append(dict(element=el, isotope=0, charge=int(ch), map=int(mp), mark=mk,
+                                              x=float(x), y=float(y), z=float(z)))
+                if iz != '0':
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=iz))
+        if 'bond' in data['bondArray']:
+            for bond in data['bondArray']['bond']:
+                order = cls.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
+                a1, a2 = bond['@atomRefs2'].split()
+                stereo = cls.__stereo_map[bond['bondStereo']['$']] if 'bondStereo' in bond else 0
+                molecule['bonds'].append((atom_map[a1], atom_map[a2], order, stereo))
+
+        return molecule
+
+    __bond_map = {'Any': 8, 'any': 8, 'A': 4, '1': 1, '2': 2, '3': 3}
+    __stereo_map = {'H': -1, 'W': 1}
 
 
 class MRVwrite(CGRwrite, WithMixin):
@@ -110,7 +196,8 @@ class MRVwrite(CGRwrite, WithMixin):
                 isotope[ia] = ' isotope="%d"' % iv
             elif it == 'atomlist':
                 atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in mendeleyset.difference(iv))
-                                                                    if len(iv) > cls._half_table else iv)
+                                                                   if len(iv) > cls._half_table else
+                                                                   (',%s' % x for x in iv))
             elif it == 'radical':
                 radical[ia] = ' radical="%d"' % iv
 
@@ -141,3 +228,6 @@ class MRVwrite(CGRwrite, WithMixin):
     _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3'}
     __finalized = False
+
+
+__all__ = [MRVread.__name__, MRVwrite.__name__]

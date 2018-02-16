@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,13 +18,62 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from abc import abstractmethod
 from itertools import count, chain
-from typing import Tuple
-from .CGRrw import mendeleyset
+from ._CGRrw import CGRread, CGRwrite, mendeleyset
 
 
-class MOLformat:
+class MOLread(CGRread):
+    def __init__(self, *args, **kwargs):
+        self.__prop = {}
+        super().__init__(*args, **kwargs)
+
+    def _collect(self, line):
+        if line.startswith('M  ALS'):
+            self.__prop[line[3:10]] = dict(atoms=(int(line[7:10]),),
+                                           type='atomlist' if line[14] == 'F' else 'atomnotlist',
+                                           value=[line[16 + x*4: 20 + x*4].strip() for x in range(int(line[10:13]))])
+
+        elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
+            _type = self.__ctf_data[line[3]]
+            for i in range(int(line[6:9])):
+                atom = int(line[10 + i * 8:13 + i * 8])
+                self.__prop['%s_%d' % (_type, atom)] = dict(atoms=(atom,), type=_type,
+                                                            value=line[14 + i * 8:17 + i * 8].strip())
+
+        elif line.startswith('M  STY'):
+            for i in range(int(line[8])):
+                if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
+                    self.__prop[int(line[10 + 8 * i:13 + 8 * i])] = {}
+        elif line.startswith('M  SAL') and int(line[7:10]) in self.__prop:
+            self.__prop[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i])
+                                                          for i in range(int(line[10:13])))
+        elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
+            key = line.split()[-1].lower()
+            if key not in self.__cgrkeys:
+                self.__prop.pop(int(line[7:10]))
+            else:
+                self.__prop[int(line[7:10])]['type'] = key
+        elif line.startswith('M  SED') and int(line[7:10]) in self.__prop:
+            self.__prop[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
+
+    def _flush_collected(self):
+        self.__prop.clear()
+
+    def _get_collected(self):
+        prop = []
+        for i in self.__prop.values():
+            if len(i['atoms']) == self.__cgrkeys[i['type']]:
+                prop.append(i)
+
+        self.__prop.clear()
+        return prop
+
+    __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
+    __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1, charge=1, radical=1,
+                     atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1, dynstereo=2)
+
+
+class MOLwrite(CGRwrite):
     @classmethod
     def _format_mol(cls, atoms, bonds, extended, cgr_dat):
         mol_prop = []
@@ -61,15 +110,9 @@ class MOLformat:
                              ("%3d%3d%3s%3d  0  0  0\n" % i for i in bonds), mol_prop))
 
     @staticmethod
-    @abstractmethod
-    def _get_position(cord) -> Tuple[int, int]:
-        pass
-
-    @staticmethod
     def _xyz_convert(x, y, z):
         return x, y, z
 
-    _half_table = None
     _stereo_map = {-1: 6, 0: 0, 1: 1, None: 0}
     _charge_map = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
     _radical_map = {2: 2, 1: 1, 3: 3}

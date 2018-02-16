@@ -202,7 +202,7 @@ class MoleculeContainer(BaseContainer, Valence):
         g = self.copy() if copy else self
         b, h, n = 's_bond', 's_hyb', 's_neighbors'
         for i, attr in g.nodes(data=True):
-            label = dict(s_hyb=1, p_hyb=1, s_neighbors=0, p_neighbors=0)
+            label = dict(s_hyb=1, s_neighbors=0)
             # hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for node, bond in g[i].items():
                 b_type = bond.get(b)

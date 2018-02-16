@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,16 +22,16 @@ from itertools import chain
 from sys import stderr
 from time import strftime
 from traceback import format_exc
-from .CGRrw import CGRread, CGRwrite, fromMDL, WithMixin
-from .MDLmol import MOLformat
+from ._CGRrw import fromMDL, WithMixin
+from ._MDLrw import MOLwrite, MOLread
 from ..containers import MoleculeContainer
 from ..exceptions import EmptyMolecule, InvalidData
 
 
-class RDFread(CGRread, WithMixin):
-    def __init__(self, file, remap=True, ignore=False, is_template=False):
+class RDFread(MOLread, WithMixin):
+    def __init__(self, file, *args, ignore=False, **kwargs):
         WithMixin.__init__(self, file)
-        CGRread.__init__(self, remap, ignore, is_template=is_template)
+        MOLread.__init__(self, *args, **kwargs)
         self.__data = self.__reader()
         self.__ignore = ignore
 
@@ -174,10 +174,10 @@ class RDFread(CGRread, WithMixin):
         return super()._get_molecule(molecule)
 
 
-class RDFwrite(MOLformat, CGRwrite, WithMixin):
-    def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+class RDFwrite(MOLwrite, WithMixin):
+    def __init__(self, file, *args, **kwargs):
         WithMixin.__init__(self, file, 'w')
-        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
+        MOLwrite.__init__(self, *args, **kwargs)
         self.write = self.__init_write
 
     def __init_write(self, data):
@@ -206,6 +206,5 @@ class RDFwrite(MOLformat, CGRwrite, WithMixin):
         for p in chain(colors.items(), data.meta.items()):
             self._file.write('$DTYPE %s\n$DATUM %s\n' % p)
 
-    @staticmethod
-    def _get_position(cord):
-        return CGRwrite._get_position(cord)
+
+__all__ = [RDFread.__name__, RDFwrite.__name__]
