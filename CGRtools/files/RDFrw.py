@@ -55,7 +55,7 @@ class RDFread(MOLread, WithMixin):
                 if reaction:
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
-                    except:
+                    except Exception:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
                 isreaction = True
                 ir = n + 5
@@ -65,7 +65,7 @@ class RDFread(MOLread, WithMixin):
                 if reaction:
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
-                    except:
+                    except Exception:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
                 reaction = dict(reagents=[], products=[], reactants=[], meta={}, colors={})
                 reagents, products, spr, molcount = 1, 1, 1, 1
@@ -160,12 +160,12 @@ class RDFread(MOLread, WithMixin):
                     data = line.lstrip("$DATUM").strip()
                     if data:
                         reaction[target][mkey].append(data)
-        else:
-            if reaction:
-                try:
-                    yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
-                except:
-                    print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
+
+        if reaction:
+            try:
+                yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
+            except Exception:
+                print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
     def _get_molecule(self, reaction):
         molecule = reaction['reagents'][0]

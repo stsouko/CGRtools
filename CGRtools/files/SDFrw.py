@@ -57,7 +57,7 @@ class SDFread(MOLread, WithMixin):
                 if molecule:
                     try:
                         yield self._get_molecule(molecule)
-                    except:
+                    except Exception:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
                 mkey = None
@@ -125,12 +125,12 @@ class SDFread(MOLread, WithMixin):
                     data = line.strip()
                     if data:
                         molecule[target][mkey].append(data)
-        else:
-            if molecule:  # True for MOL file only.
-                try:
-                    yield self._get_molecule(molecule)
-                except:
-                    print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
+
+        if molecule:  # True for MOL file only.
+            try:
+                yield self._get_molecule(molecule)
+            except Exception:
+                print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
 
 class SDFwrite(MOLwrite, WithMixin):

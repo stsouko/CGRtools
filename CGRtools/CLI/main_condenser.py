@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -41,7 +41,7 @@ def condenser_core(**kwargs):
         try:
             a = worker.condense(data)
             outputdata.write(a)
-        except:
+        except Exception:
             err += 1
             print('reaction %d consist errors: %s' % (num, format_exc()), file=stderr)
     print('%d from %d reactions condensed' % (num - err, num), file=stderr)

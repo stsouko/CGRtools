@@ -22,6 +22,7 @@ from collections import defaultdict
 from itertools import chain, count, repeat
 from lxml.etree import iterparse, QName
 from sys import stderr
+from traceback import format_exc
 from ._CGRrw import CGRread, CGRwrite, WithMixin, mendeleyset
 from ..containers import MoleculeContainer
 
@@ -35,7 +36,7 @@ def xml_dict(parent_element):
         if text:
             out['$'] = text
 
-    if parent_element:
+    if len(parent_element):
         elements_grouped = defaultdict(list)
         for element in parent_element:
             elements_grouped[QName(element).localname].append(element)
@@ -66,22 +67,80 @@ class MRVread(CGRread, WithMixin):
         return next(self.__data)
 
     def __reader(self):
-        for n, (_, element) in enumerate(iterparse(self._file, tag='{*}MChemicalStruct')):
+        for n, (_, element) in enumerate(iterparse(self._file, tag='{*}MChemicalStruct'), start=1):
             parsed = xml_dict(element)
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
-                parsed['molecule']
+                try:
+                    molecule = self.__parse_molecule(parsed['molecule'])
+                except KeyError:
+                    print('Molecule %d\nData invalid: %s' % (n, format_exc()), file=stderr)
+                else:
+                    try:
+                        yield self._get_molecule(molecule)
+                    except Exception:
+                        print('Molecule %d\nCGR Data invalid: %s' % (n, format_exc()), file=stderr)
+                    finally:
+                        del molecule
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
-                isreaction = True
+                try:
+                    reaction = self.__parse_reaction(parsed['reaction'])
+                except KeyError:
+                    print('Reaction %d\nData invalid: %s' % (n, format_exc()), file=stderr)
+                else:
+                    try:
+                        yield self._get_reaction(reaction)
+                    except Exception:
+                        print('Reaction %d\nCGR Data invalid: %s' % (n, format_exc()), file=stderr)
+                    finally:
+                        del reaction
             else:
                 print('MChemicalStruct %d invalid' % n, file=stderr)
-                continue
 
-            yield
+    @classmethod
+    def __parse_reaction(cls, data):
+        reaction = dict(reagents=[], products=[], reactants=[], meta={}, colors={})
+        if 'propertyList' in data and 'property' in data['propertyList']:
+            meta, colors = cls.__parse_property(data['propertyList'], True)
+            reaction['meta'].update(meta)
+            reaction['colors'].update(colors)
+
+        for tag, group in (('reactantList', 'reagents'), ('productList', 'products'), ('agentList', 'reactants')):
+            if tag in data and 'molecule' in data[tag]:
+                molecule = data[tag]['molecule']
+                if isinstance(molecule, dict):
+                    reaction[group].append(cls.__parse_molecule(molecule))
+                else:
+                    for m in molecule:
+                        reaction[group].append(cls.__parse_molecule(m))
+
+        return reaction
+
+    @classmethod
+    def __parse_property(cls, data, is_reaction=False):
+        meta = defaultdict(list)
+        colors = defaultdict(list)
+        for x in data['property']:
+            key = x['@title']
+            val = x['scalar']['$']
+            col_key = key.split('.')[0] if is_reaction else key
+            if col_key in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
+                           'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
+                colors[key].append(val)
+            elif key:
+                meta[key].append(val)
+
+        return meta, colors
 
     @classmethod
     def __parse_molecule(cls, data):
         molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={}, colors={})
+
+        if 'propertyList' in data and 'property' in data['propertyList']:
+            meta, colors = cls.__parse_property(data['propertyList'])
+            molecule['meta'].update(meta)
+            molecule['colors'].update(colors)
+
         atom_map = {}
         if 'atom' in data['atomArray']:
             for n, atom in enumerate(data['atomArray']['atom'], start=1):
@@ -94,19 +153,19 @@ class MRVread(CGRread, WithMixin):
                                               z=float(atom['@z3'] if '@z3' in atom else atom.get('@z2', 0))))
                 if '@isotope' in atom:
                     molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=atom['@isotope']))
-                if '@mrvQueryProps' in atom:
+                if '@mrvQueryProps' in atom and atom['@mrvQueryProps'][0] == 'L':
                     _type = atom['@mrvQueryProps'][1]
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else
-                                                                     'atomnotlist',
-                                                    value=atom['@mrvQueryProps'][2:].split(_type)))
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
+                                                    value=atom['@mrvQueryProps'][2:-1].split(_type)))
         else:
             atom = data['atomArray']
-            for n, (_id, el, iz, ch, mp, mk, x, y, z) in \
-                    enumerate(zip(atom['@id'].split(), atom['@elementType'].split(),
+            for n, (_id, el, iz, ch, mp, mk, al, x, y, z) in \
+                    enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split(),
                                   atom['@isotope'].split() if '@isotope' in atom else repeat('0'),
                                   atom['@formalCharge'].split() if '@formalCharge' in atom else repeat(0),
                                   atom['@mrvMap'].split() if '@mrvMap' in atom else repeat(0),
                                   atom['@ISIDAmark'].split() if '@ISIDAmark' in atom else repeat('0'),
+                                  atom['@mrvQueryProps'].split() if '@mrvQueryProps' in atom else repeat('0'),
                                   (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
                                   (atom['@y3'] if '@y3' in atom else atom['@y2']).split(),
                                   (atom['@z3'].split() if '@z3' in atom else
@@ -116,6 +175,10 @@ class MRVread(CGRread, WithMixin):
                                               x=float(x), y=float(y), z=float(z)))
                 if iz != '0':
                     molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=iz))
+                if al != '0' and al[0] == 'L':
+                    _type = al[1]
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
+                                                    value=al[2:-1].split(_type)))
         if 'bond' in data['bondArray']:
             for bond in data['bondArray']['bond']:
                 order = cls.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
