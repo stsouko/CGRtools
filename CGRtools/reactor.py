@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -227,14 +227,10 @@ class CGRreactor:
         newmap.update({x: y for x, y in zip(set(g).difference(newmap), set(range(1, 1000)).difference(h))})
         return g.remap(newmap, copy=True), newmap
 
-    @classmethod
-    def get_templates(cls, raw_templates):
-        warn('get_templates name deprecated. use prepare_templates instead', DeprecationWarning)
-        return cls.prepare_templates(raw_templates)
-
     @staticmethod
     def prepare_templates(raw_templates):
-        s_marks = {'s_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors', 's_stereo', 'p_stereo'}
+        a_marks = {'element', 's_charge', 's_hyb', 's_neighbors', 'p_charge', 'p_hyb', 'p_neighbors',
+                   's_stereo', 'p_stereo', 's_radical', 'p_radical'}
         b_marks = {'s_bond', 'p_bond', 's_stereo', 'p_stereo'}
         x_marks = ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
         templates = []
@@ -248,25 +244,25 @@ class CGRreactor:
             if not (isinstance(reagents, CGRContainer) and isinstance(products, CGRContainer)):
                 raise InvalidTemplate('Templates should be CGRContainers')
 
-            uncommon = set(products).difference(reagents)
-            for n in uncommon:  # if unique atoms in patch has variable properties exception is raised
+            new_atoms = set(products).difference(reagents)
+            for n in new_atoms:  # if unique atoms in patch has variable properties exception is raised
                 pnn = products.nodes[n]
-                for j in s_marks.intersection(pnn):
+                for j in a_marks.intersection(pnn):
                     if isinstance(pnn[j], list):
-                        raise InvalidTemplate("uncommon atoms can't be variable")
+                        raise InvalidTemplate("new atoms can't be variable")
 
             common = set(products).intersection(reagents)
             for n in common:
                 pnn = products.nodes[n]
                 rnn = reagents.nodes[n]
-                for j in s_marks.intersection(pnn):
+                for j in a_marks.intersection(pnn):
                     if isinstance(pnn[j], list):
                         pnn[j] = dict(zip(rnn[j], pnn[j]))
                 for j in x_marks:
                     pnn.pop(j)
 
             for m, n, a in products.edges(data=True):
-                if m in common and n in common:
+                if reagents.has_edge(m, n):
                     rmn = reagents[m][n]
                     for j in b_marks.intersection(a):
                         if isinstance(a[j], list):
@@ -274,7 +270,7 @@ class CGRreactor:
                 else:
                     for j in b_marks.intersection(a):
                         if isinstance(a[j], list):
-                            raise InvalidTemplate("uncommon bonds can't be variable")
+                            raise InvalidTemplate("new bonds can't be variable")
 
             reagents.remap({x: x + 1000 for x in reagents})
             products.remap({x: x + 1000 for x in products})
@@ -310,6 +306,11 @@ class CGRreactor:
         out = compose(s, p)
         out.meta.update(structure.meta)
         return out
+
+    @classmethod
+    def get_templates(cls, raw_templates):
+        warn('get_templates name deprecated. use prepare_templates instead', DeprecationWarning)
+        return cls.prepare_templates(raw_templates)
 
 
 def patcher(*args, **kwargs):
