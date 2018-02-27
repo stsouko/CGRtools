@@ -49,7 +49,7 @@ class MOLread(CGRread):
                                                           for i in range(int(line[10:13])))
         elif line.startswith('M  SDT') and int(line[7:10]) in self.__prop:
             key = line.split()[-1].lower()
-            if key not in self.__cgrkeys:
+            if key not in self._cgr_keys:
                 self.__prop.pop(int(line[7:10]))
             else:
                 self.__prop[int(line[7:10])]['type'] = key
@@ -62,15 +62,13 @@ class MOLread(CGRread):
     def _get_collected(self):
         prop = []
         for i in self.__prop.values():
-            if len(i['atoms']) == self.__cgrkeys[i['type']]:
+            if len(i['atoms']) == self._cgr_keys[i['type']]:
                 prop.append(i)
 
         self.__prop.clear()
         return prop
 
     __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
-    __cgrkeys = dict(extrabond=2, dynbond=2, dynatom=1, atomnotlist=1, atomlist=1, isotope=1, charge=1, radical=1,
-                     atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1, dynstereo=2)
 
 
 class MOLwrite(CGRwrite):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -35,7 +35,7 @@ setup(
     description='CGR tools',
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
     package_data={'CGRtools.utils': ['aromatize.rdf', 'dearomatize.rdf']},
-    install_requires=['networkx>=2.0,<2.1'],
+    install_requires=['networkx>=2.0,<2.1', 'lxml>=4.1.1,<4.2'],
     extras_require={'autocomplete': ['argcomplete'], 'sphinx': ['sphinx>=1.6']},
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     keywords="tools cgr cli",

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -174,15 +174,16 @@ class ReactionContainer:
                               products=[x.copy() for x in self.__products],
                               reactants=[x.copy() for x in self.__reactants])
 
-    def get_signature_hash(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature_hash(self, *args, **kwargs):
         """
         get 40bytes hash of signature string. see get_signature
 
         :return: bytes
         """
-        return hash_cgr_string(self.get_signature(isotope, stereo, hyb, element, flush_cache))
+        return hash_cgr_string(self.get_signature(*args, **kwargs))
 
-    def get_signature(self, isotope=False, stereo=False, hyb=False, element=True, flush_cache=False):
+    def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
+                      flush_cache=False, hyb=False):
         """
         return string representation of reaction with molecules
         in order same as in lists of reagents, reactants, products.
@@ -190,29 +191,40 @@ class ReactionContainer:
 
         :param isotope: set isotope marks
         :param stereo: set stereo marks
-        :param hyb: set hybridization mark of atom
-        :param element: set elements marks
+        :param hybridization: set hybridization mark of atom
+        :param neighbors: set neighbors count mark of atom
+        :param element: set elements marks and charges of atoms
         :param flush_cache: recalculate signature if True
+        :param hyb: deprecated. see hybridization arg
         """
+        if hyb:
+            warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
+            hybridization = hyb
+
         if flush_cache or self.__signatures is None or any(x.get_state() for x in
                                                            (self.__reagents, self.__reactants, self.__products)):
             self.__signatures = {}
 
-        k = (isotope, element, stereo, hyb)
-        if k not in self.__signatures:
-            self.__signatures[k] = '%s>%s>%s' % tuple('.'.join('{%s}' % x if isinstance(x, CGRContainer) else str(x)
-                                                               for x in
-                                                               (m.get_signature(isotope=isotope, stereo=stereo, hyb=hyb,
-                                                                                element=element) for m in ml))
-                                                      for ml in (self.__reagents, self.__reactants, self.__products))
-        return self.__signatures[k]
+        k = (isotope, element, stereo, hybridization, neighbors)
+        out = self.__signatures.get(k)
+        if not out:
+            sig = []
+            for ml in (self.__reagents, self.__reactants, self.__products):
+                ms = []
+                for m in ml:
+                    mol = m.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
+                                          neighbors=neighbors, element=element)
+                    ms.append('{%s}' % mol if isinstance(mol, CGRContainer) else str(mol))
+                sig.append('.'.join(ms))
+            self.__signatures[k] = out = '>'.join(sig)
+        return out
 
     def flush_cache(self):
         """clear cached signatures and representation strings. use if structures objects in reaction object changed"""
         self.__pickle = self.__signatures = None
 
     def __str__(self):
-        return self.get_signature(True, True)
+        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
 
     def __repr__(self):
         if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
@@ -228,4 +240,99 @@ class ReactionContainer:
         return self.get_signature(*args, **kwargs)
 
 
-__all__ = [ReactionContainer.__name__]
+class MergedReaction:
+    """represent reactions as single disjointed reagents and single disjointed products graphs"""
+    __slots__ = ('__reagents', '__products', '__meta', '__signatures', '__pickle')
+
+    def __init__(self, reagents=None, products=None, meta=None):
+        self.__reagents = reagents
+        self.__products = products
+        self.__meta = meta or {}
+        self.__signatures = {}
+        self.__pickle = None
+
+    @property
+    def reagents(self):
+        """disjointed reagents graph"""
+        return self.__reagents
+
+    @property
+    def products(self):
+        """disjointed products graph"""
+        return self.__products
+
+    @property
+    def meta(self):
+        """dictionary of metadata. like DTYPE-DATUM in RDF"""
+        return self.__meta
+
+    def copy(self):
+        """
+        get copy of object
+
+        :return: MergedReaction
+        """
+        return self.__class__(self.reagents.copy(), self.products.copy(), self.meta.copy())
+
+    def get_signature_hash(self, *args, **kwargs):
+        """
+        get 40bytes hash of signature string. see get_signature
+
+        :return: bytes
+        """
+        return hash_cgr_string(self.get_signature(*args, **kwargs))
+
+    def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
+                      flush_cache=False, hyb=False):
+        """
+        return string representation of reaction with unique atoms and molecules order
+        CAUTION: if reaction contains CGRs. signature will be unobvious
+
+        :param isotope: set isotope marks to string
+        :param stereo: set stereo marks
+        :param hybridization: set hybridization mark of atom
+        :param neighbors: set neighbors count mark of atom
+        :param element: set elements marks and charges of atoms
+        :param flush_cache: recalculate signature if True
+        :param hyb: deprecated. see hybridization arg
+        """
+        if hyb:
+            warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
+            hybridization = hyb
+
+        if flush_cache or self.__signatures is None:
+            self.__signatures = {}
+
+        k = (isotope, element, stereo, hybridization, neighbors)
+        out = self.__signatures.get(k)
+        if not out:
+            r = self.reagents.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
+                                            neighbors=neighbors, element=element)
+            p = self.products.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
+                                            neighbors=neighbors, element=element)
+            self.__signatures[k] = out = '%s>>%s' % ('{%s}' % r if isinstance(self.reagents, CGRContainer) else r,
+                                                     '{%s}' % p if isinstance(self.products, CGRContainer) else p)
+        return out
+
+    def flush_cache(self):
+        """clear cached signatures and representation strings. use if structure changed"""
+        self.__pickle = self.__signatures = None
+
+    def __str__(self):
+        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+
+    def __repr__(self):
+        if self.__pickle is None:
+            self.__pickle = '%s(%s, %s)' % (self.__class__.__name__, repr(self.reagents), repr(self.products))
+        return self.__pickle
+
+    def get_fear_hash(self, *args, **kwargs):
+        warn('use get_signature_hash instead', DeprecationWarning)
+        return self.get_signature_hash(*args, **kwargs)
+
+    def get_fear(self, *args, **kwargs):
+        warn('use get_signature instead', DeprecationWarning)
+        return self.get_signature(*args, **kwargs)
+
+
+__all__ = [ReactionContainer.__name__, MergedReaction.__name__]

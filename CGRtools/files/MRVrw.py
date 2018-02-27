@@ -30,7 +30,7 @@ from ..containers import MoleculeContainer
 def xml_dict(parent_element):
     out = {}
     if parent_element.items():
-        out.update({'@%s' % x: y for x, y in parent_element.items()})
+        out.update({x: y for x, y in (('@%s' % x.strip(), y.strip()) for x, y in parent_element.items()) if y})
     if parent_element.text:
         text = parent_element.text.strip()
         if text:
@@ -113,14 +113,14 @@ class MRVread(CGRread, WithMixin):
                 else:
                     for m in molecule:
                         reaction[group].append(cls.__parse_molecule(m))
-
         return reaction
 
     @classmethod
     def __parse_property(cls, data, is_reaction=False):
         meta = defaultdict(list)
         colors = defaultdict(list)
-        for x in data['property']:
+        dp = data['property']
+        for x in (dp,) if isinstance(dp, dict) else dp:
             key = x['@title']
             val = x['scalar']['$']
             col_key = key.split('.')[0] if is_reaction else key
@@ -143,7 +143,8 @@ class MRVread(CGRread, WithMixin):
 
         atom_map = {}
         if 'atom' in data['atomArray']:
-            for n, atom in enumerate(data['atomArray']['atom'], start=1):
+            da = data['atomArray']['atom']
+            for n, atom in (((1, da),) if isinstance(da, dict) else enumerate(da, start=1)):
                 atom_map[atom['@id']] = n
                 molecule['atoms'].append(dict(element=atom['@elementType'], isotope=0,
                                               charge=int(atom.get('@formalCharge', 0)),
@@ -157,15 +158,19 @@ class MRVread(CGRread, WithMixin):
                     _type = atom['@mrvQueryProps'][1]
                     molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
                                                     value=atom['@mrvQueryProps'][2:-1].split(_type)))
+                if '@radical' in atom:
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='radical',
+                                                    value=cls.__radical_map[atom['@radical']]))
         else:
             atom = data['atomArray']
-            for n, (_id, el, iz, ch, mp, mk, al, x, y, z) in \
+            for n, (_id, el, iz, ch, mp, mk, al, rd, x, y, z) in \
                     enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split(),
                                   atom['@isotope'].split() if '@isotope' in atom else repeat('0'),
                                   atom['@formalCharge'].split() if '@formalCharge' in atom else repeat(0),
                                   atom['@mrvMap'].split() if '@mrvMap' in atom else repeat(0),
                                   atom['@ISIDAmark'].split() if '@ISIDAmark' in atom else repeat('0'),
                                   atom['@mrvQueryProps'].split() if '@mrvQueryProps' in atom else repeat('0'),
+                                  atom['@radical'].split() if '@radical' in atom else repeat('0'),
                                   (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
                                   (atom['@y3'] if '@y3' in atom else atom['@y2']).split(),
                                   (atom['@z3'].split() if '@z3' in atom else
@@ -179,16 +184,33 @@ class MRVread(CGRread, WithMixin):
                     _type = al[1]
                     molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
                                                     value=al[2:-1].split(_type)))
+                if rd != '0':
+                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='radical', value=cls.__radical_map[rd]))
+
         if 'bond' in data['bondArray']:
-            for bond in data['bondArray']['bond']:
+            db = data['bondArray']['bond']
+            for bond in ((db,) if isinstance(db, dict) else db):
                 order = cls.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
                 a1, a2 = bond['@atomRefs2'].split()
                 stereo = cls.__stereo_map[bond['bondStereo']['$']] if 'bondStereo' in bond else 0
                 molecule['bonds'].append((atom_map[a1], atom_map[a2], order, stereo))
 
+        if 'molecule' in data:
+            dm = data['molecule']
+            for cgr_dat in ((dm,) if isinstance(dm, dict) else dm):
+                if cgr_dat['@role'] == 'DataSgroup':
+                    t = cgr_dat['@fieldName']
+                    if t not in cls._cgr_keys:
+                        continue
+
+                    a = tuple(atom_map[x] for x in cgr_dat['@atomRefs'].split())
+                    if len(a) == cls._cgr_keys[t]:
+                        molecule['CGR_DAT'].append(dict(atoms=a, type=t,
+                                                        value=cgr_dat['@fieldData'].replace('/', '').lower()))
         return molecule
 
     __bond_map = {'Any': 8, 'any': 8, 'A': 4, '1': 1, '2': 2, '3': 3}
+    __radical_map = {'monovalent': '2', 'divalent1': '1', 'divalent3': '3'}
     __stereo_map = {'H': -1, 'W': 1}
 
 
@@ -276,9 +298,10 @@ class MRVwrite(CGRwrite, WithMixin):
                                       '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
                               for i, (j, l, k, s) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
-                             ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1[type]}" fieldData="{1[value]}" '
-                              'atomRefs="{2}" x="{3[0]}" y="{3[1]}" '
-                              '/>'.format(i, j, ' '.join('a%d' % x for x in j['atoms']),
+                             ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1}" fieldData="{2}" '
+                              'atomRefs="{3}" x="{4[0]}" y="{4[1]}" '
+                              '/>'.format(i, j['type'], j['value'].replace('>', '&gt;'),
+                                          ' '.join('a%d' % x for x in j['atoms']),
                                           cls._get_position([atoms[i - 1] for i in j['atoms']]))
                               for i, j in enumerate(cgr_dat, start=1))))
 

@@ -222,7 +222,6 @@ class BaseContainer(Graph, ABC):
         :param element: set elements marks
         :param flush_cache: recalculate signature if True
         :param hyb: deprecated. see hybridization arg
-        :return: string representation of CGR
         """
         if hyb:
             warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
@@ -230,14 +229,14 @@ class BaseContainer(Graph, ABC):
 
         if flush_cache or self.__signatures is None:
             self.__signatures = {}
-        k = (isotope, element, stereo, hybridization, neighbors)
 
+        k = (isotope, element, stereo, hybridization, neighbors)
         out = self.__signatures.get(k)
         if not out:
             sg = self._signature_generator(element, isotope, stereo, hybridization, neighbors)
             if not weights:
                 weights = self.get_morgan(isotope, element, stereo, hybridization, neighbors, flush_cache=flush_cache)
-            out = self.__signatures.setdefault(k, sg(self, weights))
+            self.__signatures[k] = out = sg(self, weights)
         return out
 
     def get_morgan(self, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False, labels=None,
