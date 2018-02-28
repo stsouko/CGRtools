@@ -21,6 +21,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
+from io import StringIO, BytesIO
 from typing import Tuple
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
@@ -39,7 +40,11 @@ class WithMixin:
             raise InvalidConfig('invalid file')
         if isinstance(file, str):
             self._file = open(file, mode)
-        elif hasattr(file, 'read') and file.mode == mode:
+        elif isinstance(file, StringIO) and mode in 'rw':
+            self._file = file
+        elif isinstance(file, BytesIO) and mode == 'rb':
+            self._file = file
+        elif hasattr(file, 'read') and file.mode == mode:  # check if file is open(filename, mode)
             self._file = file
         else:
             raise InvalidConfig('invalid file')
