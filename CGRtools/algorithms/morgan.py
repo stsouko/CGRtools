@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,6 +22,7 @@ from collections import Counter
 from functools import reduce
 from itertools import count
 from operator import mul, itemgetter
+from sys import stderr
 from ..exceptions import InvalidConfig
 from ..periodictable import elements
 
@@ -115,14 +116,13 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
     for n, m in g.adjacency():
         scaf[n] = tuple(i for i, j in m.items() if p_bond or j.get(s_bond))
 
-    while True:
+    tries = len(g) * 4  # limit for searching
+    while tries:
         oldnumb = numb
         neweights = {}
         countprime = iter(primes)
 
-        tmp = {}
-        for n, m in scaf.items():
-            tmp[n] = reduce(mul, (weights[x] for x in m), weights[n])
+        tmp = {n: reduce(mul, (weights[x] for x in m), weights[n]) for n, m in scaf.items()}
 
         weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                    for x, y in sorted(tmp.items(), key=itemgetter(1))}
@@ -139,6 +139,14 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
             stab += 1
         elif stab:
             stab = 0
+
+        tries -= 1
+        if not tries and numb < oldnumb:
+            print('morgan. number of attempts exceeded. uniqueness has decreased. last attempt will be made',
+                  file=stderr)
+            tries = 1
+    else:
+        print('morgan. number of attempts exceeded', file=stderr)
 
     return weights
 
