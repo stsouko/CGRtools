@@ -122,7 +122,8 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
         neweights = {}
         countprime = iter(primes)
 
-        tmp = {n: reduce(mul, (weights[x] for x in m), weights[n]) for n, m in scaf.items()}
+        # weights[n] ** 2 NEED for differentiation of molecules like A-B or any complete graphs.
+        tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in scaf.items()}
 
         weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                    for x, y in sorted(tmp.items(), key=itemgetter(1))}
