@@ -107,10 +107,6 @@ class MOLwrite(CGRwrite):
                               "%(mark)3s  0%(map)3s  0  0\n" % i for i in atoms),
                              ("%3d%3d%3s%3d  0  0  0\n" % i for i in bonds), mol_prop))
 
-    @staticmethod
-    def _xyz_convert(x, y, z):
-        return x, y, z
-
     _stereo_map = {-1: 6, 0: 0, 1: 1, None: 0}
     _charge_map = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
     _radical_map = {2: 2, 1: 1, 3: 3}

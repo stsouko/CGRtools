@@ -305,10 +305,6 @@ class MRVwrite(CGRwrite, WithMixin):
                                           cls._get_position([atoms[i - 1] for i in j['atoms']]))
                               for i, j in enumerate(cgr_dat, start=1))))
 
-    @staticmethod
-    def _xyz_convert(x, y, z):
-        return x * 2, y * 2, z * 2
-
     _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
     _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
     _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
