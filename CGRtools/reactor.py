@@ -26,14 +26,14 @@ from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_matc
 from warnings import warn
 from .containers import CGRTemplate, MatchContainer, CGRContainer
 from .core import CGRcore
-from .exceptions import InvalidConfig, InvalidData, InvalidTemplate
+from .exceptions import InvalidData, InvalidTemplate
 
 
 class CGRreactor:
-    """ CGR isomorphism based operations
-    """
     def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
         """
+        CGR isomorphism based operations
+
         :param extralabels: compare hybridization and neighbors count marks on isomorphism procedure
         :param isotope: compare isotope marks on isomorphism procedure
         :param element: compare elements symbols and charges on isomorphism procedure
@@ -65,19 +65,11 @@ class CGRreactor:
 
         self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
 
-    def pickle(self):
-        """ return config. for pickling
-        """
+    def __getstate__(self):
         return self.__pickle.copy()
 
-    @classmethod
-    def unpickle(cls, config):
-        """ return CGRreactor object instance
-        """
-        args = {'stereo', 'extralabels', 'isotope', 'element'}
-        if args != set(config):
-            raise InvalidConfig('Invalid config')
-        return cls(**config)
+    def __setstate__(self, state):
+        self.__init__(**state)
 
     def get_cgr_matcher(self, g, h):
         if not isinstance(g, CGRContainer):

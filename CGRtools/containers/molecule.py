@@ -27,9 +27,10 @@ from ..periodictable import elements
 
 
 class MoleculeContainer(BaseContainer, Valence):
-    """storage for Molecules"""
     def __init__(self, *args, **kwargs):
         """
+        storage for Molecules
+
         new molecule object creation or copy of data object
         """
         BaseContainer.__init__(self, *args, **kwargs)
@@ -41,6 +42,14 @@ class MoleculeContainer(BaseContainer, Valence):
             tmp.extend([self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
                         self.atom_implicit_h.__name__, self.reset_query_marks.__name__])
         return self.__visible
+
+    def __getstate__(self):
+        return {k: v for k, v in super().__getstate__().items()
+                if not k.startswith(('_Valence', '_MoleculeContainer'))}
+
+    def __setstate__(self, state):
+        Valence.__init__(self)
+        super().__setstate__(state)
 
     def pickle(self):
         """return json serializable Molecule"""

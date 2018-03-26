@@ -56,6 +56,14 @@ class BaseContainer(Graph, ABC):
                               'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
         return self.__visible
 
+    def __getstate__(self):
+        return {k: v for k, v in super().__getstate__().items()
+                if not k.startswith('_BaseContainer') and k != 'root_graph' or k == '_BaseContainer__meta'}
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.root_graph = self
+
     def atom(self, n):
         if self.__atom_cache is None:
             self.__atom_cache = {}

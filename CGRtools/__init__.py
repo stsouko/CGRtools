@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2016 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -21,5 +21,5 @@
 """
 aggregated for wildcard imports CGRpreparer, CGRstandardizer and CGRreactor classes.
 """
-from .preparer import CGRpreparer, CGRstandardizer
+from .preparer import CGRpreparer
 from .reactor import CGRreactor

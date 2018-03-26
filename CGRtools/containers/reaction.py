@@ -104,7 +104,7 @@ class ReactionContainer:
         if substrats:
             warn('deprecated key. use reagents instead', DeprecationWarning)
 
-        self.__reagents = MindfulList(substrats or reagents)
+        self.__reagents = MindfulList(reagents or substrats)
         self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
         self.__meta = meta or {}
@@ -125,6 +125,13 @@ class ReactionContainer:
             return self.__meta
         else:
             raise Exception('invalid key: %s' % item)
+
+    def __getstate__(self):
+        return dict(reagents=list(self.__reagents), meta=self.meta,
+                    products=list(self.__products), reactants=list(self.__reactants))
+
+    def __setstate__(self, state):
+        self.__init__(**state)
 
     def pickle(self):
         """return json serializable reaction"""
@@ -250,6 +257,12 @@ class MergedReaction:
         self.__meta = meta or {}
         self.__signatures = {}
         self.__pickle = None
+
+    def __getstate__(self):
+        return dict(reagents=self.__reagents, products=self.__products, meta=self.__meta)
+
+    def __setstate__(self, state):
+        self.__init__(**state)
 
     @property
     def reagents(self):
