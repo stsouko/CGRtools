@@ -202,6 +202,7 @@ class CGRreactor:
 
         if r_group_clones:
             tmp.meta.update(g.meta)
+            return tmp
 
         return tmp.copy()
 

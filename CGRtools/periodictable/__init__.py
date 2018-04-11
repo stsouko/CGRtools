@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 """
-aggregated for wildcard imports CGRpreparer and CGRreactor classes.
+contains perodictable, atom masses, electronegativity of elements
 """
-from .preparer import CGRpreparer
-from .reactor import CGRreactor
+from .data import table_e as elements
+from .factory import *

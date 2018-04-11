@@ -45,7 +45,7 @@ class MoleculeContainer(BaseContainer, Valence):
 
     def __getstate__(self):
         return {k: v for k, v in super().__getstate__().items()
-                if not k.startswith(('_Valence', '_MoleculeContainer'))}
+                if not k.startswith(('_Valence__', '_MoleculeContainer__'))}
 
     def __setstate__(self, state):
         Valence.__init__(self)
