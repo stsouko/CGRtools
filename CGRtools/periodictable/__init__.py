@@ -19,7 +19,9 @@
 #  MA 02110-1301, USA.
 #
 """
-contains perodictable, atom masses, electronegativity of elements
+contains periodic table elements classes
 """
-from .data import table_e as elements
 from .factory import *
+from .data import table_e
+
+elements_dict, elements = elements, table_e
