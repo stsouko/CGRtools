@@ -23,7 +23,7 @@ from itertools import chain, count, repeat
 from lxml.etree import iterparse, QName
 from sys import stderr
 from traceback import format_exc
-from ._CGRrw import CGRread, CGRwrite, WithMixin, mendeleyset
+from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set
 from ..containers import MoleculeContainer
 
 
@@ -210,7 +210,7 @@ class MRVread(CGRread, WithMixin):
         return molecule
 
     __bond_map = {'Any': 8, 'any': 8, 'A': 4, '1': 1, '2': 2, '3': 3}
-    __radical_map = {'monovalent': '2', 'divalent1': '1', 'divalent3': '3'}
+    __radical_map = {'monovalent': '2', 'divalent': '1', 'divalent1': '1', 'divalent3': '3'}
     __stereo_map = {'H': -1, 'W': 1}
 
 
@@ -280,7 +280,7 @@ class MRVwrite(CGRwrite, WithMixin):
             if it == 'isotope':
                 isotope[ia] = ' isotope="%d"' % iv
             elif it == 'atomlist':
-                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in mendeleyset.difference(iv))
+                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in elements_set.difference(iv))
                                                                    if len(iv) > cls._half_table else
                                                                    (',%s' % x for x in iv))
             elif it == 'radical':

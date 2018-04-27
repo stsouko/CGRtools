@@ -22,6 +22,6 @@
 contains periodic table elements classes
 """
 from .factory import *
-from .data import table_e
+from .data import table_e as elements_list
 
-elements_dict, elements = elements, table_e
+elements_set = set(elements_list)

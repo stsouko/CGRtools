@@ -19,7 +19,7 @@
 #  MA 02110-1301, USA.
 #
 from itertools import count, chain
-from ._CGRrw import CGRread, CGRwrite, mendeleyset
+from ._CGRrw import CGRread, CGRwrite, elements_set
 
 
 class MOLread(CGRread):
@@ -80,7 +80,7 @@ class MOLwrite(CGRwrite):
             if it == 'isotope':
                 mol_prop.append('M  ISO  1 %3d %3d\n' % (ia, iv))
             elif it == 'atomlist':
-                atomslist, _type = (mendeleyset.difference(iv), 'T') if len(iv) > cls._half_table else (iv, 'F')
+                atomslist, _type = (elements_set.difference(iv), 'T') if len(iv) > cls._half_table else (iv, 'F')
                 mol_prop.append('M  ALS %3d%3d %s %s\n' % (ia, len(atomslist), _type,
                                                            ''.join('%-4s' % x for x in atomslist)))
             elif it == 'radical':

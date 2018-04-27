@@ -24,11 +24,10 @@ from itertools import count, chain
 from io import StringIO, BytesIO
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
-from ..periodictable import elements, isotopes
+from ..periodictable import elements_set, isotopes
 
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
-mendeleyset = set(elements)
 
 
 class WithMixin:
@@ -223,7 +222,7 @@ class CGRread:
             return dict(element=value)
 
         elif _type == 'atomnotlist':
-            return dict(element=list(mendeleyset.difference(value)))
+            return dict(element=list(elements_set.difference(value)))
 
         elif _type == 'atomhyb':
             return cls.__parselist('hyb', value)
@@ -620,5 +619,5 @@ class CGRwrite:
     def _radical_map(self):
         pass
 
-    _half_table = len(mendeleyset) // 2
+    _half_table = len(elements_set) // 2
     __extra_marks = [('s_%s' % x, 'p_%s' % x, 'sp_%s' % x, 'atom%s' % x, 'dynatom%s' % x) for x in ('hyb', 'neighbors')]

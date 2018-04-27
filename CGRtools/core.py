@@ -79,16 +79,15 @@ class CGRcore:
         for i, g in (('reagents', m1), ('products', m2)):
             is_cgr = isinstance(g, CGRContainer)
             pdi = cls.__popdict[i][is_cgr]
-            ext_common = {}
-            unbalanced[i] = ext_common
+            unbalanced[i] = ext_common = defaultdict(list)
             e_pop, n_pop = pdi['edge'], pdi['node']
 
             for n, m, attr in g.edges(common, data=True):
                 if n in common:
                     if m not in common:
-                        ext_common.setdefault(m, []).append(n)
+                        ext_common[m].append(n)
                 elif m in common:
-                    ext_common.setdefault(n, []).append(m)
+                    ext_common[n].append(m)
 
                 bond = {e_pop[k]: v for k, v in attr.items() if k in e_pop}
                 if bond:

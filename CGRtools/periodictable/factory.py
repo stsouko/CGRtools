@@ -18,15 +18,16 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from abc import ABC, ABCMeta, abstractmethod
 from itertools import chain
+from operator import ge, le, gt, lt
 from os.path import splitext
 from .data import (groups, periods, table_e, table_i, types, electrons, atom_valences_exceptions, atom_valences,
                    atom_charge_radical, atom_implicit_h)
 
 
-class Element:
+class Element(ABC):
     def __init__(self, charge=0, radical=0, isotope=None):
-        assert (self.symbol, charge, radical) in atom_charge_radical, 'Invalid charge or number of unpaired electrons'
         self.__isotope = isotope
         self.__charge = charge
         self.__radical = radical
@@ -42,6 +43,16 @@ class Element:
     @property
     def radical(self):
         return self.__radical
+
+    @property
+    @abstractmethod
+    def symbol(self):
+        pass
+
+    @property
+    @abstractmethod
+    def common_isotope(self):
+        pass
 
     def __repr__(self):
         r = ', %d' % self.__radical if self.__radical else ''
@@ -101,11 +112,16 @@ def get_group(number):
 
 
 def get_element(symbol, number, isotope, _electrons, _type, group, period):
-    class ElementType(type(group), type(period)):
+    class ElementType(ABCMeta, type(group), type(period)):
         def __new__(mcls, cls_name, *args, **kwargs):
             return type.__new__(mcls, symbol, *args, **kwargs)
 
     class _Element(Element, group, period, metaclass=ElementType):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            assert (self.symbol, self.charge, self.radical) in atom_charge_radical, \
+                'Invalid charge or number of unpaired electrons'
+
         @property
         def number(self):
             return number
@@ -127,11 +143,13 @@ def get_element(symbol, number, isotope, _electrons, _type, group, period):
             return _type
 
         def check_valence(self, bonds, neighbors):
-            scrl = (symbol, self.charge, self.radical, len(bonds))
-            if scrl in atom_valences_exceptions:
-                return sorted(zip(neighbors, bonds)) in atom_valences_exceptions[scrl]
-
-            return (symbol, self.charge, self.radical, self.__bonds_sum(bonds)) in atom_valences
+            print('!', symbol, bonds, neighbors)
+            res = (symbol, self.charge, self.radical, self.__bonds_sum(bonds)) in atom_valences
+            if not res:
+                scrl = (symbol, self.charge, self.radical, len(bonds))
+                if scrl in atom_valences_exceptions:
+                    return sorted(zip(neighbors, bonds)) in atom_valences_exceptions[scrl]
+            return res
 
         def get_implicit_h(self, bonds):
             return atom_implicit_h.get((symbol, self.charge, self.radical, self.__bonds_sum(bonds)), 0)
@@ -139,6 +157,39 @@ def get_element(symbol, number, isotope, _electrons, _type, group, period):
         @staticmethod
         def __bonds_sum(bonds):
             return int(sum(_bonds[x] for x in bonds))
+
+        def __eq__(self, other):
+            if isinstance(other, str):
+                assert other in table_e, 'invalid element'
+                return other == symbol
+            elif isinstance(other, Element):
+                return other.symbol == symbol and other.isotope == self.isotope and other.charge == self.charge and \
+                       other.radical == self.radical
+            return False
+
+        def __gt__(self, other):
+            return self.__ops(other, gt)
+
+        def __ge__(self, other):
+            return self.__ops(other, ge)
+
+        def __lt__(self, other):
+            return self.__ops(other, lt)
+
+        def __le__(self, other):
+            return self.__ops(other, le)
+
+        def __ops(self, other, op):
+            if isinstance(other, str):
+                assert other in table_e, 'invalid element'
+                return op(symbol, other)
+            elif isinstance(other, Element):
+                return op((symbol, self.isotope, self.charge, self.radical),
+                          (other.symbol, other.isotope, other.charge, other.radical))
+            raise TypeError('unorderable types {} and {}'.format(self.__class__.__name__, type(other)))
+
+        def __hash__(self):
+            return hash(symbol) ^ self.charge ^ self.isotope ^ self.radical
 
     return _Element
 

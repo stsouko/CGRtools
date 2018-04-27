@@ -24,7 +24,7 @@ from itertools import count
 from operator import mul, itemgetter
 from sys import stderr
 from ..exceptions import InvalidConfig
-from ..periodictable import elements
+from ..periodictable import elements_list
 
 
 def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False, labels=('s', 'p')):
@@ -91,7 +91,7 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
         s_neighbors = '%s_neighbors' % s
         p_charge = p_radical = p_stereo = p_bond = p_hyb = p_neighbors = None
 
-    params = {n: (elements.index(attr['element']) if element else 1,
+    params = {n: (elements_list.index(attr['element']) if element else 1,
                   attr.get('isotope', 1) if isotope else 1,
                   10 * attr[s_charge] + attr.get(p_charge, 0) if element else 1,
                   10 * (attr.get(s_radical) or 0) + (attr.get(p_radical) or 0) if element else 1,
