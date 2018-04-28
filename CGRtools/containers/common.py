@@ -38,22 +38,29 @@ class BaseContainer(Graph, ABC):
         :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
         """
         super().__init__(data)
+        self.__init()
 
         if meta is not None:
             if isinstance(meta, dict):
-                self.__meta = meta.copy()
+                self.__meta.update(meta)
             else:
                 raise InvalidData('metadata can be dictionary')
+
+    def __init(self):
+        self.__atom_cache = {}
+        self.__meta = {}
+        self.__bond_cache = defaultdict(dict)
 
     def __dir__(self):
         if self.__visible is None:
             self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
                               self.flush_cache.__name__, self.substructure.__name__,  self.get_morgan.__name__,
                               self.get_signature.__name__, self.get_signature_hash.__name__, self.fix_data.__name__,
-                              self.get_environment.__name__, self.atom.__name__, self.bond.__name__,
-                              self.add_atom.__name__, self.add_bond.__name__, self.add_stereo.__name__,
-                              self.get_stereo.__name__, self.delete_atom.__name__, self.delete_bond.__name__,
-                              'meta', 'bonds_count', 'atoms_count']  # properties names inaccessible
+                              self.get_environment.__name__, self.mark.__name__, self.atom.__name__, self.bond.__name__,
+                              self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
+                              self.atom_numbers.__name__, self.add_stereo.__name__, self.get_stereo.__name__,
+                              self.delete_atom.__name__, self.delete_bond.__name__,
+                              'meta', 'bonds_count', 'atoms_count']
         return self.__visible
 
     def __getstate__(self):
@@ -63,31 +70,46 @@ class BaseContainer(Graph, ABC):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.root_graph = self
+        self.__init()
+
+    def mark(self, n):
+        try:
+            tmp = self.nodes[n]
+        except KeyError:
+            raise InvalidAtom('atom not found')
+        return tmp['mark']
 
     def atom(self, n):
-        if self.__atom_cache is None:
-            self.__atom_cache = {}
         if n not in self.__atom_cache:
             try:
                 tmp = self.nodes[n]
             except KeyError:
                 raise InvalidAtom('atom not found')
 
-            self.__atom_cache[n] = self._atom_container(**{x: tmp.get(y) for x, y in self._atom_marks.items()})
+            self.__atom_cache[n] = self._atom_container(tmp)
         return self.__atom_cache[n]
 
-    def bond(self, atom1, atom2):
-        if self.__bond_cache is None:
-            self.__bond_cache = defaultdict(dict)
-        if atom2 not in self.__bond_cache[atom1]:
-            try:
-                tmp = self[atom1][atom2]
-            except KeyError:
-                raise InvalidAtom('atom or bond not found')
+    def stereo(self, n, m=None):
+        try:
+            tmp = self.nodes[n] if m is None else self[n][m]
+        except KeyError:
+            raise InvalidAtom('atom[s] or bond not found')
 
-            res = self._bond_container(**{x: tmp.get(y) for x, y in self._bond_marks.items()})
-            self.__bond_cache[atom1][atom2] = self.__bond_cache[atom2][atom1] = res
-        return self.__bond_cache[atom1][atom2]
+        return self._stereo_mark(tmp)
+
+    def bond(self, n, m):
+        if m not in self.__bond_cache[n]:
+            try:
+                tmp = self[n][m]
+            except KeyError:
+                raise InvalidAtom('atom[s] or bond not found')
+
+            self.__bond_cache[n][m] = self.__bond_cache[m][n] = self._bond_container(tmp)
+        return self.__bond_cache[n][m]
+
+    @property
+    def atom_numbers(self):
+        return list(self.nodes)
 
     @property
     def atoms_count(self):
@@ -141,8 +163,6 @@ class BaseContainer(Graph, ABC):
 
     @property
     def meta(self):
-        if self.__meta is None:
-            self.__meta = {}
         return self.__meta
 
     @abstractmethod
@@ -157,7 +177,7 @@ class BaseContainer(Graph, ABC):
         g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
 
         data = node_link_data(g, attrs=self.__attrs)
-        data['meta'] = self.meta
+        data['meta'] = self.__meta
         return data
 
     @classmethod
@@ -170,7 +190,7 @@ class BaseContainer(Graph, ABC):
 
     def copy(self):
         copy = super().copy()
-        copy.meta.update(self.meta)
+        copy.meta.update(self.__meta)
         return copy
 
     def substructure(self, nbunch, meta=False):
@@ -327,7 +347,7 @@ class BaseContainer(Graph, ABC):
         warn('use get_signature instead', DeprecationWarning)
         return self.get_signature(*args, **kwargs)
 
-    __meta = __visible = __atom_cache = __bond_cache = __weights = __signatures = __pickle = None
+    __meta = __visible = __bond_cache = __weights = __signatures = __pickle = None
     __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
 
@@ -356,19 +376,14 @@ class BaseContainer(Graph, ABC):
     def _node_marks(self):
         pass
 
-    @property
+    @classmethod
     @abstractmethod
-    def _atom_marks(self):
-        pass
-
-    @property
-    @abstractmethod
-    def _bond_marks(self):
+    def _atom_container(cls, *args, **kwargs):
         pass
 
     @classmethod
     @abstractmethod
-    def _atom_container(cls, *args, **kwargs):
+    def _stereo_mark(cls, *args, **kwargs):
         pass
 
     @classmethod

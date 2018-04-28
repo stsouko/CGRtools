@@ -18,15 +18,14 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import namedtuple
 from itertools import chain
 from .common import BaseContainer
-from ..algorithms import CGRstring, Valence, pyramid_volume
-from ..exceptions import InvalidData, InvalidAtom, InvalidStereo, ValenceError
-from ..periodictable import elements
+from ..algorithms import CGRstring, pyramid_volume
+from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
+from ..periodictable import Element, elements, H
 
 
-class MoleculeContainer(BaseContainer, Valence):
+class MoleculeContainer(BaseContainer):
     def __init__(self, *args, **kwargs):
         """
         storage for Molecules
@@ -34,7 +33,6 @@ class MoleculeContainer(BaseContainer, Valence):
         new molecule object creation or copy of data object
         """
         BaseContainer.__init__(self, *args, **kwargs)
-        Valence.__init__(self)
 
     def __dir__(self):
         if self.__visible is None:
@@ -44,12 +42,7 @@ class MoleculeContainer(BaseContainer, Valence):
         return self.__visible
 
     def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items()
-                if not k.startswith(('_Valence__', '_MoleculeContainer__'))}
-
-    def __setstate__(self, state):
-        Valence.__init__(self)
-        super().__setstate__(state)
+        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__')}
 
     def pickle(self):
         """return json serializable Molecule"""
@@ -71,24 +64,20 @@ class MoleculeContainer(BaseContainer, Valence):
 
     def substructure(self, *args, **kwargs):
         sub = super().substructure(*args, **kwargs)
-        sub._fix_stereo()
+        sub._fix_stereo_stage_2(self._fix_stereo_stage_1())
         return sub
 
-    def add_atom(self, element, charge, radical=None, _map=None, mark='0', x=0, y=0, z=0):
-        if element not in elements:
-            raise InvalidData('element %s - not exists' % element)
+    def add_atom(self, atom, _map=None, mark='0', x=0, y=0, z=0):
+        if not isinstance(atom, Element):
+            raise TypeError('invalid type of atom')
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
-        if radical not in (None, 1, 2, 3):
-            raise InvalidData('only monovalent (2), bivalent (1 singlet, 3 triplet) or None accepted')
-        if not self._check_charge_radical(element, charge, radical=self._radical_map[radical]):
-            raise InvalidData('charge and/or radical values impossible for this element')
 
-        self.add_node(_map, element=element, s_charge=charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
-        if radical:
-            self.nodes[_map]['s_radical'] = radical
+        self.add_node(_map, element=atom.symbol, s_charge=atom.charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
+        if atom.multiplicity:
+            self.nodes[_map]['s_radical'] = atom.multiplicity
 
         self.flush_cache()
         return _map
@@ -103,23 +92,28 @@ class MoleculeContainer(BaseContainer, Valence):
 
         if not ignore:
             self._check_bonding(atom1, atom2, mark)
+
+        stereo = self._fix_stereo_stage_1()
         self.add_edge(atom1, atom2, s_bond=mark)
+        self._fix_stereo_stage_2(stereo)
         self.flush_cache()
 
     def delete_atom(self, n):
         """
         implementation of atom removing
         """
-        # todo: stereo fixing
+        stereo = self._fix_stereo_stage_1()
         self.remove_node(n)
+        self._fix_stereo_stage_2(stereo)
         self.reset_query_marks()
 
     def delete_bond(self, n, m):
         """
         implementation of bond removing
         """
-        # todo: stereo fixing
+        stereo = self._fix_stereo_stage_1()
         self.remove_edge(n, m)
+        self._fix_stereo_stage_2(stereo)
         self.reset_query_marks()
 
     def add_stereo(self, atom1, atom2, mark):
@@ -241,17 +235,15 @@ class MoleculeContainer(BaseContainer, Valence):
         """
         explicit = {}
         c = 0
-        for n, attr in self.nodes(data=True):
-            if attr['element'] == 'H':
+        for n, attr in self.nodes(data='element'):
+            if attr == 'H':
                 m = next(self.neighbors(n))
                 if self.nodes[m]['element'] != 'H':
                     explicit.setdefault(m, []).append(n)
 
         for n, h in explicit.items():
-            atom = self.nodes[n]
-            implicit = self._get_implicit_h(atom['element'], atom['s_charge'],
-                                            [y['s_bond'] for x, y in self[n].items() if x not in h],
-                                            radical=atom.get('s_radical', 0))
+            atom = self.atom(n)
+            implicit = atom.get_implicit_h([y['s_bond'] for x, y in self[n].items() if x not in h])
             if implicit:
                 for x in h:
                     self.remove_node(x)
@@ -266,20 +258,18 @@ class MoleculeContainer(BaseContainer, Valence):
         :return: number of added atoms
         """
         tmp = []
-        for n, attr in self.nodes(data=True):
-            if attr['element'] != 'H':
+        for n, attr in self.nodes(data='element'):
+            if attr != 'H':
                 for _ in range(self.atom_implicit_h(n)):
                     tmp.append(n)
         for n in tmp:
-            self.add_bond(n, self.add_atom('H', 0), 1)
+            self.add_bond(n, self.add_atom(H()), 1)
 
         self.flush_cache()
         return len(tmp)
 
     def atom_implicit_h(self, atom):
-        attr = self.nodes[atom]
-        return self._get_implicit_h(attr['element'], attr['s_charge'], [x['s_bond'] for x in self[atom].values()],
-                                    radical=self._radical_map[attr.get('s_radical')])
+        return self.atom(atom).get_implicit_h([x for *_, x in self.edges(atom, data='s_bond')])
 
     def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
         if any(x != 1 for x in bonds):
@@ -302,6 +292,10 @@ class MoleculeContainer(BaseContainer, Valence):
         self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
         self.flush_cache()
 
+    def flush_cache(self):
+        self.__stereo_cache = None
+        super().flush_cache()
+
     @staticmethod
     def _attr_renew(attr, marks):
         new_attr = {}
@@ -314,63 +308,54 @@ class MoleculeContainer(BaseContainer, Valence):
     def _signature_generator(self, *args, **kwargs):
         return CGRstring(*args, **kwargs)
 
-    def _fix_stereo(self):
-        pass
-        """
-        tetrahedrons = []
-        for atom, attr in self.nodes(data=True):
-            neighbors = [self.nodes[x]['element'] for x in self.neighbors(atom)]
-            implicit = self.atom_implicit_h(atom)
-            if implicit > 1 or implicit == 1 and 'H' in neighbors or neighbors.count('H') > 1:
-                continue
+    def _fix_stereo_stage_1(self):
+        tmp = []
+        for n, m in self.edges():
+            s = self.get_stereo(n, m)
+            if s:
+                tmp.append((n, m, s))
+        return tmp
 
-            total = implicit + len(neighbors)
-            # tetrahedron
-            if total == 4:
-                tetrahedrons.append((atom, neighbors, implicit))
-
-        if tetrahedrons:
-            weights = self.get_morgan(stereo=True)
-            for atom, neighbors, implicit in tetrahedrons:
-                w_n = [weights[x] for x in neighbors]
-                if len(w_n) != len(set(w_n)):
+    def _fix_stereo_stage_2(self, stereo):
+        while True:
+            failed_stereo = []
+            for n, m, mark in stereo:
+                try:
+                    self.add_stereo(n, m, mark)
+                except InvalidStereo:
+                    failed_stereo.append((n, m, mark))
+                except InvalidAtom:
                     continue
-                if implicit:
-                    pass
-                else:
-                    pass
+            if failed_stereo and len(stereo) > len(failed_stereo):
+                stereo = failed_stereo
+                continue
+            break
 
-            self._weights = self._signatures = self._pickle = None
-        """
+    def _check_bonding(self, n, m, mark):
+        for atom, reverse in ((n, m), (m, n)):
+            a = self.atom(atom)
+            r = self.atom(reverse)
+            b = [x for *_, x in self.edges(atom, data='s_bond')] + [mark]
+            ng = [self.atom(x) for x in self[atom]] + [r]
+            if not a.check_valence(b, ng):
+                raise InvalidData('valence error')
 
-    def _check_bonding(self, atom1, atom2, mark, label='s'):
-        for atom, reverse in ((atom1, atom2), (atom2, atom1)):
-            a = self.nodes[atom]
-            lb = '%s_bond' % label
-            lc = '%s_charge' % label
-            lr = '%s_radical' % label
-            try:
-                if not self._check_valence(a['element'], a[lc],
-                                           [x[lb] for x in self[atom].values() if x.get(lb)] + [mark],
-                                           radical=self._radical_map[a.get(lr)]):
-                    raise InvalidData('valence error')
-            except ValenceError:
-                tmp = [(y[lb], self.nodes[x]['element'])
-                       for x, y in self[atom].items() if y.get(lb)] + [(mark, self.nodes[reverse]['element'])]
-                if not self._check_valence(a['element'], a[lc], [x for x, _ in tmp], self._radical_map[a.get(lr)],
-                                           neighbors=[x for _, x in tmp]):
-                    raise InvalidData('valence error')
+    @classmethod
+    def _atom_container(cls, attrs):
+        return elements[attrs['element']](charge=attrs['s_charge'], multiplicity=attrs.get('s_radical'),
+                                          isotope=attrs.get('isotope'))
 
-    _atom_marks = dict(charge='s_charge', stereo='s_stereo', neighbors='s_neighbors', hyb='s_hyb',
-                       element='element', isotope='isotope', mark='mark', radical='s_radical')
-    _bond_marks = dict(bond='s_bond', stereo='s_stereo')
-    _atom_container = namedtuple('Atom', ['element', 'isotope', 'mark', 'charge', 'stereo', 'radical',
-                                          'neighbors', 'hyb'])
-    _bond_container = namedtuple('Bond', ['bond', 'stereo'])
+    @classmethod
+    def _stereo_mark(cls, attrs):
+        return attrs.get('s_stereo')
+
+    @classmethod
+    def _bond_container(cls, attrs):
+        return attrs['s_bond']
+
     _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
     _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo', 's_radical')
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
-    _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
-    _bond_map = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1}
+
     __visible = __stereo_cache = None

@@ -18,7 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from functools import reduce
 from itertools import product
 
@@ -58,6 +58,8 @@ table_i = tuple(map(int, '''  1                                                 
                                         264 265 266 267 277 271 281 272 285 286 289 289 293 294 294
                         '''.split()))
 
+common_isotope = dict(zip(table_e, table_i))
+
 groups = ((1, 3, 11, 19, 37, 55, 87),
           (4, 12, 20, 38, 56, 88),
           (21, 39) + tuple(range(57, 72)) + tuple(range(89, 104))) + \
@@ -77,7 +79,45 @@ types = {'alkali': groups[0][1:], 'alkaline': groups[1], 'actinide': periods[6][
          'diatomic': (groups[0][0], groups[14][0], groups[15][0]) + groups[16][:4], 'noble': groups[17][:-1],
          'unknown': periods[6][22:25] + periods[6][26:]}
 
-electrons = (0,) + types['noble']
+_noble_shells = ((0,) + types['noble'])[::-1]
+valence_electrons = {s: next(n - x for x in _noble_shells if n > x) for n, s in enumerate(table_e, start=1)}
+
+orbital_cells = {n: sum(2 * l + 1 for l in range(n)) for n in range(1, 8)}
+
+orbital_names = ['s', 'p', 'd', 'f', 'g']
+_wiswesser = sorted([(n, l) for n in range(1, 8) for l in range(n)], key=lambda x: x[0] + x[1] - (x[1] / (x[1] + 1)))
+_population = [(n, l) for n, l in _wiswesser for _ in range(4 * l + 2)]
+
+_electrons = [OrderedDict({(1, 0): 1})]
+for x in _population[1:]:
+    new = _electrons[-1].copy()
+    new[x] = new.get(x, 0) + 1
+    _electrons.append(new)
+electron_configuration = _ = dict(zip(table_e, _electrons))
+_['Cr'].update({(3, 2): 5, (4, 0): 1})
+_['Cu'].update({(3, 2): 10, (4, 0): 1})
+_['Nb'].update({(4, 2): 4, (5, 0): 1})
+_['Mo'].update({(4, 2): 5, (5, 0): 1})
+_['Ru'].update({(4, 2): 7, (5, 0): 1})
+_['Rh'].update({(4, 2): 8, (5, 0): 1})
+_['Pd'][(4, 2)] = 10; del _['Pd'][(5, 0)]
+_['Ag'].update({(4, 2): 10, (5, 0): 1})
+_['Pt'].update({(5, 2): 9, (6, 0): 1})
+_['Au'].update({(5, 2): 10, (6, 0): 1})
+_['La'][(5, 2)] = 1; del _['La'][(4, 3)]
+_['Ce'].update({(4, 3): 1, (5, 2): 1})
+_['Gd'].update({(4, 3): 7, (5, 2): 1})
+_['Ac'][(6, 2)] = 1; del _['Ac'][(5, 3)]
+_['Th'][(6, 2)] = 2; del _['Th'][(5, 3)]
+_['Pa'].update({(5, 3): 2, (6, 2): 1})
+_['U'].update({(5, 3): 3, (6, 2): 1})
+_['Np'].update({(5, 3): 4, (6, 2): 1})
+_['Cm'].update({(5, 3): 7, (6, 2): 1})
+
+free_electrons = {0: (0, 1, 0),
+                  1: (0, 1, 2, 3, 2, 1, 0),
+                  2: (0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0),
+                  3: (0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1, 0)}
 
 # http://onlinelibrarystatic.wiley.com/marvin/help/sci/ValenceCalculator.html
 # elements, charge, radical, bonds, implicitH

@@ -51,50 +51,41 @@ class CGRContainer(MoleculeContainer):
     def _signature_generator(self, *args, **kwargs):
         return CGRstring(*args, is_cgr=True, **kwargs)
 
-    def add_atom(self, element, s_charge, p_charge=None, s_radical=None, p_radical=None, _map=None, mark='0',
-                 s_x=0, s_y=0, s_z=0, p_x=None, p_y=None, p_z=None):
+    def add_atom(self, atom, p_atom=None, _map=None, mark='0', x=0, y=0, z=0, p_x=None, p_y=None, p_z=None):
         """
         add new atom into CGR
 
-        :param element: atom element symbol
-        :param s_charge: reagents side charge
-        :param p_charge: products side charge
-        :param s_radical: reagents side radical
-        :param p_radical: products side radical
+        :param atom: atom object
+        :param p_atom: products side atom. None if not changed.
         :param _map: atom map number in CGR. can be omitted
         :param mark: Fragmentor mark
-        :param s_x,s_y,s_z,p_x,p_y,p_z: atom coordinates for reagents and products sides
+        :param x,y,z,p_x,p_y,p_z: atom coordinates for reagents and products sides. if not changed p_* can be omitted.
         :return: atom map number
         """
-        if element not in elements:
-            raise InvalidData('element %s - not exists' % element)
+        if p_atom is None:
+            p_atom = atom
+        elif atom.symbol != p_atom.symbol:
+            raise InvalidData('atoms not match')
+
         if _map is None:
             _map = max(self, default=0) + 1
         elif _map in self:
             raise InvalidData('mapping exists')
-        if s_radical not in (None, 1, 2, 3) or p_radical not in (None, 1, 2, 3):
-            raise InvalidData('only monovalent (2), bivalent (1 singlet, 3 triplet) or None accepted')
 
-        if p_charge is None:
-            p_charge = s_charge
         if p_x is None:
-            p_x = s_x
+            p_x = x
         if p_y is None:
-            p_y = s_y
+            p_y = y
         if p_z is None:
-            p_z = s_z
+            p_z = z
 
-        if not (self._check_charge_radical(element, s_charge, radical=self._radical_map[s_radical]) and
-                self._check_charge_radical(element, p_charge, radical=self._radical_map[p_radical])):
-            raise InvalidData('charge and/or radical values impossible for this element')
+        self.add_node(_map, element=atom.symbol, s_charge=atom.charge, p_charge=p_atom.charge, mark=mark,
+                      s_x=x, s_y=y, s_z=z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
 
-        self.add_node(_map, element=element, s_charge=s_charge, p_charge=p_charge, mark=mark,
-                      s_x=s_x, s_y=s_y, s_z=s_z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
-
-        if s_radical:
-            self.nodes[_map]['s_radical'] = s_radical
-        if p_radical:
-            self.nodes[_map]['p_radical'] = p_radical
+        if atom.multiplicity:
+            self.nodes[_map]['s_radical'] = atom.multiplicity
+        if p_atom.multiplicity:
+            self.nodes[_map]['p_radical'] = p_atom.multiplicity
 
         self.flush_cache()
         return _map

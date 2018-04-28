@@ -22,15 +22,15 @@ from abc import ABC, ABCMeta, abstractmethod
 from itertools import chain
 from operator import ge, le, gt, lt
 from os.path import splitext
-from .data import (groups, periods, table_e, table_i, types, electrons, atom_valences_exceptions, atom_valences,
-                   atom_charge_radical, atom_implicit_h)
+from .data import (groups, periods, table_e, types, atom_valences_exceptions, atom_valences, common_isotope,
+                   atom_charge_radical, atom_implicit_h, valence_electrons, electron_configuration, orbital_names)
 
 
 class Element(ABC):
-    def __init__(self, charge=0, radical=0, isotope=None):
+    def __init__(self, charge=0, multiplicity=None, isotope=None):
         self.__isotope = isotope
         self.__charge = charge
-        self.__radical = radical
+        self.__multiplicity = multiplicity
 
     @property
     def isotope(self):
@@ -42,7 +42,11 @@ class Element(ABC):
 
     @property
     def radical(self):
-        return self.__radical
+        return _radical_map[self.__multiplicity]
+
+    @property
+    def multiplicity(self):
+        return self.__multiplicity
 
     @property
     @abstractmethod
@@ -55,8 +59,8 @@ class Element(ABC):
         pass
 
     def __repr__(self):
-        r = ', %d' % self.__radical if self.__radical else ''
-        i = ', %d' % self.__isotope if self.__isotope else ''
+        r = ', multiplicity=%d' % self.__multiplicity if self.__multiplicity else ''
+        i = ', isotope=%d' % self.__isotope if self.__isotope else ''
         return '{}({}{}{})'.format(self.__class__.__name__, self.__charge or '', r, i)
 
 
@@ -111,7 +115,12 @@ def get_group(number):
     return _Group
 
 
-def get_element(symbol, number, isotope, _electrons, _type, group, period):
+def get_element(symbol, number, _type, group, period):
+    isotope = common_isotope[symbol]
+    _electrons = valence_electrons[symbol]
+    _configuration = ' '.join('%d%s%d' % (n, orbital_names[l], e) for (n, l), e in
+                              electron_configuration[symbol].items())
+
     class ElementType(ABCMeta, type(group), type(period)):
         def __new__(mcls, cls_name, *args, **kwargs):
             return type.__new__(mcls, symbol, *args, **kwargs)
@@ -135,6 +144,10 @@ def get_element(symbol, number, isotope, _electrons, _type, group, period):
             return isotope
 
         @property
+        def electron_configuration(self):
+            return _configuration
+
+        @property
         def electrons(self):
             return _electrons
 
@@ -143,7 +156,6 @@ def get_element(symbol, number, isotope, _electrons, _type, group, period):
             return _type
 
         def check_valence(self, bonds, neighbors):
-            print('!', symbol, bonds, neighbors)
             res = (symbol, self.charge, self.radical, self.__bonds_sum(bonds)) in atom_valences
             if not res:
                 scrl = (symbol, self.charge, self.radical, len(bonds))
@@ -197,8 +209,7 @@ def get_element(symbol, number, isotope, _electrons, _type, group, period):
 _bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1}
 _group_cache = {}
 _period_cache = {}
-isotopes = dict(zip(table_e, table_i))
-
+_radical_map = {1: 2, 2: 1, 3: 2, None: 0}
 _groups = {z: x for x, y in enumerate(groups, start=1) for z in y}
 _periods = {z: x for x, y in enumerate(periods, start=1) for z in y}
 _types = {z: x for x, y in types.items() for z in y}
@@ -210,8 +221,7 @@ for n, s in enumerate(table_e, start=1):
     _p = _periods[n]
     g = _group_cache.get(_g) or _group_cache.setdefault(_g, get_group(_g))
     p = _period_cache.get(_p) or _period_cache.setdefault(_p, get_period(_p))
-    e = next(n - x for x in reversed(electrons) if n > x)
-    locals()[s] = elements[s] = get_element(s, n, isotopes[s], e, _types[n], g, p)
+    locals()[s] = elements[s] = get_element(s, n, _types[n], g, p)
 
 
 for x in _group_cache.values():
@@ -222,4 +232,4 @@ for x in _period_cache.values():
 
 
 __all__ = list(table_e) + [x.__name__ for x in chain(_group_cache.values(), _period_cache.values())] + \
-          [Element.__name__, 'elements', 'isotopes']
+          [Element.__name__, 'elements']
