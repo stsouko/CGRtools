@@ -18,12 +18,15 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from itertools import repeat, zip_longest
 from .molecule import MoleculeContainer
 from ..algorithms import CGRstring
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
-from ..periodictable import elements
+from ..periodictable import elements, H, Element
+
+
+DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class CGRContainer(MoleculeContainer):
@@ -62,10 +65,31 @@ class CGRContainer(MoleculeContainer):
         :param x,y,z,p_x,p_y,p_z: atom coordinates for reagents and products sides. if not changed p_* can be omitted.
         :return: atom map number
         """
+        if issubclass(atom, Element):
+            atom = atom()
+        elif isinstance(atom, str):
+            try:
+                atom = elements[atom]()
+            except KeyError:
+                raise TypeError('invalid symbol of atom')
+        elif not isinstance(atom, Element):
+            raise TypeError('invalid type of atom')
+
         if p_atom is None:
             p_atom = atom
-        elif atom.symbol != p_atom.symbol:
-            raise InvalidData('atoms not match')
+        else:
+            if issubclass(atom, Element):
+                p_atom = p_atom()
+            elif isinstance(p_atom, str):
+                try:
+                    p_atom = elements[p_atom]()
+                except KeyError:
+                    raise TypeError('invalid symbol of p_atom')
+            elif not isinstance(p_atom, Element):
+                raise TypeError('invalid type of p_atom')
+
+            if atom.symbol != p_atom.symbol:
+                raise InvalidData('atoms not match')
 
         if _map is None:
             _map = max(self, default=0) + 1
@@ -90,75 +114,71 @@ class CGRContainer(MoleculeContainer):
         self.flush_cache()
         return _map
 
-    def add_bond(self, atom1, atom2, s_mark, p_mark, *, ignore=False):
+    def add_bond(self, atom1, atom2, mark=1, p_mark=1, *, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
         if self.has_edge(atom1, atom2):
             raise InvalidData('bond exists')
-        if not (s_mark or p_mark):
+        if not (mark or p_mark):
             raise InvalidData('empty bonds not allowed')
 
-        if s_mark not in (1, 2, 3, 4, 9, None):
+        if mark not in (1, 2, 3, 4, 9, None):
             raise InvalidData('invalid bond mark')
-        elif not ignore and s_mark:
-            self._check_bonding(atom1, atom2, s_mark)
+        elif not ignore and mark:
+            self._check_bonding(atom1, atom2, mark)
 
         if p_mark not in (1, 2, 3, 4, 9, None):
             raise InvalidData('invalid bond mark')
         elif not ignore and p_mark:
             self._check_bonding(atom1, atom2, p_mark, label='p')
 
-        if s_mark:
-            self.add_edge(atom1, atom2, s_bond=s_mark)
+        if mark:
+            self.add_edge(atom1, atom2, s_bond=mark)
         if p_mark:
             self.add_edge(atom1, atom2, p_bond=p_mark)
 
         self.flush_cache()
 
-    def add_stereo(self, atom1, atom2, s_mark, p_mark):
-        if s_mark not in (1, -1) and p_mark not in (1, -1):
+    def add_stereo(self, atom1, atom2, mark, p_mark=None):
+        if mark not in (1, -1) and p_mark not in (1, -1):
             raise InvalidData('stereo marks invalid')
         if not self.has_edge(atom1, atom2):
             raise InvalidAtom('atom or bond not found')
 
         n_atom1 = self.nodes[atom1]
         if n_atom1.get('s_stereo') or n_atom1.get('p_stereo'):
-            raise InvalidStereo('atom has stereo. change impossible')
+            raise self._stereo_exception3
 
         tmp_s = [(x, y['s_bond']) for x, y in self[atom1].items() if y.get('s_bond')]
         tmp_p = [(x, y['p_bond']) for x, y in self[atom1].items() if y.get('p_bond')]
         neighbors = [x for x, _ in tmp_s]
 
-        if s_mark and (n_atom1['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors)):
-            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+        if mark and (n_atom1['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors)):
+            raise self._stereo_exception1
         elif p_mark and (n_atom1['p_z'] or any(self.nodes[x]['p_z'] for x in neighbors)):
-            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+            raise self._stereo_exception1
 
         neighbors_e = [self.nodes[x]['element'] for x in neighbors]
         implicit_s, implicit_p = self.atom_implicit_h(atom1)
-        if s_mark and (implicit_s > 1 or implicit_s == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
-            raise InvalidStereo('stereo impossible. too many H atoms')
+        if mark and (implicit_s > 1 or implicit_s == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
+            raise self._stereo_exception4
         elif p_mark and (implicit_p > 1 or implicit_p == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
-            raise InvalidStereo('stereo impossible. too many H atoms')
+            raise self._stereo_exception4
 
-        if s_mark:
+        if mark:
             bonds = [x for _, x in tmp_s]
             total = implicit_s + len(neighbors)
             if total == 4:  # tetrahedron
-                self._tetrahedron_parse(atom1, atom2, s_mark, neighbors, bonds, implicit_s)
+                self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit_s)
             else:
-                raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+                raise self._stereo_exception2
         if p_mark:
             bonds = [x for _, x in tmp_p]
             total = implicit_p + len(neighbors)
             if total == 4:  # tetrahedron
                 self._tetrahedron_parse(atom1, atom2, p_mark, neighbors, bonds, implicit_p, label='p')
             else:
-                raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
-
-    def get_stereo(self, atom1, atom2):
-        # todo: implement
-        return None, None
+                raise self._stereo_exception2
 
     def get_center_atoms(self, stereo=False):
         """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
@@ -215,29 +235,32 @@ class CGRContainer(MoleculeContainer):
 
         :return: number of removed hydrogens
         """
-        explicit = {}
+        explicit = defaultdict(list)
         hydrogens = set()
         for_remove = []
         c = 0
-        for n, attr in self.nodes(data=True):
-            if attr['element'] == 'H':
+        for n, attr in self.nodes(data='element'):
+            if attr == 'H':
                 for m in self.neighbors(n):
                     if self.nodes[m]['element'] != 'H':
-                        explicit.setdefault(m, []).append(n)
+                        explicit[m].append(n)
                     else:
                         hydrogens.add(m)
                         hydrogens.add(n)
 
         for n, h in explicit.items():
-            atom = self.nodes[n]
-            s_bonds = [y['s_bond'] for x, y in self[n].items() if x not in h and y.get('s_bond')]
-            p_bonds = [y['p_bond'] for x, y in self[n].items() if x not in h and y.get('p_bond')]
-            s_implicit = self._get_implicit_h(atom['element'], atom['s_charge'], s_bonds, atom.get('s_radical', 0))
-            p_implicit = self._get_implicit_h(atom['element'], atom['p_charge'], p_bonds, atom.get('p_radical', 0))
+            s_atom, p_atom = self.atom(n)
+            self_n = self[n]
 
-            if not s_implicit and any(self[n][x].get('s_bond') for x in h):
+            s_bonds = [y['s_bond'] for x, y in self_n.items() if x not in h and y.get('s_bond')]
+            p_bonds = [y['p_bond'] for x, y in self_n.items() if x not in h and y.get('p_bond')]
+
+            s_implicit = s_atom.get_implicit_h(s_bonds)
+            p_implicit = p_atom.get_implicit_h(p_bonds)
+
+            if not s_implicit and any(self_n[x].get('s_bond') for x in h):
                 hydrogens.update(h)
-            elif not p_implicit and any(self[n][x].get('p_bond') for x in h):
+            elif not p_implicit and any(self_n[x].get('p_bond') for x in h):
                 hydrogens.update(h)
             else:
                 for x in h:
@@ -258,32 +281,42 @@ class CGRContainer(MoleculeContainer):
         :return: number of added atoms
         """
         tmp = []
-        for n, attr in self.nodes(data=True):
-            if attr['element'] != 'H':
+        for n, attr in self.nodes(data='element'):
+            if attr != 'H':
                 si, pi = self.atom_implicit_h(n)
                 if si or pi:
                     for s_mark, p_mark in zip_longest(repeat(1, si), repeat(1, pi)):
                         tmp.append((n, s_mark, p_mark))
 
         for n, s_mark, p_mark in tmp:
-            self.add_bond(n, self.add_atom('H', 0), s_mark, p_mark)
+            self.add_bond(n, self.add_atom(H()), s_mark, p_mark)
 
         self.flush_cache()
         return len(tmp)
 
     def atom_implicit_h(self, atom):
-        attr = self.nodes[atom]
-        si = self._get_implicit_h(attr['element'], attr['s_charge'],
-                                  [x['s_bond'] for x in self[atom].values() if x.get('s_bond')],
-                                  radical=self._radical_map[attr.get('s_radical')])
-        pi = self._get_implicit_h(attr['element'], attr['p_charge'],
-                                  [x['p_bond'] for x in self[atom].values() if x.get('p_bond')],
-                                  radical=self._radical_map[attr.get('p_radical')])
-        return self.__implicit_container(si, pi)
+        r, p = self.atom(atom)
+        ri = r.get_implicit_h([x for *_, x in self.edges(atom, data='s_bond')])
+        pi = p.get_implicit_h([x for *_, x in self.edges(atom, data='p_bond')])
+        return DynamicContainer(ri, pi)
 
-    def _fix_stereo(self):
-        # todo: implement
-        self.flush_cache()
+    def _prepare_stereo(self):
+        return {}
+
+    def _fix_stereo_stage_2(self, stereo):
+        while True:
+            failed_stereo = []
+            for n, m, mark in stereo:
+                try:
+                    self.add_stereo(n, m, *mark)
+                except InvalidStereo:
+                    failed_stereo.append((n, m, mark))
+                except InvalidAtom:
+                    continue
+            if failed_stereo and len(stereo) > len(failed_stereo):
+                stereo = failed_stereo
+                continue
+            break
 
     @staticmethod
     def _attr_renew(attr, marks):
@@ -317,6 +350,23 @@ class CGRContainer(MoleculeContainer):
                 new_attr[sp] = new_attr[s] = new_attr[p] = ls
         return new_attr
 
+    @classmethod
+    def _atom_container(cls, attrs):
+        return DynamicContainer(elements[attrs['element']](charge=attrs['s_charge'],
+                                                           multiplicity=attrs.get('s_radical'),
+                                                           isotope=attrs.get('isotope')),
+                                elements[attrs['element']](charge=attrs['p_charge'],
+                                                           multiplicity=attrs.get('p_radical'),
+                                                           isotope=attrs.get('isotope')))
+
+    @classmethod
+    def _stereo_mark(cls, attrs):
+        return DynamicContainer(attrs.get('s_stereo'), attrs.get('p_stereo'))
+
+    @classmethod
+    def _bond_container(cls, attrs):
+        return DynamicContainer(attrs.get('s_bond'), attrs.get('p_bond'))
+
     _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
                         for mark in ('charge', 'stereo', 'radical', 'neighbors', 'hyb'))
     _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
@@ -330,7 +380,5 @@ class CGRContainer(MoleculeContainer):
     _edge_save = tuple(y for x in _edge_marks for y in x[:2])
     _atom_marks = {x: x for x in __tmp3}
     _bond_marks = {x: x for x in _edge_save}
-    _atom_container = namedtuple('Atom', __tmp3)
-    _bond_container = namedtuple('Bond', _edge_save)
     __implicit_container = namedtuple('ImplicitH', ('s_implicit', 'p_implicit'))
-    __visible = None
+    __visible = __stereo_cache = None

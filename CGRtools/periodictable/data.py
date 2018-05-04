@@ -120,7 +120,7 @@ free_electrons = {0: (0, 1, 0),
                   3: (0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1, 0)}
 
 # http://onlinelibrarystatic.wiley.com/marvin/help/sci/ValenceCalculator.html
-# elements, charge, radical, bonds, implicitH
+# elements, charge, radical, bonds, [implicitH]
 _valence_rules = (
     # elemental Me
     (('Li', 'Na', 'K', 'Rb', 'Cs', 'Fr'), 0, 0, 0, 0),
@@ -287,18 +287,34 @@ _valence_rules = (
     (('He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn'), 0, 0, 0, 0)
 )
 
-atom_valences = set()
+_extra_valence_rules = (
+    (('Sc', 'Y',
+      'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+      'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr'), 0, 0, 3),
+    (('Sc', 'Y',
+      'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+      'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr'), 3, 0, 0),
+    (('Ti', 'Zr', 'Hf', 'Rf'), 0, 0, 4)
+)
+
+_valence_rules = _valence_rules + _extra_valence_rules
+
+atom_valences = {}
 atom_charge_radical = set()
-for a, c, r, v, h in _valence_rules:
+for a, c, r, *vh in _valence_rules:
+    h = 0 if len(vh) == 1 else vh[1]
+    v = vh[0]
     x = range(v - h, v + 1) if h else [v]
     for i in (a if isinstance(a, tuple) else [a]):
         for j in x:
-            atom_valences.add((i, c, r, j))
+            atom_valences[(i, c, r, j)] = v
             atom_charge_radical.add((i, c, r))
 
 
 atom_implicit_h = {('N', 0, 0, 4): 1}
-for a, c, r, v, h in _valence_rules:
+for a, c, r, *vh in _valence_rules:
+    h = 0 if len(vh) == 1 else vh[1]
+    v = vh[0]
     if h:
         for k in range(1, h + 1):
             for i in (a if isinstance(a, tuple) else [a]):

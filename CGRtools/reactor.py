@@ -271,24 +271,30 @@ class CGRreactor:
             templates.append(CGRTemplate(reagents, products, template.meta.copy()))
         return templates
 
-    @staticmethod
-    def patcher(structure, patch):
+    @classmethod
+    def patcher(cls, structure, patch):
         """
         remove edges bw common nodes. add edges from template and replace nodes data
 
         :param structure: MoleculeContainer or CGRContainer
         :param patch: MoleculeContainer or CGRContainer with replacement data
         """
-        node_marks = ['s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark']
-        bond_marks = ['s_bond', 's_stereo']
         if isinstance(structure, CGRContainer):
-            node_marks.extend(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
-            bond_marks.extend(('p_bond', 'p_stereo'))
+            node_marks = cls.__cgr_node_marks
+            full_node_marks = cls.__cgr_full_node_marks
+            bond_marks = cls.__cgr_bond_marks
+        else:
+            node_marks = cls.__node_marks
+            full_node_marks = cls.__full_node_marks
+            bond_marks = cls.__bond_marks
 
         p = structure.fresh_copy()
         for i, attr in patch.nodes(data=True):
-            p.add_node(i, **{x: y[structure.nodes[i][x]] if isinstance(y, dict) else y
-                             for x, y in attr.items() if x in node_marks})
+            if i not in structure:
+                p.add_node(i, **{x: y for x, y in attr.items() if x in full_node_marks})
+            else:
+                p.add_node(i, **{x: y[structure.nodes[i][x]] if isinstance(y, dict) else y
+                                 for x, y in attr.items() if x in node_marks})
 
         for m, n, attr in patch.edges(data=True):
             p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
@@ -299,6 +305,13 @@ class CGRreactor:
         out = compose(s, p)
         out.meta.update(structure.meta)
         return out
+
+    __node_marks = {'s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark'}
+    __full_node_marks = __node_marks.union(('s_x', 's_y', 's_z'))
+    __cgr_node_marks = __node_marks.union(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
+    __cgr_full_node_marks = __cgr_node_marks.union(('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'))
+    __bond_marks = {'s_bond', 's_stereo'}
+    __cgr_bond_marks = __bond_marks.union(('p_bond', 'p_stereo'))
 
     @classmethod
     def get_templates(cls, raw_templates):

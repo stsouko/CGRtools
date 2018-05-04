@@ -24,7 +24,8 @@ from itertools import count, chain
 from io import StringIO, BytesIO
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
-from ..periodictable import elements_set, isotopes
+from ..periodictable import elements_set
+from ..periodictable.data import common_isotope as isotopes
 
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
@@ -483,17 +484,24 @@ class CGRwrite:
 
         for i, j, l in g.edges(data=True):
             if is_cgr:
-                s_stereo, p_stereo = g.get_stereo(i, j)
+                tmp = g.get_stereo(i, j)
+                if tmp:
+                    s_stereo, p_stereo = tmp
+                else:
+                    tmp = g.get_stereo(j, i)
+                    if tmp:
+                        s_stereo, p_stereo = tmp
+                        i, j = j, i
+                    else:
+                        s_stereo = p_stereo = None
             else:
-                s_stereo = p_stereo = g.get_stereo(i, j)
-
-            if not (s_stereo or p_stereo):
-                if is_cgr:
-                    s_stereo, p_stereo = g.get_stereo(j, i)
+                s_stereo = g.get_stereo(i, j)
+                if s_stereo:
+                    p_stereo = s_stereo
                 else:
                     s_stereo = p_stereo = g.get_stereo(j, i)
-                if s_stereo or p_stereo:
-                    i, j = j, i
+                    if s_stereo:
+                        i, j = j, i
 
             re_atoms = (renum[i], renum[j])
             if s_stereo or p_stereo:

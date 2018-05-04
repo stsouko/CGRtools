@@ -58,9 +58,9 @@ class BaseContainer(Graph, ABC):
                               self.get_signature.__name__, self.get_signature_hash.__name__, self.fix_data.__name__,
                               self.get_environment.__name__, self.mark.__name__, self.atom.__name__, self.bond.__name__,
                               self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                              self.atom_numbers.__name__, self.add_stereo.__name__, self.get_stereo.__name__,
+                              self.add_stereo.__name__, self.get_stereo.__name__,
                               self.delete_atom.__name__, self.delete_bond.__name__,
-                              'meta', 'bonds_count', 'atoms_count']
+                              'meta', 'bonds_count', 'atoms_count', 'atom_numbers']
         return self.__visible
 
     def __getstate__(self):

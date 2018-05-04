@@ -18,6 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from collections import defaultdict
 from itertools import chain
 from .common import BaseContainer
 from ..algorithms import CGRstring, pyramid_volume
@@ -42,7 +43,8 @@ class MoleculeContainer(BaseContainer):
         return self.__visible
 
     def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__')}
+        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__',
+                                                                                    '_stereo_cache')}
 
     def pickle(self):
         """return json serializable Molecule"""
@@ -68,7 +70,14 @@ class MoleculeContainer(BaseContainer):
         return sub
 
     def add_atom(self, atom, _map=None, mark='0', x=0, y=0, z=0):
-        if not isinstance(atom, Element):
+        if issubclass(atom, Element):
+            atom = atom()
+        elif isinstance(atom, str):
+            try:
+                atom = elements[atom]()
+            except KeyError:
+                raise TypeError('invalid symbol of atom')
+        elif not isinstance(atom, Element):
             raise TypeError('invalid type of atom')
         if _map is None:
             _map = max(self, default=0) + 1
@@ -82,7 +91,7 @@ class MoleculeContainer(BaseContainer):
         self.flush_cache()
         return _map
 
-    def add_bond(self, atom1, atom2, mark, *, ignore=False):
+    def add_bond(self, atom1, atom2, mark=1, *, ignore=False):
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
         if self.has_edge(atom1, atom2):
@@ -123,77 +132,30 @@ class MoleculeContainer(BaseContainer):
             raise InvalidAtom('atom or bond not found')
 
         if self.nodes[atom1].get('s_stereo'):
-            raise InvalidStereo('atom has stereo. change impossible')
+            raise self._stereo_exception3
 
         tmp = [(x, y['s_bond']) for x, y in self[atom1].items()]
         neighbors = [x for x, _ in tmp]
 
         if self.nodes[atom1]['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors):
-            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+            raise self._stereo_exception1
 
         neighbors_e = [self.nodes[x]['element'] for x in neighbors]
         implicit = self.atom_implicit_h(atom1)
         if implicit > 1 or implicit == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1:
-            raise InvalidStereo('stereo impossible. too many H atoms')
+            raise self._stereo_exception4
 
         bonds = [x for _, x in tmp]
         total = implicit + len(neighbors)
         if total == 4:  # tetrahedron
             self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit)
         else:
-            raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+            raise self._stereo_exception2
 
     def get_stereo(self, atom1, atom2):
-        if self.__stereo_cache is None:
-            self.__stereo_cache = {}
-            nodes = list(self.nodes(data=True))
-            while True:
-                failed = []
-                for i, tmp in enumerate(nodes, start=1):
-                    n, attr = tmp
-                    s = attr.get('s_stereo')
-                    if s:
-                        neighbors = list(self.neighbors(n))
-                        len_n = len(neighbors)
-                        if len_n in (3, 4):  # tetrahedron
-                            if attr['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors):
-                                continue  # 3d molecules ignored
-
-                            weights = self.get_morgan(stereo=True)
-                            order = sorted(neighbors, key=weights.get)
-                            for _ in range(len_n):
-                                if (order[0], n) in self.__stereo_cache:
-                                    order.append(order.pop(0))
-                                else:
-                                    failed.append(tmp)
-                                    break
-                            else:
-                                failed.insert(0, tmp)
-                                failed.extend(nodes[i:])
-                                self.__stereo_cache = None
-                                nodes = failed
-                                break
-
-                            if len_n == 4:
-                                zero = self.nodes[order[0]]
-                                zero = (zero['s_x'], zero['s_y'], 1)
-                                first = self.nodes[order[1]]
-                                first = (first['s_x'], first['s_y'], 0)
-                            else:
-                                zero = (attr['s_x'], attr['s_y'], 0)
-                                first = self.nodes[order[0]]
-                                first = (first['s_x'], first['s_y'], 1)
-
-                            second = self.nodes[order[-2]]
-                            third = self.nodes[order[-1]]
-                            vol = pyramid_volume(zero, first,
-                                                 (second['s_x'], second['s_y'], 0), (third['s_x'], third['s_y'], 0))
-
-                            self.__stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
-                else:
-                    break
-
-        return self.__stereo_cache.get((atom1, atom2), None)
+        if self._stereo_cache is None:
+            self._stereo_cache = self._prepare_stereo()
+        return self._stereo_cache.get((atom1, atom2), None)
 
     def reset_query_marks(self, copy=False):
         """
@@ -233,21 +195,25 @@ class MoleculeContainer(BaseContainer):
 
         :return: number of removed hydrogens
         """
-        explicit = {}
+        explicit = defaultdict(list)
         c = 0
         for n, attr in self.nodes(data='element'):
             if attr == 'H':
                 m = next(self.neighbors(n))
                 if self.nodes[m]['element'] != 'H':
-                    explicit.setdefault(m, []).append(n)
+                    explicit[m].append(n)
 
         for n, h in explicit.items():
             atom = self.atom(n)
-            implicit = atom.get_implicit_h([y['s_bond'] for x, y in self[n].items() if x not in h])
-            if implicit:
-                for x in h:
-                    self.remove_node(x)
-                    c += 1
+            len_h = len(h)
+            for i in range(len_h, 0, -1):
+                hi = h[:i]
+                if atom.get_implicit_h([y['s_bond'] for x, y in self[n].items() if x not in hi]) == i:
+                    for x in hi:
+                        self.remove_node(x)
+                        c += 1
+                    break
+
         self.flush_cache()
         return c
 
@@ -292,8 +258,58 @@ class MoleculeContainer(BaseContainer):
         self.nodes[atom1][l_stereo] = vol > 0 and 1 or -1
         self.flush_cache()
 
+    def _prepare_stereo(self):
+        _stereo_cache = {}
+        nodes = list(self.nodes(data=True))
+        while True:
+            failed = []
+            for i, tmp in enumerate(nodes, start=1):
+                n, attr = tmp
+                s = attr.get('s_stereo')
+                if not s:
+                    continue
+                neighbors = list(self.neighbors(n))
+                len_n = len(neighbors)
+                if len_n in (3, 4):  # tetrahedron
+                    if attr['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors):
+                        continue  # 3d molecules ignored
+
+                    weights = self.get_morgan(stereo=True)
+                    order = sorted(neighbors, key=weights.get)
+                    for _ in range(len_n):
+                        if (order[0], n) in _stereo_cache:
+                            order.append(order.pop(0))
+                        else:
+                            failed.append(tmp)
+                            break
+                    else:
+                        failed.insert(0, tmp)
+                        failed.extend(nodes[i:])
+                        _stereo_cache = None
+                        nodes = failed
+                        break
+
+                    if len_n == 4:
+                        zero = self.nodes[order[0]]
+                        zero = (zero['s_x'], zero['s_y'], 1)
+                        first = self.nodes[order[1]]
+                        first = (first['s_x'], first['s_y'], 0)
+                    else:
+                        zero = (attr['s_x'], attr['s_y'], 0)
+                        first = self.nodes[order[0]]
+                        first = (first['s_x'], first['s_y'], 1)
+
+                    second = self.nodes[order[-2]]
+                    third = self.nodes[order[-1]]
+                    vol = pyramid_volume(zero, first,
+                                         (second['s_x'], second['s_y'], 0), (third['s_x'], third['s_y'], 0))
+
+                    _stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
+            else:
+                return _stereo_cache
+
     def flush_cache(self):
-        self.__stereo_cache = None
+        self._stereo_cache = None
         super().flush_cache()
 
     @staticmethod
@@ -314,6 +330,10 @@ class MoleculeContainer(BaseContainer):
             s = self.get_stereo(n, m)
             if s:
                 tmp.append((n, m, s))
+            else:
+                s = self.get_stereo(m, n)
+                if s:
+                    tmp.append((m, n, s))
         return tmp
 
     def _fix_stereo_stage_2(self, stereo):
@@ -331,13 +351,18 @@ class MoleculeContainer(BaseContainer):
                 continue
             break
 
-    def _check_bonding(self, n, m, mark):
+    def _check_bonding(self, n, m, mark, label='s'):
         for atom, reverse in ((n, m), (m, n)):
-            a = self.atom(atom)
-            r = self.atom(reverse)
-            b = [x for *_, x in self.edges(atom, data='s_bond')] + [mark]
-            ng = [self.atom(x) for x in self[atom]] + [r]
-            if not a.check_valence(b, ng):
+            ng = [self.atom(reverse)]
+            bn = [mark]
+            label = '%s_bond' % label
+            for a, attrs in self[atom].items():
+                b = attrs.get(label)
+                if b:
+                    bn.append(b)
+                    ng.append(self.atom(a))
+
+            if not self.atom(atom).check_valence(bn, ng):
                 raise InvalidData('valence error')
 
     @classmethod
@@ -358,4 +383,8 @@ class MoleculeContainer(BaseContainer):
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
 
-    __visible = __stereo_cache = None
+    __visible = _stereo_cache = None
+    _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+    _stereo_exception2 = InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+    _stereo_exception3 = InvalidStereo('atom has stereo. change impossible')
+    _stereo_exception4 = InvalidStereo('stereo impossible. too many H atoms')
