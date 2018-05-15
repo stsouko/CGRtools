@@ -156,11 +156,12 @@ def get_element(symbol, number, _type, group, period):
             return _type
 
         def check_valence(self, bonds, neighbors):
-            res = (symbol, self.charge, self.radical, self.__bonds_sum(bonds)) in atom_valences
+            bs = self.__bonds_sum(bonds)
+            res = atom_valences.get((symbol, self.charge, self.radical, bs))
             if not res:
                 scrl = (symbol, self.charge, self.radical, len(bonds))
                 if scrl in atom_valences_exceptions:
-                    return sorted(zip(neighbors, bonds)) in atom_valences_exceptions[scrl]
+                    return tuple(sorted(zip(neighbors, bonds))) in atom_valences_exceptions[scrl] and bs or None
             return res
 
         def get_implicit_h(self, bonds):
@@ -210,6 +211,7 @@ _bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1, None: 0}
 _group_cache = {}
 _period_cache = {}
 _radical_map = {1: 2, 2: 1, 3: 2, None: 0}
+_radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
 _groups = {z: x for x, y in enumerate(groups, start=1) for z in y}
 _periods = {z: x for x, y in enumerate(periods, start=1) for z in y}
 _types = {z: x for x, y in types.items() for z in y}

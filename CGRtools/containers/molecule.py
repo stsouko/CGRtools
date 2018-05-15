@@ -353,17 +353,22 @@ class MoleculeContainer(BaseContainer):
 
     def _check_bonding(self, n, m, mark, label='s'):
         for atom, reverse in ((n, m), (m, n)):
-            ng = [self.atom(reverse)]
-            bn = [mark]
-            label = '%s_bond' % label
-            for a, attrs in self[atom].items():
-                b = attrs.get(label)
-                if b:
-                    bn.append(b)
-                    ng.append(self.atom(a))
+            bn, ng = self._get_atom_environment(atom, label)
+            ng.append(self.nodes[reverse]['element'])
+            bn.append(mark)
 
             if not self.atom(atom).check_valence(bn, ng):
                 raise InvalidData('valence error')
+
+    def _get_atom_environment(self, atom, label='s'):
+        ng, bn = [], []
+        label = '%s_bond' % label
+        for a, attrs in self[atom].items():
+            b = attrs.get(label)
+            if b:
+                bn.append(b)
+                ng.append(self.nodes[a]['element'])
+        return bn, ng
 
     @classmethod
     def _atom_container(cls, attrs):

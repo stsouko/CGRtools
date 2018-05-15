@@ -250,9 +250,12 @@ _valence_rules = (
     (('N', 'P', 'As', 'Sb', 'Bi'), -1, 0, 2, 2),
     (('N', 'P', 'As', 'Sb', 'Bi'), -2, 0, 1, 1),
     (('N', 'P', 'As', 'Sb', 'Bi'), -3, 0, 0, 0),
+    (('P', 'As', 'Sb', 'Bi'), -1, 0, 4, 0),
     # radical
     (('N', 'P', 'As', 'Sb', 'Bi'), 0, 1, 2, 2),
     (('N', 'P', 'As', 'Sb', 'Bi'), 0, 2, 1, 1),
+    (('P', 'As', 'Sb', 'Bi'), 0, 1, 4, 1),
+    (('P', 'As', 'Sb', 'Bi'), 0, 2, 3, 1),
     # radical-charge combo
     (('N', 'P', 'As', 'Sb', 'Bi'), 1, 1, 3, 3),
     (('N', 'P', 'As', 'Sb', 'Bi'), 1, 2, 2, 2),
@@ -359,13 +362,13 @@ _exceptions = (
 
 _bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1, '-': 1, '=': 2, '#': 3, ':': 1.5}
 
-atom_valences_exceptions = defaultdict(list)
+atom_valences_exceptions = defaultdict(set)
 for a, c, r, b in _exceptions:
     ap = list(product(*(x if isinstance(x, tuple) else [x] for x in b[1::2])))
     bl = [_bonds[x] for x in b[::2]]
     for i in (a if isinstance(a, tuple) else [a]):
         for ape in ap:
-            atom_valences_exceptions[(i, c, r, len(bl))].append(sorted(zip(ape, bl)))
+            atom_valences_exceptions[(i, c, r, len(bl))].add(tuple(sorted(zip(ape, bl))))
 
 atom_valences_exceptions = dict(atom_valences_exceptions)
 

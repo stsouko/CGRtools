@@ -23,6 +23,7 @@ from itertools import cycle
 from networkx import connected_components
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 from .exceptions import InvalidData
+from .periodictable.factory import _radical_map, _radical_unmap
 
 
 class CGRcore:
@@ -134,16 +135,13 @@ class CGRcore:
             for n in unbalanced['reagents']:
                 attr = h.nodes[n]
                 attr['p_charge'] = attr['s_charge']
-                r = attr.get('s_radical')
-                if r:
-                    attr['p_radical'] = r
+                attr['p_radical'] = attr.get('s_radical')
 
             for n in unbalanced['products']:
                 attr = h.nodes[n]
                 attr['s_charge'] = attr['p_charge']
-                r = attr.get('p_radical')
-                if r:
-                    attr['s_radical'] = r
+                attr['s_radical'] = attr.get('p_radical')
+
         else:
             """ calc unbalanced charges and radicals for skin atoms
             """
@@ -154,168 +152,216 @@ class CGRcore:
                         reverse_ext[j][i].append(n)
 
             for n, sp in reverse_ext.items():
-                atom = h.nodes[n]
-                sh, ph = h.atom_implicit_h(n)
-                dh = ph - sh
-                dc = atom['p_charge'] - atom['s_charge']
-                dr = cls.__radical_map[atom.get('p_radical')] - cls.__radical_map[atom.get('s_radical')]
+                s_atom, p_atom = h.atom(n)
+                sv = s_atom.check_valence(*h._get_atom_environment(n))
+                pv = p_atom.check_valence(*h._get_atom_environment(n, 'p'))
 
-                if not (dh or dc or dr):
-                    # common atom unchanged. Substitution, Elimination, Addition
+                dv = pv - sv
+                if not dv:  # common atom unchanged. Substitution, Elimination, Addition
                     for m in sp['reagents']:
                         attr = h.nodes[m]
                         attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                        h.meta['rule #1. atom %d (lost): common atom (%d) unchanged. '
-                               'substitution, elimination, addition. lost atom' % (m, n)] = 0
+                        h.meta['rule #1. atom lost. common atom unchanged. '
+                               'substitution, elimination, addition. lost atom'] = [(m, n)]
                     for m in sp['products']:
                         attr = h.nodes[m]
                         attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                        h.meta['rule #2. atom %d (new): common atom (%d) unchanged. '
-                               'substitution, elimination, addition. new atom' % (m, n)] = 0
+                        h.meta['rule #2. atom new. common atom unchanged. '
+                               'substitution, elimination, addition. new atom'] = [(m, n)]
+
                 else:
-                    #isp = dict(reagents=cycle(sp.get('reagents', [])), products=cycle(sp.get('products', [])))
+                    sr, pr = s_atom.radical, p_atom.radical
+                    dr = pr - sr
                     # radical balancing
-                    if dr > 0:
-                        # radical added or increased.
-                        for x in range(dr):
-                            m = next(isp['reagents'], None)  # homolysis
-                            if m is not None:
+                    if dr > 0:  # radical added or increased.
+                        if sp['reagents']:
+                            for m in sp['reagents']:
+                                attr = h.nodes[m]
+                                attr['p_charge'] = attr['s_charge']
+                            for _, m in zip(range(dr), cycle(sp['reagents'])):  # homolysis
                                 attr = h.nodes[m]
                                 attr['p_radical'] = \
-                                    cls.__radical_unmap[cls.__radical_map[attr.get('p_radical', attr.get('s_radical'))] + 1]
-                            else:
-                                m = next(isp['products'], None)  # radical addition
-                                if m is not None:
-                                    attr = h.nodes[m]
-                                    attr['s_radical'] = \
-                                        cls.__radical_unmap[cls.__radical_map[attr.get('s_radical',
-                                                                                       attr.get('p_radical'))] + 1]
-
-                    elif dr < 0:
-                        # radical removed or decreased.
-                        for x in range(-dr):
-                            m = next(isp['products'], None)  # recombination
-                            if m is not None:
+                                    _radical_unmap[_radical_map[attr.get('p_radical', attr.get('s_radical'))] + 1]
+                                h.meta.setdefault('rule #20. atom lost. common atom radical added or increased. '
+                                                  'lost atom radical added', []).append((m, n))
+                            for m in sp['reagents'][dr:]:
+                                attr = h.nodes[m]
+                                attr.update(p_radical=attr.get('s_radical'))
+                                h.meta['rule #21. atom lost. common atom radical added or increased. '
+                                       'lost atom radical unchanged'] = [(m, n)]
+                            for m in sp['products']:
+                                attr = h.nodes[m]
+                                attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+                                h.meta['rule #22. atom new. common atom radical added or increased. '
+                                       'new atom radical unchanged'] = [(m, n)]
+                        else:
+                            for m in sp['products']:
+                                attr = h.nodes[m]
+                                attr['s_charge'] = attr['p_charge']
+                            for _, m in zip(range(dr), cycle(sp['products'])):  # radical addition
                                 attr = h.nodes[m]
                                 attr['s_radical'] = \
-                                    cls.__radical_unmap[cls.__radical_map[attr.get('s_radical', attr.get('p_radical'))] + 1]
-                            else:
-                                m = next(isp['reagents'], None)  # radical elimination
-                                if m is not None:
-                                    attr = h.nodes[m]
-                                    attr['p_radical'] = \
-                                        cls.__radical_unmap[cls.__radical_map[attr.get('p_radical',
-                                                                                       attr.get('s_radical'))] + 1]
-                    # protons and charge balancing
-                    if dh < 0 and dh < dc <= 0:  # deprotonation and charge decrease less.
-                        dch = dc - dh
-                        for _, m in zip(range(dch), cycle(sp['products'])):  # electrophyle substitution
-                            attr = h.nodes[m]
-                            attr['s_charge'] = attr.get('s_charge', attr['p_charge']) + 1
-                            meta = 'rule #3. atom %d (new): common atom (%d) deprotonation ' \
-                                   'and charge decreased or unchanged. electrophyle substitution' % (m, n)
-                            h.meta[meta] = h.meta.get(meta, 0) + 1
+                                    _radical_unmap[_radical_map[attr.get('s_radical', attr.get('p_radical'))] + 1]
+                                h.meta.setdefault('rule #23. atom new. common atom radical added or increased. '
+                                                  'new atom radical added', []).append((m, n))
+                            for m in sp['products'][dr:]:
+                                attr = h.nodes[m]
+                                attr.update(s_radical=attr.get('p_radical'))
+                                h.meta['rule #22. atom new. common atom radical added or increased. '
+                                       'new atom radical unchanged'] = [(m, n)]
 
-                        for m in sp['products'][dch:]:
-                            attr = h.nodes[m]
-                            attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                            h.meta['rule #4. atom %d (new): common atom (%d) deprotonation '
-                                   'and charge decreased or unchanged. new atom not modified' % (m, n)] = 0
-                        for m in sp['reagents']:
-                            attr = h.nodes[m]
-                            attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                            h.meta['rule #5. atom %d (lost): common atom (%d) deprotonation '
-                                   'and charge decreased or unchanged. lost atom not modified' % (m, n)] = 0
-
-                    elif dh > 0 and 0 <= dc < dh:  # charge increase and protonation less
-                        dhc = dh - dc
-                        for _, m in zip(range(dhc), cycle(sp['reagents'])):  # cation elimination and anion protonation
-                            attr = h.nodes[m]
-                            attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
-                            meta = 'rule #6. atom %d (lost): common atom (%d) protonation ' \
-                                   'and charge increased or unchanged. cation elimination' % (m, n)
-                            h.meta[meta] = h.meta.get(meta, 0) + 1
-
-                        for m in sp['reagents'][dhc:]:
-                            attr = h.nodes[m]
-                            attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                            h.meta['rule #7. atom %d (new): common atom (%d) protonation '
-                                   'and charge increased or unchanged. lost atom not modified' % (m, n)] = 0
-                        for m in sp['products']:
-                            attr = h.nodes[m]
-                            attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                            h.meta['rule #8. atom %d (new): common atom (%d) protonation '
-                                   'and charge increased or unchanged. new atom not modified' % (m, n)] = 0
-
-                    elif dc > 0 >= dh:  # charge increasing and deprotonation (if exists).
-                        dch = dc - dh
+                    elif dr < 0:  # radical removed or decreased.
                         if sp['products']:
-                            for _, m in zip(range(dch), cycle(sp['products'])):  # cation addition
+                            for m in sp['products']:
+                                attr = h.nodes[m]
+                                attr['s_charge'] = attr['p_charge']
+                            for _, m in zip(range(-dr), cycle(sp['products'])):  # recombination
+                                attr = h.nodes[m]
+                                attr['s_radical'] = \
+                                    _radical_unmap[_radical_map[attr.get('s_radical', attr.get('p_radical'))] + 1]
+                                h.meta.setdefault('rule #24. atom new. common atom radical removed or decreased. '
+                                                  'new atom radical added', []).append((m, n))
+                            for m in sp['products'][-dr:]:
+                                attr = h.nodes[m]
+                                attr.update(s_radical=attr.get('p_radical'))
+                                h.meta['rule #25. atom new. common atom radical removed or decreased. '
+                                       'new atom radical unchanged'] = [(m, n)]
+                            for m in sp['reagents']:
+                                attr = h.nodes[m]
+                                attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                                h.meta['rule #26. atom lost. common atom radical removed or decreased. '
+                                       'lost atom radical unchanged'] = [(m, n)]
+                        else:
+                            for m in sp['reagents']:
+                                attr = h.nodes[m]
+                                attr['p_charge'] = attr['s_charge']
+                            for _, m in zip(range(-dr), cycle(sp['reagents'])):  # radical elimination
+                                attr = h.nodes[m]
+                                attr['p_radical'] = \
+                                    _radical_unmap[_radical_map[attr.get('p_radical', attr.get('s_radical'))] + 1]
+                                h.meta.setdefault('rule #27. atom lost. common atom radical removed or decreased. '
+                                                  'lost atom radical added', []).append((m, n))
+                            for m in sp['reagents'][-dr:]:
+                                attr = h.nodes[m]
+                                attr.update(s_radical=attr.get('p_radical'))
+                                h.meta['rule #26. atom lost. common atom radical removed or decreased. '
+                                       'lost atom radical unchanged'] = [(m, n)]
+                    else:
+                        sh, ph = h.atom_implicit_h(n)
+                        sc, pc = s_atom.charge, p_atom.charge
+
+                        dh = ph - sh
+                        dc = pc - sc
+                        # protons and charge balancing
+                        if dh < 0 and dh < dc <= 0:  # deprotonation except dissociation.
+                            dch = dc - dh
+                            for _, m in zip(range(dch), cycle(sp['products'])):  # electrophyle substitution
                                 attr = h.nodes[m]
                                 attr['s_charge'] = attr.get('s_charge', attr['p_charge']) + 1
-                                meta = 'rule #9. atom %d (new): common atom (%d) charge increasing ' \
-                                       'and possible deprotonation. cation addition' % (m, n)
-                                h.meta[meta] = h.meta.get(meta, 0) + 1
+                                meta = 'rule #3. atom new. common atom deprotonation ' \
+                                       'and charge decreased or unchanged. electrophyle substitution'
+                                h.meta.setdefault(meta, []).append((m, n))
 
                             for m in sp['products'][dch:]:
                                 attr = h.nodes[m]
                                 attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                                h.meta['rule #10. atom %d (lost): common atom (%d) charge increasing '
-                                       'and possible deprotonation. new atom not modified' % (m, n)] = 0
+                                h.meta['rule #4. atom new. common atom deprotonation '
+                                       'and charge decreased or unchanged. new atom not modified'] = [(m, n)]
                             for m in sp['reagents']:
                                 attr = h.nodes[m]
                                 attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                                h.meta['rule #11. atom %d (new): common atom (%d) charge increasing '
-                                       'and possible deprotonation. lost atom not modified' % (m, n)] = 0
-                        else:
-                            for _, m in zip(range(dch), cycle(sp['reagents'])):  # anion elimination
-                                attr = h.nodes[m]
-                                attr['p_charge'] = attr.get('p_charge', attr['s_charge']) - 1
-                                meta = 'rule #12. atom %d (lost): common atom (%d) charge increasing ' \
-                                       'and possible deprotonation. anion elimination' % (m, n)
-                                h.meta[meta] = h.meta.get(meta, 0) - 1
+                                h.meta['rule #5. atom lost. common atom deprotonation '
+                                       'and charge decreased or unchanged. lost atom not modified'] = [(m, n)]
 
-                            for m in sp['reagents'][dch:]:
+                        elif dh > 0 and 0 <= dc < dh:  # charge increase except protonation
+                            dhc = dh - dc
+                            for _, m in zip(range(dhc), cycle(sp['reagents'])):  # cation elimination and anion protonation
+                                attr = h.nodes[m]
+                                attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
+                                meta = 'rule #6. atom %d (lost): common atom (%d) protonation ' \
+                                       'and charge increased or unchanged. cation elimination' % (m, n)
+                                h.meta[meta] = h.meta.get(meta, 0) + 1
+
+                            for m in sp['reagents'][dhc:]:
                                 attr = h.nodes[m]
                                 attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                                h.meta['rule #13. atom %d (new): common atom (%d) charge increasing '
-                                       'and possible deprotonation. lost atom not modified' % (m, n)] = 0
+                                h.meta['rule #7. atom %d (new): common atom (%d) protonation '
+                                       'and charge increased or unchanged. lost atom not modified' % (m, n)] = 0
                             for m in sp['products']:
                                 attr = h.nodes[m]
                                 attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                                h.meta['rule #14. atom %d (new): common atom (%d) charge increasing '
-                                       'and possible deprotonation. new atom not modified' % (m, n)] = 0
+                                h.meta['rule #8. atom %d (new): common atom (%d) protonation '
+                                       'and charge increased or unchanged. new atom not modified' % (m, n)] = 0
 
-                    elif dc < 0 <= dh:  # charge decreasing and protonation (if exists)
-                        dhc = dh - dc
-                        for _, m in zip(range(dhc), cycle(sp['reagents'])):  # cation elimination
-                            attr = h.nodes[m]
-                            attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
-                            meta = 'rule #15. atom %d (lost): common atom (%d) charge decreasing ' \
-                                   'and possible protonation. cation elimination' % (m, n)
-                            h.meta[meta] = h.meta.get(meta, 0) + 1
+                        elif dc > 0 >= dh:  # charge increasing and deprotonation (if exists).
+                            dch = dc - dh
+                            if sp['products']:
+                                for _, m in zip(range(dch), cycle(sp['products'])):  # cation addition
+                                    attr = h.nodes[m]
+                                    attr['s_charge'] = attr.get('s_charge', attr['p_charge']) + 1
+                                    meta = 'rule #9. atom %d (new): common atom (%d) charge increasing ' \
+                                           'and possible deprotonation. cation addition' % (m, n)
+                                    h.meta[meta] = h.meta.get(meta, 0) + 1
 
-                        for m in sp['reagents'][dhc:]:
-                            attr = h.nodes[m]
-                            attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                            h.meta['rule #16. atom %d (new): common atom (%d) charge decreasing ' \
-                                   'and possible protonation. lost atom not modified' % (m, n)] = 0
-                        for m in sp['products']:
-                            attr = h.nodes[m]
-                            attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                            h.meta['rule #17. atom %d (new): common atom (%d) charge decreasing '
-                                   'and possible protonation. new atom not modified' % (m, n)] = 0
+                                for m in sp['products'][dch:]:
+                                    attr = h.nodes[m]
+                                    attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+                                    h.meta['rule #10. atom %d (lost): common atom (%d) charge increasing '
+                                           'and possible deprotonation. new atom not modified' % (m, n)] = 0
+                                for m in sp['reagents']:
+                                    attr = h.nodes[m]
+                                    attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                                    h.meta['rule #11. atom %d (new): common atom (%d) charge increasing '
+                                           'and possible deprotonation. lost atom not modified' % (m, n)] = 0
+                            else:
+                                for _, m in zip(range(dch), cycle(sp['reagents'])):  # anion elimination
+                                    attr = h.nodes[m]
+                                    attr['p_charge'] = attr.get('p_charge', attr['s_charge']) - 1
+                                    meta = 'rule #12. atom %d (lost): common atom (%d) charge increasing ' \
+                                           'and possible deprotonation. anion elimination' % (m, n)
+                                    h.meta[meta] = h.meta.get(meta, 0) - 1
 
-                    else:
-                        # restore charge and radical marks. we don't know what to do.
-                        for m in sp['reagents']:
-                            attr = h.nodes[m]
-                            attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
-                            h.meta['rule #18. atom %d (lost): common atom (%d) unknown state' % (m, n)] = 0
-                        for m in sp['products']:
-                            attr = h.nodes[m]
-                            attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
-                            h.meta['rule #19. atom %d (new): common atom (%d) unknown state' % (m, n)] = 0
+                                for m in sp['reagents'][dch:]:
+                                    attr = h.nodes[m]
+                                    attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                                    h.meta['rule #13. atom %d (new): common atom (%d) charge increasing '
+                                           'and possible deprotonation. lost atom not modified' % (m, n)] = 0
+                                for m in sp['products']:
+                                    attr = h.nodes[m]
+                                    attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+                                    h.meta['rule #14. atom %d (new): common atom (%d) charge increasing '
+                                           'and possible deprotonation. new atom not modified' % (m, n)] = 0
+
+                        elif dc < 0 <= dh:  # charge decreasing and protonation (if exists)
+                            dhc = dh - dc
+                            for _, m in zip(range(dhc), cycle(sp['reagents'])):  # cation elimination
+                                attr = h.nodes[m]
+                                attr['p_charge'] = attr.get('p_charge', attr['s_charge']) + 1
+                                meta = 'rule #15. atom %d (lost): common atom (%d) charge decreasing ' \
+                                       'and possible protonation. cation elimination' % (m, n)
+                                h.meta[meta] = h.meta.get(meta, 0) + 1
+
+                            for m in sp['reagents'][dhc:]:
+                                attr = h.nodes[m]
+                                attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                                h.meta['rule #16. atom %d (new): common atom (%d) charge decreasing ' \
+                                       'and possible protonation. lost atom not modified' % (m, n)] = 0
+                            for m in sp['products']:
+                                attr = h.nodes[m]
+                                attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+                                h.meta['rule #17. atom %d (new): common atom (%d) charge decreasing '
+                                       'and possible protonation. new atom not modified' % (m, n)] = 0
+
+                        else:
+                            # restore charge and radical marks. we don't know what to do.
+                            for m in sp['reagents']:
+                                attr = h.nodes[m]
+                                attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
+                                h.meta['rule #18. atom %d (lost): common atom (%d) unknown state' % (m, n)] = 0
+                            for m in sp['products']:
+                                attr = h.nodes[m]
+                                attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
+                                h.meta['rule #19. atom %d (new): common atom (%d) unknown state' % (m, n)] = 0
 
         """ update sp_* marks
         """
@@ -340,7 +386,7 @@ class CGRcore:
 
         for mol in cls.split(x):
             for *_, edge_attr in mol.edges(data=True):
-                edge_attr['s_bond'] = edge_attr.get('p_bond', None)
+                edge_attr['s_bond'] = edge_attr.get('p_bond')
                 s = edge_attr.get('p_stereo')
                 if s:
                     edge_attr['s_stereo'] = s
@@ -392,6 +438,3 @@ class CGRcore:
                                            node=dict(s_charge='p_charge', s_neighbors='p_neighbors', s_hyb='p_hyb',
                                                      s_x='p_x', s_y='p_y', s_z='p_z', s_stereo='p_stereo',
                                                      s_radical='p_radical'))})
-
-    __radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
-    __radical_map = {1: 2, 2: 1, 3: 2, None: 0}
