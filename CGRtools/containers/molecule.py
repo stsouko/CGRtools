@@ -237,6 +237,12 @@ class MoleculeContainer(BaseContainer):
     def atom_implicit_h(self, atom):
         return self.atom(atom).get_implicit_h([x for *_, x in self.edges(atom, data='s_bond')])
 
+    def atom_explicit_h(self, atom):
+        return sum(self.nodes[x]['element'] == 'H' for x in self.neighbors(atom))
+
+    def atom_total_h(self, atom):
+        return self.atom_explicit_h(atom) + self.atom_implicit_h(atom)
+
     def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
         if any(x != 1 for x in bonds):
             raise InvalidStereo('only single bonded tetrahedron acceptable')

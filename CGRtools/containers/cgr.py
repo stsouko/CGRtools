@@ -300,6 +300,16 @@ class CGRContainer(MoleculeContainer):
         pi = p.get_implicit_h([x for *_, x in self.edges(atom, data='p_bond')])
         return DynamicContainer(ri, pi)
 
+    def atom_explicit_h(self, atom):
+        rh = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('s_bond'))
+        ph = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('p_bond'))
+        return DynamicContainer(rh, ph)
+
+    def atom_total_h(self, atom):
+        rh, ph = self.atom_explicit_h(atom)
+        ri, pi = self.atom_implicit_h(atom)
+        return DynamicContainer(ri + rh, pi + ph)
+
     def _prepare_stereo(self):
         return {}
 
