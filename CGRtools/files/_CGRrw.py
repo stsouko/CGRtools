@@ -22,6 +22,7 @@ from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
 from io import StringIO, BytesIO
+from pathlib import Path
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
 from ..periodictable import elements_set
@@ -39,6 +40,8 @@ class WithMixin:
             raise InvalidConfig('invalid file')
         if isinstance(file, str):
             self._file = open(file, mode)
+        elif isinstance(file, Path):
+            self._file = file.open(mode)
         elif isinstance(file, StringIO) and mode in 'rw':
             self._file = file
         elif isinstance(file, BytesIO) and mode == 'rb':

@@ -114,7 +114,9 @@ class CGRContainer(MoleculeContainer):
         self.flush_cache()
         return _map
 
-    def add_bond(self, atom1, atom2, mark=1, p_mark=1, *, ignore=False):
+    def add_bond(self, atom1, atom2, mark=1, p_mark=1, *, ignore=False, s_mark=1):
+        if mark == 1 and s_mark != mark:
+            mark = s_mark
         if atom1 not in self or atom2 not in self:
             raise InvalidData('atoms not found')
         if self.has_edge(atom1, atom2):
@@ -122,15 +124,10 @@ class CGRContainer(MoleculeContainer):
         if not (mark or p_mark):
             raise InvalidData('empty bonds not allowed')
 
-        if mark not in (1, 2, 3, 4, 9, None):
+        if mark not in (1, 2, 3, 4, 9, None) or p_mark not in (1, 2, 3, 4, 9, None):
             raise InvalidData('invalid bond mark')
-        elif not ignore and mark:
-            self._check_bonding(atom1, atom2, mark)
-
-        if p_mark not in (1, 2, 3, 4, 9, None):
-            raise InvalidData('invalid bond mark')
-        elif not ignore and p_mark:
-            self._check_bonding(atom1, atom2, p_mark, label='p')
+        elif not ignore:
+            self.__check_bonding(atom1, atom2, mark, p_mark)
 
         if mark:
             self.add_edge(atom1, atom2, s_bond=mark)
@@ -327,6 +324,22 @@ class CGRContainer(MoleculeContainer):
                 stereo = failed_stereo
                 continue
             break
+
+    def __check_bonding(self, n, m, mark, p_mark):
+        for atom, reverse in ((n, m), (m, n)):
+            s_atom, p_atom = self.atom(atom)
+            if mark:
+                bn, ng = self._get_atom_environment(atom)
+                ng.append(self.nodes[reverse]['element'])
+                bn.append(mark)
+                if not s_atom.check_valence(bn, ng):
+                    raise InvalidData('valence error')
+            if p_mark:
+                bn, ng = self._get_atom_environment(atom, 'p')
+                ng.append(self.nodes[reverse]['element'])
+                bn.append(p_mark)
+                if not p_atom.check_valence(bn, ng):
+                    raise InvalidData('valence error')
 
     @staticmethod
     def _attr_renew(attr, marks):

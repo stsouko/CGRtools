@@ -100,7 +100,7 @@ class MoleculeContainer(BaseContainer):
             raise InvalidData('invalid bond mark')
 
         if not ignore:
-            self._check_bonding(atom1, atom2, mark)
+            self.__check_bonding(atom1, atom2, mark)
 
         stereo = self._fix_stereo_stage_1()
         self.add_edge(atom1, atom2, s_bond=mark)
@@ -357,9 +357,9 @@ class MoleculeContainer(BaseContainer):
                 continue
             break
 
-    def _check_bonding(self, n, m, mark, label='s'):
+    def __check_bonding(self, n, m, mark):
         for atom, reverse in ((n, m), (m, n)):
-            bn, ng = self._get_atom_environment(atom, label)
+            bn, ng = self._get_atom_environment(atom)
             ng.append(self.nodes[reverse]['element'])
             bn.append(mark)
 

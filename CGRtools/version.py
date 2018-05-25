@@ -21,4 +21,4 @@
 
 
 def version():
-    return '2.8.12b'
+    return '2.8.13'

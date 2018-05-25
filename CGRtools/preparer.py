@@ -26,7 +26,7 @@ from .exceptions import InvalidData
 
 
 class CGRpreparer(CGRcore):
-    def __init__(self, cgr_type='0', extralabels=False):
+    def __init__(self, cgr_type='0', extralabels=False, balance=False):
         """
         main object for CGR creation and manipulation
 
@@ -48,9 +48,11 @@ class CGRpreparer(CGRcore):
             second reagents molecules with all products molecules excluding first
         :param extralabels: [re]create query labels in Graphs before condensation. also see CGRreactor init and
             reset_query_marks in MoleculeContainer
+        :param balance: do electron balancing for atom unbalanced reactions
         """
         self.__cgr_type_code = cgr_type
         self.__extralabels = extralabels
+        self.__balance = balance
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
 
     def __getstate__(self):
@@ -79,7 +81,7 @@ class CGRpreparer(CGRcore):
                 res.reagents.reset_query_marks()
                 res.products.reset_query_marks()
 
-            g = self.compose(res.reagents, res.products)
+            g = self.compose(res.reagents, res.products, self.__balance)
 
         g.meta.update(data.meta)
         return g
