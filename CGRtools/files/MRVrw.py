@@ -222,12 +222,9 @@ class MRVwrite(CGRwrite, WithMixin):
 
     def close(self):
         if not self.__finalized:
-            self.finalize()
+            self._file.write('</cml>')
+            self.__finalized = True
         super().close()
-
-    def finalize(self):
-        self._file.write('</cml>')
-        self.__finalized = True
 
     def __init_write(self, data):
         self._file.write('<cml>')

@@ -40,8 +40,10 @@ class WithMixin:
             raise InvalidConfig('invalid file')
         if isinstance(file, str):
             self._file = open(file, mode)
+            self.__is_buffer = False
         elif isinstance(file, Path):
             self._file = file.open(mode)
+            self.__is_buffer = False
         elif isinstance(file, StringIO) and mode in 'rw':
             self._file = file
         elif isinstance(file, BytesIO) and mode == 'rb':
@@ -52,10 +54,13 @@ class WithMixin:
             raise InvalidConfig('invalid file')
         self.__write = mode == 'w'
 
-    def close(self):
+    def close(self, force=False):
         if self.__write:
             self.write = self.__write_adhoc
-        self._file.close()
+            self.__write = False
+
+        if not self.__is_buffer or force:
+            self._file.close()
 
     def __enter__(self):
         return self
@@ -65,7 +70,9 @@ class WithMixin:
 
     @staticmethod
     def __write_adhoc(_):
-        raise FinalizedFile('file closed')
+        raise ValueError('I/O operation on closed writer')
+
+    __is_buffer = True
 
 
 class CGRread:
