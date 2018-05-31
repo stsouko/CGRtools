@@ -215,9 +215,9 @@ class MRVread(CGRread, WithMixin):
 
 
 class MRVwrite(CGRwrite, WithMixin):
-    def __init__(self, file, extralabels=False, mark_to_map=False, xyz=False):
+    def __init__(self, file, *args, **kwargs):
         WithMixin.__init__(self, file, 'w')
-        CGRwrite.__init__(self, extralabels=extralabels, mark_to_map=mark_to_map, xyz=xyz)
+        CGRwrite.__init__(self, *args, **kwargs)
         self.write = self.__init_write
 
     def close(self):
@@ -248,18 +248,27 @@ class MRVwrite(CGRwrite, WithMixin):
         else:
             colors = {}
             c = count(1)
+            s = x = 0
+            rl = len(data.reagents)
             self._file.write('<reaction>')
             for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
                 self._file.write('<%s>' % j)
                 for cnext, m in zip(c, data[i]):
-                    m = self.get_formatted_cgr(m)
+                    m = self.get_formatted_cgr(m, s)
+                    if self._fix_position:
+                        s = m['max_x'] + (3 if cnext == rl else 1)
+                    if cnext == rl:  # get last reagent right atom position
+                        x = m['max_x']
+                    elif not rl and cnext == 1:
+                        x = m['min_x'] - 3
                     self._file.write('<molecule>')
                     self._file.write(m['CGR'])
                     self._file.write('</molecule>')
                     colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
                 self._file.write('</%s>' % j)
 
-            self._file.write('<propertyList>')
+            self._file.write('<arrow type="DEFAULT" x1="{:.4f}" y1="0" x2="{:.4f}" y2="0"/>'
+                             '<propertyList>'.format(x + .5, x + 2.5))
             for k, v in chain(colors.items(), data.meta.items()):
                 if '\n' in v:
                     v = '<![CDATA[%s]]>' % v

@@ -196,8 +196,12 @@ class RDFwrite(MOLwrite, WithMixin):
             self._file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
                              (len(data.reagents), len(data.products)))
             colors = {}
+            s = 0
+            rl = len(data.reagents)
             for cnext, m in enumerate(chain(data.reagents + data.products), start=1):
-                m = self.get_formatted_cgr(m)
+                m = self.get_formatted_cgr(m, s)
+                if self._fix_position:
+                    s = m['max_x'] + (3 if cnext == rl else 1)
                 self._file.write('$MOL\n')
                 self._file.write(m['CGR'])
                 self._file.write("M  END\n")

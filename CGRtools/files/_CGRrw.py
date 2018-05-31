@@ -24,7 +24,7 @@ from itertools import count, chain
 from io import StringIO, BytesIO
 from pathlib import Path
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
-from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, FinalizedFile, MapError
+from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError
 from ..periodictable import elements_set
 from ..periodictable.data import common_isotope as isotopes
 
@@ -432,14 +432,25 @@ class CGRread:
 
 
 class CGRwrite:
-    def __init__(self, extralabels=False, mark_to_map=False, xyz=False):
+    def __init__(self, extralabels=False, mark_to_map=False, xyz=False, fix_position=True):
         self.__xyz = xyz
         self.__mark_to_map = mark_to_map
         self.__atomprop = self.__extra_marks if extralabels else []
+        self._fix_position = fix_position
 
-    def get_formatted_cgr(self, g):
+    def get_formatted_cgr(self, g, shift=0):
         is_cgr = isinstance(g, CGRContainer)
-        data = dict(meta=g.meta.copy())
+        s_x = [x for _, x in g.nodes(data='s_x')]
+        s_y = [x for _, x in g.nodes(data='s_y')]
+        y_shift = -(max(s_y) + min(s_y)) / 2
+        min_x, max_x = min(s_x), max(s_x)
+        x_shift = shift - min_x
+        data = dict(meta=g.meta.copy(), y_shift=y_shift)
+        if self._fix_position:
+            data.update(max_x=max_x + x_shift, min_x=shift)
+        else:
+            data.update(max_x=max_x, min_x=min_x)
+
         cgr_dat, extended, atoms, bonds = [], [], [], []
         renum, colors = {}, {}
         for n, (i, l) in enumerate(g.nodes(data=True), start=1):
@@ -487,8 +498,12 @@ class CGRwrite:
                 if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                     cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
 
+            x, y = l['s_x'], l['s_y']
+            if self._fix_position:
+                x += x_shift
+                y += y_shift
             atoms.append(dict(map=l['mark'] if self.__mark_to_map else i, charge=charge,
-                              element=element, mark=l['mark'], x=l['s_x'], y=l['s_y'], z=l['s_z']))
+                              element=element, mark=l['mark'], x=x, y=y, z=l['s_z']))
 
         data['colors'] = {n: '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in m.items()) for n, m in colors.items()}
 

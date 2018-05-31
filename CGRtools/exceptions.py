@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -44,16 +44,5 @@ class EmptyMolecule(Exception):
     pass
 
 
-class FinalizedFile(Exception):
-    pass
-
-
 class MapError(Exception):
     pass
-
-
-class ValenceError(Exception):
-    __message = 'need neighbors atoms for validation in order of bonds connections'
-
-    def __init__(self, message=None):
-        super().__init__(message or self.__message)
