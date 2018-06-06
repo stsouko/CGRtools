@@ -20,7 +20,7 @@
 #
 from collections import Counter
 from functools import reduce
-from itertools import count
+from itertools import count, repeat
 from operator import mul, itemgetter
 from sys import stderr
 from ..exceptions import InvalidConfig
@@ -91,17 +91,17 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
         s_neighbors = '%s_neighbors' % s
         p_charge = p_radical = p_stereo = p_bond = p_hyb = p_neighbors = None
 
-    params = {n: (elements_list.index(attr['element']) if element else 1,
-                  attr.get('isotope', 1) if isotope else 1,
-                  10 * attr[s_charge] + attr.get(p_charge, 0) if element else 1,
-                  10 * (attr.get(s_radical) or 0) + (attr.get(p_radical) or 0) if element else 1,
+    params = {n: (_tupled_element(attr.get('element')) if element else 1,
+                  _tupled(attr.get('isotope', 1)) if isotope else 1,
+                  _tupled_sp(attr[s_charge], attr.get(p_charge)) if element else 1,
+                  _tupled_sp(attr.get(s_radical), attr.get(p_radical)) if element else 1,
                   10 * (attr.get(s_stereo) or 0) + (attr.get(p_stereo) or 0) if stereo else 1,
-                  10 * (attr.get(s_hyb) or 0) + (attr.get(p_hyb) or 0) if hybridization else 1,
-                  10 * (attr.get(s_neighbors) or 0) + (attr.get(p_neighbors) or 0) if neighbors else 1,
-                  reduce(mul, (primes[10 * (eattr.get(s_bond) or 0) + (eattr.get(p_bond) or 0)]
-                               for eattr in g[n].values() if p_bond or eattr.get(s_bond)), 1),
-                  reduce(mul, (primes[10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)]
-                               for eattr in g[n].values() if p_bond or eattr.get(s_bond)), 1) if stereo else 1)
+                  _tupled_sp(attr.get(s_hyb), attr.get(p_hyb)) if hybridization else 1,
+                  _tupled_sp(attr.get(s_neighbors), attr.get(p_neighbors)) if neighbors else 1,
+                  tuple(sorted(_tupled_sp(eattr.get(s_bond), eattr.get(p_bond))
+                               for eattr in g[n].values() if p_bond or eattr.get(s_bond))),
+                  tuple(sorted(10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)
+                               for eattr in g[n].values() if p_bond or eattr.get(s_bond))) if stereo else 1)
               for n, attr in g.nodes(data=True)}
 
     newlevels = {}
@@ -150,6 +150,36 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
         print('morgan. number of attempts exceeded', file=stderr)
 
     return weights
+
+
+def _tupled(a):
+    if isinstance(a, list):
+        return tuple(sorted(a))
+    return a,
+
+
+def _tupled_element(a):
+    if a is None:
+        return -1,
+    if isinstance(a, list):
+        return tuple(sorted(elements_list.index(x) for x in a))
+    return elements_list.index(a),
+
+
+def _tupled_sp(s, p):
+    if isinstance(s, list):
+        if None in s:
+            s = (x or 0 for x in s)
+        if p is None:
+            p = repeat(0)
+        elif None in p:
+            p = (x or 0 for x in p)
+        return tuple(10 * x + y for x, y in sorted(zip(s, p)))
+    if s is None:
+        s = 0
+    if p is None:
+        p = 0
+    return 10 * s + p,
 
 
 def _eratosthenes():

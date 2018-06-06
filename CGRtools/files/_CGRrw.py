@@ -181,8 +181,12 @@ class CGRread:
         for x in value.split(','):
             s, *_, p = x.split('>')
             if s != p:
-                tmp0.append(cls.__bondlabels[s] if name == 'bond' else (s != 'n' and int(s) or None))
-                tmp1.append(cls.__bondlabels[p] if name == 'bond' else (p != 'n' and int(p) or None))
+                if name == 'bond':
+                    tmp0.append(cls.__bondlabels[s])
+                    tmp1.append(cls.__bondlabels[p])
+                else:
+                    tmp0.append(s != 'n' and int(s) or None)
+                    tmp1.append(p != 'n' and int(p) or None)
 
         s, p, sp = cls.__marks[name]
         if len(tmp0) == 1:
@@ -196,16 +200,21 @@ class CGRread:
             tmp2 = list(zip(tmp0, tmp1))
             if len(set(tmp2)) == len(tmp2):
                 return {s: tmp0, p: tmp1, sp: tmp2}
+        print('CGR data invalid: ', name, value)
 
     @classmethod
     def __parselist(cls, name, value):
-        tmp = [cls.__bondlabels[x] if name == 'bond' else (x != 'n' and int(x) or None) for x in value.split(',')]
+        if name == 'bond':
+            tmp = [cls.__bondlabels[x] for x in value.split(',')]
+        else:
+            tmp = [(x != 'n' and int(x) or None) for x in value.split(',')]
 
         if len(tmp) == 1:
             if tmp[0] is not None:
                 return dict.fromkeys(cls.__marks[name], tmp[0])
-        elif len(set(tmp)) == len(tmp):
+        elif len(set(tmp)) == len(tmp) and None not in tmp:
             return dict.fromkeys(cls.__marks[name], tmp)
+        print('CGR data invalid: ', name, value)
 
     @classmethod
     def __parse_cgr_atom(cls, value, base, mark):
@@ -293,12 +302,16 @@ class CGRread:
                     if key == 'c':
                         val = self.__parse_cgr_atom(value, charge_dat.get(a1, molecule['atoms'][a1 - 1]['charge']),
                                                     'charge')
+                        if val:
+                            cgr_dat_atom.setdefault(a1, {}).update(val)
+                        else:
+                            print('dynatom charge invalid data. skipped:', value)
                     elif key == 'r':
                         val = self.__parse_cgr_atom(value, radical_dat.get(a1, 0), 'radical')
-                    else:
-                        val = None
-                    if val:
-                        cgr_dat_atom.setdefault(a1, {}).update(val)
+                        if val:
+                            cgr_dat_atom.setdefault(a1, {}).update(val)
+                        else:
+                            print('dynatom radical invalid data. skipped:', value)
             elif k_type == 'dynstereo':
                 s_stereo, p_stereo = (self.__stereolabels[x] for x in k['value'].split('>'))
                 cgr_dat_stereo[k['atoms']] = (s_stereo, p_stereo)
@@ -320,7 +333,8 @@ class CGRread:
                 if val:
                     cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
 
-        is_cgr = True if self.__is_template or cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo else False
+        is_cgr = bool(self.__is_template or cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo or
+                      any(x['element'] in ('A', '*') for x in molecule['atoms']))
         g = CGRContainer(meta=meta) if is_cgr else MoleculeContainer(meta=meta)
 
         for k, l in enumerate(molecule['atoms'], start=1):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -77,55 +77,125 @@ class CGRstring:
         return nextatom
 
     def __mol_smi(self, gni):
-        return self.__get_sp_smi(gni, 's_stereo', 's_hyb', 's_neighbors', 's_charge'), None
+        return self.__get_sp_smi(gni)
 
     def __cgr_smi(self, gni):
-        return self.__get_sp_smi(gni, 's_stereo', 's_hyb', 's_neighbors', 's_charge'), \
-               self.__get_sp_smi(gni, 'p_stereo', 'p_hyb', 'p_neighbors', 'p_charge')
+        return self.__get_sp_smi(gni, True)
 
-    def __get_sp_smi(self, gni, stereo, hyb, neighbors, charge):
+    def __get_sp_smi(self, gni, cgr=False):
         smi = []
-        if self.__stereo and gni.get(stereo):
-            smi.append(self.__stereo_types[gni[stereo]])
-        if self.__hyb and gni.get(hyb):
-            smi.append(self.__hyb_types[gni[hyb]])
-        if self.__neighbors and gni.get(neighbors):
-            smi.append(str(gni[neighbors]))
+        pmi = [] if cgr else None
+
+        if self.__stereo:
+            if gni.get('s_stereo'):
+                smi.append(self.__stereo_types[gni['s_stereo']])
+            if cgr and gni.get('s_stereo'):
+                pmi.append(self.__stereo_types[gni['p_stereo']])
+
+        if self.__hyb:
+            s = gni.get('s_hyb')
+            if cgr:
+                p = gni.get('p_hyb')
+                if isinstance(s, list):
+                    tmp = sorted((self.__hyb_types[x], self.__hyb_types[y]) for x, y in zip(s, p))
+                    smi.append('<%s>' % ''.join(x for x, _ in tmp))
+                    pmi.append('<%s>' % ''.join(x for _, x in tmp))
+                else:
+                    if s:
+                        smi.append(self.__hyb_types[s])
+                    if p:
+                        pmi.append(self.__hyb_types[p])
+            elif s:
+                smi.append(self.__hyb_types[s])
+
+        if self.__neighbors:
+            s = gni.get('s_neighbors')
+            if cgr:
+                p = gni.get('p_neighbors')
+                if isinstance(s, list):
+                    tmp = sorted((x is None and 'n' or str(x), y is None and 'n' or str(y)) for x, y in zip(s, p))
+                    smi.append('<%s>' % ''.join(x for x, _ in tmp))
+                    pmi.append('<%s>' % ''.join(x for _, x in tmp))
+                else:
+                    if s is not None:
+                        smi.append(str(s))
+                    if p is not None:
+                        pmi.append(str(p))
+            elif s is not None:
+                smi.append(str(s))
+
         if smi:
             smi.append(';')
             smi.insert(0, ';')
+        if pmi:
+            pmi.append(';')
+            pmi.insert(0, ';')
 
         if self.__element:
-            ge = gni.get('element') or '*'
-            gcs = gni.get(charge)
-            if gcs:
-                if abs(gcs) == 1:
-                    gcs = '+' if gcs > 0 else '-'
+            ge = gni.get('element')
+            if cgr:
+                if isinstance(ge, list):
+                    ge = list(','.join(sorted(ge)))
+                    smi = ge + smi
+                    pmi = ge + pmi
                 else:
-                    gcs = '%+d' % gcs
-                smi.append(gcs)
+                    if not ge:
+                        ge = '*'
+                    smi.insert(0, ge)
+                    pmi.insert(0, ge)
+            else:
+                smi.insert(0, ge)
 
-            smi.insert(0, ge)
+            s = gni.get('s_charge')
+            if cgr:
+                p = gni.get('p_charge')
+                if isinstance(s, list):
+                    tmp = [(self.__charge_to_string(x), self.__charge_to_string(y)) for x, y in sorted(zip(s, p))]
+                    smi.append('<%s>' % ''.join(x for x, _ in tmp))
+                    pmi.append('<%s>' % ''.join(x for _, x in tmp))
+                else:
+                    if s:
+                        smi.append(self.__charge_to_string(s))
+                    if p:
+                        pmi.append(self.__charge_to_string(p))
+            elif s:
+                smi.append(self.__charge_to_string(s))
         else:
             smi.insert(0, '*')
+            if cgr:
+                pmi.insert(0, '*')
 
-        if self.__isotope and gni.get('isotope'):
-            smi.insert(0, str(gni['isotope']))
+        if self.__isotope:
+            s = gni.get('isotope')
+            if cgr:
+                if isinstance(s, list):
+                    s = '<%s>' % ','.join(str(x) for x in s)
+                    smi.insert(0, s)
+                    pmi.insert(0, s)
+                elif s:
+                    s = str(s)
+                    smi.insert(0, s)
+                    pmi.insert(0, s)
+            elif s:
+                smi.insert(0, str(s))
 
         if len(smi) != 1 or smi[0] == '*':
             smi.insert(0, '[')
             smi.append(']')
 
-        return ''.join(smi)
+        if cgr:
+            if len(pmi) != 1 or pmi[0] == '*':
+                pmi.insert(0, '[')
+                pmi.append(']')
+
+        return smi, pmi
 
     def __do_cgr_smarts(self, trace, inter, prev):
         g = self.__g
         countcyc = self.__countcyc
-        to_smiles = self.__to_smiles
         stereo = self.__stereo
 
-        s_atom, p_atom = self.__get_smi(self.__g.nodes[inter])
-        smis, smip = [s_atom], [p_atom]
+        smis, smip = self.__get_smi(self.__g.nodes[inter])
         concat = []
         stoplist = []
         iterlist = set(g.neighbors(inter)).difference([prev])
@@ -137,10 +207,12 @@ class CGRstring:
                 if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
                     cyc = next(countcyc)
                     concat.append((i, cyc, inter))
-                    smis.append('%s%s%d' % (to_smiles[gii.get('s_bond')], stereo and gii.get('s_stereo') or '', cyc))
                     if smip:
-                        smip.append('%s%s%d' % (to_smiles[gii.get('p_bond')],
-                                                stereo and gii.get('p_stereo') or '', cyc))
+                        sb, pb = self.__bond_sp(gii.get('s_bond'), gii.get('p_bond'))
+                        smip.append('%s%s%d' % (pb, stereo and gii.get('p_stereo') or '', cyc))
+                    else:
+                        sb = self.__bond_s(gii.get('s_bond'))
+                    smis.append('%s%s%d' % (sb, stereo and gii.get('s_stereo') or '', cyc))
                 continue
 
             deep0, deep1, deep2, deep3 = self.__do_cgr_smarts(set(chain(trace, [i])), i, inter)
@@ -150,24 +222,62 @@ class CGRstring:
                     if j0 == inter:
                         gij = g[inter][j2]
                         stoplist.append(j2)
-                        smis.append('%s%s%d' % (to_smiles[gij.get('s_bond')],
-                                                stereo and gij.get('s_stereo') or '', j1))
                         if smip:
-                            smip.append('%s%s%d' % (to_smiles[gij.get('p_bond')],
-                                                    stereo and gij.get('p_stereo') or '', j1))
+                            sb, pb = self.__bond_sp(gij.get('s_bond'), gij.get('p_bond'))
+                            smip.append('%s%s%d' % (pb, stereo and gij.get('p_stereo') or '', j1))
+                        else:
+                            sb = self.__bond_s(gij.get('s_bond'))
+                        smis.append('%s%s%d' % (sb, stereo and gij.get('s_stereo') or '', j1))
                     else:
                         concat.append((j0, j1, j2))
-            smis.extend(['(' if iterlist else '',
-                         '%s%s' % (to_smiles[gii.get('s_bond')], stereo and gii.get('s_stereo') or '')] + deep1 +
-                        [')' if iterlist else ''])
+
             if smip:
-                smip.extend(['(' if iterlist else '',
-                             '%s%s' % (to_smiles[gii.get('p_bond')], stereo and gii.get('p_stereo') or '')] + deep2 +
-                            [')' if iterlist else ''])
+                sb, pb = self.__bond_sp(gii.get('s_bond'), gii.get('p_bond'))
+                if iterlist:
+                    smip.append('(')
+                smip.append(pb + (stereo and gii.get('p_stereo') or ''))
+                smip.extend(deep2)
+                if iterlist:
+                    smip.append(')')
+            else:
+                sb = self.__bond_s(gii.get('s_bond'))
+
+            if iterlist:
+                smis.append('(')
+            smis.append(sb + (stereo and gii.get('s_stereo') or ''))
+            smis.extend(deep1)
+            if iterlist:
+                smis.append(')')
+
         return trace, smis, smip, concat
 
-    __to_smiles = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
-    __hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: ''}
+    @classmethod
+    def __bond_s(cls, s):
+        if isinstance(s, list):
+            return '<%s>' % ''.join(sorted(cls.__to_smiles_map[x] for x in s))
+        return cls.__to_smiles_map[s]
+
+    @classmethod
+    def __bond_sp(cls, s, p):
+        if isinstance(s, list):
+            tmp = sorted((cls.__to_smiles_map[x], cls.__to_smiles_map[y]) for x, y in zip(s, p))
+            return '<%s>' % ''.join(x for x, _ in tmp), '<%s>' % ''.join(x for _, x in tmp)
+        return cls.__to_smiles_map[s], cls.__to_smiles_map[p]
+
+    @classmethod
+    def __charge_to_string(cls, c):
+        if c == 1:
+            c = '+'
+        elif c == -1:
+            c = '-'
+        elif c:
+            c = '%+d' % c
+        else:
+            c = '0'
+        return c
+
+    __to_smiles_map = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
+    __hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
     __stereo_types = {1: '@', -1: '@@'}
 
 

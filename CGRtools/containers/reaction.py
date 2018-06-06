@@ -221,7 +221,7 @@ class ReactionContainer:
                 for m in ml:
                     mol = m.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
                                           neighbors=neighbors, element=element)
-                    ms.append('{%s}' % mol if isinstance(mol, CGRContainer) else str(mol))
+                    ms.append('{%s}' % mol if isinstance(m, CGRContainer) else mol)
                 sig.append('.'.join(ms))
             self.__signatures[k] = out = '>'.join(sig)
         return out
