@@ -21,16 +21,16 @@
 from itertools import chain
 from sys import stderr
 from traceback import format_exc
-from ._CGRrw import fromMDL, WithMixin
-from ._MDLrw import MOLwrite, MOLread
+from ._CGRrw import WithMixin, CGRread
+from ._MDLrw import MOLwrite, MOLread, EMOLread
 from ..exceptions import EmptyMolecule
 
 
-class SDFread(MOLread, WithMixin):
+class SDFread(CGRread, WithMixin):
     def __init__(self, file, *args, is_template=None, **kwargs):
         assert not is_template, 'is_tepmlate works only for reactions'
         WithMixin.__init__(self, file)
-        MOLread.__init__(self, *args, **kwargs)
+        CGRread.__init__(self, *args, **kwargs)
         self.__data = self.__reader()
 
     def read(self):
@@ -44,12 +44,8 @@ class SDFread(MOLread, WithMixin):
 
     def __reader(self):
         im = 3
-        atomcount = -1
-        bondcount = -1
         failkey = False
-        mkey = None
-        molecule = None
-        mend = False
+        mkey = parser = molecule = None
         for n, line in enumerate(self._file):
             if failkey and not line.startswith("$$$$"):
                 continue
@@ -60,71 +56,44 @@ class SDFread(MOLread, WithMixin):
                     except Exception:
                         print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
 
-                mkey = None
                 im = n + 4
                 failkey = False
-                mend = False
-                molecule = None
-
+                mkey = parser = molecule = None
             elif n == im:
                 try:
-                    atoms = int(line[0:3])
-                    if not atoms:
-                        raise EmptyMolecule('Molecule without atoms')
-                    atomcount = atoms + n
-                    bondcount = int(line[3:6]) + atomcount
-                    molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={}, colors={})
+                    if 'V2000' in line:
+                        parser = MOLread
+                    elif 'V3000' in line:
+                        parser = EMOLread
+                    else:
+                        raise ValueError('invalid MOL')
+                    parser = parser(line)
                 except (EmptyMolecule, ValueError):
-                    atomcount = bondcount = -1
                     failkey = True
-                    molecule = None
                     print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-
-            elif n <= atomcount:
-                try:
-                    molecule['atoms'].append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                                  charge=fromMDL[int(line[38:39])],
-                                                  map=int(line[60:63]), mark=line[54:57].strip(),
-                                                  x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
-                except ValueError:
-                    failkey = True
-                    molecule = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-            elif n <= bondcount:
-                try:
-                    molecule['bonds'].append((int(line[0:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
-                except ValueError:
-                    failkey = True
-                    molecule = None
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-
-            elif line.startswith("M  END"):
-                mend = True
-                molecule['CGR_DAT'] = self._get_collected()
-
             elif molecule:
-                if not mend:
-                    try:
-                        self._collect(line)
-                    except ValueError:
-                        self._flush_collected()
-                        failkey = True
-                        molecule = None
-                        print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
-                elif line.startswith('>  <'):
+                if line.startswith('>  <'):
                     mkey = line.rstrip()[4:-1].strip()
+                    if not mkey:
+                        continue
                     if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
                                 'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
                         target = 'colors'
-                    elif mkey:
-                        target = 'meta'
                     else:
-                        continue
+                        target = 'meta'
+
                     molecule[target][mkey] = []
                 elif mkey:
                     data = line.strip()
                     if data:
                         molecule[target][mkey].append(data)
+            elif parser:
+                try:
+                    if parser(line):
+                        molecule = parser.getvalue()
+                except ValueError:
+                    failkey = True
+                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
 
         if molecule:  # True for MOL file only.
             try:
