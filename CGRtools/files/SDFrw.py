@@ -46,31 +46,31 @@ class SDFread(CGRread, WithMixin):
         im = 3
         failkey = False
         mkey = parser = molecule = None
-        for n, line in enumerate(self._file):
+        for line in self._file:
             if failkey and not line.startswith("$$$$"):
                 continue
+            elif parser:
+                try:
+                    if parser(line):
+                        molecule = parser.getvalue()
+                        parser = None
+                except ValueError:
+                    failkey = True
+                    parser = None
+                    print('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), file=stderr)
+
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
                         yield self._get_molecule(molecule)
                     except Exception:
-                        print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
+                        print('previous record consist errors:\n%s' % format_exc(), file=stderr)
+                    molecule = None
 
-                im = n + 4
+                im = 3
                 failkey = False
-                mkey = parser = molecule = None
-            elif n == im:
-                try:
-                    if 'V2000' in line:
-                        parser = MOLread
-                    elif 'V3000' in line:
-                        parser = EMOLread
-                    else:
-                        raise ValueError('invalid MOL')
-                    parser = parser(line)
-                except (EmptyMolecule, ValueError):
-                    failkey = True
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                mkey = None
+
             elif molecule:
                 if line.startswith('>  <'):
                     mkey = line.rstrip()[4:-1].strip()
@@ -87,19 +87,26 @@ class SDFread(CGRread, WithMixin):
                     data = line.strip()
                     if data:
                         molecule[target][mkey].append(data)
-            elif parser:
+
+            elif im:
+                im -= 1
+            elif not im:
                 try:
-                    if parser(line):
-                        molecule = parser.getvalue()
-                except ValueError:
+                    if 'V2000' in line:
+                        parser = MOLread(line)
+                    elif 'V3000' in line:
+                        parser = EMOLread(line)
+                    else:
+                        raise ValueError('invalid MOL')
+                except (EmptyMolecule, ValueError):
                     failkey = True
-                    print('line %d\n\n%s\n consist errors: %s' % (n, line, format_exc()), file=stderr)
+                    print('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), file=stderr)
 
         if molecule:  # True for MOL file only.
             try:
                 yield self._get_molecule(molecule)
             except Exception:
-                print('line %d\n previous record consist errors: %s' % (n, format_exc()), file=stderr)
+                print('previous record consist errors:\n%s' % format_exc(), file=stderr)
 
 
 class SDFwrite(MOLwrite, WithMixin):

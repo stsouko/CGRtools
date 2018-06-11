@@ -289,7 +289,7 @@ class CGRread:
 
         for k in molecule['CGR_DAT']:
             k_type = k['type']
-            if k_type in ('charge', 'radical') or len(k['atoms']) != self._cgr_keys[k_type]:
+            if k_type in ('charge', 'radical') or len(k['atoms']) != self._cgr_keys.get(k_type):
                 continue
             elif k_type == 'dynatom':
                 key = k['value'][0]

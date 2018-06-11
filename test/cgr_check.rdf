@@ -59,7 +59,7 @@ M  SDD   3   -15.0449   -2.0542    DAU   ALL  0       0
 M  MRV SDD   3  0
 M  SED   3 c0,1,-1
 M  SAL   4  1   7
-M  SDT   4 isotop
+M  SDT   4 isotope
 M  SDD   4   -15.4764   -3.1999    DAU   ALL  0       0
 M  MRV SDD   4  0
 M  SED   4 12,13,14

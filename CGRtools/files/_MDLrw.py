@@ -42,7 +42,9 @@ class MOLread:
         raise ValueError('molecule not complete')
 
     def __call__(self, line):
-        if len(self.__atoms) < self.__atoms_count:
+        if self.__mend:
+            raise SyntaxError('invalid usage')
+        elif len(self.__atoms) < self.__atoms_count:
             self.__atoms.append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
                                      charge=fromMDL[int(line[38:39])],
                                      map=int(line[60:63]), mark=line[54:57].strip(),
@@ -52,10 +54,8 @@ class MOLread:
         elif line.startswith("M  END"):
             self.__mend = True
             return True
-        elif not self.__mend:
-            self.__collect(line)
         else:
-            raise SyntaxError('invalid usage')
+            self.__collect(line)
 
     def __collect(self, line):
         if line.startswith('M  ALS'):
@@ -230,6 +230,63 @@ class EMOLread:
 
     __current_record = __atoms_count = __in_mol = __current_parser = None
     __stereo_map = {'0': 0, '1': 1, '2': 4, '3': 6}
+
+
+class RXNread:
+    def __init__(self, line):
+        self.__reagents_count = int(line[:3])
+        self.__products_count = int(line[3:6]) + self.__reagents_count
+        self.__reactants_count = int(line[6:].rstrip() or 0) + self.__products_count
+        self.__molecules = []
+
+    def __call__(self, line):
+        if self.__rend:
+            raise SyntaxError('invalid usage')
+        elif self.__parser:
+            if self.__parser(line):
+                self.__im = 4
+                self.__molecules.append(self.__parser.getvalue())
+                self.__parser = None
+                if len(self.__molecules) == self.__reactants_count:
+                    self.__rend = True
+                    return True
+        elif self.__im == 4:
+            if not line.startswith("$MOL"):
+                raise ValueError('invalid RXN')
+            self.__im = 3
+        elif self.__im:
+            self.__im -= 1
+        else:
+            self.__parser = MOLread(line)
+
+    def getvalue(self):
+        if self.__rend:
+            return dict(reagents=self.__molecules[:self.__reagents_count],
+                        products=self.__molecules[self.__reagents_count:self.__products_count],
+                        reactants=self.__molecules[self.__products_count:self.__reactants_count], meta={}, colors={})
+        raise ValueError('reaction not complete')
+
+    __parser = None
+    __rend = False
+    __im = 4
+
+
+class ERXNread:
+    def __init__(self, line):
+        tmp = line[:13].split()
+        self.__reagents_count = int(tmp[0])
+        self.__products_count = int(tmp[1])
+        self.__reactants_count = int(tmp[2]) if len(tmp) == 3 else 0
+
+        self.__reagents = []
+        self.__products = []
+        self.__reactants = []
+
+    def __call__(self, line):
+        pass
+
+    def getvalue(self):
+        pass
 
 
 class MOLwrite(CGRwrite):
