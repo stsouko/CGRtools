@@ -74,12 +74,12 @@ class MOLread:
             for i in range(int(line[8])):
                 if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
                     self.__props[int(line[10 + 8 * i:13 + 8 * i])] = {}
-        elif line.startswith('M  SAL') and int(line[7:10]) in self.__props:
+        elif line.startswith('M  SAL'):
             self.__props[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i])
                                                            for i in range(int(line[10:13])))
-        elif line.startswith('M  SDT') and int(line[7:10]) in self.__props:
+        elif line.startswith('M  SDT'):
             self.__props[int(line[7:10])]['type'] = line.split()[-1].lower()
-        elif line.startswith('M  SED') and int(line[7:10]) in self.__props:
+        elif line.startswith('M  SED'):
             self.__props[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
 
     __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
@@ -87,83 +87,86 @@ class MOLread:
 
 
 class EMOLread:
-    def __init__(self, line):
+    def __init__(self, line=None):
         self.__props = []
+        self.__sgroup = []
         self.__atoms = []
         self.__bonds = []
 
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props, meta={}, colors={})
+        return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props + self.__sgroup, meta={}, colors={})
 
     def __call__(self, line):
         lineu = line.upper()
         if self.__in_mol:
             if lineu.startswith('M  V30 END CTAB'):
-                if not self.__atoms:
-                    raise EmptyMolecule('molecule without atoms')
                 self.__in_mol = False
                 return True
             elif self.__atoms_count:
-                if lineu.startswith('M  V30 COUNTS'):
-                    raise ValueError('invalid mol')
-                elif lineu.startswith('M  V30 BEGIN ATOM'):
-                    self.__current_parser = self.__atom_parser
-                elif lineu.startswith('M  V30 BEGIN BOND'):
-                    self.__current_parser = self.__bond_parser
-                elif lineu.startswith('M  V30 BEGIN SGROUP'):
-                    self.__current_parser = self.__sgroup_parser
-                elif lineu.startswith('M  V30 END'):
-                    x = lineu[13:].strip()
-                    self.__current_parser = None
+                if lineu.startswith('M  V30 END'):
+                    x = lineu[11:].strip()
+                    cp = self.__parser
+                    self.__parser = None
 
                     if x == 'ATOM':
-                        if self.__current_parser == self.__atom_parser and len(self.__atoms) == self.__atoms_count:
+                        if cp == self.__atom_parser and len(self.__atoms) == self.__atoms_count:
                             return
                     elif x == 'BOND':
-                        if self.__current_parser == self.__bond_parser and len(self.__bonds) == self.__bonds_count:
+                        if cp == self.__bond_parser and len(self.__bonds) == self.__bonds_count:
                             return
                     elif x == 'SGROUP':
-                        if self.__current_parser == self.__sgroup_parser and len(self.__props) == self.__props_count:
+                        if cp == self.__sgroup_parser and len(self.__sgroup) == self.__sgroup_count:
                             return
                     else:
                         return
-                    raise ValueError('invalid number of %s records' % x)
+                    raise ValueError('invalid number of %s records or invalid CTAB' % x)
 
-                elif self.__current_parser is not None:
+                elif self.__parser:
                     collected = self.__record_collector(line)
                     if collected:
-                        self.__current_parser(collected)
+                        self.__parser(collected)
 
-            elif lineu.startswith('M  V30 COUNTS'):
+                elif lineu.startswith('M  V30 BEGIN ATOM'):
+                    self.__parser = self.__atom_parser
+                elif lineu.startswith('M  V30 BEGIN BOND'):
+                    self.__parser = self.__bond_parser
+                elif lineu.startswith('M  V30 BEGIN SGROUP'):
+                    self.__parser = self.__sgroup_parser
+                else:
+                    raise ValueError('invalid CTAB')
+
+            else:  # M  V30 COUNTS line expected
                 a, b, s, *_ = line[13:].split()
                 atom_count = int(a)
                 if not atom_count:
                     raise EmptyMolecule('molecule without atoms')
                 self.__bonds_count = int(b)
-                self.__props_count = int(s)
+                self.__sgroup_count = int(s)
                 self.__atoms_count = atom_count
 
         elif self.__in_mol is not None:
             raise SyntaxError('invalid usage')
-        elif lineu.startswith('M  V30 BEGIN CTAB'):
+        elif not lineu.startswith('M  V30 BEGIN CTAB'):
+            raise SyntaxError('invalid CTAB')
+        else:
             self.__in_mol = True
 
     def __record_collector(self, line):
         if not line.endswith('-\n'):
             line = line[7:]
-            if self.__current_record:
-                line = self.__current_record + line
-                self.__current_record = None
+            if self.__record:
+                line = self.__record + line
+                self.__record = None
 
             return next(reader([line], delimiter=' ', quotechar='"', skipinitialspace=True))
 
         line = line[7:-2]
-        if not self.__current_record:
-            self.__current_record = line
+        if not self.__record:
+            self.__record = line
         else:
-            self.__current_record += line
+            self.__record += line
 
     def __bond_parser(self, line):
         _, t, a1, a2, *kvs = line
@@ -226,9 +229,9 @@ class EMOLread:
                     res['value'] = v.lower()
 
             if len(res) == 3:
-                self.__props.append(res)
+                self.__sgroup.append(res)
 
-    __current_record = __atoms_count = __in_mol = __current_parser = None
+    __record = __atoms_count = __in_mol = __parser = None
     __stereo_map = {'0': 0, '1': 1, '2': 4, '3': 6}
 
 
@@ -273,7 +276,7 @@ class RXNread:
 
 class ERXNread:
     def __init__(self, line):
-        tmp = line[:13].split()
+        tmp = line[13:].split()
         self.__reagents_count = int(tmp[0])
         self.__products_count = int(tmp[1])
         self.__reactants_count = int(tmp[2]) if len(tmp) == 3 else 0
@@ -281,12 +284,53 @@ class ERXNread:
         self.__reagents = []
         self.__products = []
         self.__reactants = []
+        self.__parser = EMOLread()
 
     def __call__(self, line):
-        pass
+        lineu = line.upper()
+        if self.__rend:
+            raise SyntaxError('invalid usage')
+        elif self.__in_mol:
+            if self.__parser(line):
+                m = self.__parser.getvalue()
+                self.__parser = EMOLread()
+                self.__in_mol -= 1
+
+                if self.__parser_group == 'REACTANT':
+                    self.__reagents.append(m)
+                elif self.__parser_group == 'PRODUCT':
+                    self.__products.append(m)
+                elif self.__parser_group == 'AGENT':
+                    self.__reactants.append(m)
+        elif lineu.startswith('M  V30 END'):
+            if self.__parser_group != lineu[11:].strip():
+                raise ValueError('invalid CTAB')
+        elif lineu.startswith('M  V30 BEGIN'):
+            x = lineu[13:].strip()
+            if x == 'REACTANT':
+                self.__in_mol = self.__reagents_count
+            elif x == 'PRODUCT':
+                self.__in_mol = self.__products_count
+            elif x == 'AGENT':
+                self.__in_mol = self.__reactants_count
+            else:
+                raise ValueError('invalid RXN CTAB')
+            self.__parser_group = x
+        elif lineu.startswith('M  END'):
+            self.__rend = True
+            return True
+        else:
+            raise ValueError('invalid CTAB')
 
     def getvalue(self):
-        pass
+        if self.__rend:
+            return dict(reagents=self.__reagents, products=self.__products, reactants=self.__reactants,
+                        meta={}, colors={})
+        raise ValueError('reaction not complete')
+
+    __parser_group = None
+    __rend = False
+    __in_mol = 0
 
 
 class MOLwrite(CGRwrite):
