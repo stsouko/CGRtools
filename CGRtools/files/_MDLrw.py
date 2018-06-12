@@ -98,8 +98,9 @@ class EMOLread:
             raise ValueError('molecule not complete')
         return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props + self.__sgroup, meta={}, colors={})
 
-    def __call__(self, line):
-        lineu = line.upper()
+    def __call__(self, line, lineu=None):
+        if lineu is None:
+            lineu = line.upper()
         if self.__in_mol:
             if lineu.startswith('M  V30 END CTAB'):
                 self.__in_mol = False
@@ -243,9 +244,7 @@ class RXNread:
         self.__molecules = []
 
     def __call__(self, line):
-        if self.__rend:
-            raise SyntaxError('invalid usage')
-        elif self.__parser:
+        if self.__parser:
             if self.__parser(line):
                 self.__im = 4
                 self.__molecules.append(self.__parser.getvalue())
@@ -253,6 +252,8 @@ class RXNread:
                 if len(self.__molecules) == self.__reactants_count:
                     self.__rend = True
                     return True
+        elif self.__rend:
+            raise SyntaxError('invalid usage')
         elif self.__im == 4:
             if not line.startswith("$MOL"):
                 raise ValueError('invalid RXN')
@@ -288,10 +289,8 @@ class ERXNread:
 
     def __call__(self, line):
         lineu = line.upper()
-        if self.__rend:
-            raise SyntaxError('invalid usage')
-        elif self.__in_mol:
-            if self.__parser(line):
+        if self.__in_mol:
+            if self.__parser(line, lineu):
                 m = self.__parser.getvalue()
                 self.__parser = EMOLread()
                 self.__in_mol -= 1
@@ -302,6 +301,8 @@ class ERXNread:
                     self.__products.append(m)
                 elif self.__parser_group == 'AGENT':
                     self.__reactants.append(m)
+        elif self.__rend:
+            raise SyntaxError('invalid usage')
         elif lineu.startswith('M  V30 END'):
             if self.__parser_group != lineu[11:].strip():
                 raise ValueError('invalid CTAB')
