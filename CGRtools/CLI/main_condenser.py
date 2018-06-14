@@ -28,10 +28,7 @@ def condenser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = SDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
-                         templates=RDFread(kwargs['templates'],
-                                           is_template=True).read() if kwargs['b_templates'] else None,
-                         balance=kwargs['balance'], element=kwargs['element'], isotope=kwargs['isotope'])
+    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], balance=kwargs['balance'])
 
     err = 0
     num = 0

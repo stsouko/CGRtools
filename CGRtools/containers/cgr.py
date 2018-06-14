@@ -20,6 +20,7 @@
 #
 from collections import namedtuple, defaultdict
 from itertools import repeat, zip_longest
+from .common import BaseContainer
 from .molecule import MoleculeContainer
 from ..algorithms import CGRstring
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
@@ -37,6 +38,9 @@ class CGRContainer(MoleculeContainer):
             tmp.append(self.get_center_atoms.__name__)
         return self.__visible
 
+    def __getstate__(self):
+        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_CGRContainer__')}
+
     def pickle(self):
         """return json serializable CGR"""
         data = super().pickle()
@@ -46,7 +50,7 @@ class CGRContainer(MoleculeContainer):
     @classmethod
     def unpickle(cls, data):
         """convert json serializable CGR or Molecule into MoleculeContainer or CGRcontainer object instance"""
-        graph, meta = super().unpickle(data)
+        graph, meta = BaseContainer.unpickle(data)
         g = MoleculeContainer(graph, meta) if data['s_only'] else cls(graph, meta)
         g.fix_data()
         return g
@@ -403,5 +407,4 @@ class CGRContainer(MoleculeContainer):
     _edge_save = tuple(y for x in _edge_marks for y in x[:2])
     _atom_marks = {x: x for x in __tmp3}
     _bond_marks = {x: x for x in _edge_save}
-    __implicit_container = namedtuple('ImplicitH', ('s_implicit', 'p_implicit'))
-    __visible = __stereo_cache = None
+    __visible = None

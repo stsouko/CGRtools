@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -25,20 +25,7 @@ from .main_condenser import condenser_core
 from ..version import version
 
 
-def _reactor_common(parser):
-    parser.add_argument("--element", "-e", action='store_false', help="FEAR use element data")
-    parser.add_argument("--isotope", "-I", action='store_true', help="FEAR use isotope data")
-
-
-def _stereo_common(parser):
-    parser.add_argument("--stereo", "-s", action='store_true', help="use stereo data")
-
-
-def _extra_common(parser):
-    parser.add_argument("--save_extralabels", "-se", action='store_true', help="save extralabels data")
-
-
-def _condenser_common(parser):
+def _common(parser):
     parser.add_argument("--cgr_type", "-t", type=str, default='0',
                         help="graph type: 0 - CGR, 1 - reagents only, 2 - products only, 101-199 - reagent 1,"
                              "2 or later, 201+ - product 1,2… (e.g. 202 - second product) -101/-199 or -201+ "
@@ -50,12 +37,7 @@ def _condenser_common(parser):
                              "first).")
     parser.add_argument("--extralabels", "-E", action='store_true',
                         help="generate atom hybridization and neighbors labels")
-
-
-def _balanser_common(parser):
-    parser.add_argument("--templates", "-T", type=FileType(), default=None,
-                        help="RDF with reactions standardizing rules")
-    parser.add_argument("--balance", "-B", action='store_true', help="Balance reactions")
+    parser.add_argument("--save_extralabels", "-se", action='store_true', help="save extralabels data")
 
 
 def _balanser(subparsers):
@@ -66,12 +48,7 @@ def _balanser(subparsers):
     parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'),
                         help="RDF outputfile")
 
-    _condenser_common(parser)
-    _extra_common(parser)
-    _stereo_common(parser)
-    _balanser_common(parser)
-    _reactor_common(parser)
-
+    _common(parser)
     parser.set_defaults(func=balanser_core)
 
 
@@ -83,12 +60,8 @@ def _condenser(subparsers):
     parser.add_argument("--output", "-o", default="output.sdf", type=FileType('w'),
                         help="SDF outputfile")
 
-    _condenser_common(parser)
-    _extra_common(parser)
-    _stereo_common(parser)
-    _balanser_common(parser)
-    _reactor_common(parser)
-
+    _common(parser)
+    parser.add_argument("--balance", "-B", action='store_true', help="Balance reactions")
     parser.set_defaults(func=condenser_core)
 
 

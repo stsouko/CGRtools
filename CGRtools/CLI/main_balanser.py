@@ -28,10 +28,7 @@ def balanser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
     outputdata = RDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
 
-    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], stereo=kwargs['stereo'],
-                         templates=RDFread(kwargs['templates'],
-                                           is_template=True).read() if kwargs['b_templates'] else None,
-                         balance=kwargs['balance'], element=kwargs['element'], isotope=kwargs['isotope'])
+    worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], balance=True)
 
     err = 0
     num = 0
@@ -40,7 +37,7 @@ def balanser_core(**kwargs):
             print("reaction: %d" % num, file=stderr)
         try:
             a = worker.condense(data)
-            a = worker.dissociate(a)
+            a = worker.decompose(a)
             outputdata.write(a)
         except Exception:
             err += 1

@@ -43,8 +43,7 @@ class MoleculeContainer(BaseContainer):
         return self.__visible
 
     def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__',
-                                                                                    '_stereo_cache')}
+        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__')}
 
     def pickle(self):
         """return json serializable Molecule"""
@@ -153,9 +152,9 @@ class MoleculeContainer(BaseContainer):
             raise self._stereo_exception2
 
     def get_stereo(self, atom1, atom2):
-        if self._stereo_cache is None:
-            self._stereo_cache = self._prepare_stereo()
-        return self._stereo_cache.get((atom1, atom2), None)
+        if self.__stereo_cache is None:
+            self.__stereo_cache = self._prepare_stereo()
+        return self.__stereo_cache.get((atom1, atom2), None)
 
     def reset_query_marks(self, copy=False):
         """
@@ -315,7 +314,7 @@ class MoleculeContainer(BaseContainer):
                 return _stereo_cache
 
     def flush_cache(self):
-        self._stereo_cache = None
+        self.__stereo_cache = None
         super().flush_cache()
 
     @staticmethod
@@ -394,7 +393,7 @@ class MoleculeContainer(BaseContainer):
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
 
-    __visible = _stereo_cache = None
+    __visible = __stereo_cache = None
     _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
     _stereo_exception2 = InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
     _stereo_exception3 = InvalidStereo('atom has stereo. change impossible')
