@@ -49,7 +49,7 @@ class RDFread(CGRread, WithMixin):
         isreaction = reaction = parser = mkey = None
         failkey = True  # skip header
         for line in self._file:
-            if failkey and not line.startswith(("$RFMT", "$MFMT")):
+            if failkey and not line.startswith(('$RFMT', '$MFMT', '$RXN')):
                 continue
             elif parser:
                 try:
@@ -61,7 +61,7 @@ class RDFread(CGRread, WithMixin):
                     parser = None
                     print('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), file=stderr)
 
-            elif line.startswith("$RFMT"):
+            elif line.startswith('$RFMT'):
                 if reaction:
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
@@ -72,7 +72,7 @@ class RDFread(CGRread, WithMixin):
                 ir = 4
                 failkey = False
                 mkey = None
-            elif line.startswith("$MFMT"):
+            elif line.startswith('$MFMT'):
                 if reaction:
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
@@ -82,7 +82,10 @@ class RDFread(CGRread, WithMixin):
                 ir = 3
                 failkey = isreaction = False
                 mkey = None
-
+            elif line.startswith('$RXN'):  # parse RXN file
+                isreaction = True
+                ir = 3
+                failkey = False
             elif reaction:
                 if line.startswith('$DTYPE'):
                     mkey = line[7:].strip()
