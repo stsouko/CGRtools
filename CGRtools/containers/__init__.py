@@ -24,6 +24,7 @@ implements all internal structures, which represents: molecules, reactions, CGR 
 from collections import namedtuple
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
+from .query import QueryContainer
 from .reaction import ReactionContainer, MergedReaction
 
 

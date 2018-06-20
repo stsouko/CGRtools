@@ -18,19 +18,16 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from itertools import repeat, zip_longest
 from .common import BaseContainer
+from .query import QueryContainer, DynamicContainer
 from .molecule import MoleculeContainer
-from ..algorithms import CGRstring
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import elements, H, Element
 
 
-DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
-
-
-class CGRContainer(MoleculeContainer):
+class CGRContainer(QueryContainer, MoleculeContainer):
     """storage for CGRs. has similar to molecules behavior"""
     def __dir__(self):
         if self.__visible is None:
@@ -43,7 +40,7 @@ class CGRContainer(MoleculeContainer):
 
     def pickle(self):
         """return json serializable CGR"""
-        data = super().pickle()
+        data = BaseContainer.pickle(self)
         data['s_only'] = False
         return data
 
@@ -51,12 +48,15 @@ class CGRContainer(MoleculeContainer):
     def unpickle(cls, data):
         """convert json serializable CGR or Molecule into MoleculeContainer or CGRcontainer object instance"""
         graph, meta = BaseContainer.unpickle(data)
-        g = MoleculeContainer(graph, meta) if data['s_only'] else cls(graph, meta)
+        if data['s_only']:
+            g = MoleculeContainer(graph, meta)
+        elif data.get('is_query'):
+            g = QueryContainer(graph, meta)
+        else:
+            g = cls(graph, meta)
+
         g.fix_data()
         return g
-
-    def _signature_generator(self, *args, **kwargs):
-        return CGRstring(*args, is_cgr=True, **kwargs)
 
     def add_atom(self, atom, p_atom=None, _map=None, mark='0', x=0, y=0, z=0, p_x=None, p_y=None, p_z=None):
         """
@@ -133,11 +133,12 @@ class CGRContainer(MoleculeContainer):
         elif not ignore:
             self.__check_bonding(atom1, atom2, mark, p_mark)
 
+        stereo = self._fix_stereo_stage_1()
         if mark:
             self.add_edge(atom1, atom2, s_bond=mark)
         if p_mark:
             self.add_edge(atom1, atom2, p_bond=p_mark)
-
+        self._fix_stereo_stage_2(stereo)
         self.flush_cache()
 
     def add_stereo(self, atom1, atom2, mark, p_mark=None):
@@ -352,22 +353,7 @@ class CGRContainer(MoleculeContainer):
             ls = attr.get(s)
             lp = attr.get(p)
 
-            if isinstance(ls, list):
-                if isinstance(lp, list):
-                    if ls == lp:
-                        new_attr[sp] = new_attr[s] = new_attr[p] = list(set(ls))
-                        continue
-                    new_attr[sp] = list(set((x, y) for x, y in zip(ls, lp) if x != y))
-                else:
-                    new_attr[sp] = list(set((x, lp) for x in ls if x != lp))
-
-                new_attr[s] = [x for x, _ in new_attr[sp]]
-                new_attr[p] = [x for _, x in new_attr[sp]]
-            elif isinstance(lp, list):
-                new_attr[sp] = list(set((ls, x) for x in lp if x != ls))
-                new_attr[s] = [x for x, _ in new_attr[sp]]
-                new_attr[p] = [x for _, x in new_attr[sp]]
-            elif ls != lp:
+            if ls != lp:
                 if ls is not None:
                     new_attr[s] = ls
                 if lp is not None:
@@ -386,25 +372,4 @@ class CGRContainer(MoleculeContainer):
                                                            multiplicity=attrs.get('p_radical'),
                                                            isotope=attrs.get('isotope')))
 
-    @classmethod
-    def _stereo_mark(cls, attrs):
-        return DynamicContainer(attrs.get('s_stereo'), attrs.get('p_stereo'))
-
-    @classmethod
-    def _bond_container(cls, attrs):
-        return DynamicContainer(attrs.get('s_bond'), attrs.get('p_bond'))
-
-    _node_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark)
-                        for mark in ('charge', 'stereo', 'radical', 'neighbors', 'hyb'))
-    _edge_marks = tuple(('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('bond', 'stereo'))
-
-    __tmp1 = ('element', 'isotope', 'mark')
-    __tmp2 = tuple(y for x in _node_marks for y in x[:2])
-    __tmp3 = __tmp1 + __tmp2
-
-    _node_base = __tmp1 + ('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z')
-    _node_save = __tmp2 + _node_base
-    _edge_save = tuple(y for x in _edge_marks for y in x[:2])
-    _atom_marks = {x: x for x in __tmp3}
-    _bond_marks = {x: x for x in _edge_save}
     __visible = None

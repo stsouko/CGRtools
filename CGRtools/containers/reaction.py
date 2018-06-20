@@ -20,6 +20,7 @@
 #
 from warnings import warn
 from .cgr import CGRContainer
+from .query import QueryContainer
 from ..algorithms import hash_cgr_string
 
 
@@ -221,7 +222,7 @@ class ReactionContainer:
                 for m in ml:
                     mol = m.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
                                           neighbors=neighbors, element=element)
-                    ms.append('{%s}' % mol if isinstance(m, CGRContainer) else mol)
+                    ms.append('{%s}' % mol if isinstance(m, QueryContainer) else mol)
                 sig.append('.'.join(ms))
             self.__signatures[k] = out = '>'.join(sig)
         return out
@@ -323,8 +324,8 @@ class MergedReaction:
                                             neighbors=neighbors, element=element)
             p = self.products.get_signature(isotope=isotope, stereo=stereo, hybridization=hybridization,
                                             neighbors=neighbors, element=element)
-            self.__signatures[k] = out = '%s>>%s' % ('{%s}' % r if isinstance(self.reagents, CGRContainer) else r,
-                                                     '{%s}' % p if isinstance(self.products, CGRContainer) else p)
+            self.__signatures[k] = out = '%s>>%s' % ('{%s}' % r if isinstance(self.reagents, QueryContainer) else r,
+                                                     '{%s}' % p if isinstance(self.products, QueryContainer) else p)
         return out
 
     def flush_cache(self):

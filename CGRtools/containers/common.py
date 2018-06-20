@@ -65,7 +65,7 @@ class BaseContainer(Graph, ABC):
 
     def __getstate__(self):
         return {k: v for k, v in super().__getstate__().items()
-                if not k.startswith('_BaseContainer') and k != 'root_graph' or k == '_BaseContainer__meta'}
+                if not k.startswith('_BaseContainer__') and k != 'root_graph' or k == '_BaseContainer__meta'}
 
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -95,7 +95,7 @@ class BaseContainer(Graph, ABC):
         except KeyError:
             raise InvalidAtom('atom[s] or bond not found')
 
-        return self._stereo_mark(tmp)
+        return self._stereo_container(tmp)
 
     def bond(self, n, m):
         if m not in self.__bond_cache[n]:
@@ -133,14 +133,12 @@ class BaseContainer(Graph, ABC):
         """
         pass
 
-    @abstractmethod
     def delete_atom(self, n):
         """
         implementation of atom removing
         """
         self.remove_node(n)
 
-    @abstractmethod
     def delete_bond(self, n, m):
         """
         implementation of bond removing
@@ -154,10 +152,15 @@ class BaseContainer(Graph, ABC):
         """
         pass
 
+    def get_stereo(self, atom1, atom2):
+        if self.__stereo_cache is None:
+            self.__stereo_cache = self._prepare_stereo()
+        return self.__stereo_cache.get((atom1, atom2), None)
+
     @abstractmethod
-    def get_stereo(self, *args, **kwargs):
+    def _prepare_stereo(self):
         """
-        implementation of stereo bond up/down representation
+        :return: dict of stere lables on bonds
         """
         pass
 
@@ -203,7 +206,7 @@ class BaseContainer(Graph, ABC):
         :param meta: if True metadata will be copied to substructure
         :return: Molecule or CGR container
         """
-        return self.__class__(self.subgraph(nbunch), self.meta if meta else None)
+        return type(self)(self.subgraph(nbunch), self.meta if meta else None)
 
     def get_environment(self, atoms, dante=False, deep=0):
         """
@@ -302,12 +305,12 @@ class BaseContainer(Graph, ABC):
         self.flush_cache()
 
     def flush_cache(self):
-        self.__weights = self.__signatures = self.__pickle = self.__hash = None
+        self.__weights = self.__signatures = self.__pickle = self.__hash = self.__stereo_cache = None
 
     def fresh_copy(self):
         """return a fresh copy graph with the same data structure but without atoms, bonds and metadata.
         """
-        return self.__class__()
+        return type(self)()
 
     def __node_attr_clear(self, attr):
         new_attr = {}
@@ -347,7 +350,7 @@ class BaseContainer(Graph, ABC):
         warn('use get_signature instead', DeprecationWarning)
         return self.get_signature(*args, **kwargs)
 
-    __meta = __visible = __bond_cache = __weights = __signatures = __pickle = None
+    __meta = __visible = __bond_cache = __weights = __signatures = __pickle = __stereo_cache = None
     __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
 
@@ -383,7 +386,7 @@ class BaseContainer(Graph, ABC):
 
     @classmethod
     @abstractmethod
-    def _stereo_mark(cls, *args, **kwargs):
+    def _stereo_container(cls, *args, **kwargs):
         pass
 
     @classmethod

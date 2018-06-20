@@ -23,7 +23,7 @@ from collections import defaultdict
 from itertools import count, chain
 from io import StringIO, BytesIO
 from pathlib import Path
-from ..containers import ReactionContainer, MoleculeContainer, CGRContainer
+from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError
 from ..periodictable import elements_set
 from ..periodictable.data import common_isotope as isotopes
@@ -195,11 +195,11 @@ class CGRread:
                 out[s] = tmp0[0]
             if tmp1[0] is not None:
                 out[p] = tmp1[0]
-            return out
+            return out, False
         elif len(tmp0) > 1:
             tmp2 = list(zip(tmp0, tmp1))
             if len(set(tmp2)) == len(tmp2):
-                return {s: tmp0, p: tmp1, sp: tmp2}
+                return {s: tmp0, p: tmp1, sp: tmp2}, True
         print('CGR data invalid: ', name, value)
 
     @classmethod
@@ -211,9 +211,9 @@ class CGRread:
 
         if len(tmp) == 1:
             if tmp[0] is not None:
-                return dict.fromkeys(cls.__marks[name], tmp[0])
+                return dict.fromkeys(cls.__marks[name], tmp[0]), False
         elif len(set(tmp)) == len(tmp) and None not in tmp:
-            return dict.fromkeys(cls.__marks[name], tmp)
+            return dict.fromkeys(cls.__marks[name], tmp), True
         print('CGR data invalid: ', name, value)
 
     @classmethod
@@ -223,26 +223,26 @@ class CGRread:
             if diff[0] == 0:  # for list of charges c0,1,-2,+3...
                 tmp = [base + x for x in diff]
                 if len(set(tmp)) == len(tmp):
-                    return {'s_%s' % mark: tmp, 'p_%s' % mark: tmp, 'sp_%s' % mark: tmp}
+                    return {'s_%s' % mark: tmp, 'p_%s' % mark: tmp, 'sp_%s' % mark: tmp}, True
             elif len(diff) % 2 == 1:  # for dyn charges c1,-1,0... -1,0 is dyn group relatively to base
                 s = [base] + [base + x for x in diff[1::2]]
                 p = [base + x for x in diff[::2]]
                 tmp = list(zip(s, p))
                 if len(set(tmp)) == len(tmp):
-                    return {'s_%s' % mark: s, 'p_%s' % mark: p, 'sp_%s' % mark: tmp}
+                    return {'s_%s' % mark: s, 'p_%s' % mark: p, 'sp_%s' % mark: tmp}, True
         else:
             tmp = diff[0]
             if tmp:
                 p = base + tmp
-                return {'s_%s' % mark: base, 'p_%s' % mark: p, 'sp_%s' % mark: (base, p)}
+                return {'s_%s' % mark: base, 'p_%s' % mark: p, 'sp_%s' % mark: (base, p)}, False
 
     @classmethod
     def __cgr_dat(cls, _type, value):
         if _type == 'atomlist':
-            return dict(element=value)
+            return dict(element=value), True
 
         elif _type == 'atomnotlist':
-            return dict(element=list(elements_set.difference(value)))
+            return dict(element=list(elements_set.difference(value))), True
 
         elif _type == 'atomhyb':
             return cls.__parselist('hyb', value)
@@ -282,10 +282,11 @@ class CGRread:
 
     def __parse_molecule(self, molecule, mapping, meta=None, colors=None):
         meta = meta and {x: '\n'.join(y) for x, y in meta.items()} or None
-        cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = {}, {}, {}, {}
+        cgr_dat_atom, cgr_dat_bond, cgr_dat_stereo, isotope_dat = defaultdict(dict), defaultdict(dict), {}, {}
         any_bonds, normal_stereo = [], []
         charge_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'charge'}
         radical_dat = {k['atoms'][0]: int(k['value']) for k in molecule['CGR_DAT'] if k['type'] == 'radical'}
+        is_query = False
 
         for k in molecule['CGR_DAT']:
             k_type = k['type']
@@ -297,45 +298,68 @@ class CGRread:
                 a1 = k['atoms'][0]
                 if key == 'x':
                     x, y, z = (float(x) for x in value)
-                    cgr_dat_atom.setdefault(a1, {}).update(p_x=x, p_y=y, p_z=z)
+                    cgr_dat_atom[a1].update(p_x=x, p_y=y, p_z=z)
                 else:
                     if key == 'c':
                         val = self.__parse_cgr_atom(value, charge_dat.get(a1, molecule['atoms'][a1 - 1]['charge']),
                                                     'charge')
                         if val:
-                            cgr_dat_atom.setdefault(a1, {}).update(val)
+                            cgr_dat_atom[a1].update(val[0])
+                            if val[1] and not is_query:
+                                is_query = True
                         else:
                             print('dynatom charge invalid data. skipped:', value)
                     elif key == 'r':
                         val = self.__parse_cgr_atom(value, radical_dat.get(a1, 0), 'radical')
                         if val:
-                            cgr_dat_atom.setdefault(a1, {}).update(val)
+                            cgr_dat_atom[a1].update(val[0])
+                            if val[1] and not is_query:
+                                is_query = True
                         else:
                             print('dynatom radical invalid data. skipped:', value)
             elif k_type == 'dynstereo':
-                s_stereo, p_stereo = (self.__stereolabels[x] for x in k['value'].split('>'))
-                cgr_dat_stereo[k['atoms']] = (s_stereo, p_stereo)
-            elif k_type in ('dynbond', 'extrabond'):
-                val = self.__parsedyn('bond', k['value']) if k_type == 'dynbond' else \
-                    self.__parselist('bond', k['value'])
+                s_stereo, p_stereo = k['value'].split('>')
+                cgr_dat_stereo[k['atoms']] = (self.__stereolabels[s_stereo], self.__stereolabels[p_stereo])
+            elif k_type == 'extrabond':
+                val = self.__parselist('bond', k['value'])
                 if val:
                     a1, a2 = k['atoms']
-                    cgr_dat_bond.setdefault(a1, {})[a2] = val
-                    cgr_dat_bond.setdefault(a2, {})[a1] = val
+                    cgr_dat_bond[a1][a2] = val[0]
+                    cgr_dat_bond[a2][a1] = val[0]
+                    if val[1] and not is_query:
+                        is_query = True
+            elif k_type == 'dynbond':
+                val = self.__parsedyn('bond', k['value'])
+                if val:
+                    a1, a2 = k['atoms']
+                    cgr_dat_bond[a1][a2] = val[0]
+                    cgr_dat_bond[a2][a1] = val[0]
+                    if val[1] and not is_query:
+                        is_query = True
             elif k_type == 'isotope':
                 tmp = k['value'].split(',')
                 if len(tmp) > 1:
-                    cgr_dat_atom.setdefault(k['atoms'][0], {})['isotope'] = [int(x) for x in tmp]
+                    cgr_dat_atom[k['atoms'][0]]['isotope'] = [int(x) for x in tmp]
+                    if not is_query:
+                        is_query = True
                 else:
                     isotope_dat[k['atoms'][0]] = int(tmp[0])
             else:
                 val = self.__cgr_dat(k_type, k['value'])
                 if val:
-                    cgr_dat_atom.setdefault(k['atoms'][0], {}).update(val)
+                    cgr_dat_atom[k['atoms'][0]].update(val[0])
+                    if val[1] and not is_query:
+                        is_query = True
 
-        is_cgr = bool(self.__is_template or cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo or
-                      any(x['element'] in ('A', '*') for x in molecule['atoms']))
-        g = CGRContainer(meta=meta) if is_cgr else MoleculeContainer(meta=meta)
+        is_cgr = is_query or bool(cgr_dat_atom or cgr_dat_bond or cgr_dat_stereo) or self.__is_template or \
+            any(x['element'] in ('A', '*') for x in molecule['atoms'])
+
+        if is_query or self.__is_template:
+            g = QueryContainer(meta=meta)
+        elif is_cgr:
+            g = CGRContainer(meta=meta)
+        else:
+            g = MoleculeContainer(meta=meta)
 
         for k, l in enumerate(molecule['atoms'], start=1):
             atom_map, parsed_map = mapping[k]
@@ -453,7 +477,7 @@ class CGRwrite:
         self._fix_position = fix_position
 
     def get_formatted_cgr(self, g, shift=0):
-        is_cgr = isinstance(g, CGRContainer)
+        is_cgr = isinstance(g, QueryContainer)
         s_x = [x for _, x in g.nodes(data='s_x')]
         s_y = [x for _, x in g.nodes(data='s_y')]
         y_shift = -(max(s_y) + min(s_y)) / 2

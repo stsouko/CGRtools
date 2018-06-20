@@ -27,14 +27,11 @@ from ..periodictable import Element, elements, H
 
 
 class MoleculeContainer(BaseContainer):
-    def __init__(self, *args, **kwargs):
-        """
-        storage for Molecules
+    """
+    storage for Molecules
 
-        new molecule object creation or copy of data object
-        """
-        BaseContainer.__init__(self, *args, **kwargs)
-
+    new molecule object creation or copy of data object
+    """
     def __dir__(self):
         if self.__visible is None:
             self.__visible = tmp = super().__dir__()
@@ -150,11 +147,6 @@ class MoleculeContainer(BaseContainer):
             self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit)
         else:
             raise self._stereo_exception2
-
-    def get_stereo(self, atom1, atom2):
-        if self.__stereo_cache is None:
-            self.__stereo_cache = self._prepare_stereo()
-        return self.__stereo_cache.get((atom1, atom2), None)
 
     def reset_query_marks(self, copy=False):
         """
@@ -313,10 +305,6 @@ class MoleculeContainer(BaseContainer):
             else:
                 return _stereo_cache
 
-    def flush_cache(self):
-        self.__stereo_cache = None
-        super().flush_cache()
-
     @staticmethod
     def _attr_renew(attr, marks):
         new_attr = {}
@@ -381,7 +369,7 @@ class MoleculeContainer(BaseContainer):
                                           isotope=attrs.get('isotope'))
 
     @classmethod
-    def _stereo_mark(cls, attrs):
+    def _stereo_container(cls, attrs):
         return attrs.get('s_stereo')
 
     @classmethod
@@ -393,7 +381,7 @@ class MoleculeContainer(BaseContainer):
     _node_save = _node_marks + _node_base
     _edge_save = _edge_marks = ('s_bond', 's_stereo')
 
-    __visible = __stereo_cache = None
+    __visible = None
     _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
     _stereo_exception2 = InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
     _stereo_exception3 = InvalidStereo('atom has stereo. change impossible')
