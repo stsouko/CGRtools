@@ -24,7 +24,7 @@ from networkx import compose, has_path
 from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
                                              categorical_edge_match)
 from warnings import warn
-from .containers import CGRTemplate, MatchContainer, CGRContainer
+from .containers import CGRTemplate, MatchContainer, CGRContainer, QueryContainer
 from .core import CGRcore
 from .exceptions import InvalidData, InvalidTemplate
 
@@ -39,14 +39,14 @@ class CGRreactor:
         :param element: compare elements symbols and charges on isomorphism procedure
         :param stereo: compare stereo marks on isomorphism procedure
         """
-        gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge']
+        gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge', 'p_radical']
         if isotope:
             gnm_sp.append('isotope')
             gnm_s.append('isotope')
             cnm_p.append('isotope')
         if element:
-            gnm_sp.extend(['sp_charge', 'element'])
-            gnm_s.extend(['s_charge', 'element'])
+            gnm_sp.extend(['sp_charge', 'element', 'sp_radical'])
+            gnm_s.extend(['s_charge', 'element', 's_radical'])
         if extralabels:
             gnm_sp.extend(['sp_neighbors', 'sp_hyb'])
             gnm_s.extend(['s_neighbors', 's_hyb'])
@@ -56,11 +56,16 @@ class CGRreactor:
             cnm_p.append('p_stereo')
 
         self.__node_match = generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
-        self.__node_match_reagents = generic_node_match(gnm_s, [None] * len(gnm_s), [self.__list_eq] * len(gnm_s))
-        self.__node_match_products = categorical_node_match(cnm_p, [None] * len(cnm_p))
-
         self.__edge_match = generic_node_match('sp_bond', None, self.__list_eq)
+
+        self.__node_match_query = generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__query_eq] * len(gnm_sp))
+        self.__edge_match_query = generic_node_match('sp_bond', None, self.__query_eq)
+
+        self.__node_match_reagents = generic_node_match(gnm_s, [None] * len(gnm_s), [self.__list_eq] * len(gnm_s))
         self.__edge_match_reagents = generic_node_match('s_bond', None, self.__list_eq)
+
+        # for reaction CGR balancing
+        self.__node_match_products = categorical_node_match(cnm_p, [None] * len(cnm_p))
         self.__edge_match_products = categorical_edge_match('p_bond', None)
 
         self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
@@ -71,10 +76,39 @@ class CGRreactor:
     def __setstate__(self, state):
         self.__init__(**state)
 
+    def is_substructure(self, g, h):
+        return self.get_cgr_matcher(g, h).subgraph_is_isomorphic()
+
+    def is_equal(self, g, h):
+        return self.get_cgr_matcher(g, h).is_isomorphic()
+
+    def get_mapping(self, g, h):
+        return next(self.get_cgr_matcher(g, h).isomorphisms_iter(), None)
+
+    def get_substructure_mapping(self, g, h, limit=1):
+        """
+        return mapping of h to g matching.
+        :param g:
+        :param h:
+        :param limit: number of matches. if -1 return iterator for all possible
+        """
+        i = self.get_cgr_matcher(g, h).subgraph_isomorphisms_iter()
+        if limit == 1:
+            return next(i, None)
+        elif limit < 0:
+            yield from i
+        elif limit == 0:
+            raise ValueError('invalid limit')
+        else:
+            return [x for x, _ in zip(i, range(limit))]
+
     def get_cgr_matcher(self, g, h):
-        if not isinstance(g, CGRContainer):
-            nm = self.__node_match_reagents
-            em = self.__edge_match_reagents
+        if isinstance(g, CGRContainer):
+            nm = self.__node_match
+            em = self.__edge_match
+        elif isinstance(g, QueryContainer):
+            nm = self.__node_match_query
+            em = self.__edge_match_query
         else:
             nm = self.__node_match
             em = self.__edge_match
@@ -208,11 +242,32 @@ class CGRreactor:
 
     @staticmethod
     def __list_eq(a, b):
-        return True if b is None else a in b if isinstance(b, list) else a == b
+        if b is None:
+            return True
+        elif isinstance(b, list):
+            return a in b
+        return a == b
 
     @staticmethod
-    def __simple_eq(a, b):
-        return True if b is None else a == b
+    def __query_eq(a, b):
+        """
+        only fully equal acceptable
+        """
+        if isinstance(a, list):
+            if isinstance(b, list):
+                if isinstance(a[0], tuple):
+                    if isinstance(b[0], tuple):
+                        a = sorted(('n' if x is None else x, 'n' if y is None else y) for x, y in a)
+                        b = sorted(('n' if x is None else x, 'n' if y is None else y) for x, y in b)
+                        return a == b
+                    return False
+                elif isinstance(b[0], tuple):
+                    return False
+                return sorted(a) == sorted(b)
+            return False
+        elif isinstance(b, list):
+            return False
+        return a == b
 
     @staticmethod
     def __remap_group(g, h, mapping):
@@ -306,9 +361,9 @@ class CGRreactor:
         out.meta.update(structure.meta)
         return out
 
-    __node_marks = {'s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark'}
+    __node_marks = {'s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark', 's_radical'}
     __full_node_marks = __node_marks.union(('s_x', 's_y', 's_z'))
-    __cgr_node_marks = __node_marks.union(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo'))
+    __cgr_node_marks = __node_marks.union(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo', 'p_radical'))
     __cgr_full_node_marks = __cgr_node_marks.union(('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'))
     __bond_marks = {'s_bond', 's_stereo'}
     __cgr_bond_marks = __bond_marks.union(('p_bond', 'p_stereo'))
