@@ -20,32 +20,49 @@
 #
 from collections import defaultdict
 from itertools import chain, count, repeat
-from lxml.etree import iterparse, QName
+from lxml.etree import iterparse, QName, tostring
 from sys import stderr
 from traceback import format_exc
 from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set
 from ..containers import MoleculeContainer
 
 
-def xml_dict(parent_element):
+def xml_dict(parent_element, stop_list=None):
+    stop_list = set() if stop_list is None else set(stop_list)
     out = {}
-    if parent_element.items():
-        out.update({x: y for x, y in (('@%s' % x.strip(), y.strip()) for x, y in parent_element.items()) if y})
-    if parent_element.text:
-        text = parent_element.text.strip()
-        if text:
-            out['$'] = text
+    for x, y in parent_element.items():
+        y = y.strip()
+        if y:
+            x = '@%s' % x.strip()
+            out[x] = y
 
+    text = []
     if len(parent_element):
         elements_grouped = defaultdict(list)
         for element in parent_element:
-            elements_grouped[QName(element).localname].append(element)
+            name = QName(element).localname
+            if name in stop_list:
+                text.append(tostring(element, encoding=str))
+            else:
+                elements_grouped[name].append(element)
+
+            if element.tail:
+                t = element.tail.strip()
+                if t:
+                    text.append(t)
 
         for element_tag, element_group in elements_grouped.items():
             if len(element_group) == 1:
                 out[element_tag] = xml_dict(element_group[0])
             else:
                 out[element_tag] = [xml_dict(x) for x in element_group]
+
+    if parent_element.text:
+        t = parent_element.text.strip()
+        if t:
+            text.insert(0, t)
+    if text:
+        out['$'] = ''.join(text)
 
     return out
 
