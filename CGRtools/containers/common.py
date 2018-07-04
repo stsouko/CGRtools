@@ -342,14 +342,6 @@ class BaseContainer(Graph, ABC):
     def __eq__(self, other):
         return str(self) == str(other)
 
-    def get_fear_hash(self, *args, **kwargs):
-        warn('use get_signature_hash instead', DeprecationWarning)
-        return self.get_signature_hash(*args, **kwargs)
-
-    def get_fear(self, *args, **kwargs):
-        warn('use get_signature instead', DeprecationWarning)
-        return self.get_signature(*args, **kwargs)
-
     __meta = __visible = __bond_cache = __weights = __signatures = __pickle = __stereo_cache = None
     __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')

@@ -19,8 +19,8 @@
 #  MA 02110-1301, USA.
 #
 from itertools import chain
-from sys import stderr
 from traceback import format_exc
+from warnings import warn
 from ._CGRrw import WithMixin, CGRread
 from ._MDLrw import MOLwrite, MOLread, EMOLread
 from ..exceptions import EmptyMolecule
@@ -57,14 +57,14 @@ class SDFread(CGRread, WithMixin):
                 except ValueError:
                     failkey = True
                     parser = None
-                    print('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), file=stderr)
+                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
 
             elif line.startswith("$$$$"):
                 if molecule:
                     try:
                         yield self._get_molecule(molecule)
                     except Exception:
-                        print('previous record consist errors:\n%s' % format_exc(), file=stderr)
+                        warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
                     molecule = None
 
                 im = 3
@@ -100,13 +100,13 @@ class SDFread(CGRread, WithMixin):
                         raise ValueError('invalid MOL')
                 except (EmptyMolecule, ValueError):
                     failkey = True
-                    print('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), file=stderr)
+                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
 
         if molecule:  # True for MOL file only.
             try:
                 yield self._get_molecule(molecule)
             except Exception:
-                print('previous record consist errors:\n%s' % format_exc(), file=stderr)
+                warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
 
 
 class SDFwrite(MOLwrite, WithMixin):

@@ -23,6 +23,7 @@ from collections import defaultdict
 from itertools import count, chain
 from io import StringIO, BytesIO
 from pathlib import Path
+from warnings import warn
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError
 from ..periodictable import elements_set
@@ -200,7 +201,7 @@ class CGRread:
             tmp2 = list(zip(tmp0, tmp1))
             if len(set(tmp2)) == len(tmp2):
                 return {s: tmp0, p: tmp1, sp: tmp2}, True
-        print('CGR data invalid: ', name, value)
+        warn('CGR data invalid: %s, %s' % (name, value), ResourceWarning)
 
     @classmethod
     def __parselist(cls, name, value):
@@ -214,7 +215,7 @@ class CGRread:
                 return dict.fromkeys(cls.__marks[name], tmp[0]), False
         elif len(set(tmp)) == len(tmp) and None not in tmp:
             return dict.fromkeys(cls.__marks[name], tmp), True
-        print('CGR data invalid: ', name, value)
+        warn('CGR data invalid: %s, %s' % (name, value), ResourceWarning)
 
     @classmethod
     def __parse_cgr_atom(cls, value, base, mark):
@@ -308,7 +309,7 @@ class CGRread:
                             if val[1] and not is_query:
                                 is_query = True
                         else:
-                            print('dynatom charge invalid data. skipped:', value)
+                            warn('dynatom charge invalid data. skipped: %s' % value, ResourceWarning)
                     elif key == 'r':
                         val = self.__parse_cgr_atom(value, radical_dat.get(a1, 0), 'radical')
                         if val:
@@ -316,7 +317,7 @@ class CGRread:
                             if val[1] and not is_query:
                                 is_query = True
                         else:
-                            print('dynatom radical invalid data. skipped:', value)
+                            warn('dynatom radical invalid data. skipped: %s' % value, ResourceWarning)
             elif k_type == 'dynstereo':
                 s_stereo, p_stereo = k['value'].split('>')
                 cgr_dat_stereo[k['atoms']] = (self.__stereolabels[s_stereo], self.__stereolabels[p_stereo])
@@ -427,12 +428,12 @@ class CGRread:
                     try:
                         g.add_stereo(k_map, l_map, s_mark, p_mark)
                     except InvalidStereo as e:
-                        print(e)
+                        warn(str(e), ResourceWarning)
                         failed_cgr_dat_stereo[(k, l)] = (s_mark, p_mark)
                     except InvalidAtom as e:
                         if not self.__ignore:
                             raise
-                        print(e)
+                        warn(str(e), ResourceWarning)
 
             failed_normal_stereo = []
             for k_map, l_map, s_mark in normal_stereo:
@@ -442,12 +443,12 @@ class CGRread:
                     else:
                         g.add_stereo(k_map, l_map, s_mark)
                 except InvalidStereo as e:
-                    print(e)
+                    warn(str(e), ResourceWarning)
                     failed_normal_stereo.append((k_map, l_map, s_mark))
                 except InvalidAtom as e:
                     if not self.__ignore:
                         raise
-                    print(e)
+                    warn(str(e), ResourceWarning)
 
             if failed_cgr_dat_stereo and len(cgr_dat_stereo) > len(failed_cgr_dat_stereo) or \
                     failed_normal_stereo and len(normal_stereo) > len(failed_normal_stereo):

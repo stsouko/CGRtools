@@ -22,7 +22,7 @@ from collections import Counter
 from functools import reduce
 from itertools import count, repeat
 from operator import mul, itemgetter
-from sys import stderr
+from warnings import warn
 from ..exceptions import InvalidConfig
 from ..periodictable import elements_list
 
@@ -143,11 +143,10 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
 
         tries -= 1
         if not tries and numb < oldnumb:
-            print('morgan. number of attempts exceeded. uniqueness has decreased. last attempt will be made',
-                  file=stderr)
+            warn('morgan. number of attempts exceeded. uniqueness has decreased. last attempt will be made')
             tries = 1
     else:
-        print('morgan. number of attempts exceeded', file=stderr)
+        warn('morgan. number of attempts exceeded')
 
     return weights
 

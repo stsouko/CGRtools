@@ -160,6 +160,22 @@ class CGRstring:
                         pmi.append(self.__charge_to_string(p))
             elif s:
                 smi.append(self.__charge_to_string(s))
+
+            s = gni.get('s_radical')
+            if cgr:
+                p = gni.get('p_radical')
+                if isinstance(s, list):
+                    tmp = [(self.__radical_map[x], self.__radical_map[y]) for x, y in sorted(zip(s, p))]
+                    smi.append('<%s>' % ''.join(x for x, _ in tmp))
+                    pmi.append('<%s>' % ''.join(x for _, x in tmp))
+                else:
+                    if s:
+                        smi.append(self.__radical_map[s])
+                    if p:
+                        pmi.append(self.__radical_map[p])
+            elif s:
+                smi.append(self.__radical_map[s])
+
         else:
             smi.insert(0, '*')
             if cgr:
@@ -279,6 +295,7 @@ class CGRstring:
     __to_smiles_map = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
     __hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
     __stereo_types = {1: '@', -1: '@@'}
+    __radical_map = {1: '*', 2: '*2', 3: '*3', None: 'n'}
 
 
 def get_cgr_string(g, weights, isotope=False, stereo=False, hyb=False, element=True, is_cgr=False):

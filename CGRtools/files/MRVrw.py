@@ -21,8 +21,8 @@
 from collections import defaultdict
 from itertools import chain, count, repeat
 from lxml.etree import iterparse, QName, tostring
-from sys import stderr
 from traceback import format_exc
+from warnings import warn
 from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set
 from ..containers import MoleculeContainer
 
@@ -91,28 +91,28 @@ class MRVread(CGRread, WithMixin):
                 try:
                     molecule = self.__parse_molecule(parsed['molecule'])
                 except KeyError:
-                    print('Molecule %d\nData invalid: %s' % (n, format_exc()), file=stderr)
+                    warn('Molecule %d\nData invalid: %s' % (n, format_exc()), ResourceWarning)
                 else:
                     try:
                         yield self._get_molecule(molecule)
                     except Exception:
-                        print('Molecule %d\nCGR Data invalid: %s' % (n, format_exc()), file=stderr)
+                        warn('Molecule %d\nCGR Data invalid: %s' % (n, format_exc()), ResourceWarning)
                     finally:
                         del molecule
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
                 try:
                     reaction = self.__parse_reaction(parsed['reaction'])
                 except KeyError:
-                    print('Reaction %d\nData invalid: %s' % (n, format_exc()), file=stderr)
+                    warn('Reaction %d\nData invalid: %s' % (n, format_exc()), ResourceWarning)
                 else:
                     try:
                         yield self._get_reaction(reaction)
                     except Exception:
-                        print('Reaction %d\nCGR Data invalid: %s' % (n, format_exc()), file=stderr)
+                        warn('Reaction %d\nCGR Data invalid: %s' % (n, format_exc()), ResourceWarning)
                     finally:
                         del reaction
             else:
-                print('MChemicalStruct %d invalid' % n, file=stderr)
+                warn('MChemicalStruct %d invalid' % n, ResourceWarning)
 
     @classmethod
     def __parse_reaction(cls, data):

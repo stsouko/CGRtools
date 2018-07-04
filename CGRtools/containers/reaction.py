@@ -239,14 +239,6 @@ class ReactionContainer:
             self.__pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
         return self.__pickle
 
-    def get_fear_hash(self, *args, **kwargs):
-        warn('use get_signature_hash instead', DeprecationWarning)
-        return self.get_signature_hash(*args, **kwargs)
-
-    def get_fear(self, *args, **kwargs):
-        warn('use get_signature instead', DeprecationWarning)
-        return self.get_signature(*args, **kwargs)
-
 
 class MergedReaction:
     """represent reactions as single disjointed reagents and single disjointed products graphs"""
@@ -339,14 +331,6 @@ class MergedReaction:
         if self.__pickle is None:
             self.__pickle = '%s(%s, %s)' % (self.__class__.__name__, repr(self.reagents), repr(self.products))
         return self.__pickle
-
-    def get_fear_hash(self, *args, **kwargs):
-        warn('use get_signature_hash instead', DeprecationWarning)
-        return self.get_signature_hash(*args, **kwargs)
-
-    def get_fear(self, *args, **kwargs):
-        warn('use get_signature instead', DeprecationWarning)
-        return self.get_signature(*args, **kwargs)
 
 
 __all__ = [ReactionContainer.__name__, MergedReaction.__name__]
