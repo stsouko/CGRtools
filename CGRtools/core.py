@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,7 +22,7 @@ from collections import defaultdict
 from itertools import cycle
 from networkx import connected_components
 from operator import sub
-from .containers import MoleculeContainer, CGRContainer, ReactionContainer
+from .containers import MoleculeContainer, CGRContainer, ReactionContainer, QueryContainer
 from .exceptions import InvalidData
 from .periodictable import H, O
 from .periodictable.factory import _radical_map, _radical_unmap
@@ -32,6 +32,25 @@ class CGRcore:
     @staticmethod
     def split(m, meta=False):
         return [m.substructure(c, meta=meta) for c in connected_components(m)]
+
+    @staticmethod
+    def __get_highest_empty(*containers):
+        if not containers:
+            return
+        is_query = False
+        for c in containers:
+            if isinstance(c, CGRContainer):
+                return type(c)
+            elif is_query:
+                continue
+            elif isinstance(c, QueryContainer):
+                t = type(c)
+                is_query = True
+            elif isinstance(c, MoleculeContainer):
+                t = type(c)
+            else:
+                raise ValueError('invalid data type of g: %s' % type(c))
+        return t
 
     @classmethod
     def union(cls, m1, m2):
@@ -47,24 +66,25 @@ class CGRcore:
         if set(m1) & set(m2):
             raise InvalidData('The node sets of m1 and m2 are not disjoint.')
 
-        u = CGRContainer() if isinstance(m1, CGRContainer) or isinstance(m2, CGRContainer) else MoleculeContainer()
-
+        u = cls.__get_highest_empty(m1, m2)()
         u.add_nodes_from(m1.nodes(data=True))
         u.add_nodes_from(m2.nodes(data=True))
         u.add_edges_from(m1.edges(data=True))
         u.add_edges_from(m2.edges(data=True))
 
-        def fix(m):
-            for n, m, attr in m.edges(data=True):
-                u.add_edge(n, m, **cls.__fix_attr(attr, u._edge_marks))
-            for n, attr in m.nodes(data=True):
-                u.add_node(n, p_x=attr['s_x'], p_y=attr['s_y'], p_z=attr['s_z'], **cls.__fix_attr(attr, u._node_marks))
-
-        if isinstance(u, CGRContainer) and not isinstance(m1, CGRContainer):
-            fix(m1)
-        elif isinstance(u, CGRContainer) and not isinstance(m2, CGRContainer):
-            fix(m2)
+        if isinstance(u, QueryContainer):
+            if not isinstance(m1, QueryContainer):
+                cls.__fix_union(u, m1)
+            elif not isinstance(m2, QueryContainer):
+                cls.__fix_union(u, m2)
         return u
+
+    @classmethod
+    def __fix_union(cls, u, m):
+        for n, m, attr in m.edges(data=True):
+            u.add_edge(n, m, **cls.__fix_attr(attr, u._edge_marks))
+        for n, attr in m.nodes(data=True):
+            u.add_node(n, p_x=attr['s_x'], p_y=attr['s_y'], p_z=attr['s_z'], **cls.__fix_attr(attr, u._node_marks))
 
     @classmethod
     def compose(cls, m1, m2, balance=False):
@@ -73,14 +93,20 @@ class CGRcore:
 
         :param m1: Molecule or CGR Container 1
         :param m2: Molecule or CGR Container 2
-        :return: CGRContainer
+        :return: CGRContainer or QueryContainer
         """
         common = set(m1).intersection(m2)
-        h = CGRContainer()
+
+        h = cls.__get_highest_empty(m1, m2)
+        if not issubclass(h, QueryContainer):
+            h = CGRContainer()
+        else:
+            h = h()
+
         unbalanced = {}
 
         for i, g in (('reagents', m1), ('products', m2)):
-            is_cgr = isinstance(g, CGRContainer)
+            is_cgr = isinstance(g, QueryContainer)
             pdi = cls.__popdict[i][is_cgr]
             unbalanced[i] = ext_common = defaultdict(list)
             e_pop, n_pop = pdi['edge'], pdi['node']
@@ -241,17 +267,7 @@ class CGRcore:
                     dh = ph - sh
                     dc = pc - sc
 
-                    if dv == dh == dc:  # explicit hydrogen addition/removing
-                        if dv > 0:
-                            for m in sp['products']:
-                                h.nodes[m]['s_charge'] = 1
-                                h.meta.setdefault('rule #3. atom new. common atom protonation', []).append((m, n))
-                        else:
-                            for m in sp['reagents']:
-                                h.nodes[m]['p_charge'] = 1
-                                h.meta.setdefault('rule #4. atom lost. common atom deprotonation', []).append((m, n))
-
-                    elif not (dv or dh or dc):  # common atom changed. Substitution, Elimination, Addition
+                    if not (dv or dh or dc):  # common atom unchanged. Substitution, Elimination, Addition
                         for m in sp['reagents']:
                             attr = h.nodes[m]
                             attr.update(p_charge=attr['s_charge'], p_radical=attr.get('s_radical'))
@@ -262,6 +278,17 @@ class CGRcore:
                             attr.update(s_charge=attr['p_charge'], s_radical=attr.get('p_radical'))
                             h.meta.setdefault('rule #2. atom new. common atom unchanged. '
                                               'substitution, elimination, addition', []).append((m, n))
+
+                    if dv == dh == dc:  # explicit hydrogen addition/removing
+                        if dv > 0:
+                            for m in sp['products']:
+                                h.nodes[m]['s_charge'] = 1
+                                h.meta.setdefault('rule #3. atom new. common atom protonation', []).append((m, n))
+                        else:
+                            for m in sp['reagents']:
+                                h.nodes[m]['p_charge'] = 1
+                                h.meta.setdefault('rule #4. atom lost. common atom deprotonation', []).append((m, n))
+
                     else:
                         for m in sp['reagents']:
                             attr = h.nodes[m]
@@ -343,7 +370,13 @@ class CGRcore:
     def decompose(cls, g):
         tmp = ReactionContainer(meta=g.meta)
 
-        x = MoleculeContainer(g)
+        if isinstance(g, CGRContainer):
+            x = MoleculeContainer(g)
+        elif isinstance(g, QueryContainer):
+            x = QueryContainer(g)
+        else:
+            raise ValueError('invalid data type of g: %s' % type(g))
+
         for n, m in cls.__get_broken_paths(g, 's_bond'):
             x.remove_edge(n, m)
 

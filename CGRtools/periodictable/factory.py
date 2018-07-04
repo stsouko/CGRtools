@@ -207,7 +207,7 @@ def get_element(symbol, number, _type, group, period):
     return _Element
 
 
-_bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1, None: 0}
+_bonds = {1: 1, 2: 2, 3: 3, 4: 1.5, 9: 1, None: 0}
 _group_cache = {}
 _period_cache = {}
 _radical_map = {1: 2, 2: 1, 3: 2, None: 0}

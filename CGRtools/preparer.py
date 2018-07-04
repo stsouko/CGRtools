@@ -187,28 +187,5 @@ class CGRpreparer(CGRcore):
     def __union_all(cls, data):
         return reduce(cls.union, data) if data else MoleculeContainer()
 
-    def getCGR(self, data):  # Reverse compatibility
-        """deprecated. see condense"""
-        warn('getCGR name is deprecated. use condense instead', DeprecationWarning)
-        return self.condense(data)
-
-    def dissCGR(self, data):  # Reverse compatibility
-        """deprecated. see dissociate"""
-        warn('dissCGR name is deprecated. use decompose instead', DeprecationWarning)
-        return self.decompose(data)
-
-
-class CGRcombo:  # Reverse compatibility
-    def __new__(cls, cgr_type='0', extralabels=False, **kwargs):
-        warn('CGRcombo deprecated and can be work incorrectly. use CGRpreparer instead', DeprecationWarning)
-        if kwargs:
-            warn('{}: now unusable'.format(list(kwargs)))
-
-        return CGRpreparer(cgr_type=cgr_type, extralabels=extralabels)
-
-    @classmethod
-    def unpickle(cls, *args, **kwargs):
-        raise Exception('CGRcombo unpickle incompatible with CGRpreparer')
-
 
 __all__ = [CGRpreparer.__name__]

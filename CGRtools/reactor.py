@@ -24,7 +24,7 @@ from networkx import compose, has_path
 from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
                                              categorical_edge_match)
 from warnings import warn
-from .containers import CGRTemplate, MatchContainer, CGRContainer, QueryContainer
+from .containers import CGRTemplate, MatchContainer, CGRContainer, QueryContainer, MoleculeContainer
 from .core import CGRcore
 from .exceptions import InvalidData, InvalidTemplate
 
@@ -109,9 +109,11 @@ class CGRreactor:
         elif isinstance(g, QueryContainer):
             nm = self.__node_match_query
             em = self.__edge_match_query
+        elif isinstance(g, MoleculeContainer):
+            nm = self.__node_match_reagents
+            em = self.__edge_match_reagents
         else:
-            nm = self.__node_match
-            em = self.__edge_match
+            raise ValueError('invalid data type of g: %s' % type(g))
 
         return GraphMatcher(g, h, node_match=nm, edge_match=em)
 
@@ -289,8 +291,8 @@ class CGRreactor:
 
             products = reduce(CGRcore.union, template.products).copy()
             reagents = reduce(CGRcore.union, template.reagents).copy()
-            if not (isinstance(reagents, CGRContainer) and isinstance(products, CGRContainer)):
-                raise InvalidTemplate('Templates should be CGRContainers')
+            if not (isinstance(reagents, QueryContainer) and isinstance(products, QueryContainer)):
+                raise InvalidTemplate('templates should be QueryContainer')
 
             new_atoms = set(products).difference(reagents)
             for n in new_atoms:  # if unique atoms in patch has variable properties exception is raised
@@ -338,10 +340,12 @@ class CGRreactor:
             node_marks = cls.__cgr_node_marks
             full_node_marks = cls.__cgr_full_node_marks
             bond_marks = cls.__cgr_bond_marks
-        else:
+        elif isinstance(structure, MoleculeContainer):
             node_marks = cls.__node_marks
             full_node_marks = cls.__full_node_marks
             bond_marks = cls.__bond_marks
+        else:
+            raise ValueError('invalid data type of g: %s' % type(structure))
 
         p = structure.fresh_copy()
         for i, attr in patch.nodes(data=True):
