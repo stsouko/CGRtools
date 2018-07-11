@@ -31,7 +31,7 @@ from ..exceptions import EmptyMolecule
 class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, ignore=False, **kwargs):
         WithMixin.__init__(self, file)
-        CGRread.__init__(self, *args, **kwargs)
+        CGRread.__init__(self, *args, ignore=ignore, **kwargs)
         self.__data = self.__reader()
         self.__ignore = ignore
 
@@ -105,22 +105,22 @@ class RDFread(CGRread, WithMixin):
             elif ir:
                 ir -= 1
             elif not ir:
-                try:
-                    if isreaction:
+                if isreaction:
                         if line.startswith('M  V30 COUNTS'):
                             parser = ERXNread(line)
                         else:
                             parser = RXNread(line)
-                    else:
+                else:
+                    try:
                         if 'V2000' in line:
                             parser = MOLread(line)
                         elif 'V3000' in line:
                             parser = EMOLread(line)
                         else:
                             raise ValueError('invalid MOL')
-                except (EmptyMolecule, ValueError):
-                    failkey = True
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
+                    except (EmptyMolecule, ValueError):
+                        failkey = True
+                        warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
 
         if reaction:
             try:

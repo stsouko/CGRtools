@@ -30,7 +30,7 @@ class SDFread(CGRread, WithMixin):
     def __init__(self, file, *args, is_template=None, **kwargs):
         assert not is_template, 'is_tepmlate works only for reactions'
         WithMixin.__init__(self, file)
-        CGRread.__init__(self, *args, **kwargs)
+        CGRread.__init__(self, *args, is_template=False, **kwargs)
         self.__data = self.__reader()
 
     def read(self):
@@ -54,7 +54,7 @@ class SDFread(CGRread, WithMixin):
                     if parser(line):
                         molecule = parser.getvalue()
                         parser = None
-                except ValueError:
+                except (EmptyMolecule, ValueError):
                     failkey = True
                     parser = None
                     warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
