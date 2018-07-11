@@ -31,7 +31,7 @@ from ..exceptions import EmptyMolecule
 class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, ignore=False, **kwargs):
         WithMixin.__init__(self, file)
-        CGRread.__init__(self, *args, **kwargs)
+        CGRread.__init__(self, *args, ignore=ignore, **kwargs)
         self.__data = self.__reader()
         self.__ignore = ignore
 
@@ -56,6 +56,11 @@ class RDFread(CGRread, WithMixin):
                     if parser(line):
                         reaction = parser.getvalue()
                         parser = None
+                except EmptyMolecule:
+                    if not (isreaction and self.__ignore):
+                        failkey = True
+                        parser = None
+                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
                 except ValueError:
                     failkey = True
                     parser = None

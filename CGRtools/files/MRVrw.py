@@ -307,7 +307,7 @@ class MRVwrite(CGRwrite, WithMixin):
                                                                    if len(iv) > cls._half_table else
                                                                    (',%s' % x for x in iv))
             elif it == 'radical':
-                radical[ia] = ' radical="%d"' % iv
+                radical[ia] = ' radical="%s"' % iv
 
         return ''.join(chain(('<atomArray>',),
                              ('<atom id="a{0}" elementType="{1[element]}" x3="{1[x]:.4f}" y3="{1[y]:.4f}" '
