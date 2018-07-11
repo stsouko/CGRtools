@@ -154,9 +154,10 @@ class CGRcore:
                     tmp = dict(p_x=attr['s_x'], p_y=attr['s_y'], p_z=attr['s_z'],
                                **{k: v for k, v in attr.items() if k in n_pop})
                 else:
-                    tmp = dict(s_x=attr['s_x'], s_y=attr['s_y'], s_z=attr['s_z'],
-                               mark=attr['mark'], element=attr['element'], map=attr['map'],
-                               **{n_pop[k]: v for k, v in attr.items() if k in n_pop})
+                    tmp = dict(s_x=attr['s_x'], s_y=attr['s_y'], s_z=attr['s_z'], mark=attr['mark'],
+                               element=attr['element'], **{n_pop[k]: v for k, v in attr.items() if k in n_pop})
+                    if 'map' in attr:
+                        tmp['map'] = attr['map']
                 h.add_node(n, **tmp)
 
         if not balance:
