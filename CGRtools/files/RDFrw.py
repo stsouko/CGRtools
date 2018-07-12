@@ -56,6 +56,11 @@ class RDFread(CGRread, WithMixin):
                     if parser(line):
                         reaction = parser.getvalue()
                         parser = None
+                except EmptyMolecule:
+                    if not (isreaction and self.__ignore):
+                        failkey = True
+                        parser = None
+                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
                 except ValueError:
                     failkey = True
                     parser = None
@@ -105,22 +110,22 @@ class RDFread(CGRread, WithMixin):
             elif ir:
                 ir -= 1
             elif not ir:
-                if isreaction:
+                try:
+                    if isreaction:
                         if line.startswith('M  V30 COUNTS'):
                             parser = ERXNread(line)
                         else:
                             parser = RXNread(line)
-                else:
-                    try:
+                    else:
                         if 'V2000' in line:
                             parser = MOLread(line)
                         elif 'V3000' in line:
                             parser = EMOLread(line)
                         else:
                             raise ValueError('invalid MOL')
-                    except (EmptyMolecule, ValueError):
-                        failkey = True
-                        warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
+                except (EmptyMolecule, ValueError):
+                    failkey = True
+                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
 
         if reaction:
             try:
