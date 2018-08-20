@@ -68,9 +68,9 @@ def xml_dict(parent_element, stop_list=None):
 
 
 class MRVread(CGRread, WithMixin):
-    def __init__(self, file, remap=True, ignore=False, is_template=False):
-        WithMixin.__init__(self, file, 'rb')
-        CGRread.__init__(self, remap, ignore, is_template=is_template)
+    def __init__(self, file, *args, ignore=False, **kwargs):
+        super().__init__(*args, ignore=ignore, **kwargs)
+        super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
         self.__ignore = ignore
 
@@ -84,35 +84,31 @@ class MRVread(CGRread, WithMixin):
         return next(self.__data)
 
     def __reader(self):
-        for n, (_, element) in enumerate(iterparse(self._file, tag='{*}MChemicalStruct'), start=1):
+        for _, element in iterparse(self._file, tag='{*}MChemicalStruct'):
             parsed = xml_dict(element)
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
                 try:
                     molecule = self.__parse_molecule(parsed['molecule'])
                 except KeyError:
-                    warn('Molecule %d\nData invalid: %s' % (n, format_exc()), ResourceWarning)
+                    warn('molecule consist errors: %s' % format_exc(), ResourceWarning)
                 else:
                     try:
                         yield self._get_molecule(molecule)
                     except Exception:
-                        warn('Molecule %d\nCGR Data invalid: %s' % (n, format_exc()), ResourceWarning)
-                    finally:
-                        del molecule
+                        warn('record consist errors: %s' % format_exc(), ResourceWarning)
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
                 try:
                     reaction = self.__parse_reaction(parsed['reaction'])
                 except KeyError:
-                    warn('Reaction %d\nData invalid: %s' % (n, format_exc()), ResourceWarning)
+                    warn('reaction consist errors: %s' % format_exc(), ResourceWarning)
                 else:
                     try:
                         yield self._get_reaction(reaction)
                     except Exception:
-                        warn('Reaction %d\nCGR Data invalid: %s' % (n, format_exc()), ResourceWarning)
-                    finally:
-                        del reaction
+                        warn('record consist errors: %s' % format_exc(), ResourceWarning)
             else:
-                warn('MChemicalStruct %d invalid' % n, ResourceWarning)
+                warn('record invalid', ResourceWarning)
 
     @classmethod
     def __parse_reaction(cls, data):
@@ -233,8 +229,8 @@ class MRVread(CGRread, WithMixin):
 
 class MRVwrite(CGRwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
-        WithMixin.__init__(self, file, 'w')
-        CGRwrite.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
+        super(CGRwrite, self).__init__(file, 'w')
         self.write = self.__init_write
 
     def close(self):

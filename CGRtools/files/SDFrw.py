@@ -29,8 +29,8 @@ from ..exceptions import EmptyMolecule
 class SDFread(CGRread, WithMixin):
     def __init__(self, file, *args, is_template=None, **kwargs):
         assert not is_template, 'is_tepmlate works only for reactions'
-        WithMixin.__init__(self, file)
-        CGRread.__init__(self, *args, is_template=False, **kwargs)
+        super().__init__(*args, is_template=False, **kwargs)
+        super(CGRread, self).__init__(file)
         self.__data = self.__reader()
 
     def read(self):
@@ -64,7 +64,7 @@ class SDFread(CGRread, WithMixin):
                     try:
                         yield self._get_molecule(molecule)
                     except Exception:
-                        warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
+                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
                     molecule = None
 
                 im = 3
@@ -106,13 +106,13 @@ class SDFread(CGRread, WithMixin):
             try:
                 yield self._get_molecule(molecule)
             except Exception:
-                warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
+                warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
 
 
 class SDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
-        WithMixin.__init__(self, file, 'w')
-        MOLwrite.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
+        super(MOLwrite, self).__init__(file, 'w')
         self.write = self.__write
 
     def __write(self, data):

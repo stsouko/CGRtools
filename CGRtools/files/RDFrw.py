@@ -30,8 +30,8 @@ from ..exceptions import EmptyMolecule
 
 class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, ignore=False, **kwargs):
-        WithMixin.__init__(self, file)
-        CGRread.__init__(self, *args, ignore=ignore, **kwargs)
+        super().__init__(*args, ignore=ignore, **kwargs)
+        super(CGRread, self).__init__(file)
         self.__data = self.__reader()
         self.__ignore = ignore
 
@@ -71,7 +71,7 @@ class RDFread(CGRread, WithMixin):
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except Exception:
-                        warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
+                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
                     reaction = None
                 isreaction = True
                 ir = 4
@@ -82,7 +82,7 @@ class RDFread(CGRread, WithMixin):
                     try:
                         yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
                     except Exception:
-                        warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
+                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
                     reaction = None
                 ir = 3
                 failkey = isreaction = False
@@ -131,13 +131,13 @@ class RDFread(CGRread, WithMixin):
             try:
                 yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
             except Exception:
-                warn('previous record consist errors:\n%s' % format_exc(), ResourceWarning)
+                warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
 
 
 class RDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
-        WithMixin.__init__(self, file, 'w')
-        MOLwrite.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
+        super(MOLwrite, self).__init__(file, 'w')
         self.write = self.__init_write
 
     def __init_write(self, data):

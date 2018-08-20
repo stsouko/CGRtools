@@ -18,6 +18,7 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
+from .SMILESrw import SMILESread
 from .SDFrw import SDFwrite, SDFread
 from .RDFrw import RDFwrite, RDFread
 from .MRVrw import MRVwrite, MRVread
