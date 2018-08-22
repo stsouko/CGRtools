@@ -22,7 +22,7 @@ from itertools import chain
 from time import strftime
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import WithMixin, CGRread
+from ._CGRrw import WithMixin, CGRread, CGRwrite
 from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread
 from ..containers import MoleculeContainer
 from ..exceptions import EmptyMolecule
@@ -137,7 +137,7 @@ class RDFread(CGRread, WithMixin):
 class RDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        super(MOLwrite, self).__init__(file, 'w')
+        super(CGRwrite, self).__init__(file, 'w')
         self.write = self.__init_write
 
     def __init_write(self, data):

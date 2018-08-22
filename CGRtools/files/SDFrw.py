@@ -21,7 +21,7 @@
 from itertools import chain
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import WithMixin, CGRread
+from ._CGRrw import WithMixin, CGRread, CGRwrite
 from ._MDLrw import MOLwrite, MOLread, EMOLread
 from ..exceptions import EmptyMolecule
 
@@ -112,7 +112,7 @@ class SDFread(CGRread, WithMixin):
 class SDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        super(MOLwrite, self).__init__(file, 'w')
+        super(CGRwrite, self).__init__(file, 'w')
         self.write = self.__write
 
     def __write(self, data):
