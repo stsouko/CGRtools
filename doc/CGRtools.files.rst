@@ -44,18 +44,18 @@ CGRtools\.files\.SMILESrw module
     :undoc-members:
     :show-inheritance:
 
-CGRtools\.files\.CGRrw module
------------------------------
+CGRtools\.files\._CGRrw module
+------------------------------
 
-.. automodule:: CGRtools.files.CGRrw
+.. automodule:: CGRtools.files._CGRrw
     :members:
     :undoc-members:
     :show-inheritance:
 
-CGRtools\.files\.MDLmol module
+CGRtools\.files\._MDLrw module
 ------------------------------
 
-.. automodule:: CGRtools.files.MDLmol
+.. automodule:: CGRtools.files._MDLrw
     :members:
     :undoc-members:
     :show-inheritance:

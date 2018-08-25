@@ -43,11 +43,3 @@ CGRtools\.algorithms\.stereo module
     :members:
     :undoc-members:
     :show-inheritance:
-
-CGRtools\.algorithms\.valence module
-------------------------------------
-
-.. automodule:: CGRtools.algorithms.valence
-    :members:
-    :undoc-members:
-    :show-inheritance:

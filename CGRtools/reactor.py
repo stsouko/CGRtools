@@ -87,7 +87,8 @@ class CGRreactor:
 
     def get_substructure_mapping(self, g, h, limit=1):
         """
-        return mapping of h to g matching.
+        return mapping of h to g matching
+
         :param g:
         :param h:
         :param limit: number of matches. if -1 return iterator for all possible

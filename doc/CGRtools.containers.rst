@@ -28,6 +28,14 @@ CGRtools\.containers\.cgr module
     :undoc-members:
     :show-inheritance:
 
+CGRtools\.containers\.query module
+----------------------------------
+
+.. automodule:: CGRtools.containers.query
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CGRtools\.containers\.reaction module
 -------------------------------------
 
