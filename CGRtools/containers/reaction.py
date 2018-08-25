@@ -105,7 +105,7 @@ class ReactionContainer:
         if substrats:
             warn('deprecated key. use reagents instead', DeprecationWarning)
 
-        self.__reagents = MindfulList(reagents or substrats)
+        self.__reagents = MindfulList(reagents if substrats is None else substrats)
         self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
         self.__meta = meta or {}
