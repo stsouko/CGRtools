@@ -96,7 +96,7 @@ class CGRreactor:
         if limit == 1:
             return next(i, None)
         elif limit < 0:
-            yield from i
+            return i
         elif limit == 0:
             raise ValueError('invalid limit')
         else:

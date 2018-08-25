@@ -45,19 +45,19 @@ class CGRstring:
 
     def __call__(self, g, weights):
         self.__weights = weights
-        self.__visited = visited = set()
         self.__countmap, self.__countcyc = count(1), count(1)
         self.__g = g
 
-        has_next = g
+        has_next = set(g)
         ssmiles, psmiles = [], []
         while has_next:
+            self.__visited = set()
             firstatom = self.__get_next_atom(has_next)
             smirks = self.__do_cgr_smarts({firstatom}, firstatom, firstatom)
             ssmiles.append(''.join(smirks[1]))
             if self.__is_cgr:
                 psmiles.append(''.join(smirks[2]))
-            has_next = set(g).difference(visited)
+            has_next.difference_update(self.__visited)
 
         jssmiles = '.'.join(ssmiles)
         if self.__is_cgr:

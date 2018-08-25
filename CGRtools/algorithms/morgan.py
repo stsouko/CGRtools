@@ -50,6 +50,9 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
                        ordering equal to reversed CGR. CGR of back reaction.
     :return: dict of atom: weights
     """
+    if not len(g):  # for empty containers
+        return {}
+
     if labels is None:
         s_charge = 's_charge'
         p_charge = 'p_charge'
