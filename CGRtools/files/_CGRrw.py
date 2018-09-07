@@ -21,7 +21,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import count, chain
-from io import StringIO, BytesIO
+from io import StringIO, BytesIO, TextIOWrapper
 from pathlib import Path
 from warnings import warn
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
@@ -46,6 +46,8 @@ class WithMixin:
             self._file = file.open(mode)
             self.__is_buffer = False
         elif isinstance(file, StringIO) and mode in 'rw':
+            self._file = file
+        elif isinstance(file, TextIOWrapper) and mode == 'r':
             self._file = file
         elif isinstance(file, BytesIO) and mode == 'rb':
             self._file = file

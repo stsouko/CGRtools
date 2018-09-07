@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,28 +18,25 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #
-from pathlib import Path
+from io import TextIOWrapper
+from pkg_resources import resource_stream
 from ..files import RDFread
 from ..reactor import CGRreactor
 
 
-class Aromatizer(CGRreactor):
-    def __dir__(self):
-        if self.__visible is None:
-            self.__visible = [self.get.__name__]
-        return self.__visible
-
+class Aromatizer:
     def __init__(self):
-        CGRreactor.__init__(self)
-        p = Path(__file__).parent
-        with (p / 'aromatize.rdf').open() as f_a, (p / 'dearomatize.rdf').open() as f_d:
-            raw_templates_a = RDFread(f_a, is_template=True).read()
-            raw_templates_d = RDFread(f_d, is_template=True).read()
-        self.__searcher_a = self.get_template_searcher(self.prepare_templates(raw_templates_a))
-        self.__searcher_d = self.get_template_searcher(self.prepare_templates(raw_templates_d))
+        with resource_stream(__package__, 'aromatize.rdf') as fa, resource_stream(__package__, 'dearomatize.rdf') as fd:
+            raw_templates_a = RDFread(TextIOWrapper(fa), is_template=True).read()
+            raw_templates_d = RDFread(TextIOWrapper(fd), is_template=True).read()
+
+        self.__reactor = r = CGRreactor()
+        self.__searcher_a = r.get_template_searcher(r.prepare_templates(raw_templates_a))
+        self.__searcher_d = r.get_template_searcher(r.prepare_templates(raw_templates_d))
 
     def __call__(self, g):
         flag = False
+        patcher = self.__reactor.patcher
         while True:  # dearomatize pyroles (furans, thiophenes) and quinones
             searcher = self.__searcher_d(g)
             match = next(searcher, None)
@@ -47,10 +44,10 @@ class Aromatizer(CGRreactor):
                 break
 
             flag = True
-            g = self.patcher(g, match.patch)
+            g = patcher(g, match.patch)
 
             for match in searcher:
-                g = self.patcher(g, match.patch)
+                g = patcher(g, match.patch)
 
         while True:  # aromatize benzenes
             searcher = self.__searcher_a(g)
@@ -59,12 +56,9 @@ class Aromatizer(CGRreactor):
                 return g, flag
 
             flag = True
-            g = self.patcher(g, match.patch)
+            g = patcher(g, match.patch)
 
             for match in searcher:
-                g = self.patcher(g, match.patch)
-
-    def get(self, *args, **kwargs):
-        return self.__call__(*args, **kwargs)
+                g = patcher(g, match.patch)
 
     __visible = None

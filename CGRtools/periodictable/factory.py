@@ -77,11 +77,11 @@ def get_period(number):
     roma = arab2roman(number)
 
     class PeriodType(type):
-        def __new__(mcls, cls_name, *args, **kwargs):
-            return super().__new__(mcls, 'Period{}'.format(roma), *args, **kwargs)
+        def __new__(mcs, cls_name, *args, **kwargs):
+            return super().__new__(mcs, 'Period{}'.format(roma), *args, **kwargs)
 
-        def __repr__(mcls):
-            return "<class '{}.{}'>".format(splitext(__name__)[0], mcls.__name__)
+        def __repr__(mcs):
+            return "<class '{}.{}'>".format(splitext(__name__)[0], mcs.__name__)
 
     class _Period(metaclass=PeriodType):
         @property
@@ -98,11 +98,11 @@ def get_group(number):
     roma = arab2roman(number)
 
     class GroupType(type):
-        def __new__(mcls, cls_name, *args, **kwargs):
-            return super().__new__(mcls, 'Group{}'.format(roma), *args, **kwargs)
+        def __new__(mcs, cls_name, *args, **kwargs):
+            return super().__new__(mcs, 'Group{}'.format(roma), *args, **kwargs)
 
-        def __repr__(mcls):
-            return "<class '{}.{}'>".format(splitext(__name__)[0], mcls.__name__)
+        def __repr__(mcs):
+            return "<class '{}.{}'>".format(splitext(__name__)[0], mcs.__name__)
 
     class _Group(metaclass=GroupType):
         @property
@@ -122,8 +122,8 @@ def get_element(symbol, number, _type, group, period):
                               electron_configuration[symbol].items())
 
     class ElementType(ABCMeta, type(group), type(period)):
-        def __new__(mcls, cls_name, *args, **kwargs):
-            return type.__new__(mcls, symbol, *args, **kwargs)
+        def __new__(mcs, cls_name, *args, **kwargs):
+            return type.__new__(mcs, symbol, *args, **kwargs)
 
     class _Element(Element, group, period, metaclass=ElementType):
         def __init__(self, *args, **kwargs):

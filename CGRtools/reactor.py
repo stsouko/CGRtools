@@ -349,6 +349,11 @@ class CGRreactor:
             raise ValueError('invalid data type of g: %s' % type(structure))
 
         p = structure.fresh_copy()
+        p.meta.update(structure.meta)
+        p.add_nodes_from(structure.nodes(data=True))
+        p.add_edges_from((m, n, attr) for m, n, attr in structure.edges(data=True)
+                         if m not in patch or n not in patch)
+
         for i, attr in patch.nodes(data=True):
             if i not in structure:
                 p.add_node(i, **{x: y for x, y in attr.items() if x in full_node_marks})
@@ -359,12 +364,7 @@ class CGRreactor:
         for m, n, attr in patch.edges(data=True):
             p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
                                 for x, y in attr.items() if x in bond_marks})
-
-        s = structure.copy()
-        s.remove_edges_from(combinations(set(patch).intersection(structure), 2))
-        out = compose(s, p)
-        out.meta.update(structure.meta)
-        return out
+        return p
 
     __node_marks = {'s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark', 's_radical'}
     __full_node_marks = __node_marks.union(('s_x', 's_y', 's_z'))
