@@ -19,9 +19,10 @@
 #  MA 02110-1301, USA.
 #
 """
-implements Molecules and CGRs analysis and representation algorithms
+Molecules and CGRs analysis and representation algorithms
 """
+from .aromatics import aromatize
 from .morgan import get_morgan
 from .sssr import find_sssr
-from .strings import hash_cgr_string, CGRstring
 from .stereo import pyramid_volume
+from .strings import hash_cgr_string, CGRstring
