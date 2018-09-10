@@ -26,7 +26,7 @@ from ..preparer import CGRpreparer
 
 def condenser_core(**kwargs):
     inputdata = RDFread(kwargs['input'])
-    outputdata = SDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'])
+    outputdata = SDFwrite(kwargs['output'], extralabels=kwargs['save_extralabels'] or kwargs['extralabels'])
 
     worker = CGRpreparer(cgr_type=kwargs['cgr_type'], extralabels=kwargs['extralabels'], balance=kwargs['balance'])
 

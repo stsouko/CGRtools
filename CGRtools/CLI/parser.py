@@ -20,12 +20,18 @@
 #
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, FileType
 from importlib.util import find_spec
-from .main_balanser import balanser_core
 from .main_condenser import condenser_core
 from ..version import version
 
 
-def _common(parser):
+def _condenser(subparsers):
+    parser = subparsers.add_parser('condenser', help='CGR generator',
+                                   formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
+                        help="RDF inputfile")
+    parser.add_argument("--output", "-o", default="output.sdf", type=FileType('w'),
+                        help="SDF outputfile")
+
     parser.add_argument("--cgr_type", "-t", type=str, default='0',
                         help="graph type: 0 - CGR, 1 - reagents only, 2 - products only, 101-199 - reagent 1,"
                              "2 or later, 201+ - product 1,2… (e.g. 202 - second product) -101/-199 or -201+ "
@@ -38,29 +44,6 @@ def _common(parser):
     parser.add_argument("--extralabels", "-E", action='store_true',
                         help="generate atom hybridization and neighbors labels")
     parser.add_argument("--save_extralabels", "-se", action='store_true', help="save extralabels data")
-
-
-def _balanser(subparsers):
-    parser = subparsers.add_parser('balanser', help='reaction balanser',
-                                   formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
-                        help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.rdf", type=FileType('w'),
-                        help="RDF outputfile")
-
-    _common(parser)
-    parser.set_defaults(func=balanser_core)
-
-
-def _condenser(subparsers):
-    parser = subparsers.add_parser('condenser', help='CGR generator',
-                                   formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--input", "-i", default="input.rdf", type=FileType(),
-                        help="RDF inputfile")
-    parser.add_argument("--output", "-o", default="output.sdf", type=FileType('w'),
-                        help="SDF outputfile")
-
-    _common(parser)
     parser.add_argument("--balance", "-B", action='store_true', help="Balance reactions")
     parser.set_defaults(func=condenser_core)
 
@@ -71,7 +54,6 @@ def argparser():
     subparsers = parser.add_subparsers(title='subcommands', description='available utilities')
 
     _condenser(subparsers)
-    _balanser(subparsers)
 
     if find_spec('argcomplete'):
         from argcomplete import autocomplete
