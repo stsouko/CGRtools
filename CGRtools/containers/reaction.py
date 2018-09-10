@@ -228,6 +228,36 @@ class ReactionContainer:
             self.__signatures[k] = out = '>'.join(sig)
         return out
 
+    def implicify_hydrogens(self):
+        """
+        remove explicit hydrogens if possible
+
+        :return: number of removed hydrogens
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if isinstance(m, MoleculeContainer):
+                    total += m.implicify_hydrogens()
+        if total:
+            self.flush_cache()
+        return total
+
+    def explicify_hydrogens(self):
+        """
+        add explicit hydrogens to atoms
+
+        :return: number of added atoms
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if isinstance(m, MoleculeContainer):
+                    total += m.explicify_hydrogens()
+        if total:
+            self.flush_cache()
+        return total
+
     def aromatize(self):
         """
         convert structures to aromatic form. works only for Molecules and CGRs
