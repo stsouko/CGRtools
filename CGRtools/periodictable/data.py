@@ -329,7 +329,7 @@ _exceptions = (
     (('S', 'Se', 'Te', 'Po'), -1, 0, ('=', 'O', '=', 'O', '-', ('C', 'O', 'S'))),
     # Pentavalent N is accepted in traditional form by default, but keep in mind that these forms are not correct.
     ('N', 0, 0, ('=', 'O', '=', ('O', 'C'), '-', ('O', 'C', 'N'))),
-    ('N', 0, 0, ('=', 'O', '-', 'C', '-', ('O', 'C', 'N'))),
+    ('N', 0, 0, ('=', 'O', '-', 'C', '-', ('O', 'C', 'N')), 5),
     ('N', 0, 0, ('=', 'O', '-', 'C', '-', 'C', '-', ('O', 'C', 'N'))),
     # XeF2, XeF4, XeF6, XeO3, XeO4, XeO2F2, XeOF4,  XeO3F2
     ('Xe', 0, 0, ('-', 'F', '-', 'F')),
@@ -362,13 +362,14 @@ _exceptions = (
 
 _bonds = {1: 1, 2: 2, 3: 4, 4: 1.5, 9: 1, '-': 1, '=': 2, '#': 3, ':': 1.5}
 
-atom_valences_exceptions = defaultdict(set)
-for a, c, r, b in _exceptions:
+atom_valences_exceptions = defaultdict(dict)
+for a, c, r, b, *bs in _exceptions:
     ap = list(product(*(x if isinstance(x, tuple) else [x] for x in b[1::2])))
     bl = [_bonds[x] for x in b[::2]]
+    bs = bs[0] if bs else int(sum(bl))
     for i in (a if isinstance(a, tuple) else [a]):
         for ape in ap:
-            atom_valences_exceptions[(i, c, r, len(bl))].add(tuple(sorted(zip(ape, bl))))
+            atom_valences_exceptions[(i, c, r, len(bl))][tuple(sorted(zip(ape, bl)))] = bs
 
 atom_valences_exceptions = dict(atom_valences_exceptions)
 

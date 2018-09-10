@@ -324,6 +324,20 @@ class CGRContainer(QueryContainer, MoleculeContainer):
         ri, pi = self.atom_implicit_h(atom)
         return DynamicContainer(ri + rh, pi + ph)
 
+    def check_valence(self):
+        errors = []
+        for x in self.nodes():
+            try:
+                s_atom, p_atom = self.atom(x)
+            except InvalidAtom as e:
+                errors.append('atom %d has error: %s' % (x, e))
+            else:
+                if s_atom.get_valence(*self._get_atom_environment(x)) is None or \
+                        p_atom.get_valence(*self._get_atom_environment(x, 'p')) is None:
+                    errors.append('atom %d has invalid valence' % x)
+
+        return errors
+
     def _prepare_stereo(self):
         return {}
 
@@ -349,13 +363,13 @@ class CGRContainer(QueryContainer, MoleculeContainer):
                 bn, ng = self._get_atom_environment(atom)
                 ng.append(self.nodes[reverse]['element'])
                 bn.append(mark)
-                if not s_atom.check_valence(bn, ng):
+                if not s_atom.get_valence(bn, ng):
                     raise InvalidData('valence error')
             if p_mark:
                 bn, ng = self._get_atom_environment(atom, 'p')
                 ng.append(self.nodes[reverse]['element'])
                 bn.append(p_mark)
-                if not p_atom.check_valence(bn, ng):
+                if not p_atom.get_valence(bn, ng):
                     raise InvalidData('valence error')
 
     @staticmethod

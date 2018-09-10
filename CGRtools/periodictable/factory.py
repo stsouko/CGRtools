@@ -24,6 +24,7 @@ from operator import ge, le, gt, lt
 from os.path import splitext
 from .data import (groups, periods, table_e, types, atom_valences_exceptions, atom_valences, common_isotope,
                    atom_charge_radical, atom_implicit_h, valence_electrons, electron_configuration, orbital_names)
+from ..exceptions import InvalidAtom
 
 
 class Element(ABC):
@@ -128,8 +129,8 @@ def get_element(symbol, number, _type, group, period):
     class _Element(Element, group, period, metaclass=ElementType):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            assert (self.symbol, self.charge, self.radical) in atom_charge_radical, \
-                'Invalid charge or number of unpaired electrons'
+            if (self.symbol, self.charge, self.radical) not in atom_charge_radical:
+                raise InvalidAtom('Invalid charge or number of unpaired electrons')
 
         @property
         def number(self):
@@ -155,13 +156,18 @@ def get_element(symbol, number, _type, group, period):
         def type(self):
             return _type
 
-        def check_valence(self, bonds, neighbors):
-            bs = self.__bonds_sum(bonds)
-            res = atom_valences.get((symbol, self.charge, self.radical, bs))
-            if not res:
-                scrl = (symbol, self.charge, self.radical, len(bonds))
-                if scrl in atom_valences_exceptions:
-                    return tuple(sorted(zip(neighbors, bonds))) in atom_valences_exceptions[scrl] and bs or None
+        def get_valence(self, bonds, neighbors):
+            """
+            get valence of atom for given environment include implicit hydrogens.
+            :param bonds: bonds of atom
+            :param neighbors: symbols of bonded atoms in same order as bonds
+            :return: valence number or None if valence impossible
+            """
+            res = atom_valences.get((symbol, self.charge, self.radical, self.__bonds_sum(bonds)))
+            if res is None:
+                key = atom_valences_exceptions.get((symbol, self.charge, self.radical, len(bonds)))
+                if key:
+                    return key.get(tuple(sorted(zip(neighbors, bonds))))
             return res
 
         def get_implicit_h(self, bonds):

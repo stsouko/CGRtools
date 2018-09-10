@@ -28,7 +28,7 @@ from ..algorithms import hash_cgr_string
 class MindfulList:
     """list with self-checks of modification. need for control of ReactionContainer caches actuality"""
     def __init__(self, data=None):
-        self.__data = [] if data is None else data
+        self.__data = [] if data is None else list(data)
         self.__check = True
 
     def get_state(self):

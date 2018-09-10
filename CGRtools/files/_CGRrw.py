@@ -242,9 +242,13 @@ class CGRread:
     @classmethod
     def __cgr_dat(cls, _type, value):
         if _type == 'atomlist':
+            if set(value).difference(elements_set):
+                raise InvalidAtom('atom list contain invalid atoms')
             return dict(element=value), True
 
         elif _type == 'atomnotlist':
+            if set(value).difference(elements_set):
+                raise InvalidAtom('atom not list contain invalid atoms')
             return dict(element=list(elements_set.difference(value))), True
 
         elif _type == 'atomhyb':
@@ -389,8 +393,16 @@ class CGRread:
                            s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=charge_dat.get(k, l['charge']))
 
             gna = g.nodes[atom_map]
-            if 'element' not in gna and l['element'] not in ('A', '*'):
-                gna['element'] = l['element']
+            element = l['element']
+            if 'element' not in gna and element not in ('A', '*'):
+                if element == 'D':
+                    gna.update(element='H', isotope=2)
+                elif element == 'T':
+                    gna.update(element='H', isotope=3)
+                elif element in elements_set:
+                    gna['element'] = element
+                else:
+                    raise InvalidAtom('atom %s is invalid' % l['element'])
 
             if 'isotope' not in gna:
                 if k in isotope_dat:

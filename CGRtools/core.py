@@ -259,8 +259,8 @@ class CGRcore:
                             h.meta.setdefault('rule #20. atom lost. common atom radical removed or decreased. '
                                               'lost atom radical unchanged', []).append((m, n))
                 else:
-                    sv = s_atom.check_valence(*h._get_atom_environment(n))
-                    pv = p_atom.check_valence(*h._get_atom_environment(n, 'p'))
+                    sv = s_atom.get_valence(*h._get_atom_environment(n))
+                    pv = p_atom.get_valence(*h._get_atom_environment(n, 'p'))
                     sh, ph = h.atom_total_h(n)
                     sc, pc = s_atom.charge, p_atom.charge
 

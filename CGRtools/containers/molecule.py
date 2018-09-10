@@ -36,7 +36,7 @@ class MoleculeContainer(BaseContainer):
         if self.__visible is None:
             self.__visible = super().__dir__() + [self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
                                                   self.atom_implicit_h.__name__, self.reset_query_marks.__name__,
-                                                  self.aromatize.__name__]
+                                                  self.aromatize.__name__, self.check_valence.__name__]
         return self.__visible
 
     def __getstate__(self):
@@ -245,6 +245,24 @@ class MoleculeContainer(BaseContainer):
     def atom_total_h(self, atom):
         return self.atom_explicit_h(atom) + self.atom_implicit_h(atom)
 
+    def check_valence(self):
+        """
+        check valences of all atoms
+
+        :return: list of invalid atoms
+        """
+        errors = []
+        for x in self.nodes():
+            try:
+                atom = self.atom(x)
+            except InvalidAtom as e:
+                errors.append('atom %d has error: %s' % (x, e))
+            else:
+                if atom.get_valence(*self._get_atom_environment(x)) is None:
+                    errors.append('atom %d has invalid valence' % x)
+
+        return errors
+
     def _tetrahedron_parse(self, atom1, atom2, mark, neighbors, bonds, implicit, label='s'):
         if any(x != 1 for x in bonds):
             raise InvalidStereo('only single bonded tetrahedron acceptable')
@@ -361,7 +379,7 @@ class MoleculeContainer(BaseContainer):
             ng.append(self.nodes[reverse]['element'])
             bn.append(mark)
 
-            if not self.atom(atom).check_valence(bn, ng):
+            if not self.atom(atom).get_valence(bn, ng):
                 raise InvalidData('valence error')
 
     def _get_atom_environment(self, atom, label='s'):
