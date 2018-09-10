@@ -21,6 +21,7 @@
 from warnings import warn
 from .cgr import CGRContainer
 from .query import QueryContainer
+from .molecule import MoleculeContainer
 from ..algorithms import hash_cgr_string
 
 
@@ -226,6 +227,26 @@ class ReactionContainer:
                 sig.append('.'.join(ms))
             self.__signatures[k] = out = '>'.join(sig)
         return out
+
+    def aromatize(self):
+        """
+        convert structures to aromatic form. works only for Molecules and CGRs
+
+        :return: number of processed molecules
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if isinstance(m, MoleculeContainer):
+                    res = m.aromatize()
+                    if isinstance(m, CGRContainer):
+                        if res[0] or res[1]:
+                            total += 1
+                    elif res:
+                        total += 1
+        if total:
+            self.flush_cache()
+        return total
 
     def flush_cache(self):
         """clear cached signatures and representation strings. use if structures objects in reaction object changed"""

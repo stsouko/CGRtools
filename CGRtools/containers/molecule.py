@@ -21,7 +21,7 @@
 from collections import defaultdict
 from itertools import chain
 from .common import BaseContainer
-from ..algorithms import CGRstring, pyramid_volume
+from ..algorithms import CGRstring, pyramid_volume, aromatize
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import Element, elements, H
 
@@ -34,9 +34,9 @@ class MoleculeContainer(BaseContainer):
     """
     def __dir__(self):
         if self.__visible is None:
-            self.__visible = tmp = super().__dir__()
-            tmp.extend([self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
-                        self.atom_implicit_h.__name__, self.reset_query_marks.__name__])
+            self.__visible = super().__dir__() + [self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
+                                                  self.atom_implicit_h.__name__, self.reset_query_marks.__name__,
+                                                  self.aromatize.__name__]
         return self.__visible
 
     def __getstate__(self):
@@ -224,6 +224,17 @@ class MoleculeContainer(BaseContainer):
 
         self.flush_cache()
         return len(tmp)
+
+    def aromatize(self) -> int:
+        """
+        convert structure to aromatic form
+
+        :return: number of processed rings
+        """
+        res = aromatize(self)
+        if res:
+            self.flush_cache()
+        return res
 
     def atom_implicit_h(self, atom):
         return self.atom(atom).get_implicit_h([x for *_, x in self.edges(atom, data='s_bond')])

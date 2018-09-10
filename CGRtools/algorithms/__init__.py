@@ -21,7 +21,7 @@
 """
 Molecules and CGRs analysis and representation algorithms
 """
-from .aromatics import aromatize
+from .aromatics import aromatize, aromatize_cgr
 from .morgan import get_morgan
 from .sssr import find_sssr
 from .stereo import pyramid_volume

@@ -20,9 +20,11 @@
 #
 from collections import defaultdict
 from itertools import repeat, zip_longest
+from typing import Tuple
 from .common import BaseContainer
 from .query import QueryContainer, DynamicContainer
 from .molecule import MoleculeContainer
+from ..algorithms import aromatize_cgr
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import elements, H, Element
 
@@ -31,8 +33,7 @@ class CGRContainer(QueryContainer, MoleculeContainer):
     """storage for CGRs. has similar to molecules behavior"""
     def __dir__(self):
         if self.__visible is None:
-            self.__visible = tmp = super().__dir__()
-            tmp.append(self.get_center_atoms.__name__)
+            self.__visible = super().__dir__() + [self.get_center_atoms.__name__]
         return self.__visible
 
     def __getstate__(self):
@@ -295,6 +296,17 @@ class CGRContainer(QueryContainer, MoleculeContainer):
 
         self.flush_cache()
         return len(tmp)
+
+    def aromatize(self) -> Tuple[int, int]:
+        """
+        convert structure to aromatic form
+
+        :return: number of processed s and p rings
+        """
+        res = aromatize_cgr(self)
+        if res[0] or res[1]:
+            self.flush_cache()
+        return res
 
     def atom_implicit_h(self, atom):
         r, p = self.atom(atom)
