@@ -66,7 +66,9 @@ class MoleculeContainer(BaseContainer):
         return sub
 
     def add_atom(self, atom, _map=None, mark='0', x=0, y=0, z=0):
-        if issubclass(atom, Element):
+        if isinstance(atom, type):
+            if not issubclass(atom, Element):
+                TypeError('invalid type of atom')
             atom = atom()
         elif isinstance(atom, str):
             try:

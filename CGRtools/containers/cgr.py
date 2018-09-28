@@ -70,7 +70,9 @@ class CGRContainer(QueryContainer, MoleculeContainer):
         :param x,y,z,p_x,p_y,p_z: atom coordinates for reagents and products sides. if not changed p_* can be omitted.
         :return: atom map number
         """
-        if issubclass(atom, Element):
+        if isinstance(atom, type):
+            if not issubclass(atom, Element):
+                TypeError('invalid type of atom')
             atom = atom()
         elif isinstance(atom, str):
             try:
@@ -83,7 +85,9 @@ class CGRContainer(QueryContainer, MoleculeContainer):
         if p_atom is None:
             p_atom = atom
         else:
-            if issubclass(atom, Element):
+            if isinstance(p_atom, type):
+                if not issubclass(p_atom, Element):
+                    TypeError('invalid type of atom')
                 p_atom = p_atom()
             elif isinstance(p_atom, str):
                 try:

@@ -36,6 +36,7 @@ setup(
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
     install_requires=['networkx>=2.1,<2.2', 'lxml>=4.1.1,<4.3', 'coho>=0.3,<0.4'],
     extras_require={'autocomplete': ['argcomplete'], 'sphinx': ['sphinx>=1.6']},
+    zip_safe=True,
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     keywords="tools cgr cli",
     classifiers=['Environment :: Console',

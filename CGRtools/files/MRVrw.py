@@ -205,7 +205,7 @@ class MRVread(CGRread, WithMixin):
             for bond in ((db,) if isinstance(db, dict) else db):
                 order = cls.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
                 a1, a2 = bond['@atomRefs2'].split()
-                stereo = cls.__stereo_map[bond['bondStereo']['$']] if 'bondStereo' in bond else 0
+                stereo = cls.__stereo_map.get(bond['bondStereo'].get('$'), 0) if 'bondStereo' in bond else 0
                 molecule['bonds'].append((atom_map[a1], atom_map[a2], order, stereo))
 
         if 'molecule' in data:
