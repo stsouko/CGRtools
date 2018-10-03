@@ -98,4 +98,4 @@ class SMILESread(CGRread, WithMixin):
                 'bonds': [(b['a0'] + 1, b['a1'] + 1, self.__bond_map[b['order']], 0) for b in self.__parser.bonds],
                 'meta': {}, 'colors': {}}
 
-    __bond_map = {1: 1, 2: 3, 3: 3, 5: 4}
+    __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}

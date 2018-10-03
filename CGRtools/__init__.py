@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2018 Timur Madzhidov <tmadzhidov@gmail.com>
+#  Copyright 2014-2018 Alexandre Varnek <varnek@unistra.fr>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify

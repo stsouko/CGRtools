@@ -3,10 +3,6 @@ CGRTools
 CGR based reactions manipulations.
 
 
-based on
-DOI: 10.1021/ci300149n
-DOI: 10.1007/s10822-005-9008-0
-
 usage
 =====
 cgrtools --help
@@ -19,3 +15,10 @@ INSTALL
 or
 
     pip install CGRTools
+
+COPYRIGHT
+=========
+
+2014-2018 Ramil Nugmanov <stsouko@live.ru>  
+2014-2018 Timur Madzhidov <tmadzhidov@gmail.com>  
+2014-2018 Alexandre Varnek <varnek@unistra.fr>

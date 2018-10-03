@@ -25,7 +25,7 @@ from io import StringIO, BytesIO, TextIOWrapper
 from pathlib import Path
 from warnings import warn
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
-from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError
+from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError, InvalidData
 from ..periodictable import elements_set
 from ..periodictable.data import common_isotope as isotopes
 
@@ -296,13 +296,17 @@ class CGRread:
         is_query = False
 
         for k in molecule['CGR_DAT']:
+            k_atoms = k['atoms']
+            if not k_atoms[0] or len(k_atoms) == 2 and not k_atoms[1]:
+                raise InvalidData('CGR data invalid. contains zero atoms')
+
             k_type = k['type']
-            if k_type in ('charge', 'radical') or len(k['atoms']) != self._cgr_keys.get(k_type):
+            if k_type in ('charge', 'radical') or len(k_atoms) != self._cgr_keys.get(k_type):
                 continue
             elif k_type == 'dynatom':
                 key = k['value'][0]
                 value = k['value'][1:].split(',')
-                a1 = k['atoms'][0]
+                a1 = k_atoms[0]
                 if key == 'x':
                     x, y, z = (float(x) for x in value)
                     cgr_dat_atom[a1].update(p_x=x, p_y=y, p_z=z)
@@ -326,11 +330,11 @@ class CGRread:
                             warn('dynatom radical invalid data. skipped: %s' % value, ResourceWarning)
             elif k_type == 'dynstereo':
                 s_stereo, p_stereo = k['value'].split('>')
-                cgr_dat_stereo[k['atoms']] = (self.__stereolabels[s_stereo], self.__stereolabels[p_stereo])
+                cgr_dat_stereo[k_atoms] = (self.__stereolabels[s_stereo], self.__stereolabels[p_stereo])
             elif k_type == 'extrabond':
                 val = self.__parselist('bond', k['value'])
                 if val:
-                    a1, a2 = k['atoms']
+                    a1, a2 = k_atoms
                     cgr_dat_bond[a1][a2] = val[0]
                     cgr_dat_bond[a2][a1] = val[0]
                     if val[1] and not is_query:
@@ -338,7 +342,7 @@ class CGRread:
             elif k_type == 'dynbond':
                 val = self.__parsedyn('bond', k['value'])
                 if val:
-                    a1, a2 = k['atoms']
+                    a1, a2 = k_atoms
                     cgr_dat_bond[a1][a2] = val[0]
                     cgr_dat_bond[a2][a1] = val[0]
                     if val[1] and not is_query:
@@ -346,15 +350,15 @@ class CGRread:
             elif k_type == 'isotope':
                 tmp = k['value'].split(',')
                 if len(tmp) > 1:
-                    cgr_dat_atom[k['atoms'][0]]['isotope'] = [int(x) for x in tmp]
+                    cgr_dat_atom[k_atoms[0]]['isotope'] = [int(x) for x in tmp]
                     if not is_query:
                         is_query = True
                 else:
-                    isotope_dat[k['atoms'][0]] = int(tmp[0])
+                    isotope_dat[k_atoms[0]] = int(tmp[0])
             else:
                 val = self.__cgr_dat(k_type, k['value'])
                 if val:
-                    cgr_dat_atom[k['atoms'][0]].update(val[0])
+                    cgr_dat_atom[k_atoms[0]].update(val[0])
                     if val[1] and not is_query:
                         is_query = True
 
