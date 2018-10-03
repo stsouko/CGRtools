@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -33,11 +33,11 @@ def find_sssr(g):
     SSSR search.
 
     :param g: Molecule Container 
-    :return: list of lists of rings nodes or None.
+    :return: list of lists of rings nodes
     """
     n_sssr = g.number_of_edges() - len(g) + 1
     if not n_sssr:
-        return None
+        return []
 
     pid1 = {}
     pid2 = {}

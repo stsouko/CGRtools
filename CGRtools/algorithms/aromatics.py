@@ -266,3 +266,5 @@ for i, *p in zip(_ind,
 
 _pyrole_pattern = dict(_pyrole_pattern)
 _pyrole_fix = dict(_pyrole_fix)
+
+del x, y, i, p, _ind
