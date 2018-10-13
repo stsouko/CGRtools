@@ -21,5 +21,5 @@
 """
 aggregated for wildcard imports CGRpreparer and CGRreactor classes.
 """
-from .preparer import CGRpreparer
-from .reactor import CGRreactor
+#from .preparer import CGRpreparer
+#from .reactor import CGRreactor
