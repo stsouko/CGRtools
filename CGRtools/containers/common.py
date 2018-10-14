@@ -28,25 +28,18 @@ from ..exceptions import InvalidData, InvalidAtom
 
 
 class BaseContainer(Graph, ABC):
-    def __init__(self, data=None, meta=None):
+    def __init__(self, *args, **kwargs):
         """
         base structure container class
 
-        :param data: MoleculeContainer [CGRContainer] or NX Graph object or other supported by NX for initialization
-        :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
+        :param incoming_graph_data: MoleculeContainer [CGRContainer] or NX Graph object or other supported by NX
+        :param kwargs: dictionary of metadata. like DTYPE-DATUM in RDF
         """
-        super().__init__(data)
+        super().__init__(*args, **kwargs)
         self.__init()
-
-        if meta is not None:
-            if isinstance(meta, dict):
-                self.__meta.update(meta)
-            else:
-                raise InvalidData('metadata can be dictionary')
 
     def __init(self):
         self.__atom_cache = {}
-        self.__meta = {}
         self.__bond_cache = defaultdict(dict)
 
     def __dir__(self):

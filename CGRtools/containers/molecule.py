@@ -18,10 +18,59 @@
 #
 from collections import defaultdict
 from itertools import chain
+from wrapt import ObjectProxy
 from .common import BaseContainer
 from ..algorithms import CGRstring, pyramid_volume, aromatize
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
-from ..periodictable import Element, elements, H
+from ..periodictable import Element, elements_classes, H
+
+
+class AtomProxy(ObjectProxy):
+    __slots__ = ('_self_nodes', '_self_node')
+
+    def __init__(self, nodes, node, atom):
+        super().__init__(atom)
+        self._self_nodes = nodes
+        self._self_node = node
+
+    def update(self, value):
+        nodes = self._self_nodes
+        node = self._self_node
+        nodes[node] = value
+        self.__wrapped__ = nodes.get(node, _not_proxy=True)
+
+
+class AtomNodes(dict):
+    def get(self, node, *args, _not_proxy=False):
+        value = super().get(node, *args)
+        if value is not None:
+            if _not_proxy:
+                return value
+            return AtomProxy(self, node, value)
+
+    def __getitem__(self, node):
+        return AtomProxy(self, node, super().__getitem__(node))
+
+    def __setitem__(self, node, value):
+        if isinstance(value, type):
+            if not issubclass(value, Element):
+                TypeError('invalid type of atom')
+            value = value()
+        elif not isinstance(value, Element):
+            if not isinstance(value, dict):
+                raise TypeError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
+            if not value:
+                raise ValueError('empty atom attributes not allowed')
+
+            value = value.copy()
+            try:
+                value = elements_classes[value.pop('element')](**value)
+            except KeyError:
+                raise ValueError('invalid atom symbol')
+            except TypeError as e:
+                raise ValueError from e
+
+        super().__setitem__(node, value)
 
 
 class MoleculeContainer(BaseContainer):
@@ -30,6 +79,8 @@ class MoleculeContainer(BaseContainer):
 
     new molecule object creation or copy of data object
     """
+    node_dict_factory = AtomNodes
+
     def __dir__(self):
         if self.__visible is None:
             self.__visible = super().__dir__() + [self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,

@@ -19,7 +19,6 @@
 """
 contains periodic table of elements classes
 """
-from dataclasses import dataclass
 from operator import ge, le, gt, lt
 from .data import *
 from .shells import *
@@ -105,7 +104,6 @@ class Element(Periodic, metaclass=ElementMeta):
     """
     Base class for all elements
     """
-    pass
 
 
 def arab2roman(number):
@@ -132,20 +130,36 @@ def get_element(symbol, number):
     class Type(Periodic, name=classes[symbol]):
         pass
 
-    @dataclass(repr=False, eq=False, frozen=True)
     class ElementClass(Element, Period, Group, Type, name=symbol, number=number):
-        charge: int = 0
-        multiplicity: int = None
-        isotope: int = common_isotope
-        mapping: int = None
-        mark: str = '0'
-        x: float = 0
-        y: float = 0
-        z: float = 0
+        __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope',
+                     'mapping', 'mark', 'x', 'y', 'z')
+
+        def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=common_isotope,
+                     mapping: int=None, mark: str='0', x: float=0, y: float=0, z: float=0):
+            self.__charge = charge
+            self.__multiplicity = multiplicity
+            self.__isotope = isotope
+            self.mapping = mapping
+            self.mark = mark
+            self.x = x
+            self.y = y
+            self.z = z
+
+        @property
+        def charge(self):
+            return self.__charge
+
+        @property
+        def multiplicity(self):
+            return self.__multiplicity
+
+        @property
+        def isotope(self):
+            return self.__isotope
 
         @property
         def radical(self):
-            return radical_map[self.multiplicity]
+            return radical_map[self.__multiplicity]
 
         @property
         def number(self):
@@ -167,7 +181,7 @@ def get_element(symbol, number):
             """
             check possibility of current charge and radical state of atom
             """
-            return (self.symbol, self.charge, self.radical) in atom_charge_radical
+            return (symbol, self.__charge, self.radical) in atom_charge_radical
 
         def check_valence(self, neighbors):
             """
@@ -188,9 +202,9 @@ def get_element(symbol, number):
             if not self.check_atom():
                 return None
             bonds = [x for x, _ in neighbors]
-            res = atom_valences.get((symbol, self.charge, self.radical, self.__bonds_sum(bonds)))
+            res = atom_valences.get((symbol, self.__charge, self.radical, self.__bonds_sum(bonds)))
             if res is None:
-                key = atom_valences_exceptions.get((symbol, self.charge, self.radical, len(bonds)))
+                key = atom_valences_exceptions.get((symbol, self.__charge, self.radical, len(bonds)))
                 if key:
                     neighbors = [x if isinstance(x, str) else x.symbol for _, x in neighbors]
                     res = key.get(tuple(sorted(zip(neighbors, bonds))))
@@ -206,7 +220,7 @@ def get_element(symbol, number):
 
             :param bonds: list of bonds
             """
-            return atom_implicit_h.get((symbol, self.charge, self.radical, self.__bonds_sum(bonds)), 0)
+            return atom_implicit_h.get((symbol, self.__charge, self.radical, self.__bonds_sum(bonds)), 0)
 
         @staticmethod
         def __bonds_sum(bonds):
@@ -221,8 +235,8 @@ def get_element(symbol, number):
                 if issubclass(other, Element):
                     return number == other.number
             elif isinstance(other, Element):
-                return number == other.number and self.isotope == other.isotope and self.charge == other.charge and \
-                       self.multiplicity == other.multiplicity
+                return number == other.number and self.__isotope == other.isotope and \
+                       self.__charge == other.charge and self.__multiplicity == other.multiplicity
             return False
 
         def __gt__(self, other):
@@ -248,18 +262,18 @@ def get_element(symbol, number):
                     return op(number, other.number)
                 raise TypeError(f'unorderable types {type(self)} and {other}')
             elif isinstance(other, Element):
-                return op((number, self.isotope, self.charge, self.multiplicity),
+                return op((number, self.__isotope, self.__charge, self.__multiplicity),
                           (other.number, other.isotope, other.charge, other.multiplicity))
             raise TypeError(f'unorderable types {type(self)} and {type(other)}')
 
         def __repr__(self):
             r = []
-            if self.charge:
-                r.append(str(self.charge))
-            if self.multiplicity:
-                r.append(f'multiplicity={self.multiplicity}')
-            if self.isotope != common_isotope:
-                r.append(f'isotope={self.isotope}')
+            if self.__charge:
+                r.append(str(self.__charge))
+            if self.__multiplicity:
+                r.append(f'multiplicity={self.__multiplicity}')
+            if self.__isotope != common_isotope:
+                r.append(f'isotope={self.__isotope}')
             if self.mapping:
                 r.append(f'mapping={self.mapping}')
             if self.mark != '0':
@@ -271,7 +285,7 @@ def get_element(symbol, number):
             return f'{type(self).__name__}({r})'
 
         def __hash__(self):
-            return hash(f'{symbol}.{self.charge}.{self.isotope}.{self.multiplicity}')
+            return hash((number, self.__charge, self.__isotope, self.__multiplicity))
 
     return ElementClass
 
