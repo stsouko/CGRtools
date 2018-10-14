@@ -3,18 +3,13 @@ CGRTools
 CGR based reactions manipulations.
 
 
-usage
-=====
-cgrtools --help
-
-
 INSTALL
 =======
-    pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools --process-dependency-links --allow-all-external
+    pip install -U git+https://github.com/stsouko/CGRtools.git@2.8#egg=CGRtools
 
 or
 
-    pip install CGRTools
+    pip install CGRTools>=2.8,<2.9
 
 COPYRIGHT
 =========
