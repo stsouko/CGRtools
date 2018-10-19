@@ -24,7 +24,7 @@ from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from typing import Callable, Iterable
 from warnings import warn
 from ..algorithms import hash_cgr_string, get_morgan
-from ..exceptions import InvalidData, InvalidAtom
+from ..exceptions import InvalidAtom
 
 
 class BaseContainer(Graph, ABC):

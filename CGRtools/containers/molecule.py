@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
+from collections import defaultdict, MutableMapping
 from itertools import chain
 from wrapt import ObjectProxy
 from .common import BaseContainer
@@ -36,20 +36,69 @@ class AtomProxy(ObjectProxy):
     def update(self, value):
         nodes = self._self_nodes
         node = self._self_node
-        nodes[node] = value
-        self.__wrapped__ = nodes.get(node, _not_proxy=True)
+        atom = self.__wrapped__
+
+        if isinstance(value, type):
+            if not issubclass(value, Element):
+                TypeError('invalid type of atom')
+            if atom.number != value.number:
+                self.__wrapped__ = nodes[node] = value(charge=atom.charge, multiplicity=atom.multiplicity,
+                                                       mapping=atom.mapping, mark=atom.mark,
+                                                       x=atom.x, y=atom.y, z=atom.z)
+        elif isinstance(value, Element):
+            if atom.number != value.number or atom.charge != value.charge or \
+                    atom.multiplicity != value.multiplicity or atom.isotope != value.isotope:
+                self.__wrapped__ = nodes[node] = value
+            else:
+                atom.x = value.x
+                atom.y = value.y
+                atom.z = value.z
+                atom.mapping = value.mapping
+                atom.mark = value.mark
+        elif isinstance(value, dict):
+            if not value:
+                raise ValueError('empty atom attributes not allowed')
+            if set(value) > self.__possible:
+                raise ValueError('unknown atom attributes not allowed')
+
+            if 'charge' in value or 'multiplicity' in value or 'isotope' in value or 'element' in value:
+                old = dict(charge=atom.charge, multiplicity=atom.multiplicity, isotope=atom.isotope,
+                           mapping=atom.mapping, mark=atom.mark, x=atom.x, y=atom.y, z=atom.z)
+                old.update(value)
+                if 'element' in value:
+                    del old['element']
+                    if 'isotope' not in value:
+                        del old['isotope']
+                    value = elements_classes[value['element']](**old)
+                else:
+                    value = elements_classes[atom.symbol](**old)
+                self.__wrapped__ = nodes[node] = value
+            else:
+                for k, v in value.items():
+                    setattr(atom, k, v)
+        else:
+            raise TypeError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
+
+    __possible = {'element', 'charge', 'isotope', 'multiplicity', 'mapping', 'mark', 'x', 'y', 'z'}
 
 
-class AtomNodes(dict):
-    def get(self, node, *args, _not_proxy=False):
-        value = super().get(node, *args)
-        if value is not None:
-            if _not_proxy:
-                return value
-            return AtomProxy(self, node, value)
+class Nodes(MutableMapping):
+    __slots__ = '_mapping'
 
-    def __getitem__(self, node):
-        return AtomProxy(self, node, super().__getitem__(node))
+    def __init__(self):
+        self._mapping = {}
+
+    def __delitem__(self, node):
+        del self._mapping[node]
+
+    def __len__(self):
+        return len(self._mapping)
+
+    def __iter__(self):
+        return iter(self._mapping)
+
+    def __contains__(self, node):
+        return node in self._mapping
 
     def __setitem__(self, node, value):
         if isinstance(value, type):
@@ -70,7 +119,15 @@ class AtomNodes(dict):
             except TypeError as e:
                 raise ValueError from e
 
-        super().__setitem__(node, value)
+        self._mapping[node] = value
+
+    def __getitem__(self, node):
+        return AtomProxy(self._mapping, node, self._mapping[node])
+
+    def setdefault(self, node, value):
+        if node not in self._mapping:
+            self[node] = value
+        return self[node]
 
 
 class MoleculeContainer(BaseContainer):
@@ -79,7 +136,7 @@ class MoleculeContainer(BaseContainer):
 
     new molecule object creation or copy of data object
     """
-    node_dict_factory = AtomNodes
+    node_dict_factory = Nodes
 
     def __dir__(self):
         if self.__visible is None:

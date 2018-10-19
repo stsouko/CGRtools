@@ -226,6 +226,14 @@ def get_element(symbol, number):
         def __bonds_sum(bonds):
             return int(sum(bonds_map[x] for x in bonds))
 
+        def __getitem__(self, item):
+            if item not in self.__subscribe:
+                raise KeyError(f"attribute '{item}' not found")
+            return getattr(self, item)
+
+        def __contains__(self, item):
+            return item in self.__subscribe
+
         def __eq__(self, other):
             if isinstance(other, str):
                 return symbol == other
@@ -286,6 +294,9 @@ def get_element(symbol, number):
 
         def __hash__(self):
             return hash((number, self.__charge, self.__isotope, self.__multiplicity))
+
+        __subscribe = ('charge', 'isotope', 'multiplicity', 'radical', 'number', 'symbol', 'electron_configuration',
+                       'electrons', 'mapping', 'mark', 'x', 'y', 'z')
 
     return ElementClass
 
