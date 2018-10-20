@@ -33,37 +33,27 @@ class AtomProxy(ObjectProxy):
         self._self_nodes = nodes
         self._self_node = node
 
+    def copy(self):
+        atom = self.__wrapped__
+        return type(atom)(charge=atom.charge, multiplicity=atom.multiplicity, isotope=atom.isotope,
+                          mapping=atom.mapping, mark=atom.mark, x=atom.x, y=atom.y, z=atom.z, stereo=atom.stereo)
+
     def update(self, value):
         nodes = self._self_nodes
         node = self._self_node
+        if node not in nodes:
+            raise KeyError('atom removed from molecule')
         atom = self.__wrapped__
 
-        if isinstance(value, type):
-            if not issubclass(value, Element):
-                TypeError('invalid type of atom')
-            if atom.number != value.number:
-                self.__wrapped__ = nodes[node] = value(charge=atom.charge, multiplicity=atom.multiplicity,
-                                                       mapping=atom.mapping, mark=atom.mark,
-                                                       x=atom.x, y=atom.y, z=atom.z)
-        elif isinstance(value, Element):
-            if atom.number != value.number or atom.charge != value.charge or \
-                    atom.multiplicity != value.multiplicity or atom.isotope != value.isotope:
-                self.__wrapped__ = nodes[node] = value
-            else:
-                atom.x = value.x
-                atom.y = value.y
-                atom.z = value.z
-                atom.mapping = value.mapping
-                atom.mark = value.mark
-        elif isinstance(value, dict):
-            if not value:
-                raise ValueError('empty atom attributes not allowed')
+        if isinstance(value, dict):
+            if not value:  # ad-hoc for add_nodes_from method
+                return
             if set(value) > self.__possible:
                 raise ValueError('unknown atom attributes not allowed')
 
             if 'charge' in value or 'multiplicity' in value or 'isotope' in value or 'element' in value:
                 old = dict(charge=atom.charge, multiplicity=atom.multiplicity, isotope=atom.isotope,
-                           mapping=atom.mapping, mark=atom.mark, x=atom.x, y=atom.y, z=atom.z)
+                           mapping=atom.mapping, mark=atom.mark, x=atom.x, y=atom.y, z=atom.z, stereo=atom.stereo)
                 old.update(value)
                 if 'element' in value:
                     del old['element']
@@ -76,13 +66,33 @@ class AtomProxy(ObjectProxy):
             else:
                 for k, v in value.items():
                     setattr(atom, k, v)
+        elif isinstance(value, type):
+            if not issubclass(value, Element):
+                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+            if atom.number != value.number:
+                self.__wrapped__ = nodes[node] = value(charge=atom.charge, multiplicity=atom.multiplicity,
+                                                       mapping=atom.mapping, mark=atom.mark, stereo=atom.stereo,
+                                                       x=atom.x, y=atom.y, z=atom.z)
+        elif isinstance(value, Element):
+            if atom.number != value.number or atom.charge != value.charge or \
+                    atom.multiplicity != value.multiplicity or atom.isotope != value.isotope:
+                value.neighbors = atom.neighbors
+                value.hybridization = atom.hybridization
+                self.__wrapped__ = nodes[node] = value
+            else:
+                atom.x = value.x
+                atom.y = value.y
+                atom.z = value.z
+                atom.mapping = value.mapping
+                atom.mark = value.mark
+                atom.stereo = value.stereo
         else:
-            raise TypeError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
+            raise ValueError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
 
-    __possible = {'element', 'charge', 'isotope', 'multiplicity', 'mapping', 'mark', 'x', 'y', 'z'}
+    __possible = {'element', 'charge', 'isotope', 'multiplicity', 'mapping', 'mark', 'x', 'y', 'z', 'stereo'}
 
 
-class Nodes(MutableMapping):
+class Atoms(MutableMapping):
     __slots__ = '_mapping'
 
     def __init__(self):
@@ -101,33 +111,115 @@ class Nodes(MutableMapping):
         return node in self._mapping
 
     def __setitem__(self, node, value):
+        if not isinstance(node, int):  # ad-hoc for add_nodes_from method
+            raise TypeError('invalid atom number')
+        if isinstance(value, dict):
+            if 'atom' not in value:
+                if set(value) > self.__possible:
+                    raise ValueError('unknown atom attributes not allowed')
+                try:
+                    value = elements_classes[value['element']](**{k: v for k, v in value.items()
+                                                                  if k in self.__acceptable})
+                except KeyError:
+                    raise ValueError('invalid atom symbol')
+                self._mapping[node] = value
+                return
+            value = value['atom']  # ad-hoc for add_node method
+
         if isinstance(value, type):
             if not issubclass(value, Element):
-                TypeError('invalid type of atom')
+                ValueError('invalid type of atom')
             value = value()
         elif not isinstance(value, Element):
-            if not isinstance(value, dict):
-                raise TypeError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
-            if not value:
-                raise ValueError('empty atom attributes not allowed')
-
-            value = value.copy()
-            try:
-                value = elements_classes[value.pop('element')](**value)
-            except KeyError:
-                raise ValueError('invalid atom symbol')
-            except TypeError as e:
-                raise ValueError from e
-
+            raise ValueError('only CGRtools.periodictable.Element or dict of atom attributes allowed')
         self._mapping[node] = value
 
     def __getitem__(self, node):
-        return AtomProxy(self._mapping, node, self._mapping[node])
+        try:
+            atom = self._mapping[node]
+        except KeyError:
+            raise KeyError('atom not found')
+        return AtomProxy(self._mapping, node, atom)
 
     def setdefault(self, node, value):
         if node not in self._mapping:
             self[node] = value
         return self[node]
+
+    __acceptable = {'charge', 'isotope', 'multiplicity', 'mapping', 'mark', 'x', 'y', 'z', 'stereo'}
+    __possible = __acceptable | {'element', 'hybridization', 'neighbors'}
+
+
+class Bond:
+    __slots__ = ('order', 'stereo')
+
+    def __init__(self, order=1, stereo=None):
+        self.order = order
+        self.stereo = stereo
+
+    def __setattr__(self, key, value):
+        if key not in self.__possible:
+            raise KeyError('unknown bond attribute')
+        acc = self.__acceptable[key]
+        if value not in acc:
+            raise ValueError(f'attribute {key} should be from acceptable list: {acc}')
+        super().__setattr__(key, value)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __len__(self):
+        return 2
+
+    def __iter__(self):
+        return iter(self.__possible)
+
+    def __repr__(self):
+        s = '' if self.stereo is None else f', stereo={self.stereo}'
+        return f'{type(self).__name__}({self.order}{s})'
+
+    def update(self, value):
+        if isinstance(value, dict):
+            if not value:
+                return  # ad-hoc for add_edges_from method
+            if 'bond' not in value:
+                if set(value) > self.__possible:
+                    raise ValueError('unknown bond attributes not allowed')
+                for k, v in self.__acceptable.items():
+                    if k in value and value[k] not in v:
+                        raise ValueError(f'attribute {k} should be from acceptable list: {v}')
+                for k, v in value.items():
+                    super().__setattr__(k, v)
+                return
+            value = value['bond']
+        if isinstance(value, Bond):
+            self.order = value.order
+            self.stereo = value.stereo
+        else:
+            raise TypeError('only Bond object or dict of bond attributes allowed')
+
+    def copy(self):
+        return type(self)(self.order, self.stereo)
+
+    def items(self):
+        """
+        iterate other non-default bonds attrs-values pairs
+
+        need for nx.readwrite.json_graph.node_link_data
+        """
+        def g():
+            for k, d in self.__default.items():
+                v = getattr(self, k)
+                if v != d:
+                    yield (k, v)
+        return g()
+
+    __possible = {'order', 'stereo'}
+    __acceptable = {'order': {1, 2, 3, 4, 9}, 'stereo': {None, -1, 1, 0}}
+    __default = {'order': 1, 'stereo': None}
 
 
 class MoleculeContainer(BaseContainer):
@@ -136,7 +228,8 @@ class MoleculeContainer(BaseContainer):
 
     new molecule object creation or copy of data object
     """
-    node_dict_factory = Nodes
+    node_dict_factory = Atoms
+    edge_attr_dict_factory = Bond
 
     def __dir__(self):
         if self.__visible is None:
@@ -171,45 +264,10 @@ class MoleculeContainer(BaseContainer):
         sub._fix_stereo_stage_2(self._fix_stereo_stage_1())
         return sub
 
-    def add_atom(self, atom, _map=None, mark='0', x=0, y=0, z=0):
-        if isinstance(atom, type):
-            if not issubclass(atom, Element):
-                TypeError('invalid type of atom')
-            atom = atom()
-        elif isinstance(atom, str):
-            try:
-                atom = elements[atom]()
-            except KeyError:
-                raise TypeError('invalid symbol of atom')
-        elif not isinstance(atom, Element):
-            raise TypeError('invalid type of atom')
-        if _map is None:
-            _map = max(self, default=0) + 1
-        elif _map in self:
-            raise InvalidData('mapping exists')
-
-        self.add_node(_map, element=atom.symbol, s_charge=atom.charge, mark=mark, s_x=x, s_y=y, s_z=z, map=_map)
-        if atom.multiplicity:
-            self.nodes[_map]['s_radical'] = atom.multiplicity
-
-        self.flush_cache()
-        return _map
-
-    def add_bond(self, atom1, atom2, mark=1, *, ignore=False):
-        if atom1 not in self or atom2 not in self:
-            raise InvalidData('atoms not found')
-        if self.has_edge(atom1, atom2):
-            raise InvalidData('bond exists')
-        if mark not in (1, 2, 3, 4, 9):
-            raise InvalidData('invalid bond mark')
-
-        if not ignore:
-            self.__check_bonding(atom1, atom2, mark)
-
+    def add_bond(self, atom1, atom2, bond):
         stereo = self._fix_stereo_stage_1()
-        self.add_edge(atom1, atom2, s_bond=mark)
+        super().add_bond(atom1, atom2, bond)
         self._fix_stereo_stage_2(stereo)
-        self.flush_cache()
 
     def delete_atom(self, n):
         """
@@ -442,15 +500,6 @@ class MoleculeContainer(BaseContainer):
             else:
                 return _stereo_cache
 
-    @staticmethod
-    def _attr_renew(attr, marks):
-        new_attr = {}
-        for s in marks:
-            ls = attr.get(s)
-            if ls is not None:
-                new_attr[s] = ls
-        return new_attr
-
     def _signature_generator(self, *args, **kwargs):
         return CGRstring(*args, **kwargs)
 
@@ -499,24 +548,6 @@ class MoleculeContainer(BaseContainer):
                 bn.append(b)
                 ng.append(self.nodes[a]['element'])
         return bn, ng
-
-    @classmethod
-    def _atom_container(cls, attrs):
-        return elements[attrs['element']](charge=attrs['s_charge'], multiplicity=attrs.get('s_radical'),
-                                          isotope=attrs.get('isotope'))
-
-    @classmethod
-    def _stereo_container(cls, attrs):
-        return attrs.get('s_stereo')
-
-    @classmethod
-    def _bond_container(cls, attrs):
-        return attrs['s_bond']
-
-    _node_base = ('element', 'isotope', 'mark', 's_x', 's_y', 's_z')
-    _node_marks = ('s_neighbors', 's_hyb', 's_charge', 's_stereo', 's_radical')
-    _node_save = _node_marks + _node_base
-    _edge_save = _edge_marks = ('s_bond', 's_stereo')
 
     __visible = None
     _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')

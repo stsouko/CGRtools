@@ -17,36 +17,19 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC, abstractmethod
-from collections import defaultdict
-from itertools import chain
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from typing import Callable, Iterable
+from typing import Callable
 from warnings import warn
 from ..algorithms import hash_cgr_string, get_morgan
-from ..exceptions import InvalidAtom
 
 
 class BaseContainer(Graph, ABC):
-    def __init__(self, *args, **kwargs):
-        """
-        base structure container class
-
-        :param incoming_graph_data: MoleculeContainer [CGRContainer] or NX Graph object or other supported by NX
-        :param kwargs: dictionary of metadata. like DTYPE-DATUM in RDF
-        """
-        super().__init__(*args, **kwargs)
-        self.__init()
-
-    def __init(self):
-        self.__atom_cache = {}
-        self.__bond_cache = defaultdict(dict)
-
     def __dir__(self):
         if self.__visible is None:
             self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
                               self.flush_cache.__name__, self.substructure.__name__,  self.get_morgan.__name__,
-                              self.get_signature.__name__, self.get_signature_hash.__name__, self.fix_data.__name__,
+                              self.get_signature.__name__, self.get_signature_hash.__name__,
                               self.get_environment.__name__, self.mark.__name__, self.atom.__name__, self.bond.__name__,
                               self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
                               self.add_stereo.__name__, self.get_stereo.__name__,
@@ -55,52 +38,23 @@ class BaseContainer(Graph, ABC):
         return self.__visible
 
     def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items()
-                if not k.startswith('_BaseContainer__') and k != 'root_graph' or k == '_BaseContainer__meta'}
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self.root_graph = self
-        self.__init()
+        return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
 
     def mark(self, n):
-        try:
-            tmp = self.nodes[n]
-        except KeyError:
-            raise InvalidAtom('atom not found')
-        return tmp['mark']
+        return self._node[n].mark
 
     def atom(self, n):
-        if n not in self.__atom_cache:
-            try:
-                tmp = self.nodes[n]
-            except KeyError:
-                raise InvalidAtom('atom not found')
-
-            self.__atom_cache[n] = self._atom_container(tmp)
-        return self.__atom_cache[n]
+        return self._node[n]
 
     def stereo(self, n, m=None):
-        try:
-            tmp = self.nodes[n] if m is None else self[n][m]
-        except KeyError:
-            raise InvalidAtom('atom[s] or bond not found')
-
-        return self._stereo_container(tmp)
+        return (self._node[n] if m is None else self[n][m]).stereo
 
     def bond(self, n, m):
-        if m not in self.__bond_cache[n]:
-            try:
-                tmp = self[n][m]
-            except KeyError:
-                raise InvalidAtom('atom[s] or bond not found')
-
-            self.__bond_cache[n][m] = self.__bond_cache[m][n] = self._bond_container(tmp)
-        return self.__bond_cache[n][m]
+        return self[n][m]
 
     @property
     def atom_numbers(self):
-        return list(self.nodes)
+        return list(self._node)
 
     @property
     def atoms_count(self):
@@ -110,31 +64,49 @@ class BaseContainer(Graph, ABC):
     def bonds_count(self):
         return self.size()
 
-    @abstractmethod
-    def add_atom(self, *args, **kwargs):
+    def add_atom(self, atom, _map=None):
         """
-        implementation of atom addition
+        new atom addition
         """
-        pass
+        if _map is None:
+            _map = max(self, default=0) + 1
+        elif _map in self._node:
+            raise KeyError('atom with same number exists')
+        if isinstance(atom, dict):
+            self.add_node(_map, **atom)
+        else:
+            self.add_node(_map, atom=atom)
+        self.flush_cache()
+        return _map
 
     @abstractmethod
-    def add_bond(self, *args, **kwargs):
+    def add_bond(self, atom1, atom2, bond):
         """
         implementation of bond addition
         """
-        pass
+        if atom1 not in self._node or atom2 not in self._node:
+            raise KeyError('atoms not found')
+        if self.has_edge(atom1, atom2):
+            raise KeyError('atoms already bonded')
+        if isinstance(bond, dict):
+            self.add_edge(atom1, atom2, **bond)
+        else:
+            self.add_edge(atom1, atom2, bond=bond)
+        self.flush_cache()
 
     def delete_atom(self, n):
         """
         implementation of atom removing
         """
         self.remove_node(n)
+        self.flush_cache()
 
     def delete_bond(self, n, m):
         """
         implementation of bond removing
         """
         self.remove_edge(n, m)
+        self.flush_cache()
 
     @abstractmethod
     def add_stereo(self, *args, **kwargs):
@@ -151,53 +123,43 @@ class BaseContainer(Graph, ABC):
     @abstractmethod
     def _prepare_stereo(self):
         """
-        :return: dict of stere lables on bonds
+        :return: dict of stereo labels on bonds
         """
         pass
 
     @property
     def meta(self):
-        return self.__meta
+        return self.graph
 
     @abstractmethod
     def pickle(self):
         """ return json serializable Container
         """
-        node_marks = self._node_save
-        edge_marks = self._edge_save
-
-        g = Graph()
-        g.add_nodes_from((n, {k: v for k, v in a.items() if k in node_marks}) for n, a in self.nodes(data=True))
-        g.add_edges_from((n, m, {k: v for k, v in a.items() if k in edge_marks}) for n, m, a in self.edges(data=True))
-
-        data = node_link_data(g, attrs=self.__attrs)
-        data['meta'] = self.__meta
+        data = node_link_data(self, attrs=self.__attrs)
+        del data['multigraph'], data['directed']
         return data
 
     @classmethod
     @abstractmethod
     def unpickle(cls, data) -> object:
         """convert json serializable Container into Molecule or CGR or Query object instance"""
-        graph = node_link_graph(data, attrs=cls.__attrs)
-        meta = data['meta']
-        return graph, meta
-
-    def copy(self):
-        copy = super().copy()
-        copy.meta.update(self.__meta)
-        return copy
+        graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
+        if 'meta' in data:  # 2.8 compatibility
+            graph.graph.update(data['meta'])
+        return graph
 
     def substructure(self, nbunch, meta=False):
         """
         create substructure containing atoms from nbunch list
 
-        Notes: for prevent of data corruption in original structure, create copy of substructure. actual for templates
-
         :param nbunch: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
-        :return: Molecule or CGR container
+        :return: container with substructure
         """
-        return type(self)(self.subgraph(nbunch), self.meta if meta else None)
+        s = self.subgraph(nbunch).copy()
+        if not meta:
+            s.graph.clean()
+        return s
 
     def get_environment(self, atoms, dante=False, deep=0):
         """
@@ -210,23 +172,15 @@ class BaseContainer(Graph, ABC):
         """
         nodes = [set(atoms)]
         for i in range(deep):
-            n = set(chain.from_iterable(self.edges(nodes[i])))
-            if not n or n in nodes:
+            n = {y for x in nodes[-1] for y in self._adj[x]} | nodes[-1]
+            if n in nodes:
                 break
             nodes.append(n)
 
-        if dante:
-            centers = [self.substructure(a) for a in nodes]
-        else:
-            centers = self.substructure(nodes[-1])
-
-        return centers
+        return [self.substructure(a) for a in nodes] if dante else self.substructure(nodes[-1])
 
     def remap(self, mapping, copy=False):
-        g = relabel_nodes(self, mapping, copy=copy)
-        if copy:
-            g.meta.update(self.meta)
-        return g
+        return relabel_nodes(self, mapping, copy=copy)
 
     def get_signature_hash(self, *args, **kwargs):
         return hash_cgr_string(self.get_signature(*args, **kwargs))
@@ -276,45 +230,8 @@ class BaseContainer(Graph, ABC):
         """
         pass
 
-    def fix_data(self, copy=False, nodes_bunch=None, edges_bunch=None):
-        g = self.copy() if copy else self
-        for a in ((a for _, a in g.nodes(data=True)) if nodes_bunch is None else
-                  (g.nodes[x] for x in g.nbunch_iter(nodes_bunch))):
-            sp_new = self._attr_renew(a, self._node_marks)
-            cm_new = self.__node_attr_clear(a)
-            a.clear()
-            a.update(sp_new)
-            a.update(cm_new)
-
-        for *_, a in g.edges(nbunch=edges_bunch, data=True):
-            new = self._attr_renew(a, self._edge_marks)
-            a.clear()
-            a.update(new)
-
-        if copy:
-            return g
-        self.flush_cache()
-
     def flush_cache(self):
         self.__weights = self.__signatures = self.__pickle = self.__hash = self.__stereo_cache = None
-
-    def fresh_copy(self):
-        """return a fresh copy graph with the same data structure but without atoms, bonds and metadata.
-        """
-        return type(self)()
-
-    def __node_attr_clear(self, attr):
-        new_attr = {}
-        for s in self._node_base:
-            ls = attr.get(s)
-            if ls is not None:
-                new_attr[s] = ls
-        return new_attr
-
-    @abstractmethod
-    def _attr_renew(self, *args, **kwargs):
-        """marks cleaning and fixing"""
-        pass
 
     def __str__(self):
         return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
@@ -333,46 +250,5 @@ class BaseContainer(Graph, ABC):
     def __eq__(self, other):
         return str(self) == str(other)
 
-    __meta = __visible = __bond_cache = __weights = __signatures = __pickle = __stereo_cache = None
-    __hash = None
+    __visible = __weights = __signatures = __pickle = __stereo_cache = __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
-
-    @property
-    @abstractmethod
-    def _node_save(self):
-        pass
-
-    @property
-    @abstractmethod
-    def _edge_save(self):
-        pass
-
-    @property
-    @abstractmethod
-    def _node_base(self) -> Iterable:
-        pass
-
-    @property
-    @abstractmethod
-    def _edge_marks(self):
-        pass
-
-    @property
-    @abstractmethod
-    def _node_marks(self):
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _atom_container(cls, *args, **kwargs):
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _stereo_container(cls, *args, **kwargs):
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _bond_container(cls, *args, **kwargs):
-        pass

@@ -19,6 +19,7 @@
 """
 contains periodic table of elements classes
 """
+from itertools import chain
 from operator import ge, le, gt, lt
 from .data import *
 from .shells import *
@@ -91,6 +92,9 @@ class ElementMeta(PeriodicMeta):
             return op(cls.__number, other.number)
         raise TypeError(f'unorderable types {cls} and {type(other)}')
 
+    def __hash__(self):
+        return self.__number
+
 
 class Periodic(metaclass=PeriodicMeta):
     """
@@ -131,19 +135,23 @@ def get_element(symbol, number):
         pass
 
     class ElementClass(Element, Period, Group, Type, name=symbol, number=number):
-        __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope',
-                     'mapping', 'mark', 'x', 'y', 'z')
+        __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope', 'mark',
+                     'mapping', 'x', 'y', 'z', 'stereo', 'hybridization', 'neighbors')
 
         def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=common_isotope,
-                     mapping: int=None, mark: str='0', x: float=0, y: float=0, z: float=0):
+                     x: float=0, y: float=0, z: float=0, mark: str='0', mapping: int=None, stereo: int=None,
+                     hybridization: int=None, neighbors: int=None):
             self.__charge = charge
-            self.__multiplicity = multiplicity
             self.__isotope = isotope
-            self.mapping = mapping
+            self.__multiplicity = multiplicity
             self.mark = mark
             self.x = x
             self.y = y
             self.z = z
+            self.stereo = stereo
+            self.mapping = mapping
+            self.neighbors = neighbors
+            self.hybridization = hybridization
 
         @property
         def charge(self):
@@ -227,9 +235,35 @@ def get_element(symbol, number):
             return int(sum(bonds_map[x] for x in bonds))
 
         def __getitem__(self, item):
+            """
+            dict like access to atom's attrs
+            """
             if item not in self.__subscribe:
                 raise KeyError(f"attribute '{item}' not found")
             return getattr(self, item)
+
+        def __iter__(self):
+            """
+            need for update dicts with atom's init attrs
+
+            d = {}
+            d.update(Element)
+            need for nx.Graph.add_nodes_from()
+            """
+            return chain(((x, getattr(self, x)) for x in self.__to_dict), (('element', symbol),))
+
+        def items(self):
+            """
+            iterate other non-default elements attrs-values pairs
+
+            need for nx.readwrite.json_graph.node_link_data
+            """
+            def g():
+                for k, d in self.__to_dict.items():
+                    v = getattr(self, k)
+                    if v != d:
+                        yield (k, v)
+            return chain(g(), (('element', symbol),))
 
         def __contains__(self, item):
             return item in self.__subscribe
@@ -295,8 +329,10 @@ def get_element(symbol, number):
         def __hash__(self):
             return hash((number, self.__charge, self.__isotope, self.__multiplicity))
 
-        __subscribe = ('charge', 'isotope', 'multiplicity', 'radical', 'number', 'symbol', 'electron_configuration',
-                       'electrons', 'mapping', 'mark', 'x', 'y', 'z')
+        __subscribe = {'charge', 'isotope', 'multiplicity', 'radical', 'number', 'symbol', 'electron_configuration',
+                       'electrons', 'mapping', 'mark', 'x', 'y', 'z', 'stereo', 'hybridization', 'neighbors'}
+        __to_dict = {'charge': 0, 'isotope': common_isotope, 'multiplicity': None, 'mapping': None, 'mark': '0',
+                     'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'hybridization': None, 'neighbors': None}
 
     return ElementClass
 
