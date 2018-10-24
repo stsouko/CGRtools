@@ -22,89 +22,97 @@ from functools import reduce
 from itertools import count, repeat
 from operator import mul, itemgetter
 from warnings import warn
-from ..exceptions import InvalidConfig
-from ..periodictable import elements_list
 
 
-def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False, labels=('s', 'p')):
+def initial_weights(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False):
+    return {n: (atom.number if element else 0,
+                atom.isotope if isotope else 0,  # isotope precedence over electron state
+                (atom.charge, atom.multiplicity or 0) if element else 0,
+                (atom.stereo or 0) if stereo else 0,
+                (atom.hybridization or 0) if hybridization else 0,
+                (atom.neighbors or 0) if neighbors else 0,
+                tuple(sorted(bond.order or 0 for bond in g._adj[n].values())),
+                tuple(sorted(bond.stereo or 0 for bond in g._adj[n].values())) if stereo else 0)
+            for n, atom in g._node.items()}, {n: tuple(m) for n, m in g._adj.items()}
+
+
+def initial_weights_cgr(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False):
+    return {n: (atom.number if element else 0,
+                atom.isotope if isotope else 0,
+                (atom.charge, atom.multiplicity or 0, atom.p_charge, atom.p_multiplicity or 0) if element else 0,
+                (atom.stereo or 0, atom.p_stereo or 0) if stereo else 0,
+                (atom.hybridization or 0, atom.p_hybridization or 0) if hybridization else 0,
+                (atom.neighbors or 0, atom.p_neighbors or 0) if neighbors else 0,
+                tuple(sorted((bond.order or 0, bond.p_order or 0) for bond in g._adj[n].values())),
+                tuple(sorted((bond.stereo or 0, bond.p_stereo or 0) for bond in g._adj[n].values())) if stereo else 0)
+            for n, atom in g._node.items()}, {n: tuple(m) for n, m in g._adj.items()}
+
+
+def initial_weights_cgr_reversed(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False):
+    return {n: (atom.number if element else 0,
+                atom.isotope if isotope else 0,
+                (atom.p_charge, atom.p_multiplicity or 0, atom.charge, atom.multiplicity or 0) if element else 0,
+                (atom.p_stereo or 0, atom.stereo or 0) if stereo else 0,
+                (atom.p_hybridization or 0, atom.hybridization or 0) if hybridization else 0,
+                (atom.p_neighbors or 0, atom.neighbors or 0) if neighbors else 0,
+                tuple(sorted((bond.p_order or 0, bond.order or 0) for bond in g._adj[n].values())),
+                tuple(sorted((bond.p_stereo or 0, bond.stereo or 0) for bond in g._adj[n].values())) if stereo else 0)
+            for n, atom in g._node.items()}, {n: tuple(m) for n, m in g._adj.items()}
+
+
+def initial_weights_cgr_reagents(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False):
+    return {n: (atom.number if element else 0,
+                atom.isotope if isotope else 0,  # isotope precedence over electron state
+                (atom.charge, atom.multiplicity or 0) if element else 0,
+                (atom.stereo or 0) if stereo else 0,
+                (atom.hybridization or 0) if hybridization else 0,
+                (atom.neighbors or 0) if neighbors else 0,
+                tuple(sorted(bond.order or 0 for bond in g._adj[n].values())),
+                tuple(sorted(bond.stereo or 0 for bond in g._adj[n].values() if bond.order)) if stereo else 0)
+            for n, atom in g._node.items()}, {n: tuple(i for i, j in m.items() if j.order) for n, m in g._adj.items()}
+
+
+def initial_weights_cgr_products(g, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False):
+    return {n: (atom.number if element else 0,
+                atom.isotope if isotope else 0,  # isotope precedence over electron state
+                (atom.p_charge, atom.p_multiplicity or 0) if element else 0,
+                (atom.p_stereo or 0) if stereo else 0,
+                (atom.p_hybridization or 0) if hybridization else 0,
+                (atom.p_neighbors or 0) if neighbors else 0,
+                tuple(sorted(bond.p_order or 0 for bond in g._adj[n].values())),
+                tuple(sorted(bond.p_stereo or 0 for bond in g._adj[n].values() if bond.p_order)) if stereo else 0)
+            for n, atom in g._node.items()}, {n: tuple(i for i, j in m.items() if j.p_order) for n, m in g._adj.items()}
+
+
+def get_morgan(g, initial, *args, **kwargs):
     """
     Morgan like algorithm for graph nodes ordering
 
     :param g: (CGR|Molecule)Container
+    :param initial: callable which returns dict with keys from graph nodes and orderable values and
+                    dict with keys from graph nodes and values as lists of neighbors atoms
+                   for MoleculeContainer initial_weights function available.
+
+                   for CGRContainer allowed to control ordering.
+                   if initial_weights_cgr_reagents passed:
+                       ordering is equal to reagents ordering of reaction from which CGR is created.
+                   if initial_weights_cgr_products passed:
+                       ordering is equal to products ordering.
+                   if initial_weights_cgr passed:
+                       ordering is default for given CGR
+                   if initial_weights_cgr_reversed passed:
+                       ordering equal to reversed CGR. CGR of back reaction.
     :param isotope: differentiate isotopes
     :param element: differentiate elements and charges
     :param stereo: differentiate stereo atoms and bonds
     :param hybridization: differentiate hybridization of atoms
     :param neighbors: differentiate neighbors of atoms. useful for queries structures
-    :param labels: for MoleculeContainer usable only default value, None, ('s',) or 's'.
-                   for CGRContainer labels allow to control ordering.
-
-                   if labels = ('s',) or 's':
-                       ordering is equal to reagents ordering of reaction from which CGR is created.
-                   if labels = ('p',) or 'p':
-                       ordering is equal to products ordering.
-                   if labels = ('s', 'p') or 'sp' or None:
-                       ordering is default for given CGR
-                   labels = ('p', 's') or 'ps':
-                       ordering equal to reversed CGR. CGR of back reaction.
-    :return: dict of atom: weights
+    :return: dict of atom-weight pairs
     """
     if not len(g):  # for empty containers
         return {}
 
-    if labels is None:
-        s_charge = 's_charge'
-        p_charge = 'p_charge'
-        s_radical = 's_radical'
-        p_radical = 'p_radical'
-        s_stereo = 's_stereo'
-        p_stereo = 'p_stereo'
-        s_bond = 's_bond'
-        p_bond = 'p_bond'
-        s_hyb = 's_hyb'
-        p_hyb = 'p_hyb'
-        s_neighbors = 's_neighbors'
-        p_neighbors = 'p_neighbors'
-    elif len(labels) == 2:
-        s, p = labels
-        if not (s == 's' and p == 'p' or s == 'p' and p == 's'):
-            raise InvalidConfig('invalid labels')
-        s_charge = '%s_charge' % s
-        p_charge = '%s_charge' % p
-        s_radical = '%s_radical' % s
-        p_radical = '%s_radical' % p
-        s_stereo = '%s_stereo' % s
-        p_stereo = '%s_stereo' % p
-        s_bond = '%s_bond' % s
-        p_bond = '%s_bond' % p
-        s_hyb = '%s_hyb' % s
-        p_hyb = '%s_hyb' % p
-        s_neighbors = '%s_neighbors' % s
-        p_neighbors = '%s_neighbors' % p
-    else:
-        s = labels[0]
-        if s not in 'sp':
-            raise InvalidConfig('invalid labels')
-        s_charge = '%s_charge' % s
-        s_radical = '%s_radical' % s
-        s_stereo = '%s_stereo' % s
-        s_bond = '%s_bond' % s
-        s_hyb = '%s_hyb' % s
-        s_neighbors = '%s_neighbors' % s
-        p_charge = p_radical = p_stereo = p_bond = p_hyb = p_neighbors = None
-
-    params = {n: (_tupled_element(attr.get('element')) if element else 1,
-                  _tupled(attr.get('isotope', 1)) if isotope else 1,
-                  _tupled_sp(attr[s_charge], attr.get(p_charge)) if element else 1,
-                  _tupled_sp(attr.get(s_radical), attr.get(p_radical)) if element else 1,
-                  10 * (attr.get(s_stereo) or 0) + (attr.get(p_stereo) or 0) if stereo else 1,
-                  _tupled_sp(attr.get(s_hyb), attr.get(p_hyb)) if hybridization else 1,
-                  _tupled_sp(attr.get(s_neighbors), attr.get(p_neighbors)) if neighbors else 1,
-                  tuple(sorted(_tupled_sp(eattr.get(s_bond), eattr.get(p_bond))
-                               for eattr in g[n].values() if p_bond or eattr.get(s_bond))),
-                  tuple(sorted(10 * (eattr.get(s_stereo) or 0) + (eattr.get(p_stereo) or 0)
-                               for eattr in g[n].values() if p_bond or eattr.get(s_bond))) if stereo else 1)
-              for n, attr in g.nodes(data=True)}
+    params, scaf = initial(g, *args, **kwargs)
 
     newlevels = {}
     countprime = iter(primes)
@@ -114,17 +122,13 @@ def get_morgan(g, isotope=False, element=True, stereo=False, hybridization=False
     numb = len(set(weights.values()))
     stab = 0
 
-    scaf = {}
-    for n, m in g.adjacency():
-        scaf[n] = tuple(i for i, j in m.items() if p_bond or j.get(s_bond))
-
     tries = len(g) * 4  # limit for searching
     while tries:
         oldnumb = numb
         neweights = {}
         countprime = iter(primes)
 
-        # weights[n] ** 2 NEED for differentiation of molecules like A-B or any complete graphs.
+        # weights[n] ** 2 NEED for differentiation of molecules like A-B or any other complete graphs.
         tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in scaf.items()}
 
         weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
@@ -159,18 +163,10 @@ def _tupled(a):
     return a,
 
 
-def _tupled_element(a):
-    if a is None:
-        return -1,
-    if isinstance(a, list):
-        return tuple(sorted(elements_list.index(x) for x in a))
-    return elements_list.index(a),
-
-
 def _tupled_sp(s, p):
     if isinstance(s, list):
         if None in s:
-            s = (x or 0 for x in s)
+            s = (0 if x is None else x for x in s)
         if p is None:
             p = repeat(0)
         elif None in p:

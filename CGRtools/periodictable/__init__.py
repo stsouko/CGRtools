@@ -226,7 +226,7 @@ def get_element(symbol, number):
             :return: valence number or None if valence impossible
             """
             if not self.check_atom():
-                return None
+                return
             bonds = [x for x, _ in neighbors]
             res = atom_valences.get((symbol, self.__charge, self.radical, self.__bonds_sum(bonds)))
             if res is None:

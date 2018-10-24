@@ -29,10 +29,10 @@ class BaseContainer(Graph, ABC):
             self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
                               self.flush_cache.__name__, self.substructure.__name__,  self.get_morgan.__name__,
                               self.get_signature.__name__, self.get_signature_hash.__name__,
-                              self.get_environment.__name__, self.mark.__name__, self.atom.__name__, self.bond.__name__,
-                              self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                              self.add_stereo.__name__, self.get_stereo.__name__,
-                              self.delete_atom.__name__, self.delete_bond.__name__,
+                              self.augmented_substructure.__name__, self.mark.__name__, self.atom.__name__,
+                              self.bond.__name__, self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
+                              self.add_stereo.__name__, self.get_stereo.__name__, self.delete_atom.__name__,
+                              self.environment.__name__, self.delete_bond.__name__,
                               'meta', 'bonds_count', 'atoms_count', 'atom_numbers']
         return self.__visible
 
@@ -194,20 +194,23 @@ class BaseContainer(Graph, ABC):
         graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
         return _search_subclass(data['class'])(graph)
 
-    def substructure(self, nbunch, meta=False):
+    def environment(self, atom):
+        return [(bond, self._node[n]) for n, bond in self._adj[atom].items()]
+
+    def substructure(self, atoms, meta=False):
         """
         create substructure containing atoms from nbunch list
 
-        :param nbunch: list of atoms numbers of substructure
+        :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
         :return: container with substructure
         """
-        s = self.subgraph(nbunch).copy()
+        s = self.subgraph(atoms).copy()
         if not meta:
             s.graph.clean()
         return s
 
-    def get_environment(self, atoms, dante=False, deep=0):
+    def augmented_substructure(self, atoms, dante=False, deep=1):
         """
         get subgraph with atoms and their neighbors
 
@@ -256,13 +259,19 @@ class BaseContainer(Graph, ABC):
             self.__signatures[k] = out = sg(self, weights)
         return out
 
-    def get_morgan(self, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False, labels=None,
+    def get_morgan(self, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False,
                    flush_cache=False):
         if flush_cache or self.__weights is None:
             self.__weights = {}
-        k = (isotope, element, stereo, hybridization, neighbors, labels)
-        return self.__weights.get(k) or self.__weights.setdefault(k, get_morgan(self, isotope, element, stereo,
-                                                                                hybridization, neighbors, labels))
+        k = (isotope, element, stereo, hybridization, neighbors, self._morgan_init)
+        return self.__weights.get(k) or self.__weights.setdefault(k, get_morgan(self, self._morgan_init, isotope,
+                                                                                element, stereo, hybridization,
+                                                                                neighbors))
+
+    @property
+    @abstractmethod
+    def _morgan_init(self):
+        pass
 
     @abstractmethod
     def _signature_generator(self, *args, **kwargs) -> Callable:
