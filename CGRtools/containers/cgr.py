@@ -19,130 +19,104 @@
 from collections import defaultdict
 from itertools import repeat, zip_longest
 from typing import Tuple
-from .common import BaseContainer
-from .query import QueryContainer, DynamicContainer
-from .molecule import MoleculeContainer
+from .query import DynamicContainer
+from .molecule import MoleculeContainer, Bond
 from ..algorithms import aromatize_cgr
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import elements, H, Element
 
 
-class CGRContainer(QueryContainer, MoleculeContainer):
-    """storage for CGRs. has similar to molecules behavior"""
+class DynBond:
+    __slots__ = ('reagent', 'product')
+
+    def __init__(self, order=1, stereo=None, p_order=1, p_stereo=None):
+        self.reagent = Bond(order, stereo)
+        self.product = Bond(p_order, p_stereo)
+
+    def __setattr__(self, key, value):
+        if key not in self.__possible:
+            raise AttributeError('unknown bond attribute')
+        setattr(getattr(self, self.__possible[key]), key, value)
+
+    def __getattr__(self, key):
+        if key not in self.__possible:
+            raise AttributeError('unknown bond attribute')
+        return getattr(getattr(self, self.__possible[key]), key)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __len__(self):
+        return 4
+
+    def __iter__(self):
+        return iter(self.__possible)
+
+    def __repr__(self):
+        return f'{self.reagent}>>{self.product}'
+
+    def update(self, value):
+        if isinstance(value, dict):
+            if not value:
+                return  # ad-hoc for add_edges_from method
+            if 'bond' not in value:
+                if set(value) > set(self.__possible):
+                    raise ValueError('unknown bond attributes not allowed')
+                for k, v in self.__acceptable.items():
+                    if k in value and value[k] not in v:
+                        raise ValueError(f'attribute {k} should be from acceptable list: {v}')
+                for k, v in value.items():
+                    super().__setattr__(k, v)
+                return
+            value = value['bond']
+        if isinstance(value, DynBond):
+            self.order = value.order
+            self.stereo = value.stereo
+            self.p_order = value.p_order
+            self.p_stereo = value.p_stereo
+        if isinstance(value, Bond):
+            self.order = self.p_order = value.order
+            self.stereo = self.p_stereo = value.stereo
+        else:
+            raise TypeError('only DynBond, Bond object or dict of bond attributes allowed')
+
+    def copy(self):
+        return type(self)(self.order, self.stereo, self.p_order, self.p_stereo)
+
+    def items(self):
+        """
+        iterate other non-default bonds attrs-values pairs
+
+        need for nx.readwrite.json_graph.node_link_data
+        """
+        def g():
+            for k, d in self.__default.items():
+                v = getattr(self, k)
+                if v != d:
+                    yield (k, v)
+        return g()
+
+    __possible = {'order': 'reagent', 'stereo': 'reagent', 'p_order': 'product', 'p_stereo': 'product'}
+    __acceptable = {'order': {1, 2, 3, 4, 9}, 'stereo': {None, -1, 1, 0},
+                    'p_order': {1, 2, 3, 4, 9}, 'p_stereo': {None, -1, 1, 0}}
+    __default = {'order': 1, 'stereo': None, 'p_order': 1, 'p_stereo': None}
+
+
+class CGRContainer(MoleculeContainer):
+    """
+    storage for CGRs. has similar to molecules behavior
+    """
+
+    node_dict_factory = DynAtoms
+    edge_attr_dict_factory = DynBond
+
     def __dir__(self):
         if self.__visible is None:
             self.__visible = super().__dir__() + [self.get_center_atoms.__name__]
         return self.__visible
-
-    def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_CGRContainer__')}
-
-    def pickle(self):
-        """return json serializable CGR"""
-        data = BaseContainer.pickle(self)
-        data['s_only'] = False
-        return data
-
-    @classmethod
-    def unpickle(cls, data):
-        """convert json serializable CGR or Molecule into MoleculeContainer or CGRcontainer object instance"""
-        graph, meta = BaseContainer.unpickle(data)
-        if data['s_only']:
-            g = MoleculeContainer(graph, meta)
-        elif data.get('is_query'):
-            g = QueryContainer(graph, meta)
-        else:
-            g = cls(graph, meta)
-
-        g.fix_data()
-        return g
-
-    def add_atom(self, atom, p_atom=None, _map=None, mark='0', x=0, y=0, z=0, p_x=None, p_y=None, p_z=None):
-        """
-        add new atom into CGR
-
-        :param atom: atom object
-        :param p_atom: products side atom. None if not changed.
-        :param _map: atom map number in CGR. can be omitted
-        :param mark: Fragmentor mark
-        :param x,y,z,p_x,p_y,p_z: atom coordinates for reagents and products sides. if not changed p_* can be omitted.
-        :return: atom map number
-        """
-        if isinstance(atom, type):
-            if not issubclass(atom, Element):
-                TypeError('invalid type of atom')
-            atom = atom()
-        elif isinstance(atom, str):
-            try:
-                atom = elements[atom]()
-            except KeyError:
-                raise TypeError('invalid symbol of atom')
-        elif not isinstance(atom, Element):
-            raise TypeError('invalid type of atom')
-
-        if p_atom is None:
-            p_atom = atom
-        else:
-            if isinstance(p_atom, type):
-                if not issubclass(p_atom, Element):
-                    TypeError('invalid type of atom')
-                p_atom = p_atom()
-            elif isinstance(p_atom, str):
-                try:
-                    p_atom = elements[p_atom]()
-                except KeyError:
-                    raise TypeError('invalid symbol of p_atom')
-            elif not isinstance(p_atom, Element):
-                raise TypeError('invalid type of p_atom')
-
-            if atom.symbol != p_atom.symbol:
-                raise InvalidData('atoms not match')
-
-        if _map is None:
-            _map = max(self, default=0) + 1
-        elif _map in self:
-            raise InvalidData('mapping exists')
-
-        if p_x is None:
-            p_x = x
-        if p_y is None:
-            p_y = y
-        if p_z is None:
-            p_z = z
-
-        self.add_node(_map, element=atom.symbol, s_charge=atom.charge, p_charge=p_atom.charge, mark=mark,
-                      s_x=x, s_y=y, s_z=z, p_x=p_x, p_y=p_y, p_z=p_z, map=_map)
-
-        if atom.multiplicity:
-            self.nodes[_map]['s_radical'] = atom.multiplicity
-        if p_atom.multiplicity:
-            self.nodes[_map]['p_radical'] = p_atom.multiplicity
-
-        self.flush_cache()
-        return _map
-
-    def add_bond(self, atom1, atom2, mark=1, p_mark=1, *, ignore=False, s_mark=1):
-        if mark == 1 and s_mark != mark:
-            mark = s_mark
-        if atom1 not in self or atom2 not in self:
-            raise InvalidData('atoms not found')
-        if self.has_edge(atom1, atom2):
-            raise InvalidData('bond exists')
-        if not (mark or p_mark):
-            raise InvalidData('empty bonds not allowed')
-
-        if mark not in (1, 2, 3, 4, 9, None) or p_mark not in (1, 2, 3, 4, 9, None):
-            raise InvalidData('invalid bond mark')
-        elif not ignore:
-            self.__check_bonding(atom1, atom2, mark, p_mark)
-
-        stereo = self._fix_stereo_stage_1()
-        if mark:
-            self.add_edge(atom1, atom2, s_bond=mark)
-        if p_mark:
-            self.add_edge(atom1, atom2, p_bond=p_mark)
-        self._fix_stereo_stage_2(stereo)
-        self.flush_cache()
 
     def add_stereo(self, atom1, atom2, mark, p_mark=None):
         if mark not in (1, -1) and p_mark not in (1, -1):
@@ -373,31 +347,5 @@ class CGRContainer(QueryContainer, MoleculeContainer):
                 bn.append(p_mark)
                 if not p_atom.get_valence(bn, ng):
                     raise InvalidData('valence error')
-
-    @staticmethod
-    def _attr_renew(attr, marks):
-        new_attr = {}
-        for s, p, sp in marks:
-            ls = attr.get(s)
-            lp = attr.get(p)
-
-            if ls != lp:
-                if ls is not None:
-                    new_attr[s] = ls
-                if lp is not None:
-                    new_attr[p] = lp
-                new_attr[sp] = (ls, lp)
-            elif ls is not None:
-                new_attr[sp] = new_attr[s] = new_attr[p] = ls
-        return new_attr
-
-    @classmethod
-    def _atom_container(cls, attrs):
-        return DynamicContainer(elements[attrs['element']](charge=attrs['s_charge'],
-                                                           multiplicity=attrs.get('s_radical'),
-                                                           isotope=attrs.get('isotope')),
-                                elements[attrs['element']](charge=attrs['p_charge'],
-                                                           multiplicity=attrs.get('p_radical'),
-                                                           isotope=attrs.get('isotope')))
 
     __visible = None

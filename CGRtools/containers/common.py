@@ -192,7 +192,7 @@ class BaseContainer(Graph, ABC):
             data = {'graph': data['meta'], 'nodes': nodes, 'bonds': bonds, 'class': _class}
 
         graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
-        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == data['class'])(graph)
+        return _search_subclass(data['class'])(graph)
 
     def substructure(self, nbunch, meta=False):
         """
@@ -293,3 +293,12 @@ class BaseContainer(Graph, ABC):
 
     __visible = __weights = __signatures = __pickle = __stereo_cache = __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
+
+
+def _search_subclass(name, start=BaseContainer):
+    for x in start.__subclasses__():
+        if x.__name__ == name:
+            return x
+        d = _search_subclass(name, x)
+        if d is not None:
+            return d

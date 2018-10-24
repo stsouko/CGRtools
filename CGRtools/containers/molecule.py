@@ -159,7 +159,7 @@ class Bond:
 
     def __setattr__(self, key, value):
         if key not in self.__possible:
-            raise KeyError('unknown bond attribute')
+            raise AttributeError('unknown bond attribute')
         acc = self.__acceptable[key]
         if value not in acc:
             raise ValueError(f'attribute {key} should be from acceptable list: {acc}')
@@ -238,15 +238,6 @@ class MoleculeContainer(BaseContainer):
                                                   self.aromatize.__name__, self.check_valence.__name__]
         return self.__visible
 
-    def __getstate__(self):
-        return {k: v for k, v in super().__getstate__().items() if not k.startswith('_MoleculeContainer__')}
-
-    def pickle(self):
-        """return json serializable Molecule"""
-        data = super().pickle()
-        data['s_only'] = True
-        return data
-
     def substructure(self, *args, **kwargs):
         sub = super().substructure(*args, **kwargs)
         sub._fix_stereo_stage_2(self._fix_stereo_stage_1())
@@ -264,7 +255,6 @@ class MoleculeContainer(BaseContainer):
         stereo = self._fix_stereo_stage_1()
         self.remove_node(n)
         self._fix_stereo_stage_2(stereo)
-        self.reset_query_marks()
 
     def delete_bond(self, n, m):
         """
@@ -273,7 +263,6 @@ class MoleculeContainer(BaseContainer):
         stereo = self._fix_stereo_stage_1()
         self.remove_edge(n, m)
         self._fix_stereo_stage_2(stereo)
-        self.reset_query_marks()
 
     def add_stereo(self, atom1, atom2, mark):
         if mark not in (1, -1):
