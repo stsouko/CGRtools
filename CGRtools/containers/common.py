@@ -20,7 +20,6 @@ from abc import ABC, abstractmethod
 from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from typing import Callable
-from warnings import warn
 from ..algorithms import hash_cgr_string, get_morgan
 
 
@@ -131,22 +130,69 @@ class BaseContainer(Graph, ABC):
     def meta(self):
         return self.graph
 
-    @abstractmethod
     def pickle(self):
         """ return json serializable Container
         """
         data = node_link_data(self, attrs=self.__attrs)
+        data['class'] = type(self).__name__
         del data['multigraph'], data['directed']
         return data
 
     @classmethod
-    @abstractmethod
-    def unpickle(cls, data) -> object:
+    def unpickle(cls, data):
         """convert json serializable Container into Molecule or CGR or Query object instance"""
+        if 's_charge' in data['nodes'][0]:  # 2.8 compatibility
+            is_cgr = not data['s_only']
+
+            if data.get('is_query'):
+                _class = 'QueryContainer'
+            elif is_cgr:
+                _class = 'CGRContainer'
+            else:
+                _class = 'MoleculeContainer'
+
+            nodes = []
+            for x in data['nodes']:
+                n = {'atom': x['atom'], 'element': x['element'], 'charge': x['s_charge'], 'mark': x['mark'],
+                     'x': x['s_x'], 'y': x['s_y'], 'z': x['s_z']}
+                if 'isotope' in x:
+                    n['isotope'] = x['isotope']
+                if 's_hyb' in x:
+                    n['hybridization'] = x['s_hyb']
+                if 's_neighbors' in x:
+                    n['neighbors'] = x['s_neighbors']
+                if 's_stereo' in x:
+                    n['stereo'] = x['s_stereo']
+                if 's_radical' in x:
+                    n['multiplicity'] = x['s_radical']
+                if is_cgr:
+                    n.update(p_x=x['p_x'], p_y=x['p_y'], p_z=x['p_z'], p_charge=x['p_charge'])
+                    if 'p_hyb' in x:
+                        n['p_hybridization'] = x['p_hyb']
+                    if 'p_neighbors' in x:
+                        n['p_neighbors'] = x['p_neighbors']
+                    if 'p_stereo' in x:
+                        n['p_stereo'] = x['p_stereo']
+                    if 'p_radical' in x:
+                        n['p_multiplicity'] = x['p_radical']
+                nodes.append(n)
+
+            bonds = []
+            for x in data['bonds']:
+                b = {'atom1': x['atom1'], 'atom2': x['atom2'], 'order': x['s_bond']}
+                if 's_stereo' in x:
+                    b['stereo'] = x['s_stereo']
+                if is_cgr:
+                    if 'p_bond' in x:
+                        b['p_order'] = x['p_bond']
+                    if 'p_stereo' in x:
+                        b['p_stereo'] = x['p_stereo']
+                bonds.append(b)
+
+            data = {'graph': data['meta'], 'nodes': nodes, 'bonds': bonds, 'class': _class}
+
         graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
-        if 'meta' in data:  # 2.8 compatibility
-            graph.graph.update(data['meta'])
-        return graph
+        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == data['class'])(graph)
 
     def substructure(self, nbunch, meta=False):
         """
@@ -186,7 +232,7 @@ class BaseContainer(Graph, ABC):
         return hash_cgr_string(self.get_signature(*args, **kwargs))
 
     def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
-                      flush_cache=False,  weights=None, hyb=False):
+                      flush_cache=False,  weights=None):
         """
         return string representation of structure
 
@@ -197,12 +243,7 @@ class BaseContainer(Graph, ABC):
         :param neighbors: set neighbors count mark of atom
         :param element: set elements marks
         :param flush_cache: recalculate signature if True
-        :param hyb: deprecated. see hybridization arg
         """
-        if hyb:
-            warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
-            hybridization = hyb
-
         if flush_cache or self.__signatures is None:
             self.__signatures = {}
 

@@ -19,11 +19,27 @@
 """
 contains periodic table of elements classes
 """
+from collections.abc import ItemsView, KeysView, ValuesView
 from itertools import chain
 from operator import ge, le, gt, lt
 from .data import *
 from .shells import *
 from .tables import *
+
+
+class ElementItemsView(ItemsView):
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+
+class ElementKeysView(KeysView):
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+
+class ElementValuesView(ValuesView):
+    def __init__(self, mapping):
+        self._mapping = mapping
 
 
 class PeriodicMeta(type):
@@ -111,6 +127,8 @@ class Element(Periodic, metaclass=ElementMeta):
 
 
 def arab2roman(number):
+    if number == 0:
+        return 'A'
     roma = []
     for arabic, roman in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"),
                           (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")):
@@ -238,19 +256,38 @@ def get_element(symbol, number):
             """
             dict like access to atom's attrs
             """
-            if item not in self.__subscribe:
+            if item == 'element':
+                item = 'symbol'
+            elif item not in self.__subscribe:
                 raise KeyError(f"attribute '{item}' not found")
             return getattr(self, item)
 
         def __iter__(self):
             """
-            need for update dicts with atom's init attrs
+            iterate other non-default atom's init attrs
+            """
+            def g():
+                for k, d in self.__to_dict.items():
+                    if d != getattr(self, k):
+                        yield k
+            return chain(g(), ('element',))
 
+        def keys(self):
+            """
+            iterate other non-default atom's attrs keys
+
+            need for update dicts with atom's init attrs
             d = {}
-            d.update(Element)
+            d.update(Element())
             need for nx.Graph.add_nodes_from()
             """
-            return chain(((x, getattr(self, x)) for x in self.__to_dict), (('element', symbol),))
+            return ElementKeysView(self)
+
+        def values(self):
+            """
+            iterate other non-default atom's attrs values
+            """
+            return ElementValuesView(self)
 
         def items(self):
             """
@@ -258,15 +295,10 @@ def get_element(symbol, number):
 
             need for nx.readwrite.json_graph.node_link_data
             """
-            def g():
-                for k, d in self.__to_dict.items():
-                    v = getattr(self, k)
-                    if v != d:
-                        yield (k, v)
-            return chain(g(), (('element', symbol),))
+            return ElementItemsView(self)
 
         def __contains__(self, item):
-            return item in self.__subscribe
+            return item == 'element' or item in self.__subscribe
 
         def __eq__(self, other):
             if isinstance(other, str):
@@ -337,17 +369,25 @@ def get_element(symbol, number):
     return ElementClass
 
 
-elements_set = set(elements)
-elements_list = elements
+radical_map = {1: 2, 2: 1, 3: 2, None: 0}
+radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
+common_isotopes = dict(zip(elements, isotopes))
+aromatic = ('B', 'C', 'N', 'P', 'O', 'S')
+
 elements_numbers = {s: n for n, s in enumerate(elements, start=1)}
 groups = {elements[z - 1]: x for x, y in enumerate(groups, start=1) for z in y}
 periods = {elements[z - 1]: x for x, y in enumerate(periods, start=1) for z in y}
 classes = {elements[z - 1]: x.capitalize() for x, y in classes.items() for z in y}
-radical_map = {1: 2, 2: 1, 3: 2, None: 0}
-radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
-common_isotopes = dict(zip(elements_list, isotopes))
-aromatic = ('B', 'C', 'N', 'P', 'O', 'S')
-elements_classes = {s: get_element(s, n) for s, n in elements_numbers.items()}
+elements_classes = {s: get_element(s, n) for n, s in enumerate(elements, start=1)}
+
+elements_list = elements + ('A',)
+elements_set = set(elements_list)
+
+groups['A'] = periods['A'] = common_isotopes['A'] = elements_numbers['A'] = valence_electrons['A'] = 0
+electrons_configuration['A'] = {}
+classes['A'] = 'AnyAtom'
+
+elements_classes['A'] = get_element('A', 0)
 
 del elements
 

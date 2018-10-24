@@ -118,8 +118,8 @@ class Atoms(MutableMapping):
                 if set(value) > self.__possible:
                     raise ValueError('unknown atom attributes not allowed')
                 try:
-                    value = elements_classes[value['element']](**{k: v for k, v in value.items()
-                                                                  if k in self.__acceptable})
+                    value = elements_classes[value.get('element', 'A')](**{k: v for k, v in value.items()
+                                                                           if k in self.__acceptable})
                 except KeyError:
                     raise ValueError('invalid atom symbol')
                 self._mapping[node] = value
@@ -246,18 +246,6 @@ class MoleculeContainer(BaseContainer):
         data = super().pickle()
         data['s_only'] = True
         return data
-
-    @classmethod
-    def unpickle(cls, data):
-        """ convert json serializable CGR into MoleculeContainer object instance
-        """
-        if not data['s_only']:
-            raise InvalidData('pickled data is invalid molecule. try CGRContainer.unpickle')
-
-        graph, meta = super().unpickle(data)
-        g = cls(graph, meta)
-        g.fix_data()
-        return g
 
     def substructure(self, *args, **kwargs):
         sub = super().substructure(*args, **kwargs)
