@@ -52,9 +52,12 @@ class CGRstring:
             self.__visited = set()
             firstatom = self.__get_next_atom(has_next)
             smirks = self.__do_cgr_smarts({firstatom}, firstatom, firstatom)
-            ssmiles.append(''.join(smirks[1]))
+
             if self.__is_cgr:
-                psmiles.append(''.join(smirks[2]))
+                ssmiles.append(''.join(smirks[1][0]))
+                psmiles.append(''.join(smirks[1][1]))
+            else:
+                ssmiles.append(''.join(smirks[1]))
             has_next.difference_update(self.__visited)
 
         jssmiles = '.'.join(ssmiles)
@@ -101,7 +104,7 @@ class CGRstring:
         else:
             smi.insert(0, '*')
 
-        if self.__isotope and atom.isotope:
+        if self.__isotope and atom.isotope != atom.common_isotope:
             smi.insert(0, str(atom.isotope))
 
         if len(smi) != 1 or smi[0] == '*':
@@ -115,14 +118,14 @@ class CGRstring:
         pmi = []
 
         if self.__stereo:
-            if atom.get('s_stereo'):
-                smi.append(self.__stereo_types[atom['s_stereo']])
-            if atom.get('s_stereo'):
-                pmi.append(self.__stereo_types[atom['p_stereo']])
+            if atom.stereo:
+                smi.append(self.__stereo_types[atom.stereo])
+            if atom.p_stereo:
+                pmi.append(self.__stereo_types[atom.p_stereo])
 
         if self.__hyb:
-            s = atom.get('s_hyb')
-            p = atom.get('p_hyb')
+            s = atom.hybridization
+            p = atom.p_hybridization
             if isinstance(s, list):
                 tmp = sorted((self.__hyb_types[x], self.__hyb_types[y]) for x, y in zip(s, p))
                 smi.append('<%s>' % ''.join(x for x, _ in tmp))
@@ -134,8 +137,8 @@ class CGRstring:
                     pmi.append(self.__hyb_types[p])
 
         if self.__neighbors:
-            s = atom.get('s_neighbors')
-            p = atom.get('p_neighbors')
+            s = atom.neighbors
+            p = atom.p_neighbors
             if isinstance(s, list):
                 tmp = sorted((x is None and 'n' or str(x), y is None and 'n' or str(y)) for x, y in zip(s, p))
                 smi.append('<%s>' % ''.join(x for x, _ in tmp))
@@ -154,7 +157,7 @@ class CGRstring:
             pmi.insert(0, ';')
 
         if self.__element:
-            ge = atom.get('element')
+            ge = atom.symbol
             if isinstance(ge, list):
                 ge = list(','.join(sorted(ge)))
                 smi = ge + smi
@@ -165,8 +168,8 @@ class CGRstring:
                 smi.insert(0, ge)
                 pmi.insert(0, ge)
 
-            s = atom.get('s_charge')
-            p = atom.get('p_charge')
+            s = atom.charge
+            p = atom.p_charge
             if isinstance(s, list):
                 tmp = [(self.__charge_to_string(x), self.__charge_to_string(y)) for x, y in sorted(zip(s, p))]
                 smi.append('<%s>' % ''.join(x for x, _ in tmp))
@@ -177,8 +180,8 @@ class CGRstring:
                 if p:
                     pmi.append(self.__charge_to_string(p))
 
-            s = atom.get('s_radical')
-            p = atom.get('p_radical')
+            s = atom.multiplicity
+            p = atom.p_multiplicity
             if isinstance(s, list):
                 tmp = [(self.__radical_map[x], self.__radical_map[y]) for x, y in sorted(zip(s, p))]
                 smi.append('<%s>' % ''.join(x for x, _ in tmp))
@@ -193,12 +196,12 @@ class CGRstring:
             pmi.insert(0, '*')
 
         if self.__isotope:
-            s = atom.get('isotope')
+            s = atom.isotope
             if isinstance(s, list):
                 s = '<%s>' % ','.join(str(x) for x in s)
                 smi.insert(0, s)
                 pmi.insert(0, s)
-            elif s:
+            elif s != atom.common_isotope:
                 s = str(s)
                 smi.insert(0, s)
                 pmi.insert(0, s)

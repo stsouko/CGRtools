@@ -138,7 +138,7 @@ def arab2roman(number):
 
 
 def get_element(symbol, number):
-    common_isotope = common_isotopes[symbol]
+    _common_isotope = common_isotopes[symbol]
     electrons = valence_electrons[symbol]
     configuration = ' '.join('%d%s%d' % (n, orbitals_names[l], e) for (n, l), e in
                              electrons_configuration[symbol].items())
@@ -156,7 +156,7 @@ def get_element(symbol, number):
         __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope', 'mark',
                      'mapping', 'x', 'y', 'z', 'stereo', 'hybridization', 'neighbors')
 
-        def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=common_isotope,
+        def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=_common_isotope,
                      x: float=0, y: float=0, z: float=0, mark: str='0', mapping: int=None, stereo: int=None,
                      hybridization: int=None, neighbors: int=None):
             self.__charge = charge
@@ -202,6 +202,10 @@ def get_element(symbol, number):
         @property
         def electrons(self):
             return electrons
+
+        @property
+        def common_isotope(self):
+            return _common_isotope
 
         def check_atom(self):
             """
