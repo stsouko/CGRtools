@@ -217,7 +217,7 @@ def get_element(symbol, number):
             """
             check possibility of atom with current charge and radical state to have given bonded neighbors
 
-            :param neighbors: list of pairs of (bond, symbol or Element object)
+            :param neighbors: list of pairs of (bond order or Bond object, symbol or Element object)
             """
             return self.get_valence(neighbors) is not None
 
@@ -231,7 +231,7 @@ def get_element(symbol, number):
             """
             if not self.check_atom():
                 return
-            bonds = [x for x, _ in neighbors]
+            bonds = [x if isinstance(x, int) else x.order for x, _ in neighbors]
             res = atom_valences.get((symbol, self.__charge, self.radical, self.__bonds_sum(bonds)))
             if res is None:
                 key = atom_valences_exceptions.get((symbol, self.__charge, self.radical, len(bonds)))
@@ -350,7 +350,7 @@ def get_element(symbol, number):
                 r.append(str(self.__charge))
             if self.__multiplicity:
                 r.append(f'multiplicity={self.__multiplicity}')
-            if self.__isotope != common_isotope:
+            if self.__isotope != _common_isotope:
                 r.append(f'isotope={self.__isotope}')
             if self.mapping:
                 r.append(f'mapping={self.mapping}')

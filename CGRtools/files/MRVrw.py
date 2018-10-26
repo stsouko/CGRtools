@@ -22,7 +22,7 @@ from lxml.etree import iterparse, QName, tostring
 from traceback import format_exc
 from warnings import warn
 from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set
-from ..containers import MoleculeContainer
+from ..containers.common import BaseContainer
 
 
 def xml_dict(parent_element, stop_list=None):
@@ -245,7 +245,7 @@ class MRVwrite(CGRwrite, WithMixin):
     def __write(self, data):
         self._file.write('<MDocument><MChemicalStruct>')
 
-        if isinstance(data, MoleculeContainer):
+        if isinstance(data, BaseContainer):
             m = self.get_formatted_cgr(data)
             self._file.write('<molecule><propertyList>')
             for k, v in chain(m['colors'].items(), data.meta.items()):

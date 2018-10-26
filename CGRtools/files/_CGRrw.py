@@ -385,18 +385,18 @@ class CGRread:
                     else:
                         atom_dat.update(p_x=l['x'], p_y=l['y'], p_z=l['z'])
 
-                    g.add_node(atom_map, mark=l['mark'], s_x=l['x'], s_y=l['y'], s_z=l['z'], map=parsed_map, **atom_dat)
+                    g.add_node(atom_map, mark=l['mark'], x=l['x'], y=l['y'], z=l['z'], mapping=parsed_map, **atom_dat)
                 else:
                     lc = charge_dat.get(k, l['charge'])
-                    g.add_node(atom_map, mark=l['mark'], map=parsed_map, s_charge=lc, p_charge=lc, sp_charge=lc,
-                               s_x=l['x'], s_y=l['y'], s_z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'])
+                    g.add_node(atom_map, mark=l['mark'], mapping=parsed_map, charge=lc, p_charge=lc,
+                               x=l['x'], y=l['y'], z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'])
             else:
-                g.add_node(atom_map, mark=l['mark'], map=parsed_map,
-                           s_x=l['x'], s_y=l['y'], s_z=l['z'], s_charge=charge_dat.get(k, l['charge']))
+                g.add_node(atom_map, mark=l['mark'], mapping=parsed_map, charge=charge_dat.get(k, l['charge']),
+                           x=l['x'], y=l['y'], z=l['z'])
 
-            gna = g.nodes[atom_map]
+            gna = g._node[atom_map]
             element = l['element']
-            if 'element' not in gna and element not in ('A', '*'):
+            if not gna.number and element not in ('A', '*'):
                 if element == 'D':
                     gna.update(element='H', isotope=2)
                 elif element == 'T':

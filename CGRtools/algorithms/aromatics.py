@@ -19,6 +19,7 @@
 from collections import defaultdict
 from itertools import repeat
 from .sssr import find_sssr
+from ..periodictable import C
 
 
 def aromatize(g):
@@ -27,13 +28,13 @@ def aromatize(g):
         return 0
     total = 0
     while True:
-        c = _quinonize(g, rings, 's_bond')
+        c = _quinonize(g, rings, 'order')
         if c:
             total += c
         elif total:
             break
 
-        c = _aromatize(g, rings, 's_bond')
+        c = _aromatize(g, rings, 'order')
         if not c:
             break
         total += c
@@ -47,16 +48,16 @@ def aromatize_cgr(g):
         return 0, 0
     total_s = total_p = 0
     while True:
-        c_s = _quinonize(g, rings, 's_bond')
-        c_p = _quinonize(g, rings, 'p_bond')
+        c_s = _quinonize(g, rings, 'order')
+        c_p = _quinonize(g, rings, 'p_order')
         if c_s or c_p:
             total_s += c_s
             total_p += c_p
         elif total_s or total_p:
             break
 
-        c_s = _aromatize(g, rings, 's_bond')
-        c_p = _aromatize(g, rings, 'p_bond')
+        c_s = _aromatize(g, rings, 'order')
+        c_p = _aromatize(g, rings, 'p_order')
         if not (c_s or c_p):
             break
         total_s += c_s
@@ -75,30 +76,39 @@ def _quinonize(g, rings, bond):
         for n, r in enumerate(rings):
             if len(r) == 6:
                 r1, r2, r3, r4, r5, r6 = r
-                key = (g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond], g[r4][r5][bond],
-                       g[r5][r6][bond], g[r6][r1][bond])
+                key = (getattr(g._adj[r1][r2], bond), getattr(g._adj[r2][r3], bond), getattr(g._adj[r3][r4], bond),
+                       getattr(g._adj[r4][r5], bond), getattr(g._adj[r5][r6], bond), getattr(g._adj[r1][r6], bond))
                 if 4 not in key:
                     continue
 
                 doubles = tuple(y for y, x in enumerate(r)
-                                if len(g[x]) == 3 and next(attr[bond] for a, attr in g[x].items() if a not in r) == 2)
+                                if len(g._adj[x]) == 3 and
+                                next(getattr(attr, bond) for a, attr in g._adj[x].items() if a not in r) == 2)
                 if not doubles:
                     continue
 
                 if len(doubles) == 6:
-                    g[r1][r2][bond] = g[r2][r3][bond] = g[r3][r4][bond] = 1
-                    g[r4][r5][bond] = g[r5][r6][bond] = g[r6][r1][bond] = 1
+                    setattr(g._adj[r1][r2], bond, 1)
+                    setattr(g._adj[r2][r3], bond, 1)
+                    setattr(g._adj[r3][r4], bond, 1)
+                    setattr(g._adj[r4][r5], bond, 1)
+                    setattr(g._adj[r5][r6], bond, 1)
+                    setattr(g._adj[r1][r6], bond, 1)
                     found.append(n)
                 else:
                     if key in _quinone_pattern.get(doubles, {}):
-                        dear = _quinone_fix.get(doubles)
-                        g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond], g[r4][r5][bond], \
-                        g[r5][r6][bond], g[r6][r1][bond] = dear
+                        d1, d2, d3, d4, d5, d6 = _quinone_fix.get(doubles)
+                        setattr(g._adj[r1][r2], bond, d1)
+                        setattr(g._adj[r2][r3], bond, d2)
+                        setattr(g._adj[r3][r4], bond, d3)
+                        setattr(g._adj[r4][r5], bond, d4)
+                        setattr(g._adj[r5][r6], bond, d5)
+                        setattr(g._adj[r1][r6], bond, d6)
                         found.append(n)
             elif len(r) == 5:
                 r1, r2, r3, r4, r5 = r
-                key = (g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond], g[r4][r5][bond],
-                       g[r5][r1][bond])
+                key = (getattr(g._adj[r1][r2], bond), getattr(g._adj[r2][r3], bond), getattr(g._adj[r3][r4], bond),
+                       getattr(g._adj[r4][r5], bond), getattr(g._adj[r1][r5], bond))
                 if 4 not in key:
                     continue
 
@@ -107,10 +117,13 @@ def _quinonize(g, rings, bond):
                     continue
 
                 for m, pos in enumerate(positions):
-                    if g.nodes[r[pos]]['element'] in ('N', 'O', 'S', 'Se', 'P'):
-                        dear = _pyrole_fix[key][m]
-                        g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond], g[r4][r5][bond], \
-                        g[r5][r1][bond] = dear
+                    if g._node[r[pos]] in _pyrole_atoms:
+                        d1, d2, d3, d4, d5 = _pyrole_fix[key][m]
+                        setattr(g._adj[r1][r2], bond, d1)
+                        setattr(g._adj[r2][r3], bond, d2)
+                        setattr(g._adj[r3][r4], bond, d3)
+                        setattr(g._adj[r4][r5], bond, d4)
+                        setattr(g._adj[r5][r1], bond, d5)
                         found.append(n)
 
         for n in found[::-1]:
@@ -128,19 +141,29 @@ def _aromatize(g, rings, bond):
         for n, r in enumerate(rings):
             if len(r) == 6:
                 r1, r2, r3, r4, r5, r6 = r
-                if (g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond], g[r4][r5][bond],
-                    g[r5][r6][bond], g[r6][r1][bond]) in _benzene:
-                    g[r1][r2][bond] = g[r2][r3][bond] = g[r3][r4][bond] = 4
-                    g[r4][r5][bond] = g[r5][r6][bond] = g[r6][r1][bond] = 4
+                if (getattr(g._adj[r1][r2], bond), getattr(g._adj[r2][r3], bond),
+                        getattr(g._adj[r3][r4], bond), getattr(g._adj[r4][r5], bond),
+                        getattr(g._adj[r5][r6], bond), getattr(g._adj[r1][r6], bond)) in _benzene:
+
+                    setattr(g._adj[r1][r2], bond, 4)
+                    setattr(g._adj[r2][r3], bond, 4)
+                    setattr(g._adj[r3][r4], bond, 4)
+                    setattr(g._adj[r4][r5], bond, 4)
+                    setattr(g._adj[r5][r6], bond, 4)
+                    setattr(g._adj[r1][r6], bond, 4)
                     found.append(n)
             elif len(r) == 5:
                 r1, r2, r3, r4, r5 = r
-                position = _pyrole.get((g[r1][r2][bond], g[r2][r3][bond], g[r3][r4][bond],
-                                        g[r4][r5][bond], g[r5][r1][bond]))
+                position = _pyrole.get((getattr(g._adj[r1][r2], bond), getattr(g._adj[r2][r3], bond),
+                                        getattr(g._adj[r3][r4], bond), getattr(g._adj[r4][r5], bond),
+                                        getattr(g._adj[r1][r5], bond)))
 
-                if position is not None and g.nodes[r[position]]['element'] in ('N', 'O', 'S', 'Se', 'P'):
-                    g[r1][r2][bond] = g[r2][r3][bond] = g[r3][r4][bond] = 4
-                    g[r4][r5][bond] = g[r5][r1][bond] = 4
+                if position is not None and g._node[r[position]] in _pyrole_atoms:
+                    setattr(g._adj[r1][r2], bond, 4)
+                    setattr(g._adj[r2][r3], bond, 4)
+                    setattr(g._adj[r3][r4], bond, 4)
+                    setattr(g._adj[r4][r5], bond, 4)
+                    setattr(g._adj[r5][r1], bond, 4)
                     found.append(n)
 
         for n in found[::-1]:
@@ -264,5 +287,7 @@ for i, *p in zip(_ind,
 
 _pyrole_pattern = dict(_pyrole_pattern)
 _pyrole_fix = dict(_pyrole_fix)
+
+_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
 
 del x, y, i, p, _ind

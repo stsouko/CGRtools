@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .SMILESrw import SMILESread
 from .SDFrw import SDFwrite, SDFread
+from .SMILESrw import SMILESread
 from .RDFrw import RDFwrite, RDFread
 from .MRVrw import MRVwrite, MRVread

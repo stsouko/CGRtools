@@ -22,7 +22,7 @@ from traceback import format_exc
 from warnings import warn
 from ._CGRrw import WithMixin, CGRread, CGRwrite
 from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread
-from ..containers import MoleculeContainer
+from ..containers.common import BaseContainer
 from ..exceptions import EmptyMolecule
 
 
@@ -144,7 +144,7 @@ class RDFwrite(MOLwrite, WithMixin):
         self.write = self.__write
 
     def __write(self, data):
-        if isinstance(data, MoleculeContainer):
+        if isinstance(data, BaseContainer):
             m = self.get_formatted_cgr(data)
             self._file.write('$MFMT\n')
             self._file.write(m['CGR'])

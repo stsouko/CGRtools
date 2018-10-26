@@ -28,6 +28,10 @@ DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class QueryContainer(BaseContainer):
+    @property
+    def _morgan_init(self):
+        return
+
     def pickle(self):
         """return json serializable CGR"""
         data = super().pickle()

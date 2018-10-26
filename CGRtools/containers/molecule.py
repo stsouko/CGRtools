@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict, MutableMapping
-from itertools import chain
 from wrapt import ObjectProxy
 from .common import BaseContainer
 from ..algorithms import CGRstring, pyramid_volume, aromatize

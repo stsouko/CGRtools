@@ -16,14 +16,14 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections.abc import MutableSequence
 from warnings import warn
-from .cgr import CGRContainer
+from .common import BaseContainer
 from .query import QueryContainer
-from .molecule import MoleculeContainer
 from ..algorithms import hash_cgr_string
 
 
-class MindfulList:
+class MindfulList(MutableSequence):
     """list with self-checks of modification. need for control of ReactionContainer caches actuality"""
     def __init__(self, data=None):
         self.__data = [] if data is None else list(data)
@@ -35,43 +35,19 @@ class MindfulList:
         self.__check = False
         return tmp
 
-    def append(self, obj):
-        self.__check = True
-        self.__data.append(obj)
-
-    def clear(self):
-        self.__check = True
-        self.__data.clear()
-
-    def extend(self, iterable):
-        self.__check = True
-        self.__data.extend(iterable)
-
     def insert(self, index, obj):
         self.__check = True
         self.__data.insert(index, obj)
 
-    def pop(self, index=None):
-        self.__check = True
-        return self.__data.pop(index)
-
     def __delitem__(self, index):
         self.__check = True
         del self.__data[index]
-
-    def __iadd__(self, obj):
-        self.__check = True
-        self.__data.append(obj)
-        return self
 
     def __add__(self, other):
         return self.__class__(self.__data + list(other))
 
     def __getitem__(self, index):
         return self.__data[index]
-
-    def __iter__(self):
-        return iter(self.__data)
 
     def __len__(self):
         return len(self.__data)
@@ -95,7 +71,7 @@ class ReactionContainer:
         """
         new empty or filled reaction object creation
 
-        :param reagents: list of MoleculeContainers [or CGRContainers] in left side of reaction
+        :param reagents: list of MoleculeContainers [or CGRContainers or QueryContainers] in left side of reaction
         :param products: right side of reaction. see reagents
         :param reactants: middle side of reaction: solvents, catalysts, etc. see reagents
         :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
@@ -112,10 +88,7 @@ class ReactionContainer:
         self.__pickle = None
 
     def __getitem__(self, item):
-        if item == 'substrats':
-            warn('deprecated key. use reagents instead', DeprecationWarning)
-            return self.__reagents
-        elif item == 'reagents':
+        if item == 'reagents':
             return self.__reagents
         elif item == 'products':
             return self.__products
@@ -138,18 +111,13 @@ class ReactionContainer:
         return dict(reagents=[x.pickle() for x in self.__reagents], meta=self.meta,
                     products=[x.pickle() for x in self.__products], reactants=[x.pickle() for x in self.__reactants])
 
-    @staticmethod
-    def unpickle(data):
+    @classmethod
+    def unpickle(cls, data):
         """convert json serializable reaction into ReactionContainer object instance"""
-        return ReactionContainer(reagents=[CGRContainer.unpickle(x) for x in
-                                           (data['reagents'] if 'reagents' in data else data['substrats'])],
-                                 products=[CGRContainer.unpickle(x) for x in data['products']], meta=data['meta'],
-                                 reactants=[CGRContainer.unpickle(x) for x in data.get('reactants', [])])
-
-    @property
-    def substrats(self):  # reverse compatibility
-        warn('deprecated key. use reagents instead', DeprecationWarning)
-        return self.__reagents
+        return cls(reagents=[BaseContainer.unpickle(x) for x in
+                             (data['reagents'] if 'reagents' in data else data['substrats'])],
+                   products=[BaseContainer.unpickle(x) for x in data['products']], meta=data['meta'],
+                   reactants=[BaseContainer.unpickle(x) for x in data.get('reactants', [])])
 
     @property
     def reagents(self):
@@ -190,7 +158,7 @@ class ReactionContainer:
         return hash_cgr_string(self.get_signature(*args, **kwargs))
 
     def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
-                      flush_cache=False, hyb=False):
+                      flush_cache=False):
         """
         return string representation of reaction with molecules
         in order same as in lists of reagents, reactants, products.
@@ -202,12 +170,7 @@ class ReactionContainer:
         :param neighbors: set neighbors count mark of atom
         :param element: set elements marks and charges of atoms
         :param flush_cache: recalculate signature if True
-        :param hyb: deprecated. see hybridization arg
         """
-        if hyb:
-            warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
-            hybridization = hyb
-
         if flush_cache or self.__signatures is None or any(x.get_state() for x in
                                                            (self.__reagents, self.__reactants, self.__products)):
             self.__signatures = {}
@@ -235,7 +198,7 @@ class ReactionContainer:
         total = 0
         for ml in (self.__reagents, self.__reactants, self.__products):
             for m in ml:
-                if isinstance(m, MoleculeContainer):
+                if hasattr(m, 'implicify_hydrogens'):
                     total += m.implicify_hydrogens()
         if total:
             self.flush_cache()
@@ -250,7 +213,7 @@ class ReactionContainer:
         total = 0
         for ml in (self.__reagents, self.__reactants, self.__products):
             for m in ml:
-                if isinstance(m, MoleculeContainer):
+                if hasattr(m, 'explicify_hydrogens'):
                     total += m.explicify_hydrogens()
         if total:
             self.flush_cache()
@@ -265,9 +228,9 @@ class ReactionContainer:
         total = 0
         for ml in (self.__reagents, self.__reactants, self.__products):
             for m in ml:
-                if isinstance(m, MoleculeContainer):
+                if hasattr(m, 'aromatize'):
                     res = m.aromatize()
-                    if isinstance(m, CGRContainer):
+                    if isinstance(res, tuple):
                         if res[0] or res[1]:
                             total += 1
                     elif res:
@@ -285,7 +248,7 @@ class ReactionContainer:
 
     def __repr__(self):
         if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
-            self.__pickle = '%s.unpickle(%s)' % (self.__class__.__name__, self.pickle())
+            self.__pickle = '%s.unpickle(%s)' % (type(self).__name__, self.pickle())
         return self.__pickle
 
 
@@ -327,7 +290,7 @@ class MergedReaction:
 
         :return: MergedReaction
         """
-        return self.__class__(self.reagents.copy(), self.products.copy(), self.meta.copy())
+        return type(self)(self.reagents.copy(), self.products.copy(), self.meta.copy())
 
     def get_signature_hash(self, *args, **kwargs):
         """
@@ -338,7 +301,7 @@ class MergedReaction:
         return hash_cgr_string(self.get_signature(*args, **kwargs))
 
     def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
-                      flush_cache=False, hyb=False):
+                      flush_cache=False):
         """
         return string representation of reaction with unique atoms and molecules order
         CAUTION: if reaction contains CGRs. signature will be unobvious
@@ -349,12 +312,7 @@ class MergedReaction:
         :param neighbors: set neighbors count mark of atom
         :param element: set elements marks and charges of atoms
         :param flush_cache: recalculate signature if True
-        :param hyb: deprecated. see hybridization arg
         """
-        if hyb:
-            warn('attr hyb is deprecated, use hybridization instead', DeprecationWarning)
-            hybridization = hyb
-
         if flush_cache or self.__signatures is None:
             self.__signatures = {}
 
@@ -378,7 +336,7 @@ class MergedReaction:
 
     def __repr__(self):
         if self.__pickle is None:
-            self.__pickle = '%s(%s, %s)' % (self.__class__.__name__, repr(self.reagents), repr(self.products))
+            self.__pickle = '%s(%s, %s)' % (type(self).__name__, repr(self.reagents), repr(self.products))
         return self.__pickle
 
 
