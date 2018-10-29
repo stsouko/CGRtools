@@ -32,7 +32,7 @@ setup(
     author_email='stsouko@live.ru',
     description='CGR tools',
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
-    install_requires=['networkx>=2.2,<2.3', 'lxml>=4.1.1,<4.3', 'coho>=0.3,<0.4', 'wrapt>=1.10.11,<1.11'],
+    install_requires=['networkx>=2.2,<2.3', 'lxml>=4.1.1,<4.3', 'coho>=0.3,<0.4'],
     extras_require={'autocomplete': ['argcomplete'], 'sphinx': ['sphinx>=1.6']},
     zip_safe=True,
     long_description=(Path(__file__).parent / 'README.md').open().read(),
