@@ -19,27 +19,10 @@
 """
 contains periodic table of elements classes
 """
-from collections.abc import ItemsView, KeysView, ValuesView
-from itertools import chain
 from operator import ge, le, gt, lt
 from .data import *
 from .shells import *
 from .tables import *
-
-
-class ElementItemsView(ItemsView):
-    def __init__(self, mapping):
-        self._mapping = mapping
-
-
-class ElementKeysView(KeysView):
-    def __init__(self, mapping):
-        self._mapping = mapping
-
-
-class ElementValuesView(ValuesView):
-    def __init__(self, mapping):
-        self._mapping = mapping
 
 
 class PeriodicMeta(type):
@@ -256,54 +239,6 @@ def get_element(symbol, number):
         def __bonds_sum(bonds):
             return int(sum(bonds_map[x] for x in bonds))
 
-        def __getitem__(self, item):
-            """
-            dict like access to atom's attrs
-            """
-            if item == 'element':
-                item = 'symbol'
-            elif item not in self.__subscribe:
-                raise KeyError(f"attribute '{item}' not found")
-            return getattr(self, item)
-
-        def __iter__(self):
-            """
-            iterate other non-default atom's init attrs
-            """
-            def g():
-                for k, d in self.__to_dict.items():
-                    if d != getattr(self, k):
-                        yield k
-            return chain(g(), ('element',))
-
-        def keys(self):
-            """
-            iterate other non-default atom's attrs keys
-
-            need for update dicts with atom's init attrs
-            d = {}
-            d.update(Element())
-            need for nx.Graph.add_nodes_from()
-            """
-            return ElementKeysView(self)
-
-        def values(self):
-            """
-            iterate other non-default atom's attrs values
-            """
-            return ElementValuesView(self)
-
-        def items(self):
-            """
-            iterate other non-default elements attrs-values pairs
-
-            need for nx.readwrite.json_graph.node_link_data
-            """
-            return ElementItemsView(self)
-
-        def __contains__(self, item):
-            return item == 'element' or item in self.__subscribe
-
         def __eq__(self, other):
             if isinstance(other, str):
                 return symbol == other
@@ -364,11 +299,6 @@ def get_element(symbol, number):
 
         def __hash__(self):
             return hash((number, self.__charge, self.__isotope, self.__multiplicity))
-
-        __subscribe = {'charge', 'isotope', 'multiplicity', 'radical', 'number', 'symbol', 'electron_configuration',
-                       'electrons', 'mapping', 'mark', 'x', 'y', 'z', 'stereo', 'hybridization', 'neighbors'}
-        __to_dict = {'charge': 0, 'isotope': common_isotope, 'multiplicity': None, 'mapping': None, 'mark': '0',
-                     'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'hybridization': None, 'neighbors': None}
 
     return ElementClass
 
