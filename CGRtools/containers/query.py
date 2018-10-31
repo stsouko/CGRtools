@@ -21,7 +21,7 @@ from itertools import product
 from .common import BaseContainer
 from ..algorithms import CGRstring
 from ..exceptions import InvalidData
-from ..periodictable import elements
+from ..periodictable import elements_list
 
 
 DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])

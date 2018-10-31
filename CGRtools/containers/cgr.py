@@ -17,92 +17,204 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import repeat, zip_longest
+from collections.abc import MutableMapping
+from itertools import repeat, zip_longest, chain
 from typing import Tuple
 from .query import DynamicContainer
-from .molecule import MoleculeContainer, Bond
+from .molecule import MoleculeContainer, Bond, Atom
 from ..algorithms import aromatize_cgr
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
-from ..periodictable import elements, H, Element
+from ..periodictable import H
 
 
-class DynBond:
+class DynAtom(MutableMapping):
     __slots__ = ('reagent', 'product')
 
-    def __init__(self, order=1, stereo=None, p_order=1, p_stereo=None):
-        self.reagent = Bond(order, stereo)
-        self.product = Bond(p_order, p_stereo)
-
-    def __setattr__(self, key, value):
-        if key not in self.__possible:
-            raise AttributeError('unknown bond attribute')
-        setattr(getattr(self, self.__possible[key]), key, value)
-
-    def __getattr__(self, key):
-        if key not in self.__possible:
-            raise AttributeError('unknown bond attribute')
-        return getattr(getattr(self, self.__possible[key]), key)
-
-    def __setitem__(self, key, value):
-        setattr(self, key, value)
+    def __init__(self, atom=None, p_atom=None):
+        self.reagent = Atom() if atom is None else atom
+        self.product = Atom() if p_atom is None else p_atom
 
     def __getitem__(self, key):
-        return getattr(self, key)
+        if key.startswith('p_'):
+            return self.product[key[2:]]
+        return self.reagent[key]
+
+    def __setitem__(self, key, value):
+        return setattr(self, key, value)
+
+    def __getattr__(self, key):
+        if key.startswith('p_'):
+            return getattr(self.product, key[2:])
+        return getattr(self.reagent, key)
+
+    def __setattr__(self, key, value):
+        if key.startswith('p_'):
+            return setattr(self.product, key[2:], value)
+        return setattr(self.reagent, key, value)
 
     def __len__(self):
-        return 4
+        return len(self.reagent) + len(self.product)
 
     def __iter__(self):
-        return iter(self.__possible)
+        return chain(self.reagent, (f'p_{x}' for x in self.product))
+
+    def __contains__(self, key):
+        if key.startswith('p_'):
+            return key[2:] in self.product
+        return key in self.reagent
+
+    def __delitem__(self, key):
+        raise NotImplemented('attribute deletion impossible')
+
+    def __eq__(self, other):
+        if isinstance(other, DynAtom):
+            return self.reagent == other.reagent and self.product == other.product
+        return False
+
+    def __gt__(self, other):
+        return self.__atom > other
+
+    def __ge__(self, other):
+        return self.__atom >= other
+
+    def __lt__(self, other):
+        return self.__atom < other
+
+    def __le__(self, other):
+        return self.__atom <= other
 
     def __repr__(self):
         return f'{self.reagent}>>{self.product}'
 
-    def update(self, value):
-        if isinstance(value, dict):
-            if not value:
-                return  # ad-hoc for add_edges_from method
-            if 'bond' not in value:
-                if set(value) > set(self.__possible):
-                    raise ValueError('unknown bond attributes not allowed')
-                for k, v in self.__acceptable.items():
-                    if k in value and value[k] not in v:
-                        raise ValueError(f'attribute {k} should be from acceptable list: {v}')
-                for k, v in value.items():
-                    super().__setattr__(k, v)
-                return
-            value = value['bond']
-        if isinstance(value, DynBond):
-            self.order = value.order
-            self.stereo = value.stereo
-            self.p_order = value.p_order
-            self.p_stereo = value.p_stereo
-        if isinstance(value, Bond):
-            self.order = self.p_order = value.order
-            self.stereo = self.p_stereo = value.stereo
-        else:
-            raise TypeError('only DynBond, Bond object or dict of bond attributes allowed')
+    def __hash__(self):
+        return hash((self.reagent, self.product))
 
     def copy(self):
-        return type(self)(self.order, self.stereo, self.p_order, self.p_stereo)
+        return type(self)(self.reagent.copy(), self.product.copy())
 
-    def items(self):
+    def update(self, *args, **kwargs):
         """
-        iterate other non-default bonds attrs-values pairs
+        update atom
 
-        need for nx.readwrite.json_graph.node_link_data
+        :param args: tuple with 1 or 0 elements. element can be dict of atom attrs or atom object or atom class
+        or DynAtom object or dict with 'atom' key with value equal to dict of atom attrs or atom object or atom class or
+        DynAtom object.
+        'atom' keyed dict also may contain atom attrs. this attrs has precedence other 'atom' key value attrs.
+        :param kwargs: atom attrs. has precedence other args[0]
         """
-        def g():
-            for k, d in self.__default.items():
-                v = getattr(self, k)
-                if v != d:
-                    yield (k, v)
-        return g()
+        if args:
+            if len(args) > 1:
+                raise TypeError('update expected at most 1 arguments')
 
-    __possible = {'order': 'reagent', 'stereo': 'reagent', 'p_order': 'product', 'p_stereo': 'product'}
-    __acceptable = {'order': {1, 2, 3, 4, 9}, 'stereo': {None, -1, 1, 0},
-                    'p_order': {1, 2, 3, 4, 9}, 'p_stereo': {None, -1, 1, 0}}
-    __default = {'order': 1, 'stereo': None, 'p_order': 1, 'p_stereo': None}
+            value = args[0]
+            if isinstance(value, dict) and 'atom' in value:
+                value.update(kwargs)
+                kwargs = value
+                value = value.pop('atom')
+        elif 'atom' in kwargs:
+            value = kwargs.pop('atom')
+        else:
+            value = kwargs
+            kwargs = ()
+
+        if isinstance(value, DynAtom):
+            p_value = value.product
+            value = value.reagent
+        else:
+            p_value = value
+
+        if kwargs:
+            self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
+            self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')},
+                                **{k: v for k, v in kwargs.items() if k in ('mark', 'mapping')})
+        else:
+            self.reagent.update(value)
+            self.product.update(p_value)
+
+
+class DynBond(MutableMapping):
+    __slots__ = ('reagent', 'product')
+
+    def __init__(self, bond=None, p_bond=None):
+        self.reagent = Bond() if bond is None else bond
+        self.product = Bond() if p_bond is None else p_bond
+
+    def __getitem__(self, key):
+        if key.startswith('p_'):
+            return self.product[key[2:]]
+        return self.reagent[key]
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getattr__(self, key):
+        if key.startswith('p_'):
+            return getattr(self.product, key[2:])
+        return getattr(self.reagent, key)
+
+    def __setattr__(self, key, value):
+        if key.startswith('p_'):
+            return setattr(self.product, key[2:], value)
+        return setattr(self.reagent, key, value)
+
+    def __len__(self):
+        return len(self.reagent) + len(self.product)
+
+    def __iter__(self):
+        return chain(self.reagent, (f'p_{x}' for x in self.product))
+
+    def __contains__(self, key):
+        if key.startswith('p_'):
+            return key[2:] in self.product
+        return key in self.reagent
+
+    def __delitem__(self, key):
+        raise NotImplemented('attribute deletion impossible')
+
+    def __repr__(self):
+        return f'{self.reagent}>>{self.product}'
+
+    def __hash__(self):
+        return hash((self.reagent, self.product))
+
+    def update(self, *args, **kwargs):
+        """
+        update bond
+        :param args: tuple with 1 or 0 elements. element can be Bond|DynBond object or dict of bond attrs or
+        dict with 'bond' key with value equal to Bond|DynBond object or dict of bond attrs.
+        bond keyed dict also may contain bond attrs. this attrs has precedence other 'bond' key value attrs.
+        :param kwargs: bond attrs. has precedence other args[0]
+        """
+        if args:
+            if len(args) > 1:
+                raise TypeError('update expected at most 1 arguments')
+
+            value = args[0]
+            if isinstance(value, dict) and 'bond' in value:
+                value.update(kwargs)
+                kwargs = value
+                value = value.pop('bond')
+        elif 'bond' in kwargs:
+            value = kwargs.pop('bond')
+        else:
+            value = kwargs
+            kwargs = ()
+
+        if isinstance(value, DynBond):
+            p_value = value.product
+            value = value.reagent
+        else:
+            p_value = value
+
+        if kwargs:
+            self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
+            self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')})
+        else:
+            self.reagent.update(value)
+            self.product.update(p_value)
+
+    def copy(self):
+        return type(self)(self.reagent.copy(), self.product.copy())
 
 
 class CGRContainer(MoleculeContainer):
@@ -110,7 +222,7 @@ class CGRContainer(MoleculeContainer):
     storage for CGRs. has similar to molecules behavior
     """
 
-    node_dict_factory = DynAtoms
+    node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
 
     def __dir__(self):

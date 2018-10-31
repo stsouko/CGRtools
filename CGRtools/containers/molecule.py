@@ -37,6 +37,9 @@ class Atom(MutableMapping):
         """
         if key == 'element':
             key = 'symbol'
+        elif key not in self.__acceptable:
+            raise KeyError('unknown atom attribute')
+
         return getattr(self.__atom, key)
 
     def __setitem__(self, key, value):
@@ -46,23 +49,29 @@ class Atom(MutableMapping):
         return getattr(self.__atom, key)
 
     def __setattr__(self, key, value):
-        if key in self.__mutable:
-            setattr(self.__atom, key, value)
-        else:
-            if key not in self.__possible:
-                raise ValueError('unknown atom attributes not allowed')
-            attrs = {k: getattr(self.__atom, k) for k in self.__acceptable}
-            if key == 'element':
-                if value == self.__atom.symbol:
-                    return
-                if value not in elements_classes or value == 'A':
-                    raise ValueError('invalid atom symbol')
-
+        if key == 'element':
+            if value not in elements_classes or value == 'A':
+                raise ValueError('invalid atom symbol')
+            if self.__atom is None:
+                super().__setattr__('_Atom__atom', elements_classes[value]())
+            elif value != self.__atom.symbol:
+                attrs = {k: getattr(self.__atom, k) for k in self.__acceptable}
                 del attrs['isotope']
                 super().__setattr__('_Atom__atom', elements_classes[value](**attrs))
-            else:
-                attrs[key] = value
-                super().__setattr__('_Atom__atom', elements_classes[self.__atom.symbol](**attrs))
+        elif self.__atom is None:
+            raise TypeError('any atom not allowed')
+        elif key in self.__unmutable:
+            if not self.__unmutable[key](value):
+                raise ValueError('invalid value of unmutable attribute')
+            attrs = {k: getattr(self.__atom, k) for k in self.__acceptable}
+            attrs[key] = value
+            super().__setattr__('_Atom__atom', elements_classes[self.__atom.symbol](**attrs))
+        elif key in self.__mutable:
+            if not self.__mutable[key](value):
+                raise ValueError('invalid value of mutable attribute')
+            setattr(self.__atom, key, value)
+        else:
+            raise KeyError('unknown atom attributes not allowed')
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -118,7 +127,7 @@ class Atom(MutableMapping):
 
         :param args: tuple with 1 or 0 elements. element can be dict of atom attrs or atom object or atom class or
         dict with 'atom' key with value equal to dict of atom attrs or atom object or atom class.
-        atom keyed dict also may contain atom attrs. this attrs has precedence other 'atom' key value attrs.
+        'atom' keyed dict also may contain atom attrs. this attrs has precedence other 'atom' key value attrs.
         :param kwargs: atom attrs. has precedence other args[0]
         """
         if args:
@@ -139,7 +148,7 @@ class Atom(MutableMapping):
         if isinstance(value, type):
             if not issubclass(value, Element):
                 ValueError('only CGRtools.periodictable.Element subclasses allowed')
-            if kwargs.keys() - self.__mutable.keys():
+            if kwargs.keys() - self.__mutable.keys():  # not need to check values
                 raise KeyError('unmutable atom attributes not allowed')
 
             if self.__atom is None:
@@ -150,10 +159,7 @@ class Atom(MutableMapping):
                 super().__setattr__('_Atom__atom', value(**attrs))
 
         elif isinstance(value, Element):
-            try:
-                if not all(self.__mutable[k](v) for k, v in kwargs.items()):
-                    raise ValueError('invalid value of mutable attribute')
-            except KeyError:
+            if kwargs.keys() - self.__mutable.keys():
                 raise KeyError('unmutable atom attributes not allowed')
 
             attrs = {k: getattr(value, k) for k in self.__mutable}
@@ -162,6 +168,8 @@ class Atom(MutableMapping):
                 super().__setattr__('_Atom__atom', type(value)(charge=value.charge, isotope=value.isotope,
                                                                multiplicity=value.multiplicity, **attrs))
             else:
+                if not all(self.__mutable[k](v) for k, v in kwargs.items()):
+                    raise ValueError('invalid value of mutable attribute')
                 for k, v in attrs.items():
                     setattr(self.__atom, k, v)
         else:
@@ -203,15 +211,14 @@ class Atom(MutableMapping):
                 for k, v in value.items():
                     setattr(self.__atom, k, v)
 
-    @staticmethod
-    def __int_float(x):
-        return isinstance(x, (float, int))
-
     __defaults = {'mapping': None, 'mark': '0', 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'charge': 0,
                   'multiplicity': None}
     __mutable = {'mapping': lambda x: x is None or isinstance(x, int), 'mark': lambda x: isinstance(x, str),
-                 'x': __int_float, 'y': __int_float, 'z': __int_float, 'stereo': lambda x: x in {None, -1, 1, 0}}
-    __acceptable = {'isotope', *__mutable}
+                 'x': lambda x: isinstance(x, (float, int)), 'y': lambda x: isinstance(x, (float, int)),
+                 'z': lambda x: isinstance(x, (float, int)), 'stereo': lambda x: x in {None, -1, 1, 0}}
+    __unmutable = {'isotope': lambda x: isinstance(x, int), 'charge': lambda x: isinstance(x, int),
+                   'multiplicity': lambda x: x is None or isinstance(x, int)}
+    __acceptable = {*__mutable, *__unmutable}
     __possible = {'element', *__acceptable}
 
 
@@ -223,6 +230,8 @@ class Bond(MutableMapping):
         self.stereo = stereo
 
     def __getitem__(self, key):
+        if key not in self.__acceptable:
+            raise KeyError('unknown bond attribute')
         return getattr(self, key)
 
     def __setitem__(self, key, value):
@@ -258,6 +267,9 @@ class Bond(MutableMapping):
     def __repr__(self):
         s = '' if self.stereo is None else f', stereo={self.stereo}'
         return f'{type(self).__name__}({self.order}{s})'
+
+    def __hash__(self):
+        return hash((self.order, self.stereo))
 
     def update(self, *args, **kwargs):
         """
@@ -306,7 +318,7 @@ class Bond(MutableMapping):
                 return  # ad-hoc for add_edges_from method
 
             try:
-                if not all(v in self.__acceptable[k] for k, v in kwargs.items()):
+                if not all(v in self.__acceptable[k] for k, v in value.items()):
                     raise ValueError('invalid attribute value')
             except KeyError:
                 raise KeyError('unknown bond attributes not allowed')
