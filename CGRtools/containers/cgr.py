@@ -72,16 +72,24 @@ class DynAtom(MutableMapping):
         return False
 
     def __gt__(self, other):
-        return self.__atom > other
+        if isinstance(other, DynAtom):
+            return (self.reagent, self.product) > (other.reagent, other.product)
+        raise TypeError('unorderable type')
 
     def __ge__(self, other):
-        return self.__atom >= other
+        if isinstance(other, DynAtom):
+            return (self.reagent, self.product) >= (other.reagent, other.product)
+        raise TypeError('unorderable type')
 
     def __lt__(self, other):
-        return self.__atom < other
+        if isinstance(other, DynAtom):
+            return (self.reagent, self.product) < (other.reagent, other.product)
+        raise TypeError('unorderable type')
 
     def __le__(self, other):
-        return self.__atom <= other
+        if isinstance(other, DynAtom):
+            return (self.reagent, self.product) <= (other.reagent, other.product)
+        raise TypeError('unorderable type')
 
     def __repr__(self):
         return f'{self.reagent}>>{self.product}'
