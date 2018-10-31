@@ -21,6 +21,7 @@ from networkx import Graph, relabel_nodes
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from typing import Callable
 from ..algorithms import hash_cgr_string, get_morgan
+from ..periodictable import elements_list
 
 
 class BaseContainer(Graph, ABC):
@@ -71,10 +72,18 @@ class BaseContainer(Graph, ABC):
             _map = max(self, default=0) + 1
         elif _map in self._node:
             raise KeyError('atom with same number exists')
-        if isinstance(atom, dict):
-            self.add_node(_map, **atom)
-        else:
-            self.add_node(_map, atom=atom)
+        try:
+            if isinstance(atom, dict):
+                self.add_node(_map, **atom)
+            elif isinstance(atom, str):
+                self.add_node(_map, atom={'element': atom})
+            elif isinstance(atom, int):
+                self.add_node(_map, atom=elements_list[atom - 1])
+            else:
+                self.add_node(_map, atom=atom)
+        except (KeyError, ValueError, TypeError):
+            del self._node[_map]
+            raise
         self.flush_cache()
         return _map
 
@@ -87,10 +96,18 @@ class BaseContainer(Graph, ABC):
             raise KeyError('atoms not found')
         if self.has_edge(atom1, atom2):
             raise KeyError('atoms already bonded')
-        if isinstance(bond, dict):
-            self.add_edge(atom1, atom2, **bond)
-        else:
-            self.add_edge(atom1, atom2, bond=bond)
+        try:
+            if isinstance(bond, dict):
+                self.add_edge(atom1, atom2, **bond)
+            elif isinstance(bond, int):
+                self.add_edge(atom1, atom2, bond={'order': bond})
+            else:
+                self.add_edge(atom1, atom2, bond=bond)
+        except (KeyError, ValueError, TypeError):
+            if atom2 in self._adj[atom1]:
+                del self._adj[atom1][atom2]
+                del self._adj[atom2][atom1]
+            raise
         self.flush_cache()
 
     def delete_atom(self, n):
