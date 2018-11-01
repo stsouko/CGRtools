@@ -29,12 +29,14 @@ class PeriodicMeta(type):
     """
     metaclass for creation of all classes of periodic table
     """
+    def __init__(cls, defined_name, bases, attrs, **extra):
+        name = extra.get('name', defined_name)
+        super().__init__(name, bases, attrs)
+
     def __new__(mcs, defined_name, bases, attrs, **extra):
         name = extra.get('name', defined_name)
+        attrs['__qualname__'] = name
         return mcs.classes.get(name) or mcs.classes.setdefault(name, super().__new__(mcs, name, bases, attrs))
-
-    def __repr__(cls):
-        return f"<class '{__package__}.{cls.__name__}'>"
 
     classes = {}
 
@@ -43,7 +45,7 @@ class ElementMeta(PeriodicMeta):
     def __init__(cls, defined_name, bases, attrs, **extra):
         cls.__number = extra.get('number', 0)
         cls.__symbol = extra.get('name', defined_name)
-        super().__init__(defined_name, bases, attrs)
+        super().__init__(defined_name, bases, attrs, **extra)
 
     @property
     def number(cls):
@@ -136,21 +138,32 @@ def get_element(symbol, number):
         pass
 
     class ElementClass(Element, Period, Group, Type, name=symbol, number=number):
-        __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope', 'mark',
-                     'mapping', 'x', 'y', 'z', 'stereo', 'hybridization', 'neighbors')
+        __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope',
+                     '_ElementClass__mark', '_ElementClass__mapping', '_ElementClass__x', '_ElementClass__y',
+                     '_ElementClass__z', '_ElementClass__stereo', 'hybridization', 'neighbors')
 
         def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=_common_isotope,
                      x: float=0, y: float=0, z: float=0, mark: str='0', mapping: int=None, stereo: int=None,
                      hybridization: int=None, neighbors: int=None):
+            if not (isinstance(charge, int) and isinstance(isotope, int)):
+                raise TypeError('charge, isotope can be int')
+            if not all(isinstance(x, (float, int)) for x in (x, y, z)):
+                raise TypeError('coordinates can be float')
+            if not all(x is None or isinstance(x, int)
+                       for x in (mapping, hybridization, neighbors, stereo, multiplicity)):
+                raise TypeError('mapping, hybridization, neighbors, stereo, multiplicity can be None or int')
+            if not isinstance(mark, str):
+                raise TypeError('mark can be str')
+
             self.__charge = charge
             self.__isotope = isotope
             self.__multiplicity = multiplicity
-            self.mark = mark
-            self.x = x
-            self.y = y
-            self.z = z
-            self.stereo = stereo
-            self.mapping = mapping
+            self.__mark = mark
+            self.__x = x
+            self.__y = y
+            self.__z = z
+            self.__stereo = stereo
+            self.__mapping = mapping
             self.neighbors = neighbors
             self.hybridization = hybridization
 
@@ -177,6 +190,75 @@ def get_element(symbol, number):
         @property
         def symbol(self):
             return symbol
+
+        @property
+        def x(self):
+            return self.__x
+
+        @x.setter
+        def x(self, value):
+            if not isinstance(value, (float, int)):
+                raise TypeError('coordinates can be float')
+            self.__x = value
+
+        @property
+        def y(self):
+            return self.__y
+
+        @y.setter
+        def y(self, value):
+            if not isinstance(value, (float, int)):
+                raise TypeError('coordinates can be float')
+            self.__y = value
+
+        @property
+        def z(self):
+            return self.__z
+
+        @z.setter
+        def z(self, value):
+            if not isinstance(value, (float, int)):
+                raise TypeError('coordinates can be float')
+            self.__z = value
+
+        @property
+        def mapping(self):
+            return self.__mapping
+
+        @mapping.setter
+        def mapping(self, value):
+            if value is None:
+                self.__mapping = value
+            elif not isinstance(value, int):
+                raise TypeError('mapping can be int')
+            elif value >= 1000 or value < 0:
+                raise ValueError('mapping can be in range 0-999')
+            self.__mapping = value
+
+        @property
+        def stereo(self):
+            return self.__stereo
+
+        @stereo.setter
+        def stereo(self, value):
+            if value is None:
+                self.__stereo = value
+            elif not isinstance(value, int):
+                raise TypeError('stereo can be int')
+            elif value not in (-1, 0, 1):
+                raise ValueError('stereo can be: None 1, 0, -1')
+            else:
+                self.__stereo = value
+
+        @property
+        def mark(self):
+            return self.__mark
+
+        @mark.setter
+        def mark(self, value):
+            if not isinstance(value, str):
+                raise TypeError('mark can be str')
+            self.__mark = value
 
         @property
         def electron_configuration(self):
@@ -292,7 +374,7 @@ def get_element(symbol, number):
             if self.mark != '0':
                 r.append(f'mark={self.mark}')
             if self.x or self.y or self.z:
-                r.append(f'x={self.x}, y={self.y}, x={self.x}')
+                r.append(f'x={self.x}, y={self.y}, z={self.z}')
 
             r = ', '.join(r)
             return f'{type(self).__name__}({r})'
