@@ -21,7 +21,7 @@ from collections.abc import MutableMapping
 from .common import BaseContainer
 from ..algorithms import CGRstring, pyramid_volume, aromatize
 from ..algorithms.morgan import initial_weights
-from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
+from ..exceptions import InvalidStereo
 from ..periodictable import Element, elements_classes, H
 
 
@@ -223,11 +223,12 @@ class Atom(MutableMapping):
 
 
 class Bond(MutableMapping):
-    __slots__ = ('order', 'stereo')
+    __slots__ = ('order', 'stereo', '__allow_none')
 
-    def __init__(self, order=1, stereo=None):
+    def __init__(self, order=1, stereo=None, allow_none=False):
         self.order = order
         self.stereo = stereo
+        super().__setattr__('_Bond__allow_none', allow_none)
 
     def __getitem__(self, key):
         if key not in self.__acceptable:
@@ -240,7 +241,7 @@ class Bond(MutableMapping):
     def __setattr__(self, key, value):
         if key not in self.__acceptable:
             raise AttributeError('unknown bond attribute')
-        if value not in self.__acceptable[key]:
+        if value not in self.__acceptable[key] and value is None and not self.__allow_none:
             raise ValueError(f"attribute '{key}' value should be from acceptable list: {self.__acceptable[key]}")
         super().__setattr__(key, value)
 
@@ -296,7 +297,7 @@ class Bond(MutableMapping):
 
         if isinstance(value, Bond):
             try:
-                if not all(v in self.__acceptable[k] for k, v in kwargs.items()):
+                if not all(v in self.__acceptable[k] or v is None and self.__allow_none for k, v in kwargs.items()):
                     raise ValueError('invalid attribute value')
             except KeyError:
                 raise KeyError('unknown bond attributes not allowed')
@@ -318,7 +319,7 @@ class Bond(MutableMapping):
                 return  # ad-hoc for add_edges_from method
 
             try:
-                if not all(v in self.__acceptable[k] for k, v in value.items()):
+                if not all(v in self.__acceptable[k] or v is None and self.__allow_none for k, v in value.items()):
                     raise ValueError('invalid attribute value')
             except KeyError:
                 raise KeyError('unknown bond attributes not allowed')
@@ -377,11 +378,11 @@ class MoleculeContainer(BaseContainer):
 
     def add_stereo(self, atom1, atom2, mark):
         if mark not in (1, -1):
-            raise InvalidData('stereo mark invalid')
+            raise ValueError('stereo mark invalid')
         if not self.has_edge(atom1, atom2):
-            raise InvalidAtom('atom or bond not found')
+            raise KeyError('atom or bond not found')
 
-        if self.nodes[atom1].stereo:
+        if self._node[atom1].stereo:
             raise self._stereo_exception3
 
         if self._node[atom1].z or any(self._node[x].z for x in self._adj[atom1]):
@@ -413,16 +414,18 @@ class MoleculeContainer(BaseContainer):
                 if g._node[j] != 'H':
                     neighbors += 1
 
-                order = bond.order
-                if order == 1 or hybridization in (3, 4):
+                if hybridization in (3, 4):
                     continue
-                elif order == 4:
+                order = bond.order
+                if order == 4:
                     hybridization = 4
-                elif order == 3 or (order == 2 and hybridization == 2):  # Если есть 3-я или две 2-х связи, то sp1
+                elif order == 3:
                     hybridization = 3
-                elif order == 2 and hybridization not in (3, 4):
-                    # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
-                    hybridization = 2
+                elif order == 2:
+                    if hybridization == 2:
+                        hybridization = 3
+                    else:
+                        hybridization = 2
 
             atom.neighbors = neighbors
             atom.hybridization = hybridization
@@ -583,31 +586,10 @@ class MoleculeContainer(BaseContainer):
         return initial_weights
 
     def _fix_stereo_stage_1(self):
-        tmp = []
-        for n, m in self.edges():
-            s = self.get_stereo(n, m)
-            if s:
-                tmp.append((n, m, s))
-            else:
-                s = self.get_stereo(m, n)
-                if s:
-                    tmp.append((m, n, s))
-        return tmp
+        pass
 
     def _fix_stereo_stage_2(self, stereo):
-        while True:
-            failed_stereo = []
-            for n, m, mark in stereo:
-                try:
-                    self.add_stereo(n, m, mark)
-                except InvalidStereo:
-                    failed_stereo.append((n, m, mark))
-                except InvalidAtom:
-                    continue
-            if failed_stereo and len(stereo) > len(failed_stereo):
-                stereo = failed_stereo
-                continue
-            break
+        pass
 
     __visible = None
     _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')

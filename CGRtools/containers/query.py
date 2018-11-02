@@ -16,15 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import namedtuple
 from itertools import product
 from .common import BaseContainer
 from ..algorithms import CGRstring
 from ..exceptions import InvalidData
 from ..periodictable import elements_list
-
-
-DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class QueryContainer(BaseContainer):

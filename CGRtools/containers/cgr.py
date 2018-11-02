@@ -16,15 +16,18 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from collections.abc import MutableMapping
 from itertools import repeat, zip_longest, chain
 from typing import Tuple
-from .query import DynamicContainer
 from .molecule import MoleculeContainer, Bond, Atom
-from ..algorithms import aromatize_cgr
+from ..algorithms import CGRstring, pyramid_volume, aromatize_cgr
+from ..algorithms.morgan import initial_weights_cgr
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import H
+
+
+DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class DynAtom(MutableMapping):
@@ -144,8 +147,8 @@ class DynBond(MutableMapping):
     __slots__ = ('reagent', 'product')
 
     def __init__(self, bond=None, p_bond=None):
-        self.reagent = Bond() if bond is None else bond
-        self.product = Bond() if p_bond is None else p_bond
+        self.reagent = Bond(allow_none=True) if bond is None else bond
+        self.product = Bond(allow_none=True) if p_bond is None else p_bond
 
     def __getitem__(self, key):
         if key.startswith('p_'):
@@ -302,28 +305,48 @@ class CGRContainer(MoleculeContainer):
         :return: graph if copy True else None
         """
         g = self.copy() if copy else self
-        for i in g:
-            label = dict(s_hyb=1, p_hyb=1, sp_hyb=1, s_neighbors=0, p_neighbors=0, sp_neighbors=0)
+        for i, atom in g._node.items():
+            neighbors = 0
+            hybridization = 1
+            p_neighbors = 0
+            p_hybridization = 1
             # hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
-            for b, h, n in (('s_bond', 's_hyb', 's_neighbors'), ('p_bond', 'p_hyb', 'p_neighbors')):
-                for node, bond in g[i].items():
-                    b_type = bond.get(b)
-                    if b_type and g.nodes[node]['element'] != 'H':
-                        label[n] += 1
-                    if b_type in (1, None) or label[h] in (3, 4):
-                        continue
-                    elif b_type == 4:
-                        label[h] = 4
-                    elif b_type == 3 or (b_type == 2 and label[h] == 2):  # Если есть 3-я или две 2-х связи, то sp1
-                        label[h] = 3
-                    elif b_type == 2 and label[h] != 3:
-                        # Если есть 2-я связь, но до этого не было найдено другой 2-й, 3-й, или аром.
-                        label[h] = 2
+            for j, bond in g._adj[i].items():
+                isnth = g._node[j] != 'H'
 
-            for n, m, h in (('s_hyb', 'p_hyb', 'sp_hyb'), ('s_neighbors', 'p_neighbors', 'sp_neighbors')):
-                label[h] = (label[n], label[m]) if label[n] != label[m] else label[n]
+                order = bond.order
+                if order:
+                    if isnth:
+                        neighbors += 1
+                    if hybridization not in (3, 4):
+                        if order == 4:
+                            hybridization = 4
+                        elif order == 3:
+                            hybridization = 3
+                        elif order == 2:
+                            if hybridization == 2:
+                                hybridization = 3
+                            else:
+                                hybridization = 2
+                order = bond.p_order
+                if order:
+                    if isnth:
+                        p_neighbors += 1
+                    if p_hybridization not in (3, 4):
+                        if order == 4:
+                            p_hybridization = 4
+                        elif order == 3:
+                            p_hybridization = 3
+                        elif order == 2:
+                            if p_hybridization == 2:
+                                p_hybridization = 3
+                            else:
+                                p_hybridization = 2
 
-            g.nodes[i].update(label)
+            atom.neighbors = neighbors
+            atom.hybridization = hybridization
+            atom.p_neighbors = p_neighbors
+            atom.p_hybridization = p_hybridization
         if copy:
             return g
         self.flush_cache()
@@ -405,9 +428,9 @@ class CGRContainer(MoleculeContainer):
         return res
 
     def atom_implicit_h(self, atom):
-        r, p = self.atom(atom)
-        ri = r.get_implicit_h([x for *_, x in self.edges(atom, data='s_bond')])
-        pi = p.get_implicit_h([x for *_, x in self.edges(atom, data='p_bond')])
+        atom = self._node[atom]
+        ri = atom.reagent.get_implicit_h([x.order for x in self._adj[atom].values()])
+        pi = atom.product.get_implicit_h([x.p_order for x in self._adj[atom].values()])
         return DynamicContainer(ri, pi)
 
     def atom_explicit_h(self, atom):
@@ -421,51 +444,33 @@ class CGRContainer(MoleculeContainer):
         return DynamicContainer(ri + rh, pi + ph)
 
     def check_valence(self):
-        errors = []
-        for x in self.nodes():
-            try:
-                s_atom, p_atom = self.atom(x)
-            except InvalidAtom as e:
-                errors.append('atom %d has error: %s' % (x, e))
-            else:
-                if s_atom.get_valence(*self._get_atom_environment(x)) is None or \
-                        p_atom.get_valence(*self._get_atom_environment(x, 'p')) is None:
-                    errors.append('atom %d has invalid valence' % x)
+        """
+        check valences of all atoms
 
-        return errors
+        :return: list of invalid atoms
+        """
+        report = []
+        for x, atom in self._node.items():
+            env = self.environment(x)
+            if not atom.reagent.check_valence([(b.reagent, a.reagent) for b, a in env if b.order]) or \
+                    not atom.product.check_valence([(b.product, a.product) for b, a in env if b.p_order]):
+                report.append(f'atom {x} has invalid valence')
+        return report
+
+    def _signature_generator(self, *args, **kwargs):
+        return CGRstring(*args, is_cgr=True, **kwargs)
+
+    @property
+    def _morgan_init(self):
+        return initial_weights_cgr
 
     def _prepare_stereo(self):
         return {}
 
-    def _fix_stereo_stage_2(self, stereo):
-        while True:
-            failed_stereo = []
-            for n, m, mark in stereo:
-                try:
-                    self.add_stereo(n, m, *mark)
-                except InvalidStereo:
-                    failed_stereo.append((n, m, mark))
-                except InvalidAtom:
-                    continue
-            if failed_stereo and len(stereo) > len(failed_stereo):
-                stereo = failed_stereo
-                continue
-            break
+    def _fix_stereo_stage_1(self):
+        pass
 
-    def __check_bonding(self, n, m, mark, p_mark):
-        for atom, reverse in ((n, m), (m, n)):
-            s_atom, p_atom = self.atom(atom)
-            if mark:
-                bn, ng = self._get_atom_environment(atom)
-                ng.append(self.nodes[reverse]['element'])
-                bn.append(mark)
-                if not s_atom.get_valence(bn, ng):
-                    raise InvalidData('valence error')
-            if p_mark:
-                bn, ng = self._get_atom_environment(atom, 'p')
-                ng.append(self.nodes[reverse]['element'])
-                bn.append(p_mark)
-                if not p_atom.get_valence(bn, ng):
-                    raise InvalidData('valence error')
+    def _fix_stereo_stage_2(self, stereo):
+        pass
 
     __visible = None
