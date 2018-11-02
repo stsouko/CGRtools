@@ -58,7 +58,7 @@ class SMILESread(CGRread, WithMixin):
                     meta[x[0].strip()] = x[1].strip()
 
             if '>' in smi:
-                reaction = dict(reagents=[], reactants=[], products=[], meta=meta, colors={})
+                reaction = dict(reagents=[], reactants=[], products=[], meta=meta)
                 try:
                     reagents, reactants, products = smi.split('>')
                     if reagents:
@@ -94,6 +94,6 @@ class SMILESread(CGRread, WithMixin):
                 'CGR_DAT': [dict(atoms=(n,), type='isotope', value=a['isotope'])
                             for n, a in enumerate(self.__parser.atoms, start=1) if a['isotope']],
                 'bonds': [(b['a0'] + 1, b['a1'] + 1, self.__bond_map[b['order']], 0) for b in self.__parser.bonds],
-                'meta': {}, 'colors': {}}
+                'meta': {}}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}

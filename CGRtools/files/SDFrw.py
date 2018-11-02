@@ -74,18 +74,11 @@ class SDFread(CGRread, WithMixin):
                     mkey = line.rstrip()[4:-1].strip()
                     if not mkey:
                         continue
-                    if mkey in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
-                                'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
-                        target = 'colors'
-                    else:
-                        target = 'meta'
-
-                    molecule[target][mkey] = []
+                    molecule['meta'][mkey] = []
                 elif mkey:
                     data = line.strip()
                     if data:
-                        molecule[target][mkey].append(data)
-
+                        molecule['meta'][mkey].append(data)
             elif im:
                 im -= 1
             elif not im:

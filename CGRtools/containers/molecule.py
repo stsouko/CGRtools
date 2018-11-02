@@ -215,7 +215,9 @@ class Atom(MutableMapping):
                   'multiplicity': None}
     __mutable = {'mapping': lambda x: x is None or isinstance(x, int), 'mark': lambda x: isinstance(x, str),
                  'x': lambda x: isinstance(x, (float, int)), 'y': lambda x: isinstance(x, (float, int)),
-                 'z': lambda x: isinstance(x, (float, int)), 'stereo': lambda x: x in {None, -1, 1, 0}}
+                 'z': lambda x: isinstance(x, (float, int)), 'stereo': lambda x: x in {None, -1, 1, 0},
+                 'color': lambda x: x is None or isinstance(x, dict) and all(isinstance(y, int) for y in x) and
+                                        all(isinstance(y, str) for y in x.values())}
     __unmutable = {'isotope': lambda x: isinstance(x, int), 'charge': lambda x: isinstance(x, int),
                    'multiplicity': lambda x: x is None or isinstance(x, int)}
     __acceptable = {*__mutable, *__unmutable}

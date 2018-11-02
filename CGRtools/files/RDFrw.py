@@ -94,17 +94,11 @@ class RDFread(CGRread, WithMixin):
                     mkey = line[7:].strip()
                     if not mkey:
                         continue
-                    if mkey.split('.')[0] in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG', 'dynPHTYP',
-                                              'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
-                        target = 'colors'
-                    else:
-                        target = 'meta'
-                    reaction[target][mkey] = []
+                    reaction['meta'][mkey] = []
                 elif mkey:
                     data = line.lstrip("$DATUM").strip()
                     if data:
-                        reaction[target][mkey].append(data)
-
+                        reaction['meta'][mkey].append(data)
             elif ir:
                 ir -= 1
             elif not ir:

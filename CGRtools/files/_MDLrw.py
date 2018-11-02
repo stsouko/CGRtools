@@ -36,7 +36,7 @@ class MOLread:
 
     def getvalue(self):
         if self.__mend:
-            return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=list(self.__props.values()), meta={}, colors={})
+            return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=list(self.__props.values()), meta={})
         raise ValueError('molecule not complete')
 
     def __call__(self, line):
@@ -94,7 +94,7 @@ class EMOLread:
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props + self.__sgroup, meta={}, colors={})
+        return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props + self.__sgroup, meta={})
 
     def __call__(self, line, lineu=None):
         if lineu is None:
@@ -265,7 +265,7 @@ class RXNread:
         if self.__rend:
             return dict(reagents=self.__molecules[:self.__reagents_count],
                         products=self.__molecules[self.__reagents_count:self.__products_count],
-                        reactants=self.__molecules[self.__products_count:self.__reactants_count], meta={}, colors={})
+                        reactants=self.__molecules[self.__products_count:self.__reactants_count], meta={})
         raise ValueError('reaction not complete')
 
     __parser = None
@@ -323,8 +323,7 @@ class ERXNread:
 
     def getvalue(self):
         if self.__rend:
-            return dict(reagents=self.__reagents, products=self.__products, reactants=self.__reactants,
-                        meta={}, colors={})
+            return dict(reagents=self.__reagents, products=self.__products, reactants=self.__reactants, meta={})
         raise ValueError('reaction not complete')
 
     __parser_group = None

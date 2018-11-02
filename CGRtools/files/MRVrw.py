@@ -110,11 +110,9 @@ class MRVread(CGRread, WithMixin):
 
     @classmethod
     def __parse_reaction(cls, data):
-        reaction = dict(reagents=[], products=[], reactants=[], meta={}, colors={})
+        reaction = dict(reagents=[], products=[], reactants=[], meta={})
         if 'propertyList' in data and 'property' in data['propertyList']:
-            meta, colors = cls.__parse_property(data['propertyList'], True)
-            reaction['meta'].update(meta)
-            reaction['colors'].update(colors)
+            reaction['meta'].update(cls.__parse_property(data['propertyList']))
 
         for tag, group in (('reactantList', 'reagents'), ('productList', 'products'), ('agentList', 'reactants')):
             if tag in data and 'molecule' in data[tag]:
@@ -127,30 +125,22 @@ class MRVread(CGRread, WithMixin):
         return reaction
 
     @classmethod
-    def __parse_property(cls, data, is_reaction=False):
+    def __parse_property(cls, data):
         meta = defaultdict(list)
-        colors = defaultdict(list)
         dp = data['property']
         for x in (dp,) if isinstance(dp, dict) else dp:
             key = x['@title']
             val = x['scalar']['$']
-            col_key = key.split('.')[0] if is_reaction else key
-            if col_key in ('PHTYP', 'FFTYP', 'PCTYP', 'EPTYP', 'HBONDCHG', 'CNECHG',
-                           'dynPHTYP', 'dynFFTYP', 'dynPCTYP', 'dynEPTYP', 'dynHBONDCHG', 'dynCNECHG'):
-                colors[key].append(val)
-            elif key:
+            if key:
                 meta[key].append(val)
-
-        return meta, colors
+        return meta
 
     @classmethod
     def __parse_molecule(cls, data):
-        molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={}, colors={})
+        molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={})
 
         if 'propertyList' in data and 'property' in data['propertyList']:
-            meta, colors = cls.__parse_property(data['propertyList'])
-            molecule['meta'].update(meta)
-            molecule['colors'].update(colors)
+            molecule['meta'].update(cls.__parse_property(data['propertyList']))
 
         atom_map = {}
         if 'atom' in data['atomArray']:

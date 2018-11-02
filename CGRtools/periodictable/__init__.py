@@ -140,11 +140,11 @@ def get_element(symbol, number):
     class ElementClass(Element, Period, Group, Type, name=symbol, number=number):
         __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope',
                      '_ElementClass__mark', '_ElementClass__mapping', '_ElementClass__x', '_ElementClass__y',
-                     '_ElementClass__z', '_ElementClass__stereo', 'hybridization', 'neighbors')
+                     '_ElementClass__z', '_ElementClass__stereo', '_ElementClass__color', 'hybridization', 'neighbors')
 
         def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=_common_isotope,
                      x: float=0, y: float=0, z: float=0, mark: str='0', mapping: int=None, stereo: int=None,
-                     hybridization: int=None, neighbors: int=None):
+                     hybridization: int=None, neighbors: int=None, color: str=None):
             if not (isinstance(charge, int) and isinstance(isotope, int)):
                 raise TypeError('charge, isotope can be int')
             if not all(isinstance(x, (float, int)) for x in (x, y, z)):
@@ -155,6 +155,16 @@ def get_element(symbol, number):
             if not isinstance(mark, str):
                 raise TypeError('mark can be str')
 
+            if color is not None:
+                if not isinstance(color, dict):
+                    raise TypeError('color can be dict')
+                elif not color:
+                    raise ValueError('empty color not allowed')
+                elif not all(isinstance(x, int) for x in color):
+                    raise TypeError('color keys can be int')
+                elif not all(isinstance(x, str) for x in color.values()):
+                    raise TypeError('color values can be str')
+
             self.__charge = charge
             self.__isotope = isotope
             self.__multiplicity = multiplicity
@@ -164,6 +174,7 @@ def get_element(symbol, number):
             self.__z = z
             self.__stereo = stereo
             self.__mapping = mapping
+            self.__color = color
             self.neighbors = neighbors
             self.hybridization = hybridization
 
@@ -199,7 +210,7 @@ def get_element(symbol, number):
         def x(self, value):
             if not isinstance(value, (float, int)):
                 raise TypeError('coordinates can be float')
-            self.__x = value
+            self.__x = float(value)
 
         @property
         def y(self):
@@ -209,7 +220,7 @@ def get_element(symbol, number):
         def y(self, value):
             if not isinstance(value, (float, int)):
                 raise TypeError('coordinates can be float')
-            self.__y = value
+            self.__y = float(value)
 
         @property
         def z(self):
@@ -219,7 +230,7 @@ def get_element(symbol, number):
         def z(self, value):
             if not isinstance(value, (float, int)):
                 raise TypeError('coordinates can be float')
-            self.__z = value
+            self.__z = float(value)
 
         @property
         def mapping(self):
@@ -259,6 +270,23 @@ def get_element(symbol, number):
             if not isinstance(value, str):
                 raise TypeError('mark can be str')
             self.__mark = value
+
+        @property
+        def color(self):
+            if self.__color:
+                return self.__color.copy()
+
+        @color.setter
+        def color(self, value):
+            if not value:
+                self.__color = None
+            elif not isinstance(value, dict):
+                raise TypeError('color can be dict')
+            elif not all(isinstance(x, int) for x in value):
+                raise TypeError('color keys can be int')
+            elif not all(isinstance(x, str) for x in value.values()):
+                raise TypeError('color values can be str')
+            self.__color = value
 
         @property
         def electron_configuration(self):
@@ -369,12 +397,16 @@ def get_element(symbol, number):
                 r.append(f'multiplicity={self.__multiplicity}')
             if self.__isotope != _common_isotope:
                 r.append(f'isotope={self.__isotope}')
-            if self.mapping:
-                r.append(f'mapping={self.mapping}')
-            if self.mark != '0':
-                r.append(f'mark={self.mark}')
-            if self.x or self.y or self.z:
-                r.append(f'x={self.x}, y={self.y}, z={self.z}')
+            if self.__mapping:
+                r.append(f'mapping={self.__mapping}')
+            if self.__mark != '0':
+                r.append(f'mark={self.__mark}')
+            if self.__z:
+                r.append(f'x={self.__x}, y={self.__y}, z={self.__z}')
+            elif self.__x or self.__y:
+                r.append(f'x={self.__x}, y={self.__y}')
+            if self.__color:
+                r.append(f'color={self.__color}')
 
             r = ', '.join(r)
             return f'{type(self).__name__}({r})'
