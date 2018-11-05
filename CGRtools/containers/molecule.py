@@ -36,16 +36,17 @@ class Atom(MutableMapping):
         dict like access to atom's attrs
         """
         if key == 'element':
-            key = 'symbol'
+            return self.__atom.symbol
         elif key not in self.__acceptable:
             raise KeyError('unknown atom attribute')
-
         return getattr(self.__atom, key)
 
     def __setitem__(self, key, value):
-        return setattr(self, key, value)
+        setattr(self, key, value)
 
     def __getattr__(self, key):
+        if key == 'element':
+            key = 'symbol'
         return getattr(self.__atom, key)
 
     def __setattr__(self, key, value):

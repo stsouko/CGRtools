@@ -314,7 +314,7 @@ class MRVwrite(CGRwrite, WithMixin):
 
     _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
     _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
-    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
+    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3', None: None}
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3'}
     __finalized = False
 

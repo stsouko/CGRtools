@@ -39,21 +39,30 @@ class DynAtom(MutableMapping):
 
     def __getitem__(self, key):
         if key.startswith('p_'):
+            if key in self.__p_static:
+                raise KeyError(f'{key} is invalid')
             return self.product[key[2:]]
         return self.reagent[key]
 
     def __setitem__(self, key, value):
-        return setattr(self, key, value)
+        setattr(self, key, value)
 
     def __getattr__(self, key):
         if key.startswith('p_'):
+            if key in self.__p_static:
+                raise KeyError(f'{key} is invalid')
             return getattr(self.product, key[2:])
         return getattr(self.reagent, key)
 
     def __setattr__(self, key, value):
         if key.startswith('p_'):
-            return setattr(self.product, key[2:], value)
-        return setattr(self.reagent, key, value)
+            if key in self.__p_static:
+                raise KeyError(f'{key} is invalid')
+            setattr(self.product, key[2:], value)
+        else:
+            setattr(self.reagent, key, value)
+            if key in self.__static:
+                setattr(self.product, key, value)
 
     def __len__(self):
         return len(self.reagent) + len(self.product)
@@ -135,12 +144,17 @@ class DynAtom(MutableMapping):
             p_value = value
 
         if kwargs:
+            if kwargs.keys() & self.__p_static:
+                raise KeyError('color, element, isotope, mark, mapping is static')
             self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
             self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')},
-                                **{k: v for k, v in kwargs.items() if k in ('mark', 'mapping')})
+                                **{k: v for k, v in kwargs.items() if k in self.__static})
         else:
             self.reagent.update(value)
             self.product.update(p_value)
+
+    __static = {'color', 'element', 'isotope', 'mark', 'mapping'}
+    __p_static = {f'p_{x}' for x in __static}
 
 
 class DynBond(MutableMapping):
@@ -165,8 +179,9 @@ class DynBond(MutableMapping):
 
     def __setattr__(self, key, value):
         if key.startswith('p_'):
-            return setattr(self.product, key[2:], value)
-        return setattr(self.reagent, key, value)
+            setattr(self.product, key[2:], value)
+        else:
+            setattr(self.reagent, key, value)
 
     def __len__(self):
         return len(self.reagent) + len(self.product)
