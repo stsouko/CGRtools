@@ -72,18 +72,17 @@ class BaseContainer(Graph, ABC):
             _map = max(self, default=0) + 1
         elif _map in self._node:
             raise KeyError('atom with same number exists')
-        try:
-            if isinstance(atom, dict):
-                self.add_node(_map, **atom)
-            elif isinstance(atom, str):
-                self.add_node(_map, atom={'element': atom})
-            elif isinstance(atom, int):
-                self.add_node(_map, atom=elements_list[atom - 1])
-            else:
-                self.add_node(_map, atom=atom)
-        except (KeyError, ValueError, TypeError):
-            del self._node[_map]
-            raise
+
+        attr_dict = self.node_attr_dict_factory()
+        if isinstance(atom, str):
+            attr_dict.element = atom
+        elif isinstance(atom, int):
+            attr_dict.element = elements_list[atom - 1]
+        else:
+            attr_dict.update(atom)
+
+        self._adj[_map] = self.adjlist_inner_dict_factory()
+        self._node[_map] = attr_dict
         self.flush_cache()
         return _map
 
@@ -94,20 +93,16 @@ class BaseContainer(Graph, ABC):
         """
         if atom1 not in self._node or atom2 not in self._node:
             raise KeyError('atoms not found')
-        if self.has_edge(atom1, atom2):
+        if atom1 not in self._adj[atom2]:
             raise KeyError('atoms already bonded')
-        try:
-            if isinstance(bond, dict):
-                self.add_edge(atom1, atom2, **bond)
-            elif isinstance(bond, int):
-                self.add_edge(atom1, atom2, bond={'order': bond})
-            else:
-                self.add_edge(atom1, atom2, bond=bond)
-        except (KeyError, ValueError, TypeError):
-            if atom2 in self._adj[atom1]:
-                del self._adj[atom1][atom2]
-                del self._adj[atom2][atom1]
-            raise
+
+        attr_dict = self.edge_attr_dict_factory()
+        if isinstance(bond, int):
+            attr_dict.order = bond
+        else:
+            attr_dict.update(bond)
+
+        self._adj[atom1][atom2] = self._adj[atom2][atom1] = attr_dict
         self.flush_cache()
 
     def delete_atom(self, n):

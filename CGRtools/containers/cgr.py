@@ -117,22 +117,13 @@ class DynAtom(MutableMapping):
         update atom
 
         :param args: tuple with 1 or 0 elements. element can be dict of atom attrs or atom object or atom class
-        or DynAtom object or dict with 'atom' key with value equal to dict of atom attrs or atom object or atom class or
-        DynAtom object.
-        'atom' keyed dict also may contain atom attrs. this attrs has precedence other 'atom' key value attrs.
+        or DynAtom object.
         :param kwargs: atom attrs. has precedence other args[0]
         """
-        if args:
-            if len(args) > 1:
-                raise TypeError('update expected at most 1 arguments')
-
+        if len(args) > 1:
+            raise TypeError('update expected at most 1 arguments')
+        elif args:
             value = args[0]
-            if isinstance(value, dict) and 'atom' in value:
-                value.update(kwargs)
-                kwargs = value
-                value = value.pop('atom')
-        elif 'atom' in kwargs:
-            value = kwargs.pop('atom')
         else:
             value = kwargs
             kwargs = ()
@@ -206,22 +197,14 @@ class DynBond(MutableMapping):
     def update(self, *args, **kwargs):
         """
         update bond
-        :param args: tuple with 1 or 0 elements. element can be Bond|DynBond object or dict of bond attrs or
-        dict with 'bond' key with value equal to Bond|DynBond object or dict of bond attrs.
-        bond keyed dict also may contain bond attrs. this attrs has precedence other 'bond' key value attrs.
+
+        :param args: tuple with 1 or 0 elements. element can be Bond|DynBond object or dict of bond attrs.
         :param kwargs: bond attrs. has precedence other args[0]
         """
-        if args:
-            if len(args) > 1:
-                raise TypeError('update expected at most 1 arguments')
-
+        if len(args) > 1:
+            raise TypeError('update expected at most 1 arguments')
+        elif args:
             value = args[0]
-            if isinstance(value, dict) and 'bond' in value:
-                value.update(kwargs)
-                kwargs = value
-                value = value.pop('bond')
-        elif 'bond' in kwargs:
-            value = kwargs.pop('bond')
         else:
             value = kwargs
             kwargs = ()
