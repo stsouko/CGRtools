@@ -440,4 +440,4 @@ elements_classes['A'] = get_element('A', 0)
 del elements
 
 locals().update(PeriodicMeta.classes)
-__all__ = [Element.__name__] + list(PeriodicMeta.classes)
+__all__ = ['Element'] + list(PeriodicMeta.classes)
