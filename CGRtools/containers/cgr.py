@@ -85,13 +85,12 @@ class CGRContainer(MoleculeContainer):
         """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
         """
         nodes = set()
-        for n, attr in self.nodes(data=True):
-            if attr['s_charge'] != attr['p_charge'] or attr.get('s_radical') != attr.get('p_radical') or \
-                   stereo and attr.get('s_stereo') != attr.get('p_stereo'):
+        for n, atom in self.nodes(data=True):
+            if atom.reagent != atom.product or stereo and atom.stereo != atom.p_stereo:
                 nodes.add(n)
 
-        for *n, attr in self.edges(data=True):
-            if attr.get('s_bond') != attr.get('p_bond') or stereo and attr.get('s_stereo') != attr.get('p_stereo'):
+        for *n, bond in self.edges(data=True):
+            if bond.reagent != bond.product or stereo and bond.stereo != bond.p_stereo:
                 nodes.update(n)
 
         return list(nodes)

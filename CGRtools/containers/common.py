@@ -17,11 +17,14 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC, abstractmethod
-from networkx import Graph, relabel_nodes
+from collections import defaultdict
+from itertools import cycle
+from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from typing import Callable
 from ..algorithms import hash_cgr_string, get_morgan
-from ..periodictable import elements_list
+from ..attributes import Bond
+from ..periodictable import elements_list, radical_map, radical_unmap
 
 
 class BaseContainer(Graph, ABC):
@@ -91,9 +94,11 @@ class BaseContainer(Graph, ABC):
         """
         implementation of bond addition
         """
+        if atom1 == atom2:
+            raise KeyError('atom loops impossible')
         if atom1 not in self._node or atom2 not in self._node:
             raise KeyError('atoms not found')
-        if atom1 not in self._adj[atom2]:
+        if atom1 in self._adj[atom2]:
             raise KeyError('atoms already bonded')
 
         attr_dict = self.edge_attr_dict_factory()
@@ -207,6 +212,12 @@ class BaseContainer(Graph, ABC):
         return _search_subclass(data['class'])(graph)
 
     def environment(self, atom):
+        """
+        pairs of (bond, atom) connected to atom
+
+        :param atom: number
+        :return: list
+        """
         return [(bond, self._node[n]) for n, bond in self._adj[atom].items()]
 
     def substructure(self, atoms, meta=False):
@@ -222,7 +233,7 @@ class BaseContainer(Graph, ABC):
             s.graph.clean()
         return s
 
-    def augmented_substructure(self, atoms, dante=False, deep=1):
+    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False):
         """
         get subgraph with atoms and their neighbors
 
@@ -230,6 +241,7 @@ class BaseContainer(Graph, ABC):
         :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
         etc up to deep or while new nodes available.
         :param deep: number of bonds between atoms and neighbors.
+        :param meta: copy metadata to each substructure
         """
         nodes = [set(atoms)]
         for i in range(deep):
@@ -241,7 +253,7 @@ class BaseContainer(Graph, ABC):
         return [self.substructure(a) for a in nodes] if dante else self.substructure(nodes[-1])
 
     def remap(self, mapping, copy=False):
-        return relabel_nodes(self, mapping, copy=copy)
+        return relabel_nodes(self, mapping, copy)
 
     def get_signature_hash(self, *args, **kwargs):
         return hash_cgr_string(self.get_signature(*args, **kwargs))

@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableSequence
-from warnings import warn
 from .common import BaseContainer
 from .query import QueryContainer
 from ..algorithms import hash_cgr_string
@@ -67,7 +66,7 @@ class ReactionContainer:
     """reaction storage. contains reagents, products and reactants lists"""
     __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__signatures', '__pickle')
 
-    def __init__(self, reagents=None, products=None, reactants=None, meta=None, substrats=None):
+    def __init__(self, reagents=None, products=None, reactants=None, meta=None):
         """
         new empty or filled reaction object creation
 
@@ -77,13 +76,10 @@ class ReactionContainer:
         :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
 
         """
-        if substrats:
-            warn('deprecated key. use reagents instead', DeprecationWarning)
-
-        self.__reagents = MindfulList(reagents if substrats is None else substrats)
+        self.__reagents = MindfulList(reagents)
         self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
-        self.__meta = meta or {}
+        self.__meta = dict(meta) or {}
         self.__signatures = {}
         self.__pickle = None
 
