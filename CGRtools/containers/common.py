@@ -250,7 +250,318 @@ class BaseContainer(Graph, ABC):
                 break
             nodes.append(n)
 
-        return [self.substructure(a) for a in nodes] if dante else self.substructure(nodes[-1])
+        return [self.substructure(a, meta) for a in nodes] if dante else self.substructure(nodes[-1], meta)
+
+    def connected_components(self):
+        return connected_components(self)
+
+    def split(self, meta=False):
+        """
+        split disconnected structure to connected substructures
+
+        :param meta: copy metadata to each substructure
+        :return: list of substructures
+        """
+        return [self.substructure(c, meta) for c in connected_components(self)]
+
+    def union(self, g):
+        if not isinstance(g, BaseContainer):
+            raise TypeError('BaseContainer subclass expected')
+        if self._node.keys() & set(g):
+            raise KeyError('mapping of graphs is not disjoint')
+
+        # dynamic container resolving
+        qc = _search_subclass('QueryContainer')
+        cc = _search_subclass('CGRContainer')
+
+        if isinstance(self, qc):  # self has precedence
+            u = type(self)()
+        elif isinstance(g, qc):
+            u = type(g)()
+        elif isinstance(self, cc):
+            u = type(self)()
+        elif isinstance(g, cc):
+            u = type(g)()
+        else:
+            u = type(self)()
+
+        for n, a in self._node.items():
+            u.add_atom(a, n)
+        for n, a in g._node.items():
+            u.add_atom(a, n)
+
+        for n, m_b in self._adj.items():
+            for m, b in m_b.items():
+                u.add_bond(n, m, b)
+        for n, m_b in g._adj.items():
+            for m, b in m_b.items():
+                u.add_bond(n, m, b)
+
+    def compose(self, g, balance=False):
+        """
+        compose 2 graphs to CGR
+
+        :param g: Molecule or CGR Container
+        :return: CGRContainer or QueryContainer
+        """
+        if not isinstance(g, BaseContainer):
+            raise TypeError('BaseContainer subclass expected')
+
+        # dynamic container resolving
+        qc = _search_subclass('QueryContainer')
+        cc = _search_subclass('CGRContainer')
+
+        # try to use custom containers
+        if isinstance(self, qc):  # self has precedence
+            h = type(self)()
+        elif isinstance(g, qc):
+            h = type(g)()
+        elif isinstance(self, cc):
+            h = type(self)()
+        elif isinstance(g, cc):
+            h = type(g)()
+        else:  # use common CGR
+            h = cc()
+
+        common = self._node.keys() & g
+        unique_reagent = self._node.keys() - common
+        unique_product = g._node.keys() - common
+
+        for n in common:
+            h.add_atom(h.node_attr_dict_factory(self._node[n], g._node[n]), n)
+        for n in unique_reagent:
+            h.add_atom(h.node_attr_dict_factory(self._node[n], self._node[n]), n)
+        for n in unique_product:
+            h.add_atom(h.node_attr_dict_factory(g._node[n], g._node[n]), n)
+
+        skin_reagent = defaultdict(list)
+        seen = set()
+        for n, m_b in self._adj.items():
+            seen.add(n)
+            if n in common:
+                for m, b in m_b.items():
+                    if m in seen:
+                        continue
+                    if m in common:
+                        h.add_bond(n, m, h.edge_attr_dict_factory(b, g._adj[n][m]))
+                    else:
+                        skin_reagent[n].append(m)
+                        h.add_bond(n, m, h.edge_attr_dict_factory(b, Bond(None, allow_none=True)))
+            else:
+                for m, b in m_b.items():
+                    if m in seen:
+                        continue
+                    if m in common:
+                        skin_reagent[m].append(n)
+                        h.add_bond(n, m, h.edge_attr_dict_factory(b, Bond(None, allow_none=True)))
+                    else:
+                        h.add_bond(n, m, h.edge_attr_dict_factory(b, b))
+
+        skin_product = defaultdict(list)
+        seen = set()
+        for n, m_b in g._adj.items():
+            seen.add(n)
+            if n in common:
+                for m, b in m_b.items():
+                    if m in seen:
+                        continue
+                    if m in common:
+                        h.add_bond(n, m, h.edge_attr_dict_factory(self._adj[n][m], b))
+                    else:
+                        skin_product[n].append(m)
+                        h.add_bond(n, m, h.edge_attr_dict_factory(Bond(None, allow_none=True), b))
+            else:
+                for m, b in m_b.items():
+                    if m in seen:
+                        continue
+                    if m in common:
+                        skin_product[m].append(n)
+                        h.add_bond(n, m, h.edge_attr_dict_factory(Bond(None, allow_none=True), b))
+                    else:
+                        h.add_bond(n, m, h.edge_attr_dict_factory(b, b))
+
+        if balance:
+            """ calc unbalanced charges and radicals for skin atoms
+            """
+            meta = h.meta
+            for n in (skin_reagent.keys() | skin_product.keys()):
+                lost = skin_reagent[n]
+                cycle_lost = cycle(lost)
+                new = skin_product[n]
+                cycle_new = cycle(new)
+                atom = h._node[n]
+                dr = atom.p_radical - atom.radical
+                # radical balancing
+                if dr > 0:  # radical added or increased.
+                    for _, m in zip(range(dr), cycle_lost):  # homolysis
+                        s_atom = h._node[m]
+                        s_atom.p_multiplicity = radical_unmap[s_atom.p_radical + 1]
+                        meta.setdefault('rule #14. atom lost. common atom radical added or increased. '
+                                        'lost atom radical added', []).append((m, n))
+                    for m in lost[dr:]:
+                        meta.setdefault('rule #15. atom lost. common atom radical added or increased. '
+                                        'lost atom radical unchanged', []).append((m, n))
+                elif dr < 0:  # radical removed or decreased.
+                    if n in skin_product:
+                        for m in lost:
+                            meta.setdefault('rule #20. atom lost. common atom radical removed or decreased. '
+                                            'lost atom radical unchanged', []).append((m, n))
+                    else:
+                        for _, m in zip(range(-dr), cycle_lost):  # radical elimination
+                            s_atom = h._node[m]
+                            s_atom.p_multiplicity = radical_unmap[s_atom.p_radical + 1]
+                            meta.setdefault('rule #21. atom lost. common atom radical removed or decreased. '
+                                            'lost atom radical added', []).append((m, n))
+                        for m in lost[-dr:]:
+                            meta.setdefault('rule #20. atom lost. common atom radical removed or decreased. '
+                                            'lost atom radical unchanged', []).append((m, n))
+                else:
+                    env = h.environment(n)
+                    sv = atom.get_valence([(b.reagent, a.reagent) for b, a in env if b.order])
+                    pv = atom.p_get_valence([(b.product, a.product) for b, a in env if b.p_order])
+                    sh, ph = h.atom_total_h(n)
+
+                    dv = pv - sv
+                    dh = ph - sh
+                    dc = atom.p_charge - atom.charge
+
+                    if not (dv or dh or dc):  # common atom unchanged. Substitution, Elimination
+                        for m in skins:
+                            meta.setdefault('rule #1. atom lost. common atom unchanged. '
+                                            'substitution, elimination, addition', []).append((m, n))
+                    elif dv == dh == dc < 0:  # explicit hydrogen removing
+                        for m in skins:
+                            h._node[m].p_charge = 1
+                            meta.setdefault('rule #4. atom lost. common atom deprotonation', []).append((m, n))
+                    else:
+                        for m in skins:
+                            meta.setdefault('rule #5. atom lost. common atom changed. '
+                                            'convert to reduction or oxidation', []).append((m, n))
+
+                        pth = ph + sum(h.atom_total_h(x)[1] for x in skins)
+                        if n in skin_product:
+                            sth = sh + sum(h.atom_total_h(x)[0] for x in skin_product[n])
+                        else:
+                            sth = sh
+                        dth = pth - sth
+
+            for n, skins in skin_product.items():
+                cycle_skins = cycle(skins)
+                atom = h._node[n]
+                dr = atom.p_radical - atom.radical
+                # radical balancing
+                if dr > 0:  # radical added or increased.
+                    if n in skin_reagent:
+                        for m in skins:
+                            meta.setdefault('rule #16. atom new. common atom radical added or increased. '
+                                            'new atom radical unchanged', []).append((m, n))
+                    else:
+                        for _, m in zip(range(dr), cycle_skins):  # radical addition
+                            s_atom = h._node[m]
+                            s_atom.multiplicity = radical_unmap[s_atom.radical + 1]
+                            meta.setdefault('rule #17. atom new. common atom radical added or increased. '
+                                            'new atom radical added', []).append((m, n))
+                        for m in skins[dr:]:
+                            meta.setdefault('rule #16. atom new. common atom radical added or increased. '
+                                            'new atom radical unchanged', []).append((m, n))
+                elif dr < 0:  # radical removed or decreased.
+                    for _, m in zip(range(-dr), cycle_skins):  # recombination
+                        s_atom = h._node[m]
+                        s_atom.multiplicity = radical_unmap[s_atom.radical + 1]
+                        meta.setdefault('rule #18. atom new. common atom radical removed or decreased. '
+                                        'new atom radical added', []).append((m, n))
+                    for m in skins[-dr:]:
+                        meta.setdefault('rule #19. atom new. common atom radical removed or decreased. '
+                                        'new atom radical unchanged', []).append((m, n))
+                else:
+                    env = h.environment(n)
+                    sv = atom.get_valence([(b.reagent, a.reagent) for b, a in env if b.order])
+                    pv = atom.p_get_valence([(b.product, a.product) for b, a in env if b.p_order])
+                    sh, ph = h.atom_total_h(n)
+
+                    dv = pv - sv
+                    dh = ph - sh
+                    dc = atom.p_charge - atom.charge
+
+                    if not (dv or dh or dc):  # common atom unchanged. Substitution, Addition
+                        for m in skins:
+                            meta.setdefault('rule #2. atom new. common atom unchanged. '
+                                            'substitution, elimination, addition', []).append((m, n))
+                    elif dv == dh == dc > 0:  # explicit hydrogen addition
+                        for m in skins:
+                            h._node[m].charge = 1
+                            h.meta.setdefault('rule #3. atom new. common atom protonation', []).append((m, n))
+                    else:
+                        for m in skins:
+                            meta.setdefault('rule #6. atom new. common atom changed. '
+                                            'convert to reduction or oxidation', []).append((m, n))
+
+                        sth = sh + sum(h.atom_total_h(x)[0] for x in skins)
+                        if n in skin_reagent:
+                            pth = ph + sum(h.atom_total_h(x)[1] for x in skin_reagent[n])
+                        else:
+                            pth = ph
+                        dth = pth - sth
+
+            for n, sp in reverse_ext.items():
+
+                # charge neutralization
+                if dc > 0:
+                    for _ in range(dc):
+                        h.meta.setdefault('rule #7. charge neutralization. hydroxide radical added',
+                                          []).append(h.add_atom(O(multiplicity=2), O(charge=-1)))
+                elif dc < 0:
+                    for _ in range(-dc):
+                        h.meta.setdefault('rule #8. charge neutralization. hydrogen radical added',
+                                          []).append(h.add_atom(H(multiplicity=2), H(charge=1)))
+
+                # hydrogen balancing
+                if dth > 0:
+                    red_e = 0
+                    for m in sp['products']:
+                        if h.nodes[m]['element'] == 'H':  # set reduction H if explicit H count increased
+                            h.nodes[m]['s_radical'] = 2
+                            red_e += 1
+                            h.meta.setdefault('rule #11. protonation. new explicit hydrogen radical added',
+                                              []).append(m)
+
+                    red = []
+                    for _ in range(dth - red_e):  # add reduction agents
+                        m = h.add_atom(H(multiplicity=2), H())
+                        red.append(m)
+                        h.meta.setdefault('rule #10. protonation. hydrogen radical added', []).append(m)
+                    red = iter(red)
+
+                    dih = sub(*h.atom_implicit_h(n))
+                    if dih < 0:  # attach reduction H to central atom if implicit H atoms count increased
+                        for _ in range(-dih):
+                            m = next(red)
+                            h.add_bond(m, n, None)
+                            h.meta.setdefault('rule #12. protonation. new implicit hydrogen radical added',
+                                              []).append(m)
+
+                    for m in sp['reagents']:  # attach reduction H if detached group implicit H count increased
+                        dih = sub(*h.atom_implicit_h(m))
+                        if dih < 0:
+                            for _ in range(-dih):
+                                o = next(red)
+                                h.add_bond(o, m, None)
+                elif dth < 0:
+                    oxo = []
+                    for _ in range(-dth):
+                        m = h.add_atom(O(multiplicity=2), O())
+                        oxo.append(m)
+                        h.meta.setdefault('rule #9. deprotonation. hydroxide radical added', []).append(m)
+                    oxo = iter(oxo)
+
+                    for m in sp['reagents']:
+                        if h.nodes[m]['element'] == 'H':
+                            o = next(oxo)
+                            h.add_bond(o, m, None)
+                            h.meta.setdefault('rule #13. hydrogen accepting by hydroxide radical added',
+                                              []).append(m)
+
+        return h
 
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
@@ -306,6 +617,33 @@ class BaseContainer(Graph, ABC):
 
     def flush_cache(self):
         self.__weights = self.__signatures = self.__pickle = self.__hash = self.__stereo_cache = None
+
+    def __and__(self, other):
+        """
+        substructure of graph
+        """
+        return self.substructure(other)
+
+    def __sub__(self, other):
+        """
+        other nodes excluded substructure of graph
+        :return graph or None
+        """
+        n = self._node.keys() - set(other)
+        if n:
+            return self.substructure(n)
+
+    def __xor__(self, other):
+        """
+        G ^ H is CGR generation
+        """
+        return self.compose(other)
+
+    def __or__(self, other):
+        """
+        G | H is union of graphs
+        """
+        return self.union(other)
 
     def __str__(self):
         return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)

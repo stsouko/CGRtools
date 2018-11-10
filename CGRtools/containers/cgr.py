@@ -95,6 +95,28 @@ class CGRContainer(MoleculeContainer):
 
         return list(nodes)
 
+    def decompose(self):
+        """
+        decompose CGR to pair of Molecules, which represents reagents and products state of reaction
+
+        :return: tuple of two molecules
+        """
+        reagents = MoleculeContainer()
+        products = MoleculeContainer()
+
+        reagents.add_nodes_from((n, atom.reagent) for n, atom in self.nodes(data=True))
+        products.add_nodes_from((n, atom.product) for n, atom in self.nodes(data=True))
+        nmb = list(self.edges(data=True))
+        reagents.add_edges_from((n, m, bond.reagent) for n, m, bond in nmb if bond.order)
+        products.add_edges_from((n, m, bond.product) for n, m, bond in nmb if bond.p_order)
+        return DynamicContainer(reagents, products)
+
+    def __invert__(self):
+        """
+        decompose CGR
+        """
+        return self.decompose()
+
     def reset_query_marks(self, copy=False):
         """
         set or reset hyb and neighbors marks to atoms.
