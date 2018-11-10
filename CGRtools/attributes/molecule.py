@@ -17,14 +17,22 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableMapping
+from copy import deepcopy
 from ..periodictable import Element, elements_classes
 
 
 class Atom(MutableMapping):
     __slots__ = '__atom'
 
-    def __init__(self):
-        super().__setattr__('_Atom__atom', None)
+    def __init__(self, atom=None):
+        if atom is None:
+            super().__setattr__('_Atom__atom', None)
+        elif isinstance(atom, Atom):
+            super().__setattr__('_Atom__atom', atom.copy())
+        elif isinstance(atom, Element):
+            super().__setattr__('_Atom__atom', deepcopy(atom))
+        else:
+            raise TypeError('invalid atom passed')
 
     def __getitem__(self, key):
         """
@@ -57,14 +65,10 @@ class Atom(MutableMapping):
         elif self.__atom is None:
             raise TypeError('any atom not allowed')
         elif key in self.__unmutable:
-            if not self.__unmutable[key](value):
-                raise ValueError('invalid value of unmutable attribute')
             attrs = {k: getattr(self.__atom, k) for k in self.__acceptable}
             attrs[key] = value
             super().__setattr__('_Atom__atom', elements_classes[self.__atom.symbol](**attrs))
         elif key in self.__mutable:
-            if not self.__mutable[key](value):
-                raise ValueError('invalid value of mutable attribute')
             setattr(self.__atom, key, value)
         else:
             raise KeyError('unknown atom attributes not allowed')
@@ -117,9 +121,10 @@ class Atom(MutableMapping):
         return self.__atom
 
     def copy(self):
-        atom = self.__atom
-        return type(atom)(charge=atom.charge, multiplicity=atom.multiplicity, isotope=atom.isotope,
-                          mapping=atom.mapping, mark=atom.mark, x=atom.x, y=atom.y, z=atom.z, stereo=atom.stereo)
+        """
+        deepcopy of wrapped atom
+        """
+        return deepcopy(self.__atom)
 
     def update(self, *args, **kwargs):
         """
@@ -203,14 +208,13 @@ class Atom(MutableMapping):
                     setattr(self.__atom, k, v)
 
     __defaults = {'mapping': None, 'mark': '0', 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'charge': 0,
-                  'multiplicity': None}
+                  'multiplicity': None, 'color': None}
     __mutable = {'mapping': lambda x: x is None or isinstance(x, int), 'mark': lambda x: isinstance(x, str),
                  'x': lambda x: isinstance(x, (float, int)), 'y': lambda x: isinstance(x, (float, int)),
                  'z': lambda x: isinstance(x, (float, int)), 'stereo': lambda x: x in {None, -1, 1, 0},
                  'color': lambda x: x is None or isinstance(x, dict) and all(isinstance(y, int) for y in x) and
-                                        all(isinstance(y, str) for y in x.values())}
-    __unmutable = {'isotope': lambda x: isinstance(x, int), 'charge': lambda x: isinstance(x, int),
-                   'multiplicity': lambda x: x is None or isinstance(x, int)}
+                                    all(isinstance(y, str) for y in x.values())}
+    __unmutable = {'isotope', 'charge', 'multiplicity'}
     __acceptable = {*__mutable, *__unmutable}
     __possible = {'element', *__acceptable}
 
@@ -318,7 +322,7 @@ class Bond(MutableMapping):
                 super().__setattr__(k, v)
 
     def copy(self):
-        return type(self)(self.order, self.stereo)
+        return type(self)(self.order, self.stereo, allow_none=self.__allow_none)
 
     __acceptable = {'order': {1, 2, 3, 4, 9}, 'stereo': {None, -1, 1, 0}}
     __defaults = {'order': 1, 'stereo': None}

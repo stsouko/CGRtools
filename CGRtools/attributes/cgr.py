@@ -19,7 +19,9 @@
 from collections import namedtuple
 from collections.abc import MutableMapping
 from itertools import chain
+from logging import warning
 from .molecule import Bond, Atom
+from ..periodictable import Element
 
 
 DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
@@ -29,8 +31,28 @@ class DynAtom(MutableMapping):
     __slots__ = ('reagent', 'product')
 
     def __init__(self, atom=None, p_atom=None):
-        self.reagent = Atom() if atom is None else atom
-        self.product = Atom() if p_atom is None else p_atom
+        if atom is None or p_atom is None:
+            if atom != p_atom:
+                warning('only one atom state passed. ignored')
+            atom = Atom()
+            p_atom = Atom()
+        else:
+            if isinstance(atom, DynAtom):
+                atom = Atom(atom.reagent)
+            elif isinstance(atom, (Atom, Element)):
+                atom = Atom(atom)
+            else:
+                raise TypeError('invalid atom passed')
+            if isinstance(p_atom, DynAtom):
+                p_atom = Atom(p_atom.product)
+            elif isinstance(p_atom, (Atom, Element)):
+                p_atom = Atom(p_atom)
+            else:
+                raise TypeError('invalid p_atom passed')
+            if atom.symbol != p_atom.symbol or atom.isotope != p_atom.isotope:
+                raise ValueError('different atoms impossible')
+        super().__setattr__('reagent', atom)
+        super().__setattr__('product', p_atom)
 
     def __getitem__(self, key):
         if key.startswith('p_'):
@@ -101,8 +123,18 @@ class DynAtom(MutableMapping):
     def __repr__(self):
         return f'{self.reagent}>>{self.product}'
 
+    @property
+    def atom(self):
+        """
+        reagent and product state atoms
+        """
+        return DynamicContainer(self.reagent.atom, self.product.atom)
+
     def copy(self):
-        return type(self)(self.reagent.copy(), self.product.copy())
+        """
+        deepcopy of reagent and product state atoms
+        """
+        return DynamicContainer(self.reagent.copy(), self.product.copy())
 
     def update(self, *args, **kwargs):
         """
@@ -121,14 +153,14 @@ class DynAtom(MutableMapping):
             kwargs = ()
 
         if isinstance(value, DynAtom):
-            p_value = value.product
-            value = value.reagent
+            p_value = value.product.atom
+            value = value.reagent.atom
         else:
             p_value = value
 
         if kwargs:
             if kwargs.keys() & self.__p_static:
-                raise KeyError('color, element, isotope, mark, mapping is static')
+                raise KeyError(f'{self.__static} keys is static')
             self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
             self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')},
                                 **{k: v for k, v in kwargs.items() if k in self.__static})
@@ -144,8 +176,28 @@ class DynBond(MutableMapping):
     __slots__ = ('reagent', 'product')
 
     def __init__(self, bond=None, p_bond=None):
-        self.reagent = Bond(allow_none=True) if bond is None else bond
-        self.product = Bond(allow_none=True) if p_bond is None else p_bond
+        if bond is None or p_bond is None:
+            if bond != p_bond:
+                warning('only one atom state passed. ignored')
+            bond = Bond(allow_none=True)
+            p_bond = Bond(allow_none=True)
+        else:
+            if isinstance(bond, DynBond):
+                bond = bond.reagent.copy()
+            elif isinstance(bond, Bond):
+                bond = Bond(**bond, allow_none=True)
+            else:
+                raise TypeError('invalid bond passed')
+            if isinstance(p_bond, DynBond):
+                p_bond = p_bond.product.copy()
+            elif isinstance(p_bond, Bond):
+                p_bond = Bond(**p_bond, allow_none=True)
+            else:
+                raise TypeError('invalid p_bond passed')
+            if bond.order == p_bond.order is None:
+                raise ValueError('empty bond not allowed')
+        super().__setattr__('reagent', bond)
+        super().__setattr__('product', p_bond)
 
     def __getitem__(self, key):
         if key.startswith('p_'):
@@ -162,8 +214,12 @@ class DynBond(MutableMapping):
 
     def __setattr__(self, key, value):
         if key.startswith('p_'):
+            if key == 'p_order' and value == self.reagent.order is None:
+                raise ValueError('empty bond not allowed')
             setattr(self.product, key[2:], value)
         else:
+            if key == 'order' and value == self.product.order is None:
+                raise ValueError('empty bond not allowed')
             setattr(self.reagent, key, value)
 
     def __len__(self):
@@ -209,10 +265,18 @@ class DynBond(MutableMapping):
         if isinstance(value, DynBond):
             p_value = value.product
             value = value.reagent
-        else:
+        elif isinstance(value, Bond):
+            if value.order is None:
+                raise ValueError('empty bond not allowed')
             p_value = value
+        else:
+            p_value = value = dict(value)
+            if value.get('order', True) is None:
+                raise ValueError('empty bond not allowed')
 
         if kwargs:
+            if kwargs.get('p_order', True) == kwargs.get('order', True) is None:
+                raise ValueError('empty bond not allowed')
             self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
             self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')})
         else:

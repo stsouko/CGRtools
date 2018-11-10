@@ -147,10 +147,10 @@ def get_element(symbol, number):
                      hybridization: int=None, neighbors: int=None, color: str=None):
             if not (isinstance(charge, int) and isinstance(isotope, int)):
                 raise TypeError('charge, isotope can be int')
-            if not all(isinstance(x, (float, int)) for x in (x, y, z)):
+            if not all(isinstance(k, (float, int)) for k in (x, y, z)):
                 raise TypeError('coordinates can be float')
-            if not all(x is None or isinstance(x, int)
-                       for x in (mapping, hybridization, neighbors, stereo, multiplicity)):
+            if not all(k is None or isinstance(k, int)
+                       for k in (mapping, hybridization, neighbors, stereo, multiplicity)):
                 raise TypeError('mapping, hybridization, neighbors, stereo, multiplicity can be None or int')
             if not isinstance(mark, str):
                 raise TypeError('mark can be str')
@@ -160,10 +160,11 @@ def get_element(symbol, number):
                     raise TypeError('color can be dict')
                 elif not color:
                     raise ValueError('empty color not allowed')
-                elif not all(isinstance(x, int) for x in color):
+                elif not all(isinstance(k, int) for k in color):
                     raise TypeError('color keys can be int')
-                elif not all(isinstance(x, str) for x in color.values()):
+                elif not all(isinstance(k, str) for k in color.values()):
                     raise TypeError('color values can be str')
+                color = color.copy()
 
             self.__charge = charge
             self.__isotope = isotope
@@ -286,7 +287,7 @@ def get_element(symbol, number):
                 raise TypeError('color keys can be int')
             elif not all(isinstance(x, str) for x in value.values()):
                 raise TypeError('color values can be str')
-            self.__color = value
+            self.__color = value.copy()
 
         @property
         def electron_configuration(self):
@@ -413,6 +414,16 @@ def get_element(symbol, number):
 
         def __hash__(self):
             return hash((number, self.__charge, self.__isotope, self.__multiplicity))
+
+        def __copy__(self):
+            return type(self)(charge=self.__charge, multiplicity=self.__multiplicity, isotope=self.__isotope,
+                              color=self.__color, mapping=self.__mapping, mark=self.__mark,
+                              x=self.__x, y=self.__y, z=self.__z, stereo=self.__stereo)
+
+        def __deepcopy__(self, *args, **kwargs):
+            return type(self)(charge=self.__charge, multiplicity=self.__multiplicity, isotope=self.__isotope,
+                              color=self.__color.copy(), mapping=self.__mapping, mark=self.__mark,
+                              x=self.__x, y=self.__y, z=self.__z, stereo=self.__stereo)
 
     return ElementClass
 
