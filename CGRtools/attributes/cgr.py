@@ -93,7 +93,7 @@ class DynAtom(MutableMapping):
         return key in self.reagent
 
     def __delitem__(self, key):
-        raise NotImplemented('attribute deletion impossible')
+        raise TypeError('attribute deletion impossible')
 
     def __eq__(self, other):
         if isinstance(other, DynAtom):
@@ -234,7 +234,7 @@ class DynBond(MutableMapping):
         return key in self.reagent
 
     def __delitem__(self, key):
-        raise NotImplemented('attribute deletion impossible')
+        raise TypeError('attribute deletion impossible')
 
     def __eq__(self, other):
         if isinstance(other, DynBond):
