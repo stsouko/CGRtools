@@ -29,6 +29,7 @@ class PeriodicMeta(type):
     """
     metaclass for creation of all classes of periodic table
     """
+
     def __init__(cls, defined_name, bases, attrs, **extra):
         name = extra.get('name', defined_name)
         super().__init__(name, bases, attrs)
@@ -56,15 +57,25 @@ class ElementMeta(PeriodicMeta):
         return cls.__symbol
 
     def __eq__(cls, other):
-        if isinstance(other, str):
-            return cls.__symbol == other
-        elif isinstance(other, int):
-            return cls.__number == other
+        if cls.__number == 0:
+            if isinstance(other, Element):
+                return True
+            elif isinstance(other, type):
+                return issubclass(other, Element)
+            elif isinstance(other, str):
+                return other in elements_set
+            elif isinstance(other, int):
+                return 0 <= other < len(elements_list)
+
+        elif isinstance(other, Element):
+            return other.number in (cls.__number, 0)
         elif isinstance(other, type):
             if issubclass(other, Element):
-                return cls.__number == other.number
-        elif isinstance(other, Element):
-            return cls.__number == other.number
+                return other.number in (cls.__number, 0)
+        elif isinstance(other, str):
+            return other in (cls.__symbol, 'A')
+        elif isinstance(other, int):
+            return other in (cls.__number, 0)
         return False
 
     def __gt__(cls, other):
@@ -80,17 +91,17 @@ class ElementMeta(PeriodicMeta):
         return self.__ops(other, le)
 
     def __ops(cls, other, op):
-        if isinstance(other, str):
-            if other in elements_list:
-                return op(cls.__number, elements_numbers[other])
-        elif isinstance(other, int):
-            return op(cls.__number, other)
+        if isinstance(other, Element):
+            return op(cls.__number or other.number, other.number or cls.__number)
         elif isinstance(other, type):
             if issubclass(other, Element):
-                return op(cls.__number, other.number)
+                return op(cls.__number or other.number, other.number or cls.__number)
             raise TypeError(f'unorderable types {cls} and {other}')
-        elif isinstance(other, Element):
-            return op(cls.__number, other.number)
+        elif isinstance(other, str):
+            if other in elements_set:
+                return op(cls.__number or elements_numbers[other], elements_numbers[other] or cls.__number)
+        elif isinstance(other, int) and 0 <= other < len(elements_list):
+            return op(cls.__number or other, other or cls.__number)
         raise TypeError(f'unorderable types {cls} and {type(other)}')
 
     def __hash__(self):
@@ -101,6 +112,7 @@ class Periodic(metaclass=PeriodicMeta):
     """
     Base class of elements periodic classes
     """
+
     def __repr__(self):
         return f'{type(self).__name__}()'
 
@@ -142,9 +154,9 @@ def get_element(symbol, number):
                      '_ElementClass__mark', '_ElementClass__mapping', '_ElementClass__x', '_ElementClass__y',
                      '_ElementClass__z', '_ElementClass__stereo', '_ElementClass__color', 'hybridization', 'neighbors')
 
-        def __init__(self, charge: int=0, multiplicity: int=None, isotope: int=_common_isotope,
-                     x: float=0, y: float=0, z: float=0, mark: str='0', mapping: int=None, stereo: int=None,
-                     hybridization: int=None, neighbors: int=None, color: str=None):
+        def __init__(self, charge: int = 0, multiplicity: int = None, isotope: int = _common_isotope,
+                     x: float = 0, y: float = 0, z: float = 0, mark: str = '0', mapping: int = None, stereo: int = None,
+                     hybridization: int = None, neighbors: int = None, color: str = None):
             if not (isinstance(charge, int) and isinstance(isotope, int)):
                 raise TypeError('charge, isotope can be int')
             if not all(isinstance(k, (float, int)) for k in (x, y, z)):
@@ -351,16 +363,27 @@ def get_element(symbol, number):
             return int(sum(bonds_map[x] for x in bonds))
 
         def __eq__(self, other):
-            if isinstance(other, str):
-                return symbol == other
-            elif isinstance(other, int):
-                return number == other
+            if number == 0:  # all atoms equal to Any atom
+                if isinstance(other, Element):
+                    return self.__isotope in (other.isotope, 0) and \
+                       self.__charge == other.charge and self.__multiplicity == other.multiplicity
+                elif isinstance(other, type):
+                    return issubclass(other, Element)
+                elif isinstance(other, str):
+                    return other in elements_set
+                elif isinstance(other, int):
+                    return 0 <= other < len(elements_list)
+
+            elif isinstance(other, Element):
+                return other.number in (number, 0) and other.isotope in (self.__isotope, 0) and \
+                       self.__charge == other.charge and self.__multiplicity == other.multiplicity
             elif isinstance(other, type):
                 if issubclass(other, Element):
-                    return number == other.number
-            elif isinstance(other, Element):
-                return number == other.number and self.__isotope == other.isotope and \
-                       self.__charge == other.charge and self.__multiplicity == other.multiplicity
+                    return other.number in (number, 0)
+            elif isinstance(other, str):
+                return other in (symbol, 'A')
+            elif isinstance(other, int):
+                return other in (number, 0)
             return False
 
         def __gt__(self, other):
@@ -376,18 +399,20 @@ def get_element(symbol, number):
             return self.__ops(other, le)
 
         def __ops(self, other, op):
-            if isinstance(other, str):
-                if other in elements_list:
-                    return op(number, elements_numbers[other])
-            elif isinstance(other, int):
-                return op(number, other)
+            if isinstance(other, Element):
+                return op(((number or other.number), (self.__isotope or other.isotope), self.__charge,
+                           self.__multiplicity),
+                          ((other.number or number), (other.isotope or self.__isotope), other.charge,
+                           other.multiplicity))
             elif isinstance(other, type):
                 if issubclass(other, Element):
-                    return op(number, other.number)
+                    return op(number or other.number, other.number or number)
                 raise TypeError(f'unorderable types {type(self)} and {other}')
-            elif isinstance(other, Element):
-                return op((number, self.__isotope, self.__charge, self.__multiplicity),
-                          (other.number, other.isotope, other.charge, other.multiplicity))
+            elif isinstance(other, str):
+                if other in elements_set:
+                    return op(number or elements_numbers[other], elements_numbers[other] or number)
+            elif isinstance(other, int) and 0 <= other < len(elements_list):
+                return op(number or other, other or number)
             raise TypeError(f'unorderable types {type(self)} and {type(other)}')
 
         def __repr__(self):
