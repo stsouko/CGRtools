@@ -93,19 +93,9 @@ class Atom(MutableMapping):
         raise TypeError('attribute deletion impossible')
 
     def __eq__(self, other):
-        return self._atom == other
-
-    def __gt__(self, other):
-        return self._atom > other
-
-    def __ge__(self, other):
-        return self._atom >= other
-
-    def __lt__(self, other):
-        return self._atom < other
-
-    def __le__(self, other):
-        return self._atom <= other
+        if isinstance(other, Atom):
+            return self._atom == other._atom
+        return False
 
     def __repr__(self):
         return repr(self._atom)
@@ -118,10 +108,7 @@ class Atom(MutableMapping):
         return self._atom
 
     def copy(self):
-        """
-        deepcopy of wrapped atom
-        """
-        return deepcopy(self._atom)
+        return type(self)(self._atom)
 
     def update(self, *args, **kwargs):
         """
