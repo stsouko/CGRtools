@@ -102,8 +102,11 @@ class DynAtom(MutableMapping):
             return self.reagent == other == self.product
         return False
 
-    def __repr__(self):
+    def __str__(self):
         return f'{self.reagent}>>{self.product}'
+
+    def format(self, *args, **kwargs):
+        return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
 
     @property
     def atom(self):
@@ -132,8 +135,8 @@ class DynAtom(MutableMapping):
             kwargs = ()
 
         if isinstance(value, DynAtom):
-            p_value = value.product.atom
-            value = value.reagent.atom
+            p_value = value.product
+            value = value.reagent
         else:
             p_value = value
 

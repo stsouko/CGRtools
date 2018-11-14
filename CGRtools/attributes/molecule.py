@@ -17,22 +17,157 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableMapping
-from copy import deepcopy
 from ..periodictable import Element, elements_classes
 
 
 class Atom(MutableMapping):
-    __slots__ = '_atom'
+    __slots__ = ('_atom', '__hybridization', '__neighbors', '__color', '__stereo', '__mapping', '__mark',
+                 '__x', '__y', '__z')
 
     def __init__(self, atom=None):
-        if atom is None:
-            super().__setattr__('_atom', None)
-        elif isinstance(atom, Atom):
-            super().__setattr__('_atom', atom.copy())
-        elif isinstance(atom, Element):
-            super().__setattr__('_atom', deepcopy(atom))
+        if isinstance(atom, Atom):
+            super().__setattr__('_atom', atom.atom)
+            super().__setattr__('_Atom__x', atom.x)
+            super().__setattr__('_Atom__y', atom.y)
+            super().__setattr__('_Atom__z', atom.z)
+            super().__setattr__('_Atom__mapping', atom.mapping)
+            super().__setattr__('_Atom__stereo', atom.stereo)
+            super().__setattr__('_Atom__mark', atom.mark)
+            super().__setattr__('_Atom__color', atom.color)
+            super().__setattr__('_Atom__hybridization', None)
+            super().__setattr__('_Atom__neighbors', None)
         else:
-            raise TypeError('invalid atom passed')
+            if atom is None:
+                super().__setattr__('_atom', None)
+            elif isinstance(atom, Element):
+                super().__setattr__('_atom', atom)
+            else:
+                raise TypeError('invalid atom passed')
+
+            super().__setattr__('_Atom__x', 0)
+            super().__setattr__('_Atom__y', 0)
+            super().__setattr__('_Atom__z', 0)
+            super().__setattr__('_Atom__mapping', None)
+            super().__setattr__('_Atom__stereo', None)
+            super().__setattr__('_Atom__mark', '0')
+            super().__setattr__('_Atom__color', None)
+            super().__setattr__('_Atom__hybridization', None)
+            super().__setattr__('_Atom__neighbors', None)
+
+    @property
+    def x(self):
+        return self.__x
+
+    @x.setter
+    def x(self, value):
+        if not isinstance(value, (float, int)):
+            raise TypeError('coordinates can be float')
+        super().__setattr__('_Atom__x', float(value))
+
+    @property
+    def y(self):
+        return self.__y
+
+    @y.setter
+    def y(self, value):
+        if not isinstance(value, (float, int)):
+            raise TypeError('coordinates can be float')
+        super().__setattr__('_Atom__y', float(value))
+
+    @property
+    def z(self):
+        return self.__z
+
+    @z.setter
+    def z(self, value):
+        if not isinstance(value, (float, int)):
+            raise TypeError('coordinates can be float')
+        super().__setattr__('_Atom__z', float(value))
+
+    @property
+    def mapping(self):
+        return self.__mapping
+
+    @mapping.setter
+    def mapping(self, value):
+        if value is None:
+            super().__setattr__('_Atom__mapping', value)
+        elif not isinstance(value, int):
+            raise TypeError('mapping can be int')
+        elif value >= 1000 or value < 0:
+            raise ValueError('mapping can be in range 0-999')
+        super().__setattr__('_Atom__mapping', value)
+
+    @property
+    def stereo(self):
+        return self.__stereo
+
+    @stereo.setter
+    def stereo(self, value):
+        if value is None:
+            super().__setattr__('_Atom__stereo', None)
+        elif not isinstance(value, int):
+            raise TypeError('stereo can be int')
+        elif value not in (-1, 1):
+            raise ValueError('stereo can be: None, 1 or -1')
+        super().__setattr__('_Atom__stereo', value)
+
+    @property
+    def neighbors(self):
+        return self.__neighbors
+
+    @neighbors.setter
+    def neighbors(self, value):
+        if value is None:
+            super().__setattr__('_Atom__neighbors', None)
+        elif not isinstance(value, int):
+            raise TypeError('neighbors can be int')
+        elif value < 0 or value > 998:
+            raise ValueError('neighbors can be: None or in range 0-998')
+        super().__setattr__('_Atom__neighbors', value)
+
+    @property
+    def hybridization(self):
+        return self.__hybridization
+
+    @hybridization.setter
+    def hybridization(self, value):
+        if value is None:
+            super().__setattr__('_Atom__hybridization', None)
+        elif not isinstance(value, int):
+            raise TypeError('hybridization can be int')
+        elif value not in (1, 2, 3, 4):
+            raise ValueError('hybridization can be: None, 1, 2, 3 or 4')
+        super().__setattr__('_Atom__hybridization', value)
+
+    @property
+    def mark(self):
+        return self.__mark
+
+    @mark.setter
+    def mark(self, value):
+        if not isinstance(value, str):
+            raise TypeError('mark can be str')
+        if not value or len(value) > 3:
+            raise ValueError('mark can be 1-3 symbol length')
+        super().__setattr__('_Atom__mark', value)
+
+    @property
+    def color(self):
+        if self.__color:
+            return self.__color.copy()
+
+    @color.setter
+    def color(self, value):
+        if not value:
+            super().__setattr__('_Atom__color', None)
+        elif not isinstance(value, dict):
+            raise TypeError('color can be dict')
+        elif not all(isinstance(x, int) for x in value):
+            raise TypeError('color keys can be int')
+        elif not all(isinstance(x, str) for x in value.values()):
+            raise TypeError('color values can be str')
+        super().__setattr__('_Atom__color', value.copy())
 
     def __getitem__(self, key):
         """
@@ -40,36 +175,37 @@ class Atom(MutableMapping):
         """
         if key == 'element':
             return self._atom.symbol
-        elif key not in self.__acceptable:
-            raise KeyError('unknown atom attribute')
-        return getattr(self._atom, key)
+        elif key in ('symbol', 'isotope', 'charge', 'multiplicity'):
+            return getattr(self._atom, key)
+        elif key in ('color', 'stereo', 'mapping', 'mark', 'x', 'y', 'z'):
+            return getattr(self, key)
+        raise KeyError('unknown atom attribute')
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
     def __getattr__(self, key):
         if key == 'element':
-            key = 'symbol'
+            return self._atom.symbol
         return getattr(self._atom, key)
 
     def __setattr__(self, key, value):
-        if key in ('element', 'symbol'):
+        if key in ('color', 'stereo', 'mapping', 'mark', 'x', 'y', 'z', 'neighbors', 'hybridization'):
+            super().__setattr__(key, value)
+        elif key in ('element', 'symbol'):
             if value not in elements_classes or value == 'A':
                 raise ValueError('invalid atom symbol')
             if self._atom is None:
                 super().__setattr__('_atom', elements_classes[value]())
             elif value != self._atom.symbol:
-                attrs = {k: getattr(self._atom, k) for k in self.__acceptable}
-                del attrs['isotope']
-                super().__setattr__('_atom', elements_classes[value](**attrs))
+                super().__setattr__('_atom', elements_classes[value](self._atom.charge, self._atom.multiplicity,
+                                                                     self._atom.isotope))
         elif self._atom is None:
             raise TypeError('any atom not allowed')
-        elif key in self.__unmutable:
-            attrs = {k: getattr(self._atom, k) for k in self.__acceptable}
-            attrs[key] = value
+        elif key in ('charge', 'isotope', 'multiplicity'):
+            attrs = {'multiplicity': self._atom.multiplicity, 'isotope': self._atom.isotope,
+                     'charge': self._atom.charge, key: value}
             super().__setattr__('_atom', elements_classes[self._atom.symbol](**attrs))
-        elif key in self.__mutable:
-            setattr(self._atom, key, value)
         else:
             raise KeyError('unknown atom attributes not allowed')
 
@@ -80,13 +216,18 @@ class Atom(MutableMapping):
         """
         iterate other non-default atom's init attrs
         """
-        if self._atom is None:
+        satom = self._atom
+        if satom is None:
             raise StopIteration
         yield 'element'
-        if self._atom.isotope != self._atom.common_isotope:
+        if satom.isotope != satom.common_isotope:
             yield 'isotope'
+        if satom.charge:
+            yield 'charge'
+        if satom.multiplicity:
+            yield 'multiplicity'
         for k, d in self.__defaults.items():
-            if d != getattr(self._atom, k):
+            if d != getattr(self, k):
                 yield k
 
     def __delitem__(self, key):
@@ -97,8 +238,40 @@ class Atom(MutableMapping):
             return self._atom == other._atom
         return False
 
-    def __repr__(self):
-        return repr(self._atom)
+    def __str__(self):
+        return self.format(isotope=True, stereo=True)
+
+    def format(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+        smi = []
+
+        if stereo and self.__stereo:
+            smi.append(self._stereo_str[self.__stereo])
+        if hybridization and self.__hybridization:
+            smi.append(self._hybridization_str[self.__hybridization])
+        if neighbors and self.__neighbors is not None:
+            smi.append(str(self.__neighbors))
+        if smi:
+            smi.append(';')
+            smi.insert(0, ';')
+
+        satom = self._atom
+        if atom:
+            smi.insert(0, satom.symbol)
+            if satom.charge:
+                smi.append(self._charge_str[satom.charge])
+            if satom.multiplicity:
+                smi.append(self._multiplicity_str[satom.multiplicity])
+        else:
+            smi.insert(0, '*')
+
+        if isotope and satom.isotope != satom.common_isotope:
+            smi.insert(0, str(satom.isotope))
+
+        if len(smi) != 1 or not atom:
+            smi.insert(0, '[')
+            smi.append(']')
+
+        return ''.join(smi)
 
     @property
     def atom(self):
@@ -108,7 +281,7 @@ class Atom(MutableMapping):
         return self._atom
 
     def copy(self):
-        return type(self)(self._atom)
+        return type(self)(self)
 
     def update(self, *args, **kwargs):
         """
@@ -128,30 +301,18 @@ class Atom(MutableMapping):
         if isinstance(value, type):
             if not issubclass(value, Element):
                 ValueError('only CGRtools.periodictable.Element subclasses allowed')
-            if kwargs.keys() - self.__mutable.keys():  # not need to check values
-                raise KeyError('unmutable atom attributes not allowed')
-
-            if self._atom is None:
-                super().__setattr__('_atom', value(**kwargs))
-            else:
-                attrs = {k: getattr(self._atom, k) for k in self.__mutable}
-                attrs.update(kwargs)
-                super().__setattr__('_atom', value(**attrs))
+            if not all(self.__mutable[k](v) for k, v in kwargs.items()):
+                raise ValueError('invalid value of attribute')
+            for k, v in kwargs.items():
+                super().__setattr__(k, v)
+            super().__setattr__('_atom', value())
 
         elif isinstance(value, Element):
-            if kwargs.keys() - self.__mutable.keys():
-                raise KeyError('unmutable atom attributes not allowed')
-
-            attrs = {k: getattr(value, k) for k in self.__mutable}
-            attrs.update(kwargs)
-            if self._atom is None or self._atom != value:
-                super().__setattr__('_atom', type(value)(charge=value.charge, isotope=value.isotope,
-                                                         multiplicity=value.multiplicity, **attrs))
-            else:
-                if not all(self.__mutable[k](v) for k, v in kwargs.items()):
-                    raise ValueError('invalid value of mutable attribute')
-                for k, v in attrs.items():
-                    setattr(self._atom, k, v)
+            if not all(self.__mutable[k](v) for k, v in kwargs.items()):
+                raise ValueError('invalid value of attribute')
+            for k, v in kwargs.items():
+                super().__setattr__(k, v)
+            super().__setattr__('_atom', value)
         else:
             if not isinstance(value, dict):
                 try:
@@ -162,18 +323,18 @@ class Atom(MutableMapping):
             value.update(kwargs)
             if not value:  # ad-hoc for add_nodes_from method
                 return
-            if value.keys() - self.__possible:
-                raise ValueError('unknown atom attributes not allowed')
 
-            if self._atom is None:
-                if 'element' not in value or value['element'] not in elements_classes or value['element'] == 'A':
-                    raise ValueError('invalid atom symbol')
+            if self._atom is None and 'element' not in value:
+                raise TypeError('any atom not allowed')
 
-                super().__setattr__('_atom', elements_classes[value['element']](**{k: v for k, v in value.items()
-                                                                                   if k != 'element'}))
-            elif value.keys() - self.__mutable.keys():
-                attrs = {k: getattr(self._atom, k) for k in self.__acceptable}
-                attrs.update(value)
+            mutable_keys = value.keys() & self.__mutable.keys()
+            if not all(self.__mutable[k](value[k]) for k in mutable_keys):
+                raise ValueError('invalid value of attribute')
+
+            atom_keys = value.keys() - self.__mutable.keys()
+            if atom_keys:
+                attrs = {'multiplicity': self._atom.multiplicity, 'isotope': self._atom.isotope,
+                         'charge': self._atom.charge, **{k: value[k] for k in atom_keys}}
 
                 if 'element' in value:
                     if value['element'] not in elements_classes or value['element'] == 'A':
@@ -185,22 +346,21 @@ class Atom(MutableMapping):
                     super().__setattr__('_atom', elements_classes[value['element']](**attrs))
                 else:
                     super().__setattr__('_atom', elements_classes[self._atom.symbol](**attrs))
-            else:
-                if not all(self.__mutable[k](v) for k, v in value.items()):
-                    raise ValueError('invalid value of mutable attribute')
-                for k, v in value.items():
-                    setattr(self._atom, k, v)
 
-    __defaults = {'mapping': None, 'mark': '0', 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'charge': 0,
-                  'multiplicity': None, 'color': None}
+            for k in mutable_keys:
+                super().__setattr__(k, value[k])
+
+    _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
+    _stereo_str = {1: '@', -1: '@@'}
+    _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
+    _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
+
+    __defaults = {'mapping': None, 'mark': '0', 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'color': None}
     __mutable = {'mapping': lambda x: x is None or isinstance(x, int), 'mark': lambda x: isinstance(x, str),
                  'x': lambda x: isinstance(x, (float, int)), 'y': lambda x: isinstance(x, (float, int)),
                  'z': lambda x: isinstance(x, (float, int)), 'stereo': lambda x: x in (None, -1, 1),
                  'color': lambda x: x is None or isinstance(x, dict) and all(isinstance(y, int) for y in x) and
                                     all(isinstance(y, str) for y in x.values())}
-    __unmutable = {'isotope', 'charge', 'multiplicity'}
-    __acceptable = {*__mutable, *__unmutable}
-    __possible = {'element', *__acceptable}
 
 
 class Bond(MutableMapping):
