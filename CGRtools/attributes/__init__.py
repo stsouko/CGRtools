@@ -18,3 +18,4 @@
 #
 from .cgr import *
 from .molecule import *
+from .query import *
