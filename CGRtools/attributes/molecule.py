@@ -408,6 +408,14 @@ class Bond(MutableMapping):
             return self.order == other.order
         return False
 
+    def __str__(self):
+        return self.format(stereo=True)
+
+    def format(self, stereo=False):
+        if stereo and self.stereo:
+            return self._order_str[self.order] + self._stereo_str[self.stereo]
+        return self._order_str[self.order]
+
     def __repr__(self):
         s = '' if self.stereo == self._defaults['stereo'] else f', stereo={self.stereo}'
         return f'{type(self).__name__}({self.order}{s})'
@@ -467,6 +475,8 @@ class Bond(MutableMapping):
     _acceptable = {'order': lambda x, y: x in (1, 2, 3, 4, 9) or y and x is None,
                    'stereo': lambda x, _: x in (None, -1, 1)}
     _defaults = {'order': 1, 'stereo': None}
+    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
+    _stereo_str = {1: '@', -1: '@@'}
 
 
 __all__ = ['Atom', 'Bond']

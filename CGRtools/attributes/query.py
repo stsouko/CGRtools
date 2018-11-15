@@ -248,8 +248,14 @@ class QueryBond(Bond):
                 return True
         return False
 
+    def format(self, stereo=True):
+        order = '<%s>' % ''.join(sorted(self._order_str[x] for x in sorted(self.order)))
+        if stereo and self.stereo:
+            return order + self._stereo_str[self.stereo]
+        return order
+
     def __hash__(self):
-        return hash((tuple(sorted(self.order, key=lambda x: x or 0)), self.stereo))
+        return hash((tuple(sorted(self.order)), self.stereo))
 
     def update(self, *args, **kwargs):
         """
@@ -300,7 +306,7 @@ class QueryBond(Bond):
             for k, v in value.items():
                 super().__setattr__(k, v)
 
-    _acceptable = {'order': lambda x, _=None: isinstance(x, tuple) and all(x in (1, 2, 3, 4, 9, None) for x in x),
+    _acceptable = {'order': lambda x, _=None: isinstance(x, tuple) and all(x in (1, 2, 3, 4, 9) for x in x),
                    'stereo': lambda x, _=None: x in (None, -1, 1)}
     _defaults = {'order': (1,), 'stereo': None}
 

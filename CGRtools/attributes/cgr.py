@@ -225,6 +225,12 @@ class DynBond(MutableMapping):
             return self.reagent == other == self.product
         return False
 
+    def __str__(self):
+        return f'{self.reagent}>>{self.product}'
+
+    def format(self, *args, **kwargs):
+        return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
+
     def __repr__(self):
         return f'{self.reagent}>>{self.product}'
 
