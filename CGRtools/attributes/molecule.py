@@ -367,9 +367,9 @@ class Bond(MutableMapping):
     __slots__ = ('order', 'stereo', '__allow_none')
 
     def __init__(self, order=None, stereo=None, allow_none=False):
+        super().__setattr__('_Bond__allow_none', allow_none)
         self.order = self._defaults['order'] if order is None else order
         self.stereo = self._defaults['stereo'] if stereo is None else stereo
-        super().__setattr__('_Bond__allow_none', allow_none)
 
     def __getitem__(self, key):
         if key not in self._acceptable:

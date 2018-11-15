@@ -24,7 +24,7 @@ from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from typing import Callable
 from ..algorithms import hash_cgr_string, get_morgan
 from ..attributes import Bond
-from ..periodictable import elements_list, radical_map, radical_unmap
+from ..periodictable import elements_list, radical_unmap
 
 
 class BaseContainer(Graph, ABC):
@@ -89,7 +89,6 @@ class BaseContainer(Graph, ABC):
         self.flush_cache()
         return _map
 
-    @abstractmethod
     def add_bond(self, atom1, atom2, bond):
         """
         implementation of bond addition
