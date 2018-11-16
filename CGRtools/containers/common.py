@@ -18,28 +18,17 @@
 #
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from hashlib import md5, sha256
 from itertools import cycle
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from typing import Callable
-from ..algorithms import hash_cgr_string, get_morgan
+from ..algorithms import get_morgan
+from ..algorithms.strings import StringCommon
 from ..attributes import Bond
 from ..periodictable import elements_list, radical_unmap
 
 
-class BaseContainer(Graph, ABC):
-    def __dir__(self):
-        if self.__visible is None:
-            self.__visible = [self.pickle.__name__, self.unpickle.__name__, self.copy.__name__, self.remap.__name__,
-                              self.flush_cache.__name__, self.substructure.__name__,  self.get_morgan.__name__,
-                              self.get_signature.__name__, self.get_signature_hash.__name__,
-                              self.augmented_substructure.__name__, self.mark.__name__, self.atom.__name__,
-                              self.bond.__name__, self.stereo.__name__, self.add_atom.__name__, self.add_bond.__name__,
-                              self.add_stereo.__name__, self.get_stereo.__name__, self.delete_atom.__name__,
-                              self.environment.__name__, self.delete_bond.__name__,
-                              'meta', 'bonds_count', 'atoms_count', 'atom_numbers']
-        return self.__visible
-
+class BaseContainer(Graph, StringCommon, ABC):
     def __getstate__(self):
         return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
 
@@ -566,32 +555,41 @@ class BaseContainer(Graph, ABC):
         return relabel_nodes(self, mapping, copy)
 
     def get_signature_hash(self, *args, **kwargs):
-        return hash_cgr_string(self.get_signature(*args, **kwargs))
+        """
+        concatenated md5 and sha256 hashes of cgr string
+        :return: 48 bytes length string
+        """
+        bs = self.get_signature(*args, **kwargs).encode()
+        return md5(bs).digest() + sha256(bs).digest()
 
-    def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
-                      flush_cache=False,  weights=None):
+    def get_signature(self, start=None, depth_limit=None, atom=True, isotope=False, stereo=False, hybridization=False,
+                      neighbors=False, flush_cache=False,  weights=None):
         """
         return string representation of structure
 
+        :param start: root atom map. need for augmented atom signatures
+        :param depth_limit: dept of augmented atom signature
         :param weights: dict of atoms in keys and orders in values
         :param isotope: set isotope marks
         :param stereo: set stereo marks
         :param hybridization: set hybridization mark of atom
         :param neighbors: set neighbors count mark of atom
-        :param element: set elements marks
+        :param atom: set elements marks
         :param flush_cache: recalculate signature if True
         """
         if flush_cache or self.__signatures is None:
             self.__signatures = {}
 
-        k = (isotope, element, stereo, hybridization, neighbors)
-        out = self.__signatures.get(k)
-        if not out:
-            sg = self._signature_generator(element, isotope, stereo, hybridization, neighbors)
-            if not weights:
-                weights = self.get_morgan(isotope, element, stereo, hybridization, neighbors, flush_cache=flush_cache)
-            self.__signatures[k] = out = sg(self, weights)
-        return out
+        if weights is None:
+            k = (start, depth_limit, atom, isotope, stereo, hybridization, neighbors)
+            if k in self.__signatures:
+                return self.__signatures[k]
+            weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, flush_cache)
+            sg = self._stringify(start, depth_limit, weights, atom, isotope, stereo, hybridization, neighbors)
+            self.__signatures[k] = sg
+            return sg
+        else:
+            return self._stringify(start, depth_limit, weights, atom, isotope, stereo, hybridization, neighbors)
 
     def get_morgan(self, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False,
                    flush_cache=False):
@@ -608,7 +606,7 @@ class BaseContainer(Graph, ABC):
         pass
 
     @abstractmethod
-    def _signature_generator(self, *args, **kwargs) -> Callable:
+    def _stringify(self, *args, **kwargs) -> str:
         """
         container specific signature generation class
         """

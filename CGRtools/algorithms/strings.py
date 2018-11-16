@@ -16,285 +16,231 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from hashlib import md5, sha256
-from itertools import chain, count
+from collections import defaultdict
 
 
-def hash_cgr_string(string):
-    """
-    concatenated md5 and sha256 hashes of cgr string 
-    :param string: 
-    :return: 48 bytes length string  
-    """
-    bs = string.encode()
-    return md5(bs).digest() + sha256(bs).digest()
-
-
-class CGRstring:
-    def __init__(self, element=True, isotope=False, stereo=False, hybridization=False, neighbors=False, is_cgr=False):
-        self.__isotope = element and isotope
-        self.__stereo = stereo
-        self.__hyb = hybridization
-        self.__neighbors = neighbors
-        self.__element = element
-        self.__get_atom = self.__cgr_atom if is_cgr else self.__mol_atom
-        self.__add_bond = self.__cgr_bond if is_cgr else self.__mol_bond
-        self.__is_cgr = is_cgr
-
-    def __call__(self, g, weights):
-        self.__weights = weights
-        self.__countmap, self.__countcyc = count(1), count(1)
-        self.__g = g
-
-        has_next = set(g)
-        ssmiles, psmiles = [], []
-        while has_next:
-            self.__visited = set()
-            firstatom = self.__get_next_atom(has_next)
-            smirks = self.__do_cgr_smarts({firstatom}, firstatom, firstatom)
-
-            if self.__is_cgr:
-                ssmiles.append(''.join(smirks[1][0]))
-                psmiles.append(''.join(smirks[1][1]))
-            else:
-                ssmiles.append(''.join(smirks[1]))
-            has_next.difference_update(self.__visited)
-
-        jssmiles = '.'.join(ssmiles)
-        if self.__is_cgr:
-            jpsmiles = '.'.join(psmiles)
-            return '%s>>%s' % (jssmiles, jpsmiles) if jssmiles != jpsmiles else jssmiles
-
-        return jssmiles
-
-    def __get_next_atom(self, atoms):
-        if len(atoms) == 1:
-            nextatom = list(atoms)[0]
+class StringCommon:
+    def _dfs(self, start, weights=None, depth_limit=None):
+        """
+        modified NX dfs
+        """
+        adj = self._adj
+        if weights is None:
+            def weights(x):
+                return x
         else:
-            weights = self.__weights
-            nextatom = sorted((weights[i], i) for i in atoms)[-1][1]
+            weights = weights.get
 
-        self.__visited.add(nextatom)
-        return nextatom
-
-    def __mol_atom(self, atom):
-        smi = []
-
-        if self.__stereo and atom.stereo:
-            smi.append(self.__stereo_types[atom.stereo])
-
-        if self.__hyb and atom.hybridization:
-            smi.append(self.__hyb_types[atom.hybridization])
-
-        if self.__neighbors and atom.neighbors is not None:
-            smi.append(str(atom.neighbors))
-
-        if smi:
-            smi.append(';')
-            smi.insert(0, ';')
-
-        if self.__element:
-            smi.insert(0, atom.symbol)
-
-            if atom.charge:
-                smi.append(self.__charge_to_string(atom.charge))
-
-            if atom.multiplicity:
-                smi.append(self.__radical_map[atom.multiplicity])
-        else:
-            smi.insert(0, '*')
-
-        if self.__isotope and atom.isotope != atom.common_isotope:
-            smi.insert(0, str(atom.isotope))
-
-        if len(smi) != 1 or smi[0] == '*':
-            smi.insert(0, '[')
-            smi.append(']')
-
-        return smi
-
-    def __cgr_atom(self, atom):
-        smi = []
-        pmi = []
-
-        if self.__stereo:
-            if atom.stereo:
-                smi.append(self.__stereo_types[atom.stereo])
-            if atom.p_stereo:
-                pmi.append(self.__stereo_types[atom.p_stereo])
-
-        if self.__hyb:
-            s = atom.hybridization
-            p = atom.p_hybridization
-            if isinstance(s, list):
-                tmp = sorted((self.__hyb_types[x], self.__hyb_types[y]) for x, y in zip(s, p))
-                smi.append('<%s>' % ''.join(x for x, _ in tmp))
-                pmi.append('<%s>' % ''.join(x for _, x in tmp))
+        if depth_limit is None:
+            depth_limit = len(adj)
+        stack = [(start, depth_limit, iter(sorted(adj[start], key=weights)))]
+        visited = {start}
+        cycles = defaultdict(list)
+        edges = defaultdict(list)
+        while stack:
+            parent, depth_now, children = stack[-1]
+            try:
+                child = next(children)
+            except StopIteration:
+                stack.pop()
             else:
-                if s:
-                    smi.append(self.__hyb_types[s])
-                if p:
-                    pmi.append(self.__hyb_types[p])
+                if child not in visited:
+                    edges[parent].append(child)
+                    visited.add(child)
+                    if depth_now > 1:
+                        front = adj[child].keys() - {parent}
+                        if front:
+                            stack.append((child, depth_now - 1, iter(sorted(front, key=weights))))
+                elif child not in cycles:
+                    cycles[parent].append(child)
 
-        if self.__neighbors:
-            s = atom.neighbors
-            p = atom.p_neighbors
-            if isinstance(s, list):
-                tmp = sorted((x is None and 'n' or str(x), y is None and 'n' or str(y)) for x, y in zip(s, p))
-                smi.append('<%s>' % ''.join(x for x, _ in tmp))
-                pmi.append('<%s>' % ''.join(x for _, x in tmp))
+        return visited, edges, cycles
+
+
+class StringMolecule:
+    def _stringify(self, start=None, depth_limit=None, weights=None, atom=True, isotope=False, stereo=False,
+                   hybridization=False, neighbors=False):
+        if start is None:
+            depth_limit = None
+            g_set = set(self._node)
+            smiles = []
+            while g_set:
+                if weights is None:
+                    start = min(g_set)
+                else:
+                    start = min(g_set, key=weights.get)
+
+                visited, edges, cycles = self._dfs(start, weights, depth_limit)
+                smiles.append(self.__stringify(start, visited, edges, cycles, atom, isotope, stereo,
+                              hybridization, neighbors))
+                g_set.difference_update(visited)
+            return '.'.join(smiles)
+
+        visited, edges, cycles = self._dfs(start, weights, depth_limit)
+        return self.__stringify(start, visited, edges, cycles, atom, isotope, stereo, hybridization, neighbors)
+
+    def __stringify(self, start, visited, edges, cycles, f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors):
+        node = self._node
+        adj = self._adj
+        c = 1
+        atoms = {}
+        reverse = defaultdict(list)
+        for parent, children in cycles.items():
+            tmp = [node[parent].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)]
+            for child in children:
+                bond = f'{adj[parent][child].stringify(f_stereo)}{c}'
+                tmp.append(bond)
+                reverse[child].append(bond)
+                c += 1
+            atoms[parent] = ''.join(tmp)
+
+        for parent, children in reverse.items():
+            tmp = [node[parent].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)]
+            tmp.extend(children)
+            atoms[parent] = ''.join(tmp)
+
+        for i in visited - atoms.keys():
+            atoms[i] = node[i].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)
+
+        stack = [[start, [atoms[start]], 0]]
+        while True:
+            tail, smiles, closure = stack[-1]
+            if tail in edges:
+                children = edges[tail]
+                if len(children) > 1:
+                    child = children[-1]
+                    stack_len = len(stack)
+                    stack.append([child, [adj[tail][child].stringify(f_stereo), atoms[child]], 0])
+                    for child in children[:-1]:
+                        stack.append([child, ['(', adj[tail][child].stringify(f_stereo), atoms[child]],
+                                      stack_len])
+                else:
+                    child = children[-1]
+                    stack[-1][0] = child
+                    smiles.append(adj[tail][child].stringify(f_stereo))
+                    smiles.append(atoms[child])
+            elif closure:
+                stack.pop()
+                smiles.append(')')
+                stack[closure - 1][1].extend(smiles)
+            elif len(stack) > 2:
+                stack.pop()
+                stack[-1][0] = tail
+                stack[-1][1].extend(smiles)
+            elif len(stack) == 2:
+                stack[0][1].extend(smiles)
+                smiles = stack[0][1]
+                break
             else:
-                if s is not None:
-                    smi.append(str(s))
-                if p is not None:
-                    pmi.append(str(p))
+                break
 
-        if smi:
-            smi.append(';')
-            smi.insert(0, ';')
-        if pmi:
-            pmi.append(';')
-            pmi.insert(0, ';')
+        return ''.join(smiles)
 
-        if self.__element:
-            ge = atom.symbol
-            if isinstance(ge, list):
-                ge = list(','.join(sorted(ge)))
-                smi = ge + smi
-                pmi = ge + pmi
+
+class StringCGR:
+    def _stringify(self, start=None, depth_limit=None, weights=None, atom=True, isotope=False, stereo=False,
+                   hybridization=False, neighbors=False):
+        if start is None:
+            depth_limit = None
+            g_set = set(self._node)
+            r_smiles, p_smiles = [], []
+            while g_set:
+                if weights is None:
+                    start = min(g_set)
+                else:
+                    start = min(g_set, key=weights.get)
+
+                visited, edges, cycles = self._dfs(start, weights, depth_limit)
+                tmp = self.__stringify(start, visited, edges, cycles, atom, isotope, stereo,
+                                       hybridization, neighbors)
+                r_smiles.append(tmp[0])
+                p_smiles.append(tmp[1])
+                g_set.difference_update(visited)
+            return f"{'.'.join(r_smiles)}>>{'.'.join(p_smiles)}"
+
+        visited, edges, cycles = self._dfs(start, weights, depth_limit)
+        return '>>'.join(self.__stringify(start, visited, edges, cycles, atom, isotope, stereo, hybridization,
+                                          neighbors))
+
+    def __stringify(self, start, visited, edges, cycles, f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors):
+        node = self._node
+        adj = self._adj
+        c = 1
+        atoms = {}
+        r_reverse = defaultdict(list)
+        p_reverse = defaultdict(list)
+        for parent, children in cycles.items():
+            r_tmp, p_tmp = node[parent].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)
+            r_tmp = [r_tmp]
+            p_tmp = [p_tmp]
+            for child in children:
+                r_bond, p_bond = adj[parent][child].stringify(f_stereo)
+                sc = str(c)
+                r_tmp.append(r_bond)
+                p_tmp.append(p_bond)
+                r_tmp.append(sc)
+                p_tmp.append(sc)
+                r_reverse[child].append(r_bond)
+                r_reverse[child].append(sc)
+                p_reverse[child].append(p_bond)
+                p_reverse[child].append(sc)
+                c += 1
+            atoms[parent] = (''.join(r_tmp), ''.join(p_tmp))
+
+        for (parent, r_children), p_children in zip(r_reverse.items(), p_reverse.values()):
+            r_tmp, p_tmp = node[parent].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)
+            r_tmp = [r_tmp]
+            p_tmp = [p_tmp]
+            r_tmp.extend(r_children)
+            p_tmp.extend(p_children)
+            atoms[parent] = (''.join(r_tmp), ''.join(p_tmp))
+
+        for i in visited - atoms.keys():
+            atoms[i] = node[i].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)
+
+        r_atom, p_atom = atoms[start]
+        stack = [[start, [r_atom], [p_atom], 0]]
+        while True:
+            tail, r_smiles, p_smiles, closure = stack[-1]
+            if tail in edges:
+                children = edges[tail]
+                if len(children) > 1:
+                    child = children[-1]
+                    stack_len = len(stack)
+                    r_bond, p_bond = adj[tail][child].stringify(f_stereo)
+                    r_atom, p_atom = atoms[child]
+                    stack.append([child, [r_bond, r_atom], [p_bond, p_atom], 0])
+                    for child in children[:-1]:
+                        r_bond, p_bond = adj[tail][child].stringify(f_stereo)
+                        r_atom, p_atom = atoms[child]
+                        stack.append([child, ['(', r_bond, r_atom], ['(', p_bond, p_atom], stack_len])
+                else:
+                    child = children[-1]
+                    stack[-1][0] = child
+                    r_bond, p_bond = adj[tail][child].stringify(f_stereo)
+                    r_atom, p_atom = atoms[child]
+                    r_smiles.append(r_bond)
+                    r_smiles.append(r_atom)
+                    p_smiles.append(p_bond)
+                    p_smiles.append(p_atom)
+            elif closure:
+                stack.pop()
+                r_smiles.append(')')
+                p_smiles.append(')')
+                stack[closure - 1][1].extend(r_smiles)
+                stack[closure - 1][2].extend(p_smiles)
+            elif len(stack) > 2:
+                stack.pop()
+                stack[-1][0] = tail
+                stack[-1][1].extend(r_smiles)
+                stack[-1][2].extend(p_smiles)
+            elif len(stack) == 2:
+                stack[0][1].extend(r_smiles)
+                stack[0][2].extend(p_smiles)
+                r_smiles = stack[0][1]
+                p_smiles = stack[0][2]
+                break
             else:
-                if not ge:
-                    ge = '*'
-                smi.insert(0, ge)
-                pmi.insert(0, ge)
+                break
 
-            s = atom.charge
-            p = atom.p_charge
-            if isinstance(s, list):
-                tmp = [(self.__charge_to_string(x), self.__charge_to_string(y)) for x, y in sorted(zip(s, p))]
-                smi.append('<%s>' % ''.join(x for x, _ in tmp))
-                pmi.append('<%s>' % ''.join(x for _, x in tmp))
-            else:
-                if s:
-                    smi.append(self.__charge_to_string(s))
-                if p:
-                    pmi.append(self.__charge_to_string(p))
-
-            s = atom.multiplicity
-            p = atom.p_multiplicity
-            if isinstance(s, list):
-                tmp = [(self.__radical_map[x], self.__radical_map[y]) for x, y in sorted(zip(s, p))]
-                smi.append('<%s>' % ''.join(x for x, _ in tmp))
-                pmi.append('<%s>' % ''.join(x for _, x in tmp))
-            else:
-                if s:
-                    smi.append(self.__radical_map[s])
-                if p:
-                    pmi.append(self.__radical_map[p])
-        else:
-            smi.insert(0, '*')
-            pmi.insert(0, '*')
-
-        if self.__isotope:
-            s = atom.isotope
-            if isinstance(s, list):
-                s = '<%s>' % ','.join(str(x) for x in s)
-                smi.insert(0, s)
-                pmi.insert(0, s)
-            elif s != atom.common_isotope:
-                s = str(s)
-                smi.insert(0, s)
-                pmi.insert(0, s)
-
-        if len(smi) != 1 or smi[0] == '*':
-            smi.insert(0, '[')
-            smi.append(']')
-        if len(pmi) != 1 or pmi[0] == '*':
-            pmi.insert(0, '[')
-            pmi.append(']')
-
-        return smi, pmi
-
-    def __mol_bond(self, smiles, bond, closure=''):
-        if isinstance(bond.order, list):
-            sb = '<%s>' % ''.join(sorted(self.__to_smiles_map[x] for x in bond.order))
-        else:
-            sb = self.__to_smiles_map[bond.order]
-        smiles.append('%s%s%s' % (sb, self.__stereo and bond.stereo or '', closure))
-
-    def __cgr_bond(self, smiles, bond, closure=''):
-        if isinstance(bond.order, list):
-            tmp = sorted((self.__to_smiles_map[x], self.__to_smiles_map[y]) for x, y in zip(bond.order, bond.p_order))
-            sb, pb = '<%s>' % ''.join(x for x, _ in tmp), '<%s>' % ''.join(x for _, x in tmp)
-        else:
-            sb, pb = self.__to_smiles_map[bond.order], self.__to_smiles_map[bond.p_order]
-
-        smiles[0].append('%s%s%s' % (pb, self.__stereo and bond.stereo or '', closure))
-        smiles[1].append('%s%s%s' % (pb, self.__stereo and bond.p_stereo or '', closure))
-
-    def __do_cgr_smarts(self, trace, inter, prev):
-        g = self.__g
-        countcyc = self.__countcyc
-
-        smiles = self.__get_atom(g._node[inter])
-        concat = []
-        stoplist = []
-        iterlist = set(g._adj[inter]).difference([prev])
-        while iterlist:
-            i = self.__get_next_atom(iterlist)
-            iterlist.discard(i)
-            gii = g._adj[inter][i]
-            if i in trace:
-                if i not in stoplist:  # костыль для циклов. чтоб не было 2х проходов.
-                    cyc = next(countcyc)
-                    concat.append((i, cyc, inter))
-                    self.__add_bond(smiles, gii, cyc)
-                continue
-
-            deep0, deep1, deep2 = self.__do_cgr_smarts(set(chain(trace, [i])), i, inter)
-            trace.update(deep0)
-            if deep2:
-                for j0, j1, j2 in deep2:
-                    if j0 == inter:
-                        gij = g[inter][j2]
-                        stoplist.append(j2)
-                        self.__add_bond(smiles, gij, j1)
-                    else:
-                        concat.append((j0, j1, j2))
-
-            if self.__is_cgr:
-                if iterlist:
-                    smiles[0].append('(')
-                    smiles[1].append('(')
-                self.__add_bond(smiles, gii)
-                smiles[0].extend(deep1[0])
-                smiles[1].extend(deep1[1])
-                if iterlist:
-                    smiles[0].append(')')
-                    smiles[1].append(')')
-            else:
-                if iterlist:
-                    smiles.append('(')
-                self.__add_bond(smiles, gii)
-                smiles.extend(deep1)
-                if iterlist:
-                    smiles.append(')')
-
-        return trace, smiles, concat
-
-    @classmethod
-    def __charge_to_string(cls, c):
-        if c == 1:
-            c = '+'
-        elif c == -1:
-            c = '-'
-        elif c:
-            c = '%+d' % c
-        else:
-            c = '0'
-        return c
-
-    __to_smiles_map = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
-    __hyb_types = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-    __stereo_types = {1: '@', -1: '@@'}
-    __radical_map = {1: '*', 2: '*2', 3: '*3', None: 'n'}
+        return ''.join(r_smiles), ''.join(p_smiles)

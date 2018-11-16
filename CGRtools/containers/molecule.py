@@ -18,14 +18,15 @@
 #
 from collections import defaultdict
 from .common import BaseContainer
-from ..algorithms import CGRstring, pyramid_volume, aromatize
+from ..algorithms import pyramid_volume, aromatize
 from ..algorithms.morgan import initial_weights
+from ..algorithms.strings import StringMolecule
 from ..attributes import Atom, Bond
 from ..exceptions import InvalidStereo
 from ..periodictable import H
 
 
-class MoleculeContainer(BaseContainer):
+class MoleculeContainer(StringMolecule, BaseContainer):
     """
     storage for Molecules
 
@@ -33,13 +34,6 @@ class MoleculeContainer(BaseContainer):
     """
     node_attr_dict_factory = Atom
     edge_attr_dict_factory = Bond
-
-    def __dir__(self):
-        if self.__visible is None:
-            self.__visible = super().__dir__() + [self.explicify_hydrogens.__name__, self.implicify_hydrogens.__name__,
-                                                  self.atom_implicit_h.__name__, self.reset_query_marks.__name__,
-                                                  self.aromatize.__name__, self.check_valence.__name__]
-        return self.__visible
 
     def substructure(self, *args, **kwargs):
         sub = super().substructure(*args, **kwargs)
@@ -268,9 +262,6 @@ class MoleculeContainer(BaseContainer):
                     _stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
             else:
                 return _stereo_cache
-
-    def _signature_generator(self, *args, **kwargs):
-        return CGRstring(*args, **kwargs)
 
     @property
     def _morgan_init(self):

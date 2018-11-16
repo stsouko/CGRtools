@@ -239,9 +239,9 @@ class Atom(MutableMapping):
         return False
 
     def __str__(self):
-        return self.format(isotope=True, stereo=True)
+        return self.stringify(isotope=True, stereo=True)
 
-    def format(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+    def stringify(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
         smi = []
 
         if stereo and self.__stereo:
@@ -256,16 +256,17 @@ class Atom(MutableMapping):
 
         satom = self._atom
         if atom:
+            if satom.symbol not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                atom = False
             smi.insert(0, satom.symbol)
             if satom.charge:
                 smi.append(self._charge_str[satom.charge])
             if satom.multiplicity:
                 smi.append(self._multiplicity_str[satom.multiplicity])
+            if isotope and satom.isotope != satom.common_isotope:
+                smi.insert(0, str(satom.isotope))
         else:
             smi.insert(0, '*')
-
-        if isotope and satom.isotope != satom.common_isotope:
-            smi.insert(0, str(satom.isotope))
 
         if len(smi) != 1 or not atom:
             smi.insert(0, '[')
@@ -409,9 +410,9 @@ class Bond(MutableMapping):
         return False
 
     def __str__(self):
-        return self.format(stereo=True)
+        return self.stringify(stereo=True)
 
-    def format(self, stereo=False):
+    def stringify(self, stereo=False):
         if stereo and self.stereo:
             return self._order_str[self.order] + self._stereo_str[self.stereo]
         return self._order_str[self.order]

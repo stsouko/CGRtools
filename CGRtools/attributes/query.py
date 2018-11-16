@@ -19,7 +19,7 @@
 from collections.abc import MutableMapping
 from .cgr import DynAtom
 from .molecule import Bond, Atom
-from ..periodictable import Element, elements_classes
+from ..periodictable import Element, elements_classes, elements_numbers
 
 
 class QueryAtom(MutableMapping):
@@ -102,9 +102,9 @@ class QueryAtom(MutableMapping):
         return False
 
     def __str__(self):
-        return self.format()
+        return self.stringify()
 
-    def format(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
+    def stringify(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
         smi = []
         satom = self._atom
         if stereo and satom['stereo']:
@@ -125,12 +125,14 @@ class QueryAtom(MutableMapping):
 
         if atom:
             if satom['element'] == ('A',):
+                atom = False
                 smi.insert(0, '*')
             elif len(satom['element']) > 1:
-                if not smi:
-                    smi.append('')  # ad-hoc
-                smi.insert(0, ','.join(sorted(satom['element'])))
+                atom = False
+                smi.insert(0, ','.join(sorted(satom['element'], key=elements_numbers)))
             else:
+                if satom['element'][0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                    atom = False
                 smi.insert(0, satom['element'][0])
 
             if len(satom['charge']) > 1:
@@ -142,16 +144,16 @@ class QueryAtom(MutableMapping):
                 smi.append('<%s>' % ''.join(Atom._multiplicity_str[x] for x in sorted(satom['multiplicity'])))
             elif satom['multiplicity']:
                 smi.append(Atom._multiplicity_str[satom['multiplicity'][0]])
+
+            if isotope:
+                if len(satom['isotope']) > 1:
+                    smi.insert(0, '<%s>' % ''.join(str(x) for x in sorted(satom['isotope'])))
+                elif satom['isotope']:
+                    smi.insert(0, str(satom['isotope'][0]))
         else:
             smi.insert(0, '*')
 
-        if isotope:
-            if len(satom['isotope']) > 1:
-                smi.insert(0, '<%s>' % ''.join(str(x) for x in sorted(satom['isotope'])))
-            elif satom['isotope']:
-                smi.insert(0, str(satom['isotope'][0]))
-
-        if len(smi) != 1 or not atom or smi[0] == '*':
+        if len(smi) != 1 or not atom:
             smi.insert(0, '[')
             smi.append(']')
 
@@ -248,7 +250,7 @@ class QueryBond(Bond):
                 return True
         return False
 
-    def format(self, stereo=True):
+    def stringify(self, stereo=True):
         order = '<%s>' % ''.join(sorted(self._order_str[x] for x in sorted(self.order)))
         if stereo and self.stereo:
             return order + self._stereo_str[self.stereo]

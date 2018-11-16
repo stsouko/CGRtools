@@ -105,7 +105,7 @@ class DynAtom(MutableMapping):
     def __str__(self):
         return f'{self.reagent}>>{self.product}'
 
-    def format(self, *args, **kwargs):
+    def stringify(self, *args, **kwargs):
         return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
 
     @property
@@ -228,7 +228,7 @@ class DynBond(MutableMapping):
     def __str__(self):
         return f'{self.reagent}>>{self.product}'
 
-    def format(self, *args, **kwargs):
+    def stringify(self, *args, **kwargs):
         return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
 
     def __repr__(self):
