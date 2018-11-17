@@ -20,10 +20,10 @@ from collections import defaultdict
 from itertools import repeat, zip_longest
 from typing import Tuple
 from .molecule import MoleculeContainer
-from ..algorithms import pyramid_volume, aromatize_cgr
+from ..algorithms import aromatize_cgr
 from ..algorithms.strings import StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
-from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
+from ..exceptions import InvalidData, InvalidAtom
 from ..periodictable import H
 
 
@@ -34,11 +34,6 @@ class CGRContainer(StringCGR, MoleculeContainer):
 
     node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
-
-    def __dir__(self):
-        if self.__visible is None:
-            self.__visible = super().__dir__() + [self.get_center_atoms.__name__]
-        return self.__visible
 
     def add_stereo(self, atom1, atom2, mark, p_mark=None):
         if mark not in (1, -1) and p_mark not in (1, -1):
@@ -277,13 +272,7 @@ class CGRContainer(StringCGR, MoleculeContainer):
                 report.append(f'atom {x} has invalid valence')
         return report
 
-    def _prepare_stereo(self):
+    def _wedge_map(self):
         return {}
 
-    def _fix_stereo_stage_1(self):
-        pass
-
-    def _fix_stereo_stage_2(self, stereo):
-        pass
-
-    __visible = None
+    _visible = ()

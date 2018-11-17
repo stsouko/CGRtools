@@ -28,5 +28,5 @@ class QueryContainer(StringMolecule, BaseContainer):
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
 
-    def _prepare_stereo(self):
+    def _wedge_map(self):
         return {}

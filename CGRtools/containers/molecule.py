@@ -18,14 +18,13 @@
 #
 from collections import defaultdict
 from .common import BaseContainer
-from ..algorithms import pyramid_volume, aromatize
+from ..algorithms.stereo import StereoMolecule
 from ..algorithms.strings import StringMolecule
 from ..attributes import Atom, Bond
-from ..exceptions import InvalidStereo
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, BaseContainer):
+class MoleculeContainer(StringMolecule, StereoMolecule, BaseContainer):
     """
     storage for Molecules
 
@@ -33,54 +32,6 @@ class MoleculeContainer(StringMolecule, BaseContainer):
     """
     node_attr_dict_factory = Atom
     edge_attr_dict_factory = Bond
-
-    def substructure(self, *args, **kwargs):
-        sub = super().substructure(*args, **kwargs)
-        sub._fix_stereo_stage_2(self._fix_stereo_stage_1())
-        return sub
-
-    def add_bond(self, atom1, atom2, bond):
-        stereo = self._fix_stereo_stage_1()
-        super().add_bond(atom1, atom2, bond)
-        self._fix_stereo_stage_2(stereo)
-
-    def delete_atom(self, n):
-        """
-        implementation of atom removing
-        """
-        stereo = self._fix_stereo_stage_1()
-        self.remove_node(n)
-        self._fix_stereo_stage_2(stereo)
-
-    def delete_bond(self, n, m):
-        """
-        implementation of bond removing
-        """
-        stereo = self._fix_stereo_stage_1()
-        self.remove_edge(n, m)
-        self._fix_stereo_stage_2(stereo)
-
-    def add_stereo(self, atom1, atom2, mark):
-        if mark not in (1, -1):
-            raise ValueError('stereo mark invalid')
-        if not self.has_edge(atom1, atom2):
-            raise KeyError('atom or bond not found')
-
-        if self._node[atom1].stereo:
-            raise self._stereo_exception3
-
-        if self._node[atom1].z or any(self._node[x].z for x in self._adj[atom1]):
-            raise self._stereo_exception1
-
-        implicit = self.atom_implicit_h(atom1)
-        if implicit + self.atom_explicit_h(atom1) > 1:
-            raise self._stereo_exception4
-
-        total = implicit + len(self._adj[atom1])
-        if total == 4 and all(x.order == 1 for x in self._adj[atom1].values()):  # tetrahedron
-            self.__tetrahedron_parse(atom1, atom2, mark, implicit)
-        else:
-            raise self._stereo_exception2
 
     def reset_query_marks(self, copy=False):
         """
@@ -192,85 +143,4 @@ class MoleculeContainer(StringMolecule, BaseContainer):
         return [f'atom {x} has invalid valence' for x, atom in self._node.items()
                 if not atom.check_valence(self.environment(x))]
 
-    def __tetrahedron_parse(self, atom1, atom2, mark, implicit):
-        weights = self.get_morgan(stereo=True)
-
-        neighbors = list(self._adj[atom1])
-        if len(neighbors) != len(set(weights[x] for x in neighbors)):
-            raise InvalidStereo('stereo impossible. neighbors equivalent')
-
-        order = sorted(((x, self._node[x]) for x in neighbors), key=lambda x: weights[x[0]])
-        if implicit:
-            central = self._node[atom1]
-            vol = pyramid_volume((central.x, central.y, 0), *((atom.x, atom.y, 0 if x != atom2 else mark)
-                                                              for x, atom in order))
-        else:
-            vol = pyramid_volume(*((atom.x, atom.y, 0 if x != atom2 else mark) for x, atom in order))
-
-        if not vol:
-            raise InvalidStereo('unknown')
-
-        self._node[atom1].stereo = vol > 0 and 1 or -1
-        self.flush_cache()
-
-    def _prepare_stereo(self):
-        _stereo_cache = {}
-        nodes = list(self._node.items())
-        while True:
-            failed = []
-            for i, tmp in enumerate(nodes, start=1):
-                n, atom = tmp
-                s = atom.stereo
-                if not s:
-                    continue
-                neighbors = list(self._adj[n])
-                len_n = len(neighbors)
-                if len_n in (3, 4):  # tetrahedron
-                    if atom.z or any(self._node[x].z for x in neighbors):
-                        continue  # 3d molecules ignored
-
-                    weights = self.get_morgan(stereo=True)
-                    order = sorted(neighbors, key=weights.get)
-                    for _ in range(len_n):
-                        if (order[0], n) in _stereo_cache:
-                            order.append(order.pop(0))
-                        else:
-                            failed.append(tmp)
-                            break
-                    else:
-                        failed.insert(0, tmp)
-                        failed.extend(nodes[i:])
-                        _stereo_cache = None
-                        nodes = failed
-                        break
-
-                    if len_n == 4:
-                        zero = self._node[order[0]]
-                        zero = (zero.x, zero.y, 1)
-                        first = self._node[order[1]]
-                        first = (first.x, first.y, 0)
-                    else:
-                        zero = (atom.x, atom.y, 0)
-                        first = self._node[order[0]]
-                        first = (first.x, first.y, 1)
-
-                    second = self._node[order[-2]]
-                    third = self._node[order[-1]]
-                    vol = pyramid_volume(zero, first, (second.x, second.y, 0), (third.x, third.y, 0))
-
-                    _stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
-            else:
-                return _stereo_cache
-
-    def _fix_stereo_stage_1(self):
-        pass
-
-    def _fix_stereo_stage_2(self, stereo):
-        pass
-
-    __visible = None
-    _stereo_exception1 = InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
-    _stereo_exception2 = InvalidStereo('unsupported stereo or stereo impossible. '
-                                       'single bonded tetrahedron only supported')
-    _stereo_exception3 = InvalidStereo('atom has stereo. change impossible')
-    _stereo_exception4 = InvalidStereo('stereo impossible. too many H atoms')
+    _visible = ()

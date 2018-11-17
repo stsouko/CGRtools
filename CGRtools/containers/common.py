@@ -29,6 +29,9 @@ from ..periodictable import elements_list, radical_unmap
 
 
 class BaseContainer(Graph, StringCommon, Morgan, ABC):
+    def __dir__(self):
+        return list(self._visible) or super().__dir__()
+
     def __getstate__(self):
         return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
 
@@ -121,11 +124,11 @@ class BaseContainer(Graph, StringCommon, Morgan, ABC):
 
     def get_stereo(self, atom1, atom2):
         if self.__stereo_cache is None:
-            self.__stereo_cache = self._prepare_stereo()
-        return self.__stereo_cache.get((atom1, atom2), None)
+            self.__stereo_cache = self._wedge_map()
+        return self.__stereo_cache.get((atom1, atom2))
 
     @abstractmethod
-    def _prepare_stereo(self):
+    def _wedge_map(self):
         """
         :return: dict of stereo labels on bonds
         """
@@ -655,8 +658,9 @@ class BaseContainer(Graph, StringCommon, Morgan, ABC):
     def __eq__(self, other):
         return str(self) == str(other)
 
-    __visible = __weights = __signatures = __pickle = __stereo_cache = __hash = None
+    __weights = __signatures = __pickle = __stereo_cache = __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
+    _visible = ()
 
 
 def _search_subclass(name, start=BaseContainer):
