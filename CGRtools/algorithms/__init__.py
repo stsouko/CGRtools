@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
-#  Copyright 2017 Timur Madzhidov <tmadzhidov@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -21,7 +20,5 @@
 Molecules and CGRs analysis and representation algorithms
 """
 from .aromatics import aromatize, aromatize_cgr
-from .morgan import get_morgan
 from .sssr import find_sssr
 from .stereo import pyramid_volume
-from .strings import hash_cgr_string, CGRstring

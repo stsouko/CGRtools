@@ -22,13 +22,13 @@ from hashlib import md5, sha256
 from itertools import cycle
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from ..algorithms import get_morgan
+from ..algorithms.morgan import Morgan
 from ..algorithms.strings import StringCommon
 from ..attributes import Bond
 from ..periodictable import elements_list, radical_unmap
 
 
-class BaseContainer(Graph, StringCommon, ABC):
+class BaseContainer(Graph, StringCommon, Morgan, ABC):
     def __getstate__(self):
         return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
 
@@ -591,24 +591,20 @@ class BaseContainer(Graph, StringCommon, ABC):
         else:
             return self._stringify(start, depth_limit, weights, atom, isotope, stereo, hybridization, neighbors)
 
-    def get_morgan(self, isotope=False, element=True, stereo=False, hybridization=False, neighbors=False,
+    def get_morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False,
                    flush_cache=False):
         if flush_cache or self.__weights is None:
             self.__weights = {}
-        k = (isotope, element, stereo, hybridization, neighbors, self._morgan_init)
-        return self.__weights.get(k) or self.__weights.setdefault(k, get_morgan(self, self._morgan_init, isotope,
-                                                                                element, stereo, hybridization,
-                                                                                neighbors))
-
-    @property
-    @abstractmethod
-    def _morgan_init(self):
-        pass
+        k = (atom, isotope, stereo, hybridization, neighbors)
+        if k in self.__weights:
+            return self.__weights[k]
+        return self.__weights.setdefault(k, self._morgan(atom, isotope, stereo, hybridization, neighbors))
 
     @abstractmethod
-    def _stringify(self, *args, **kwargs) -> str:
+    def _stringify(self, start=None, depth_limit=None, weights=None, atom=True, isotope=True, stereo=False,
+                   hybridization=False, neighbors=False) -> str:
         """
-        container specific signature generation class
+        container specific signature generation
         """
         pass
 

@@ -159,6 +159,23 @@ class QueryAtom(MutableMapping):
 
         return ''.join(smi)
 
+    def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+        satom = self._atom
+        weight = []
+        if atom:
+            weight.append(tuple(sorted(elements_numbers[x] for x in satom['element'])))
+            if isotope:
+                weight.append(tuple(sorted(satom['isotope'])))
+            weight.append(tuple(sorted(satom['charge'])))
+            weight.append(satom['multiplicity'] and tuple(sorted(satom['multiplicity'])))
+        if stereo:
+            weight.append(satom['stereo'] or 0)
+        if hybridization:
+            weight.append(satom['hybridization'] and tuple(sorted(satom['hybridization'])))
+        if neighbors:
+            weight.append(satom['neighbors'] and tuple(sorted(satom['neighbors'])))
+        return tuple(weight)
+
     def copy(self):
         raise type(self)(self._atom)
 

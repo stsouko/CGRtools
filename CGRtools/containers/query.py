@@ -17,23 +17,16 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .common import BaseContainer
-from ..algorithms import CGRstring
+from ..algorithms.strings import StringMolecule
 from ..attributes import QueryAtom, QueryBond
 
 
-class QueryContainer(BaseContainer):
+class QueryContainer(StringMolecule, BaseContainer):
     def add_stereo(self, *args, **kwargs):
         pass
 
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
 
-    @property
-    def _morgan_init(self):
-        return
-
     def _prepare_stereo(self):
         return {}
-
-    def _signature_generator(self, *args, **kwargs):
-        return CGRstring(*args, is_cgr=True, **kwargs)

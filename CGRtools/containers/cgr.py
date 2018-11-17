@@ -20,14 +20,14 @@ from collections import defaultdict
 from itertools import repeat, zip_longest
 from typing import Tuple
 from .molecule import MoleculeContainer
-from ..algorithms import CGRstring, pyramid_volume, aromatize_cgr
-from ..algorithms.morgan import initial_weights_cgr
+from ..algorithms import pyramid_volume, aromatize_cgr
+from ..algorithms.strings import StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
 from ..exceptions import InvalidData, InvalidAtom, InvalidStereo
 from ..periodictable import H
 
 
-class CGRContainer(MoleculeContainer):
+class CGRContainer(StringCGR, MoleculeContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
@@ -276,13 +276,6 @@ class CGRContainer(MoleculeContainer):
                     not atom.product.check_valence([(b.product, a.product) for b, a in env if b.p_order]):
                 report.append(f'atom {x} has invalid valence')
         return report
-
-    def _signature_generator(self, *args, **kwargs):
-        return CGRstring(*args, is_cgr=True, **kwargs)
-
-    @property
-    def _morgan_init(self):
-        return initial_weights_cgr
 
     def _prepare_stereo(self):
         return {}

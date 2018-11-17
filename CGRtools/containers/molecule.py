@@ -19,7 +19,6 @@
 from collections import defaultdict
 from .common import BaseContainer
 from ..algorithms import pyramid_volume, aromatize
-from ..algorithms.morgan import initial_weights
 from ..algorithms.strings import StringMolecule
 from ..attributes import Atom, Bond
 from ..exceptions import InvalidStereo
@@ -262,10 +261,6 @@ class MoleculeContainer(StringMolecule, BaseContainer):
                     _stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
             else:
                 return _stereo_cache
-
-    @property
-    def _morgan_init(self):
-        return initial_weights
 
     def _fix_stereo_stage_1(self):
         pass

@@ -274,6 +274,23 @@ class Atom(MutableMapping):
 
         return ''.join(smi)
 
+    def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+        satom = self._atom
+        weight = []
+        if atom:
+            weight.append(satom.number)
+            if isotope:
+                weight.append(satom.isotope)
+            weight.append(satom.charge)
+            weight.append(satom.multiplicity or 0)
+        if stereo:
+            weight.append(self.__stereo or 0)
+        if hybridization:
+            weight.append(self.__hybridization or 0)
+        if neighbors:
+            weight.append(self.__neighbors or -1)
+        return tuple(weight)
+
     @property
     def atom(self):
         """
@@ -416,6 +433,11 @@ class Bond(MutableMapping):
         if stereo and self.stereo:
             return self._order_str[self.order] + self._stereo_str[self.stereo]
         return self._order_str[self.order]
+
+    def weight(self, stereo=False):
+        if stereo:
+            return self.order, self.stereo or 0
+        return self.order
 
     def __repr__(self):
         s = '' if self.stereo == self._defaults['stereo'] else f', stereo={self.stereo}'

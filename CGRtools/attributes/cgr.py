@@ -108,6 +108,9 @@ class DynAtom(MutableMapping):
     def stringify(self, *args, **kwargs):
         return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
 
+    def weight(self, *args, **kwargs):
+        return DynamicContainer(self.reagent.weight(*args, **kwargs), self.product.weight(*args, **kwargs))
+
     @property
     def atom(self):
         """
@@ -230,6 +233,9 @@ class DynBond(MutableMapping):
 
     def stringify(self, *args, **kwargs):
         return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
+
+    def weight(self, *args, **kwargs):
+        return DynamicContainer(self.reagent.weight(*args, **kwargs), self.product.weight(*args, **kwargs))
 
     def __repr__(self):
         return f'{self.reagent}>>{self.product}'

@@ -17,9 +17,9 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableSequence
+from hashlib import md5, sha256
 from .common import BaseContainer
 from .query import QueryContainer
-from ..algorithms import hash_cgr_string
 
 
 class MindfulList(MutableSequence):
@@ -151,7 +151,8 @@ class ReactionContainer:
 
         :return: bytes
         """
-        return hash_cgr_string(self.get_signature(*args, **kwargs))
+        bs = self.get_signature(*args, **kwargs).encode()
+        return md5(bs).digest() + sha256(bs).digest()
 
     def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
                       flush_cache=False):
@@ -294,7 +295,8 @@ class MergedReaction:
 
         :return: bytes
         """
-        return hash_cgr_string(self.get_signature(*args, **kwargs))
+        bs = self.get_signature(*args, **kwargs).encode()
+        return md5(bs).digest() + sha256(bs).digest()
 
     def get_signature(self, isotope=False, stereo=False, hybridization=False, neighbors=False, element=True,
                       flush_cache=False):
