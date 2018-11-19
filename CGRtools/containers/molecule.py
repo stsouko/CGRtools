@@ -18,9 +18,7 @@
 #
 from collections import defaultdict
 from .common import BaseContainer
-from ..algorithms.aromatics import Aromatize
-from ..algorithms.stereo import StereoMolecule
-from ..algorithms.strings import StringMolecule
+from ..algorithms import Aromatize, StereoMolecule, StringMolecule
 from ..attributes import Atom, Bond
 from ..periodictable import H
 

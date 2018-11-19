@@ -19,9 +19,7 @@
 from collections import defaultdict
 from itertools import repeat, zip_longest
 from .molecule import MoleculeContainer
-from ..algorithms.aromatics import AromatizeCGR
-from ..algorithms.stereo import StereoCGR
-from ..algorithms.strings import StringCGR
+from ..algorithms import AromatizeCGR, StereoCGR, StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
 from ..periodictable import H
 

@@ -101,3 +101,6 @@ class SSSR:
                             n_ringidx += 1
                         if n_ringidx == n_sssr:
                             return list(c_sssr.values())
+
+
+__all__ = ['SSSR']

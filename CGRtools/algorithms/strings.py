@@ -244,3 +244,6 @@ class StringCGR:
                 break
 
         return ''.join(r_smiles), ''.join(p_smiles)
+
+
+__all__ = ['StringCommon', 'StringCGR', 'StringMolecule']

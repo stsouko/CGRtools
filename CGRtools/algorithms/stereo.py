@@ -166,3 +166,6 @@ class StereoCGR(StereoMolecule):
 
     def _wedge_map(self):
         return {}
+
+
+__all__ = ['StereoMolecule', 'StereoCGR']

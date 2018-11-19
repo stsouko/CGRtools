@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .common import BaseContainer
-from ..algorithms.strings import StringMolecule
+from ..algorithms import StringMolecule
 from ..attributes import QueryAtom, QueryBond
 
 

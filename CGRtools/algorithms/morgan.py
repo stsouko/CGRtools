@@ -107,3 +107,6 @@ def _eratosthenes():
 
 
 primes = tuple(x for _, x in zip(range(1000), _eratosthenes()))
+
+
+__all__ = ['Morgan']

@@ -282,3 +282,6 @@ _pyrole_fix = dict(_pyrole_fix)
 
 
 del x, y, i, p, _ind
+
+
+__all__ = ['Aromatize', 'AromatizeCGR']

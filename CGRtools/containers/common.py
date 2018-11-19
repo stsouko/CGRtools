@@ -22,9 +22,7 @@ from hashlib import md5, sha256
 from itertools import cycle
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from ..algorithms.morgan import Morgan
-from ..algorithms.sssr import SSSR
-from ..algorithms.strings import StringCommon
+from ..algorithms import Morgan, SSSR, StringCommon
 from ..attributes import Bond
 from ..periodictable import elements_list, radical_unmap
 
