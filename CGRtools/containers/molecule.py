@@ -18,13 +18,14 @@
 #
 from collections import defaultdict
 from .common import BaseContainer
+from ..algorithms.aromatics import Aromatize
 from ..algorithms.stereo import StereoMolecule
 from ..algorithms.strings import StringMolecule
 from ..attributes import Atom, Bond
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, StereoMolecule, BaseContainer):
+class MoleculeContainer(StringMolecule, StereoMolecule, Aromatize, BaseContainer):
     """
     storage for Molecules
 
@@ -113,17 +114,6 @@ class MoleculeContainer(StringMolecule, StereoMolecule, BaseContainer):
 
         self.flush_cache()
         return len(tmp)
-
-    def aromatize(self) -> int:
-        """
-        convert structure to aromatic form
-
-        :return: number of processed rings
-        """
-        res = aromatize(self)
-        if res:
-            self.flush_cache()
-        return res
 
     def atom_implicit_h(self, atom):
         return self._node[atom].get_implicit_h([x.order for x in self._adj[atom].values()])

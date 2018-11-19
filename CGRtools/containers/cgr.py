@@ -18,16 +18,15 @@
 #
 from collections import defaultdict
 from itertools import repeat, zip_longest
-from typing import Tuple
 from .molecule import MoleculeContainer
-from ..algorithms import aromatize_cgr
+from ..algorithms.aromatics import AromatizeCGR
 from ..algorithms.stereo import StereoCGR
 from ..algorithms.strings import StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
 from ..periodictable import H
 
 
-class CGRContainer(StringCGR, StereoCGR, MoleculeContainer):
+class CGRContainer(StringCGR, StereoCGR, AromatizeCGR, MoleculeContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
@@ -189,17 +188,6 @@ class CGRContainer(StringCGR, StereoCGR, MoleculeContainer):
 
         self.flush_cache()
         return len(tmp)
-
-    def aromatize(self) -> Tuple[int, int]:
-        """
-        convert structure to aromatic form
-
-        :return: number of processed s and p rings
-        """
-        res = aromatize_cgr(self)
-        if res[0] or res[1]:
-            self.flush_cache()
-        return res
 
     def atom_implicit_h(self, atom):
         atom = self._node[atom]
