@@ -42,7 +42,6 @@ class StereoMolecule:
 
     def _wedge_map(self):
         _stereo_cache = {}
-        return {}
         nodes = list(self._node.items())
         while True:
             failed = []
@@ -54,11 +53,9 @@ class StereoMolecule:
                 neighbors = list(self._adj[n])
                 len_n = len(neighbors)
                 if len_n in (3, 4):  # tetrahedron
-                    weights = self.get_morgan(stereo=True)
-                    order = sorted(neighbors, key=weights.get)
                     for _ in range(len_n):
-                        if (order[0], n) in _stereo_cache:
-                            order.append(order.pop(0))
+                        if (neighbors[0], n) in _stereo_cache:
+                            neighbors.append(neighbors.pop(0))
                         else:
                             failed.append(tmp)
                             break
@@ -70,20 +67,20 @@ class StereoMolecule:
                         break
 
                     if len_n == 4:
-                        zero = self._node[order[0]]
+                        zero = self._node[neighbors[0]]
                         zero = (zero.x, zero.y, 1)
-                        first = self._node[order[1]]
+                        first = self._node[neighbors[1]]
                         first = (first.x, first.y, 0)
                     else:
                         zero = (atom.x, atom.y, 0)
-                        first = self._node[order[0]]
+                        first = self._node[neighbors[0]]
                         first = (first.x, first.y, 1)
 
-                    second = self._node[order[-2]]
-                    third = self._node[order[-1]]
-                    vol = pyramid_volume(zero, first, (second.x, second.y, 0), (third.x, third.y, 0))
+                    second = self._node[neighbors[-2]]
+                    third = self._node[neighbors[-1]]
+                    vol = self._pyramid_volume(zero, first, (second.x, second.y, 0), (third.x, third.y, 0))
 
-                    _stereo_cache[(n, order[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
+                    _stereo_cache[(n, neighbors[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
             else:
                 return _stereo_cache
 
@@ -122,3 +119,50 @@ class StereoMolecule:
         wy -= ny
         wz -= nz
         return ux * (vy * wz - vz * wy) + uy * (vz * wx - vx * wz) + uz * (vx * wy - vy * wx)
+
+
+class StereoCGR(StereoMolecule):
+    def add_stereo(self, atom1, atom2, mark, p_mark=None):
+        return  # disabled. need fix.
+        if mark not in (1, -1) and p_mark not in (1, -1):
+            raise InvalidData('stereo marks invalid')
+        if not self.has_edge(atom1, atom2):
+            raise InvalidAtom('atom or bond not found')
+
+        n_atom1 = self.nodes[atom1]
+        if n_atom1.get('s_stereo') or n_atom1.get('p_stereo'):
+            raise self._stereo_exception3
+
+        tmp_s = [(x, y['s_bond']) for x, y in self[atom1].items() if y.get('s_bond')]
+        tmp_p = [(x, y['p_bond']) for x, y in self[atom1].items() if y.get('p_bond')]
+        neighbors = [x for x, _ in tmp_s]
+
+        if mark and (n_atom1['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors)):
+            raise self._stereo_exception1
+        elif p_mark and (n_atom1['p_z'] or any(self.nodes[x]['p_z'] for x in neighbors)):
+            raise self._stereo_exception1
+
+        neighbors_e = [self.nodes[x]['element'] for x in neighbors]
+        implicit_s, implicit_p = self.atom_implicit_h(atom1)
+        if mark and (implicit_s > 1 or implicit_s == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
+            raise self._stereo_exception4
+        elif p_mark and (implicit_p > 1 or implicit_p == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
+            raise self._stereo_exception4
+
+        if mark:
+            bonds = [x for _, x in tmp_s]
+            total = implicit_s + len(neighbors)
+            if total == 4:  # tetrahedron
+                self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit_s)
+            else:
+                raise self._stereo_exception2
+        if p_mark:
+            bonds = [x for _, x in tmp_p]
+            total = implicit_p + len(neighbors)
+            if total == 4:  # tetrahedron
+                self._tetrahedron_parse(atom1, atom2, p_mark, neighbors, bonds, implicit_p, label='p')
+            else:
+                raise self._stereo_exception2
+
+    def _wedge_map(self):
+        return {}

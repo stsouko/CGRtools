@@ -21,60 +21,19 @@ from itertools import repeat, zip_longest
 from typing import Tuple
 from .molecule import MoleculeContainer
 from ..algorithms import aromatize_cgr
+from ..algorithms.stereo import StereoCGR
 from ..algorithms.strings import StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
-from ..exceptions import InvalidData, InvalidAtom
 from ..periodictable import H
 
 
-class CGRContainer(StringCGR, MoleculeContainer):
+class CGRContainer(StringCGR, StereoCGR, MoleculeContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
 
     node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
-
-    def add_stereo(self, atom1, atom2, mark, p_mark=None):
-        if mark not in (1, -1) and p_mark not in (1, -1):
-            raise InvalidData('stereo marks invalid')
-        if not self.has_edge(atom1, atom2):
-            raise InvalidAtom('atom or bond not found')
-
-        n_atom1 = self.nodes[atom1]
-        if n_atom1.get('s_stereo') or n_atom1.get('p_stereo'):
-            raise self._stereo_exception3
-
-        tmp_s = [(x, y['s_bond']) for x, y in self[atom1].items() if y.get('s_bond')]
-        tmp_p = [(x, y['p_bond']) for x, y in self[atom1].items() if y.get('p_bond')]
-        neighbors = [x for x, _ in tmp_s]
-
-        if mark and (n_atom1['s_z'] or any(self.nodes[x]['s_z'] for x in neighbors)):
-            raise self._stereo_exception1
-        elif p_mark and (n_atom1['p_z'] or any(self.nodes[x]['p_z'] for x in neighbors)):
-            raise self._stereo_exception1
-
-        neighbors_e = [self.nodes[x]['element'] for x in neighbors]
-        implicit_s, implicit_p = self.atom_implicit_h(atom1)
-        if mark and (implicit_s > 1 or implicit_s == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
-            raise self._stereo_exception4
-        elif p_mark and (implicit_p > 1 or implicit_p == 1 and 'H' in neighbors_e or neighbors_e.count('H') > 1):
-            raise self._stereo_exception4
-
-        if mark:
-            bonds = [x for _, x in tmp_s]
-            total = implicit_s + len(neighbors)
-            if total == 4:  # tetrahedron
-                self._tetrahedron_parse(atom1, atom2, mark, neighbors, bonds, implicit_s)
-            else:
-                raise self._stereo_exception2
-        if p_mark:
-            bonds = [x for _, x in tmp_p]
-            total = implicit_p + len(neighbors)
-            if total == 4:  # tetrahedron
-                self._tetrahedron_parse(atom1, atom2, p_mark, neighbors, bonds, implicit_p, label='p')
-            else:
-                raise self._stereo_exception2
 
     def get_center_atoms(self, stereo=False):
         """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
@@ -271,8 +230,5 @@ class CGRContainer(StringCGR, MoleculeContainer):
                     not atom.product.check_valence([(b.product, a.product) for b, a in env if b.p_order]):
                 report.append(f'atom {x} has invalid valence')
         return report
-
-    def _wedge_map(self):
-        return {}
 
     _visible = ()
