@@ -16,83 +16,88 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-""" SSSR calculation. based on idea from:
-    Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009).
-    A robust method for searching the smallest set of smallest rings with a path-included distance matrix.
-    Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
-    http://doi.org/10.1073/pnas.0813040106
-"""
-from networkx import shortest_simple_paths
+from networkx import shortest_simple_paths, NetworkXNoPath
 from itertools import combinations
 
 
-def find_sssr(g):
+class SSSR:
+    """ SSSR calculation. based on idea from:
+        Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009).
+        A robust method for searching the smallest set of smallest rings with a path-included distance matrix.
+        Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
+        http://doi.org/10.1073/pnas.0813040106
     """
-    SSSR search.
+    def get_sssr(self):
+        """
+        SSSR search.
 
-    :param g: Molecule Container 
-    :return: list of lists of rings nodes
-    """
-    n_sssr = g.number_of_edges() - len(g) + 1
-    if not n_sssr:
-        return []
+        :return: list of lists of rings nodes
+        """
+        n_sssr = self.number_of_edges() - len(self) + 1
+        if not n_sssr:
+            return []
 
-    pid1 = {}
-    pid2 = {}
+        pid1 = {}
+        pid2 = {}
 
-    for ij in combinations(g, 2):
-        for path in shortest_simple_paths(g, *ij):  # slowest part of algorithm
-            if ij not in pid1:
-                pid1[ij] = [path]
-                ls = len(path)
-                continue
-
-            lp = len(path)
-            if lp == ls:
-                pid1[ij].append(path)
-            elif lp == ls + 1:
-                if ij not in pid2:
-                    pid2[ij] = [path]
-                else:
-                    pid2[ij].append(path)
-            else:
+        for ij in combinations(self, 2):
+            paths = shortest_simple_paths(self, *ij)  # slowest part of algorithm
+            try:  # stop if path not reachable
+                path = next(paths)
+            except NetworkXNoPath:
                 break
 
-    c_set = []
-    for ij, p1ij in pid1.items():
-        dij = len(p1ij[0]) - 1
-        p2ij = pid2.get(ij)
+            pid1[ij] = [path]
+            ls = len(path)
+            lsp = ls + 1
 
-        if not p2ij and len(p1ij) == 1:
-            continue
+            for path in paths:
+                lp = len(path)
+                if lp == ls:
+                    pid1[ij].append(path)
+                elif lp == lsp:
+                    if ij not in pid2:
+                        pid2[ij] = [path]
+                    else:
+                        pid2[ij].append(path)
+                else:
+                    break
 
-        c_num = 2 * dij
-        if p2ij:
-            c_num += 1
+        c_set = []
+        for ij, p1ij in pid1.items():
+            dij = len(p1ij[0]) - 1
+            p2ij = pid2.get(ij)
 
-        c_set.append((c_num, p1ij, p2ij))
+            if not p2ij and len(p1ij) == 1:
+                continue
 
-    n_ringidx, c_sssr = 0, {}
-    for c_num, p1ij, p2ij in sorted(c_set):
-        if c_num % 2:
-            c1 = p1ij[0]
-            cs1 = set(c1)
-            for c2 in p2ij:
-                if len(cs1.intersection(c2)) == 2:
-                    c = c1 + c2[-2:0:-1]
-                    ck = tuple(sorted(c))
-                    if ck not in c_sssr:
-                        c_sssr[ck] = c
-                        n_ringidx += 1
-                    if n_ringidx == n_sssr:
-                        return list(c_sssr.values())
-        else:
-            for c1, c2 in zip(p1ij, p1ij[1:]):
-                if len(set(c1).intersection(c2)) == 2:
-                    c = c1 + c2[-2:0:-1]
-                    ck = tuple(sorted(c))
-                    if ck not in c_sssr:
-                        c_sssr[ck] = c
-                        n_ringidx += 1
-                    if n_ringidx == n_sssr:
-                        return list(c_sssr.values())
+            c_num = 2 * dij
+            if p2ij:
+                c_num += 1
+
+            c_set.append((c_num, p1ij, p2ij))
+
+        n_ringidx, c_sssr = 0, {}
+        for c_num, p1ij, p2ij in sorted(c_set):
+            if c_num % 2:
+                c1 = p1ij[0]
+                cs1 = set(c1)
+                for c2 in p2ij:
+                    if len(cs1.intersection(c2)) == 2:
+                        c = c1 + c2[-2:0:-1]
+                        ck = tuple(sorted(c))
+                        if ck not in c_sssr:
+                            c_sssr[ck] = c
+                            n_ringidx += 1
+                        if n_ringidx == n_sssr:
+                            return list(c_sssr.values())
+            else:
+                for c1, c2 in zip(p1ij, p1ij[1:]):
+                    if len(set(c1).intersection(c2)) == 2:
+                        c = c1 + c2[-2:0:-1]
+                        ck = tuple(sorted(c))
+                        if ck not in c_sssr:
+                            c_sssr[ck] = c
+                            n_ringidx += 1
+                        if n_ringidx == n_sssr:
+                            return list(c_sssr.values())
