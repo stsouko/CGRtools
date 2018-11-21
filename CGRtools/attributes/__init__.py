@@ -17,5 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .cgr import *
+from .cgr_query import *
 from .molecule import *
 from .query import *

@@ -253,19 +253,18 @@ class QueryAtom(MutableMapping):
 
 
 class QueryBond(Bond):
-    def __init__(self, order=None, stereo=None):
-        super().__init__(order, stereo, True)
-
-    def __eq__(self, other):
-        if isinstance(other, QueryBond):
-            return sorted(self.order, key=lambda x: x or 0) == sorted(other.order, key=lambda x: x or 0) and \
-                   self.stereo == other.stereo
-        elif isinstance(other, Bond):
-            if other.order in self.order:
-                if self.stereo:
-                    return self.stereo == other.stereo
-                return True
-        return False
+    def _update(self, value, kwargs):
+        if isinstance(value, Bond):
+            kwargs = self._check_kwargs(kwargs)
+            if isinstance(value, QueryBond):
+                super().__setattr__('order', value.order)
+            else:
+                super().__setattr__('order', (value.order,))
+            super().__setattr__('stereo', value.stereo)
+            for k, v in kwargs.items():
+                super().__setattr__(k, v)
+        else:
+            super()._update(value, kwargs)
 
     def stringify(self, stereo=True):
         order = '<%s>' % ''.join(sorted(self._order_str[x] for x in sorted(self.order)))
@@ -273,60 +272,43 @@ class QueryBond(Bond):
             return order + self._stereo_str[self.stereo]
         return order
 
-    def __hash__(self):
-        return hash((tuple(sorted(self.order)), self.stereo))
+    def weight(self, stereo=False):
+        if stereo:
+            return tuple(sorted(self.order)), self.stereo or 0
+        return self.order
 
-    def update(self, *args, **kwargs):
+    def __eq__(self, other):
         """
-        update bond
-
-        :param args: tuple with 1 or 0 elements. element can be Bond object or dict of bond attrs.
-        :param kwargs: bond attrs. has precedence other args[0]
+        == equality checks. if stereo mark is presented in query, stereo also will be compared
         """
-        if len(args) > 1:
-            raise TypeError('update expected at most 1 arguments')
-        elif args:
-            value = args[0]
-        else:
-            value = kwargs
-            kwargs = ()
+        if isinstance(other, QueryBond):
+            return sorted(self.order) == sorted(other.order)
+        elif isinstance(other, Bond):
+            return other.order in self.order
+        return False
 
-        if isinstance(value, Bond):
-            try:
-                if not all(self._acceptable[k](v) for k, v in kwargs.items()):
-                    raise ValueError('invalid attribute value')
-            except KeyError:
-                raise KeyError('unknown bond attributes not allowed')
-            if isinstance(value, QueryBond):
-                super().__setattr__('order', value.order)
-                super().__setattr__('stereo', value.stereo)
-            else:
-                super().__setattr__('order', [value.order])
-                super().__setattr__('stereo', value.stereo)
-            for k, v in kwargs.items():
-                super().__setattr__(k, v)
-        else:
-            if not isinstance(value, dict):
-                try:
-                    value = dict(value)
-                except (TypeError, ValueError):
-                    raise TypeError('invalid attrs sequence')
+    def __ne__(self, other):
+        """
+        != equality checks with stereo
+        """
+        if self == other:
+            if self.stereo is None:
+                return True
+            return self.stereo == other.stereo
+        return False
 
-            value.update(kwargs)
-            if not value:
-                return  # ad-hoc for add_edges_from method
+    @staticmethod
+    def _order_check(x):
+        if isinstance(x, int):
+            if x in (1, 2, 3, 4, 9):
+                return x,
+            raise ValueError('invalid order')
+        elif not isinstance(x, tuple):
+            x = tuple(x)
+        if x and all(x in (1, 2, 3, 4, 9) for x in x):
+            return x
+        raise ValueError('invalid order')
 
-            try:
-                if not all(self._acceptable[k](v) for k, v in value.items()):
-                    raise ValueError('invalid attribute value')
-            except KeyError:
-                raise KeyError('unknown bond attributes not allowed')
-
-            for k, v in value.items():
-                super().__setattr__(k, v)
-
-    _acceptable = {'order': lambda x, _=None: isinstance(x, tuple) and all(x in (1, 2, 3, 4, 9) for x in x),
-                   'stereo': lambda x, _=None: x in (None, -1, 1)}
     _defaults = {'order': (1,), 'stereo': None}
 
 

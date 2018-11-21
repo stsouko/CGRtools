@@ -382,27 +382,94 @@ class Atom(MutableMapping):
 
 
 class Bond(MutableMapping):
-    __slots__ = ('order', 'stereo', '__allow_none')
+    __slots__ = ('order', 'stereo', '_skip_checks')
 
-    def __init__(self, order=None, stereo=None, allow_none=False):
-        super().__setattr__('_Bond__allow_none', allow_none)
-        self.order = self._defaults['order'] if order is None else order
-        self.stereo = self._defaults['stereo'] if stereo is None else stereo
+    def __init__(self, *, skip_checks=False):
+        super().__setattr__('_skip_checks', skip_checks)
+        super().__setattr__('order', 1)
+        super().__setattr__('stereo', None)
+
+    def __init_copy__(self, parent):
+        super().__setattr__('_skip_checks', parent._skip_checks)
+        super().__setattr__('order', parent.order)
+        super().__setattr__('stereo', parent.stereo)
+
+    def __setattr__(self, key, value):
+        if not self._skip_checks:
+            value = getattr(self, f'_{key}_check')(value)
+        super().__setattr__(key, value)
+
+    def update(self, *args, **kwargs):
+        """
+        update bond
+
+        :param args: tuple with 1 or 0 elements. element can be Bond object or dict of bond attrs.
+        :param kwargs: bond attrs. has precedence other args[0]
+        """
+        if len(args) > 1:
+            raise TypeError('update expected at most 1 arguments')
+        elif args:
+            value = args[0]
+        else:
+            value = kwargs
+            kwargs = ()
+        self._update(value, kwargs)
+
+    def _update(self, value, kwargs):
+        if isinstance(value, Bond):
+            kwargs = self._check_kwargs(kwargs)
+            super().__setattr__('order', value.order)
+            super().__setattr__('stereo', value.stereo)
+            for k, v in kwargs.items():
+                super().__setattr__(k, v)
+        else:
+            if not isinstance(value, dict):
+                try:
+                    value = dict(value)
+                except (TypeError, ValueError):
+                    raise TypeError('invalid attrs sequence')
+
+            value.update(kwargs)
+            if not value:
+                return  # ad-hoc for add_edges_from method
+
+            for k, v in self._check_kwargs(value).items():
+                super().__setattr__(k, v)
+
+    def stringify(self, stereo=False):
+        if stereo and self.stereo:
+            return self._order_str[self.order] + self._stereo_str[self.stereo]
+        return self._order_str[self.order]
+
+    def weight(self, stereo=False):
+        if stereo:
+            return self.order, self.stereo or 0
+        return self.order
+
+    def __eq__(self, other):
+        """
+        == equality checks without stereo
+        """
+        if isinstance(other, Bond):
+            return self.order == other.order
+        return False
+
+    def __ne__(self, other):
+        """
+        != equality checks with stereo
+        """
+        return self == other and self.stereo == other.stereo
 
     def __getitem__(self, key):
-        if key not in self._acceptable:
+        if key not in self._defaults:
             raise KeyError('unknown bond attribute')
         return getattr(self, key)
 
     def __setitem__(self, key, value):
-        setattr(self, key, value)
-
-    def __setattr__(self, key, value):
-        if key not in self._acceptable:
-            raise AttributeError('unknown bond attribute')
-        if not self._acceptable[key](value, self.__allow_none):
-            raise ValueError(f"attribute '{key}' value invalid")
-        super().__setattr__(key, value)
+        try:
+            setattr(self, key, value)
+        except AttributeError as e:
+            raise KeyError from e
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -421,84 +488,37 @@ class Bond(MutableMapping):
     def __delitem__(self, key):
         raise TypeError('attribute deletion impossible')
 
-    def __eq__(self, other):
-        if isinstance(other, Bond):
-            return self.order == other.order
-        return False
-
     def __str__(self):
         return self.stringify(stereo=True)
 
-    def stringify(self, stereo=False):
-        if stereo and self.stereo:
-            return self._order_str[self.order] + self._stereo_str[self.stereo]
-        return self._order_str[self.order]
-
-    def weight(self, stereo=False):
-        if stereo:
-            return self.order, self.stereo or 0
-        return self.order
-
-    def __repr__(self):
-        s = '' if self.stereo == self._defaults['stereo'] else f', stereo={self.stereo}'
-        return f'{type(self).__name__}({self.order}{s})'
-
-    def __hash__(self):
-        return hash((self.order, self.stereo))
-
-    def update(self, *args, **kwargs):
-        """
-        update bond
-
-        :param args: tuple with 1 or 0 elements. element can be Bond object or dict of bond attrs.
-        :param kwargs: bond attrs. has precedence other args[0]
-        """
-        if len(args) > 1:
-            raise TypeError('update expected at most 1 arguments')
-        elif args:
-            value = args[0]
-        else:
-            value = kwargs
-            kwargs = ()
-
-        if isinstance(value, Bond):
-            try:
-                if not all(self._acceptable[k](v, self.__allow_none) for k, v in kwargs.items()):
-                    raise ValueError('invalid attribute value')
-            except KeyError:
-                raise KeyError('unknown bond attributes not allowed')
-
-            super().__setattr__('order', value.order)
-            super().__setattr__('stereo', value.stereo)
-            for k, v in kwargs.items():
-                super().__setattr__(k, v)
-        else:
-            if not isinstance(value, dict):
-                try:
-                    value = dict(value)
-                except (TypeError, ValueError):
-                    raise TypeError('invalid attrs sequence')
-
-            value.update(kwargs)
-            if not value:
-                return  # ad-hoc for add_edges_from method
-
-            try:
-                if not all(self._acceptable[k](v) for k, v in value.items()):
-                    raise ValueError('invalid attribute value')
-            except KeyError:
-                raise KeyError('unknown bond attributes not allowed')
-
-            for k, v in value.items():
-                super().__setattr__(k, v)
-
     def copy(self):
-        return type(self)(self.order, self.stereo, allow_none=self.__allow_none)
+        cls = type(self)
+        copy = cls.__new__(cls)
+        copy.__init_copy__(self)
+        return copy
 
-    _acceptable = {'order': lambda x, y: x in (1, 2, 3, 4, 9) or y and x is None,
-                   'stereo': lambda x, _: x in (None, -1, 1)}
+    def _check_kwargs(self, kwargs):
+        if not self._skip_checks:
+            kwargs = {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
+        return kwargs
+
+    @staticmethod
+    def _order_check(x):
+        if isinstance(x, int) and x in (1, 2, 3, 4, 9):
+            return x
+        raise ValueError('invalid order')
+
+    @staticmethod
+    def _stereo_check(x):
+        if x is None:
+            return None
+        x = int(x)
+        if x in (-1, 1):
+            return x
+        raise ValueError('stereo can be: None, 1 or -1')
+
     _defaults = {'order': 1, 'stereo': None}
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', None: '.', 9: '~'}
+    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~'}
     _stereo_str = {1: '@', -1: '@@'}
 
 
