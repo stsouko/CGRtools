@@ -16,9 +16,210 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .cgr import DynamicContainer, DynBond
-from .molecule import Bond
-from .query import QueryBond
+from .cgr import DynAtom, DynBond, DynamicContainer
+from .molecule import Atom, Bond
+from .query import QueryAtom, QueryBond
+from ..periodictable import elements_numbers
+
+
+class DynQueryAtom(DynAtom):
+    def __setattr__(self, key, value):
+        if key in self._p_static:
+            raise AttributeError(f'{key} is invalid')
+        elif key.startswith('p_'):
+            key = key[2:]
+            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            if key != 'stereo' and len(value) != len(getattr(self._reagent, key)):
+                raise ValueError(f'{key} lists in reagent and product should be equal')
+            setattr(self._product, key, value)
+        else:
+            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            if key in self._static:
+                setattr(self._product, key, value)
+            elif key != 'stereo' and len(value) != len(getattr(self._product, key)):
+                raise ValueError(f'{key} lists in reagent and product should be equal')
+            setattr(self._reagent, key, value)
+
+    def _update(self, value, kwargs):
+        if isinstance(value, DynQueryAtom):
+            r, p = self._split_check_kwargs(kwargs)
+            p_value = value._product
+            value = value._reagent
+        elif isinstance(value, QueryAtom):
+            r, p = self._split_check_kwargs(kwargs)
+            p_value = value
+        else:
+            return super()._update(value, kwargs)
+
+        self._reagent._update(value, r)
+        self._product._update(p_value, p)
+
+    def stringify(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
+        rmi, pmi = [], []
+        ratom = self._reagent._atom
+        patom = self._product._atom
+
+        if stereo:
+            if ratom['stereo']:
+                rmi.append(self._stereo_str[ratom['stereo']])
+            if patom['stereo']:
+                pmi.append(self._stereo_str[patom['stereo']])
+        if hybridization:
+            if len(ratom['hybridization']) > 1:
+                r, p = zip(*sorted(zip(ratom['hybridization'], patom['hybridization'])))
+                rmi.append('<%s>' % ''.join(self._hybridization_str[x] for x in r))
+                pmi.append('<%s>' % ''.join(self._hybridization_str[x] for x in p))
+            else:
+                if ratom['hybridization']:
+                    rmi.append(self._hybridization_str[ratom['hybridization'][0]])
+                if patom['hybridization']:
+                    pmi.append(self._hybridization_str[patom['hybridization'][0]])
+        if neighbors:
+            if len(ratom['neighbors']) > 1:
+                r, p = zip(*sorted(zip(ratom['neighbors'], patom['neighbors'])))
+                rmi.append('<%s>' % ''.join(str(x) for x in r))
+                pmi.append('<%s>' % ''.join(str(x) for x in p))
+            else:
+                if ratom['neighbors']:
+                    rmi.append(str(ratom['neighbors'][0]))
+                if patom['neighbors']:
+                    pmi.append(str(patom['neighbors'][0]))
+        if rmi:
+            rmi.append(';')
+            rmi.insert(0, ';')
+        if pmi:
+            pmi.append(';')
+            pmi.insert(0, ';')
+
+        if atom:
+            if ratom['element'] == ('A',):
+                atom = False
+                rmi.insert(0, '*')
+                pmi.insert(0, '*')
+            elif len(ratom['element']) > 1:
+                atom = False
+                tmp = ','.join(sorted(ratom['element'], key=elements_numbers.get))
+                rmi.insert(0, tmp)
+                pmi.insert(0, tmp)
+            else:
+                if ratom['element'][0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                    atom = False
+                rmi.insert(0, ratom['element'][0])
+                pmi.insert(0, ratom['element'][0])
+
+            if len(ratom['charge']) > 1:
+                r, p = zip(*sorted(zip(ratom['charge'], patom['charge'])))
+                rmi.append('<%s>' % ''.join(self._charge_str[x] for x in r))
+                pmi.append('<%s>' % ''.join(self._charge_str[x] for x in p))
+            else:
+                if ratom['charge'] != (0,):
+                    rmi.append(self._charge_str[ratom['charge'][0]])
+                if patom['charge'] != (0,):
+                    pmi.append(self._charge_str[patom['charge'][0]])
+            if len(ratom['multiplicity']) > 1:
+                r, p = zip(*sorted(zip(ratom['multiplicity'], patom['multiplicity'])))
+                rmi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in r))
+                pmi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in p))
+            else:
+                if ratom['multiplicity']:
+                    rmi.append(self._multiplicity_str[ratom['multiplicity'][0]])
+                if patom['multiplicity']:
+                    pmi.append(self._multiplicity_str[patom['multiplicity'][0]])
+            if isotope:
+                if len(ratom['isotope']) > 1:
+                    tmp = '<%s>' % ''.join(str(x) for x in sorted(ratom['isotope']))
+                    rmi.insert(0, tmp)
+                    pmi.insert(0, tmp)
+                elif ratom['isotope']:
+                    tmp = str(ratom['isotope'][0])
+                    rmi.insert(0, tmp)
+                    pmi.insert(0, tmp)
+        else:
+            rmi.insert(0, '*')
+            pmi.insert(0, '*')
+
+        if len(rmi) != 1 or not atom:
+            rmi.insert(0, '[')
+            rmi.append(']')
+        if len(pmi) != 1 or not atom:
+            pmi.insert(0, '[')
+            pmi.append(']')
+        return ''.join(rmi), ''.join(pmi)
+
+    def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+        ratom = self._reagent._atom
+        patom = self._product._atom
+        r_weight, p_weight = [], []
+        if atom:
+            tmp = tuple(sorted(elements_numbers[x] for x in ratom['element']))
+            r_weight.append(tmp)
+            p_weight.append(tmp)
+            if isotope:
+                tmp = tuple(sorted(ratom['isotope']))
+                r_weight.append(tmp)
+                p_weight.append(tmp)
+            r, p = zip(*sorted(zip(ratom['charge'], patom['charge'])))
+            r_weight.append(tuple(r))
+            p_weight.append(tuple(p))
+            if ratom['multiplicity']:
+                r, p = zip(*sorted(zip(ratom['multiplicity'], patom['multiplicity'])))
+                r_weight.append(tuple(r))
+                p_weight.append(tuple(p))
+            else:
+                r_weight.append(())
+                p_weight.append(())
+        if stereo:
+            r_weight.append(ratom['stereo'] or 0)
+            p_weight.append(patom['stereo'] or 0)
+        if hybridization:
+            if ratom['hybridization']:
+                r, p = zip(*sorted(zip(ratom['hybridization'], patom['hybridization'])))
+                r_weight.append(tuple(r))
+                p_weight.append(tuple(p))
+            else:
+                r_weight.append(())
+                p_weight.append(())
+        if neighbors:
+            if ratom['neighbors']:
+                r, p = zip(*sorted(zip(ratom['neighbors'], patom['neighbors'])))
+                r_weight.append(tuple(r))
+                p_weight.append(tuple(p))
+            else:
+                r_weight.append(())
+                p_weight.append(())
+        return tuple(r_weight), tuple(p_weight)
+
+    def __eq__(self, other):
+        if isinstance(other, DynAtom):
+            return self._reagent == other._reagent and self._product == other._product
+        elif isinstance(other, Atom):
+            return self._reagent == other == self._product
+        return False
+
+    def __ne__(self, other):
+        """
+        != equality checks with stereo
+        """
+        if isinstance(other, DynAtom):
+            return self._reagent != other._reagent and self._product != other._product
+        return self._reagent != self._product != other
+
+    @classmethod
+    def _split_check_kwargs(cls, kwargs):
+        r, p = super()._split_check_kwargs(kwargs)
+        if not all(len(r.get(x, ())) == len(p.get(x, ())) for x in
+                   ('charge', 'multiplicity', 'neighbors', 'hybridization')):
+            raise ValueError('charge, multiplicity, neighbors, hybridization should be presented in both states '
+                             'with same number of values')
+        return r, p
+
+    _hybridization_str = Atom._hybridization_str
+    _stereo_str = Atom._stereo_str
+    _multiplicity_str = Atom._multiplicity_str
+    _charge_str = Atom._charge_str
+    _static = {'element', 'isotope'}
+    _p_static = {f'p_{x}' for x in _static}
+    _atom_factory = QueryAtom
 
 
 class DynQueryBond(DynBond):
@@ -126,4 +327,4 @@ class DynQueryBond(DynBond):
     _stereo_str = Bond._stereo_str
 
 
-__all__ = ['DynQueryBond']
+__all__ = ['DynQueryAtom', 'DynQueryBond']

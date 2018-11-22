@@ -19,8 +19,8 @@
 from collections import namedtuple
 from collections.abc import MutableMapping
 from itertools import chain
-from logging import warning
 from .molecule import Bond, Atom
+from .query import QueryAtom
 from ..periodictable import Element
 
 
@@ -28,98 +28,28 @@ DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class DynAtom(MutableMapping):
-    __slots__ = ('reagent', 'product')
+    __slots__ = ('_reagent', '_product')
 
-    def __init__(self, atom=None, p_atom=None):
-        if atom is None or p_atom is None:
-            if atom != p_atom:
-                warning('only one atom state passed. ignored')
-            atom = Atom()
-            p_atom = Atom()
-        else:
-            if isinstance(atom, DynAtom):
-                atom = Atom(atom.reagent)
-            elif isinstance(atom, (Atom, Element)):
-                atom = Atom(atom)
-            else:
-                raise TypeError('invalid atom passed')
-            if isinstance(p_atom, DynAtom):
-                p_atom = Atom(p_atom.product)
-            elif isinstance(p_atom, (Atom, Element)):
-                p_atom = Atom(p_atom)
-            else:
-                raise TypeError('invalid p_atom passed')
-            if atom.symbol != p_atom.symbol or atom.isotope != p_atom.isotope:
-                raise ValueError('different atoms impossible')
-        super().__setattr__('reagent', atom)
-        super().__setattr__('product', p_atom)
+    def __init__(self):
+        super().__setattr__('_reagent', self._atom_factory(skip_checks=True))
+        super().__setattr__('_product', self._atom_factory(skip_checks=True))
 
-    def __getitem__(self, key):
-        if key.startswith('p_'):
-            if key in self.__p_static:
-                raise KeyError(f'{key} is invalid')
-            return self.product[key[2:]]
-        return self.reagent[key]
-
-    def __setitem__(self, key, value):
-        setattr(self, key, value)
-
-    def __getattr__(self, key):
-        if key.startswith('p_'):
-            if key in self.__p_static:
-                raise KeyError(f'{key} is invalid')
-            return getattr(self.product, key[2:])
-        return getattr(self.reagent, key)
+    def __init_copy__(self, parent):
+        super().__setattr__('_reagent', parent._reagent.copy())
+        super().__setattr__('_product', parent._product.copy())
 
     def __setattr__(self, key, value):
-        if key.startswith('p_'):
-            if key in self.__p_static:
-                raise KeyError(f'{key} is invalid')
-            setattr(self.product, key[2:], value)
+        if key in self._p_static:
+            raise AttributeError(f'{key} is invalid')
+        elif key.startswith('p_'):
+            key = key[2:]
+            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            setattr(self._product, key, value)
         else:
-            setattr(self.reagent, key, value)
-            if key in self.__static:
-                setattr(self.product, key, value)
-
-    def __len__(self):
-        return len(self.reagent) + len(self.product)
-
-    def __iter__(self):
-        return chain(self.reagent, (f'p_{x}' for x in self.product))
-
-    def __contains__(self, key):
-        if key.startswith('p_'):
-            return key[2:] in self.product
-        return key in self.reagent
-
-    def __delitem__(self, key):
-        raise TypeError('attribute deletion impossible')
-
-    def __eq__(self, other):
-        if isinstance(other, DynAtom):
-            return self.reagent == other.reagent and self.product == other.product
-        elif isinstance(other, Atom):
-            return self.reagent == other == self.product
-        return False
-
-    def __str__(self):
-        return f'{self.reagent}>>{self.product}'
-
-    def stringify(self, *args, **kwargs):
-        return DynamicContainer(self.reagent.format(*args, **kwargs), self.product.format(*args, **kwargs))
-
-    def weight(self, *args, **kwargs):
-        return DynamicContainer(self.reagent.weight(*args, **kwargs), self.product.weight(*args, **kwargs))
-
-    @property
-    def atom(self):
-        """
-        reagent and product state atoms
-        """
-        return DynamicContainer(self.reagent.atom, self.product.atom)
-
-    def copy(self):
-        return type(self)(self.reagent, self.product)
+            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            setattr(self._reagent, key, value)
+            if key in self._static:
+                setattr(self._product, key, value)
 
     def update(self, *args, **kwargs):
         """
@@ -136,25 +66,123 @@ class DynAtom(MutableMapping):
         else:
             value = kwargs
             kwargs = ()
+        self._update(value, kwargs)
 
+    def _update(self, value, kwargs):
         if isinstance(value, DynAtom):
-            p_value = value.product
-            value = value.reagent
-        else:
+            r, p = self._split_check_kwargs(kwargs)
+            p_value = value._product
+            value = value._reagent
+            if isinstance(value, QueryAtom):
+                raise TypeError('QueryAtom not supported')
+        elif isinstance(value, (Atom, Element)):
+            r, p = self._split_check_kwargs(kwargs)
             p_value = value
-
-        if kwargs:
-            if kwargs.keys() & self.__p_static:
-                raise KeyError(f'{self.__static} keys is static')
-            self.reagent.update(value, **{k: v for k, v in kwargs.items() if not k.startswith('p_')})
-            self.product.update(p_value, **{k[2:]: v for k, v in kwargs.items() if k.startswith('p_')},
-                                **{k: v for k, v in kwargs.items() if k in self.__static})
+        elif isinstance(value, type):
+            if not issubclass(value, Element):
+                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+            r, p = self._split_check_kwargs(kwargs)
+            p_value = value
         else:
-            self.reagent.update(value)
-            self.product.update(p_value)
+            if not isinstance(value, dict):
+                try:
+                    value = dict(value)
+                except (TypeError, ValueError):
+                    raise TypeError('invalid attrs sequence')
 
-    __static = {'color', 'element', 'isotope', 'mark', 'mapping'}
-    __p_static = {f'p_{x}' for x in __static}
+            value.update(kwargs)
+            if not value:  # ad-hoc for add_nodes_from method
+                return
+            value, p_value = self._split_check_kwargs(value)
+            r = p = {}
+
+        self._reagent._update(value, r)
+        self._product._update(p_value, p)
+
+    def stringify(self, *args, **kwargs):
+        return DynamicContainer(self._reagent.format(*args, **kwargs), self._product.format(*args, **kwargs))
+
+    def weight(self, *args, **kwargs):
+        return DynamicContainer(self._reagent.weight(*args, **kwargs), self._product.weight(*args, **kwargs))
+
+    def __eq__(self, other):
+        if isinstance(other, DynAtom):
+            return self._reagent == other._reagent and self._product == other._product
+        elif isinstance(other, Atom):
+            return self._reagent == other == self._product
+        return False
+
+    def __ne__(self, other):
+        """
+        != equality checks with stereo
+        """
+        if isinstance(other, DynAtom):
+            return self._reagent != other._reagent and self._product != other._product
+        return self._reagent != self._product != other
+
+    def __getitem__(self, key):
+        if key.startswith('p_'):
+            if key in self._p_static:
+                raise KeyError(f'{key} is invalid')
+            return self._product[key[2:]]
+        return self._reagent[key]
+
+    def __setitem__(self, key, value):
+        try:
+            setattr(self, key, value)
+        except AttributeError as e:
+            raise KeyError from e
+
+    def __getattr__(self, key):
+        if key.startswith('p_'):
+            if key in self._p_static:
+                raise AttributeError(f'{key} is invalid')
+            return getattr(self._product, key[2:])
+        return getattr(self._reagent, key)
+
+    def __len__(self):
+        return len(self._reagent) + len(self._product)
+
+    def __iter__(self):
+        return chain(self._reagent, (f'p_{x}' for x in self._product))
+
+    def __contains__(self, key):
+        if key in self._p_static:
+            return False
+        if key.startswith('p_'):
+            return key[2:] in self._product
+        return key in self._reagent
+
+    def __delitem__(self, key):
+        raise TypeError('attribute deletion impossible')
+
+    def __str__(self):
+        return '%s>>%s' % self.stringify(stereo=True)
+
+    def copy(self):
+        cls = type(self)
+        copy = cls.__new__(cls)
+        copy.__init_copy__(self)
+        return copy
+
+    @classmethod
+    def _split_check_kwargs(cls, kwargs):
+        r, p = {}, {}
+        for k, v in kwargs.items():
+            if k in cls._p_static:
+                raise KeyError(f'{k} is invalid')
+            elif k in cls._static:
+                r[k] = p[k] = getattr(cls._atom_factory, f'_{k}_check')(v)
+            elif k.startswith('p_'):
+                k = k[2:]
+                p[k] = getattr(cls._atom_factory, f'_{k}_check')(v)
+            else:
+                r[k] = getattr(cls._atom_factory, f'_{k}_check')(v)
+        return r, p
+
+    _static = {'color', 'element', 'isotope', 'mark', 'mapping'}
+    _p_static = {f'p_{x}' for x in _static}
+    _atom_factory = Atom
 
 
 class DynBond(MutableMapping):
