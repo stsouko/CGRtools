@@ -55,7 +55,7 @@ class QueryAtom(MutableMapping):
     def _update(self, value, kwargs):
         if isinstance(value, QueryAtom):
             kwargs = self._check_kwargs(kwargs)
-            self._atom.update(value._atom)
+            self._atom.update(value)
             self._atom.update(kwargs)
         elif isinstance(value, Atom):
             kwargs = self._check_kwargs(kwargs)
@@ -97,50 +97,49 @@ class QueryAtom(MutableMapping):
 
     def stringify(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
         smi = []
-        satom = self._atom
-        if stereo and satom['stereo']:
-            smi.append(self._stereo_str[satom['stereo']])
+        if stereo and self.stereo:
+            smi.append(self._stereo_str[self.stereo])
         if hybridization:
-            if len(satom['hybridization']) > 1:
-                smi.append('<%s>' % ''.join(self._hybridization_str[x] for x in sorted(satom['hybridization'])))
-            elif satom['hybridization']:
-                smi.append(self._hybridization_str[satom['hybridization'][0]])
+            if len(self.hybridization) > 1:
+                smi.append('<%s>' % ''.join(self._hybridization_str[x] for x in sorted(self.hybridization)))
+            elif self.hybridization:
+                smi.append(self._hybridization_str[self.hybridization[0]])
         if neighbors:
-            if len(satom['neighbors']) > 1:
-                smi.append('<%s>' % ''.join(str(x) for x in sorted(satom['neighbors'])))
-            elif satom['neighbors']:
-                smi.append(str(satom['neighbors'][0]))
+            if len(self.neighbors) > 1:
+                smi.append('<%s>' % ''.join(str(x) for x in sorted(self.neighbors)))
+            elif self.neighbors:
+                smi.append(str(self.neighbors[0]))
         if smi:
             smi.append(';')
             smi.insert(0, ';')
 
         if atom:
-            if satom['element'] == ('A',):
+            if self.element == ('A',):
                 atom = False
                 smi.insert(0, '*')
-            elif len(satom['element']) > 1:
+            elif len(self.element) > 1:
                 atom = False
-                smi.insert(0, ','.join(sorted(satom['element'], key=elements_numbers.get)))
+                smi.insert(0, ','.join(sorted(self.element, key=elements_numbers.get)))
             else:
-                if satom['element'][0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                if self.element[0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
                     atom = False
-                smi.insert(0, satom['element'][0])
+                smi.insert(0, self.element[0])
 
-            if len(satom['charge']) > 1:
-                smi.append('<%s>' % ''.join(self._charge_str[x] for x in sorted(satom['charge'])))
-            elif satom['charge'] != (0,):
-                smi.append(self._charge_str[satom['charge'][0]])
+            if len(self.charge) > 1:
+                smi.append('<%s>' % ''.join(self._charge_str[x] for x in sorted(self.charge)))
+            elif self.charge != (0,):
+                smi.append(self._charge_str[self.charge[0]])
 
-            if len(satom['multiplicity']) > 1:
-                smi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in sorted(satom['multiplicity'])))
-            elif satom['multiplicity']:
-                smi.append(self._multiplicity_str[satom['multiplicity'][0]])
+            if len(self.multiplicity) > 1:
+                smi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in sorted(self.multiplicity)))
+            elif self.multiplicity:
+                smi.append(self._multiplicity_str[self.multiplicity[0]])
 
             if isotope:
-                if len(satom['isotope']) > 1:
-                    smi.insert(0, '<%s>' % ''.join(str(x) for x in sorted(satom['isotope'])))
-                elif satom['isotope']:
-                    smi.insert(0, str(satom['isotope'][0]))
+                if len(self.isotope) > 1:
+                    smi.insert(0, '<%s>' % ''.join(str(x) for x in sorted(self.isotope)))
+                elif self.isotope:
+                    smi.insert(0, str(self.isotope[0]))
         else:
             smi.insert(0, '*')
 
@@ -151,36 +150,35 @@ class QueryAtom(MutableMapping):
         return ''.join(smi)
 
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
-        satom = self._atom
         weight = []
         if atom:
-            weight.append(tuple(sorted(elements_numbers[x] for x in satom['element'])))
+            weight.append(tuple(sorted(elements_numbers[x] for x in self.element)))
             if isotope:
-                weight.append(tuple(sorted(satom['isotope'])))
-            weight.append(tuple(sorted(satom['charge'])))
-            weight.append(satom['multiplicity'] and tuple(sorted(satom['multiplicity'])))
+                weight.append(tuple(sorted(self.isotope)))
+            weight.append(tuple(sorted(self.charge)))
+            weight.append(self.multiplicity and tuple(sorted(self.multiplicity)))
         if stereo:
-            weight.append(satom['stereo'] or 0)
+            weight.append(self.stereo or 0)
         if hybridization:
-            weight.append(satom['hybridization'] and tuple(sorted(satom['hybridization'])))
+            weight.append(self.hybridization and tuple(sorted(self.hybridization)))
         if neighbors:
-            weight.append(satom['neighbors'] and tuple(sorted(satom['neighbors'])))
+            weight.append(self.neighbors and tuple(sorted(self.neighbors)))
         return tuple(weight)
 
     def __eq__(self, other):
         if isinstance(other, QueryAtom):
-            return all(sorted(self._atom[attr]) == sorted(other[attr])
+            return all(sorted(self[attr]) == sorted(other[attr])
                        for attr in ('element', 'isotope', 'charge', 'multiplicity', 'hybridization', 'neighbors'))
         elif isinstance(other, Atom):
-            return (other.element in self._atom['element'] or self._atom['element'][0] == 'A') and \
-                    all(getattr(other, attr) in self._atom[attr] for attr in
-                        ('isotope', 'charge', 'multiplicity', 'hybridization', 'neighbors') if self._atom[attr])
+            return (other.element in self.element or self.element == ('A',)) and \
+                    all(other[attr] in self[attr] for attr in
+                        ('isotope', 'charge', 'multiplicity', 'hybridization', 'neighbors') if self[attr])
         return False
 
     def __ne__(self, other):
         if self == other:
-            if self._atom['stereo']:
-                return self._atom['stereo'] == other.stereo
+            if self.stereo:
+                return self.stereo == other.stereo
             return True
         return False
 
@@ -208,12 +206,7 @@ class QueryAtom(MutableMapping):
         return sum(1 for _ in self)
 
     def __iter__(self):
-        """
-        iterate other non-default atom's init attrs
-        """
-        for k, d in self.__defaults.items():
-            if d != self._atom[k]:
-                yield k
+        return iter(self._atom)
 
     def __delitem__(self, key):
         raise TypeError('attribute deletion impossible')

@@ -54,22 +54,21 @@ class Atom(MutableMapping):
         if key == 'element':
             value = self._element_check(value)
             if value != self._atom:
-                super().__setattr__('_atom', value(self._atom.charge, self._atom.multiplicity))
-            return
+                super().__setattr__('_atom', value(self.charge, self.multiplicity))
         elif key in ('charge', 'isotope', 'multiplicity'):
             value = getattr(self, f'_{key}_check')(value)
-            attrs = {'multiplicity': self._atom.multiplicity, 'isotope': self._atom.isotope,
-                     'charge': self._atom.charge, key: value}
+            attrs = {'multiplicity': self.multiplicity, 'isotope': self.isotope,
+                     'charge': self.charge, key: value}
             super().__setattr__('_atom', type(self._atom)(**attrs))
-            return
         elif key in ('neighbors', 'hybridization'):
             raise AttributeError('neighbors and hybridization change not allowed')
-        elif key in ('_neighbors', '_hybridization'):
-            key = key[1:]
-        if self._skip_checks:
-            super().__setattr__(f'_Atom__{key}', value)
         else:
-            super().__setattr__(key, value)
+            if key in ('_neighbors', '_hybridization'):
+                key = key[1:]
+            if self._skip_checks:
+                super().__setattr__(f'_Atom__{key}', value)
+            else:
+                super().__setattr__(key, value)
 
     def update(self, *args, **kwargs):
         """
@@ -133,16 +132,16 @@ class Atom(MutableMapping):
 
             if 'element' in value:
                 element = self._element_check(value['element'])
-                attrs = {'multiplicity': value.get('multiplicity', self._atom.multiplicity),
-                         'charge': value.get('charge', self._atom.charge)}
+                attrs = {'multiplicity': value.get('multiplicity', self.multiplicity),
+                         'charge': value.get('charge', self.charge)}
                 if 'isotope' in value:
                     attrs['isotope'] = value['isotope']
                 super().__setattr__('_atom', element(**attrs))
             else:
                 atom_keys = value.keys() & {'isotope', 'charge', 'multiplicity'}
                 if atom_keys:
-                    attrs = {'multiplicity': self._atom.multiplicity, 'isotope': self._atom.isotope,
-                             'charge': self._atom.charge, **{k: value[k] for k in atom_keys}}
+                    attrs = {'multiplicity': self.multiplicity, 'isotope': self.isotope,
+                             'charge': self.charge, **{k: value[k] for k in atom_keys}}
                     super().__setattr__('_atom', type(self._atom)(**attrs))
 
             for k, v in mutable_keys.items():
@@ -161,17 +160,16 @@ class Atom(MutableMapping):
             smi.append(';')
             smi.insert(0, ';')
 
-        satom = self._atom
         if atom:
-            if satom.symbol not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+            if self.element not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
                 atom = False
-            smi.insert(0, satom.symbol)
-            if satom.charge:
-                smi.append(self._charge_str[satom.charge])
-            if satom.multiplicity:
-                smi.append(self._multiplicity_str[satom.multiplicity])
-            if isotope and satom.isotope != satom.common_isotope:
-                smi.insert(0, str(satom.isotope))
+            smi.insert(0, self.element)
+            if self.charge:
+                smi.append(self._charge_str[self.charge])
+            if self.multiplicity:
+                smi.append(self._multiplicity_str[self.multiplicity])
+            if isotope and self.isotope != self.common_isotope:
+                smi.insert(0, str(self.isotope))
         else:
             smi.insert(0, '*')
 
@@ -182,14 +180,13 @@ class Atom(MutableMapping):
         return ''.join(smi)
 
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
-        satom = self._atom
         weight = []
         if atom:
-            weight.append(satom.number)
+            weight.append(self.number)
             if isotope:
-                weight.append(satom.isotope)
-            weight.append(satom.charge)
-            weight.append(satom.multiplicity or 0)
+                weight.append(self.isotope)
+            weight.append(self.charge)
+            weight.append(self.multiplicity or 0)
         if stereo:
             weight.append(self.__stereo or 0)
         if hybridization:
@@ -379,15 +376,12 @@ class Atom(MutableMapping):
         """
         iterate other non-default atom's init attrs
         """
-        satom = self._atom
-        if satom is None:
-            raise StopIteration
         yield 'element'
-        if satom.isotope != satom.common_isotope:
+        if self.isotope != self.common_isotope:
             yield 'isotope'
-        if satom.charge:
+        if self.charge:
             yield 'charge'
-        if satom.multiplicity:
+        if self.multiplicity:
             yield 'multiplicity'
         for k, d in self.__defaults.items():
             if d != getattr(self, k):

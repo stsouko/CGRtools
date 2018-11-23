@@ -56,34 +56,31 @@ class DynQueryAtom(DynAtom):
 
     def stringify(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
         rmi, pmi = [], []
-        ratom = self._reagent._atom
-        patom = self._product._atom
-
         if stereo:
-            if ratom['stereo']:
-                rmi.append(self._stereo_str[ratom['stereo']])
-            if patom['stereo']:
-                pmi.append(self._stereo_str[patom['stereo']])
+            if self.stereo:
+                rmi.append(self._stereo_str[self.stereo])
+            if self.p_stereo:
+                pmi.append(self._stereo_str[self.p_stereo])
         if hybridization:
-            if len(ratom['hybridization']) > 1:
-                r, p = zip(*sorted(zip(ratom['hybridization'], patom['hybridization'])))
+            if len(self.hybridization) > 1:
+                r, p = zip(*sorted(zip(self.hybridization, self.p_hybridization)))
                 rmi.append('<%s>' % ''.join(self._hybridization_str[x] for x in r))
                 pmi.append('<%s>' % ''.join(self._hybridization_str[x] for x in p))
             else:
-                if ratom['hybridization']:
-                    rmi.append(self._hybridization_str[ratom['hybridization'][0]])
-                if patom['hybridization']:
-                    pmi.append(self._hybridization_str[patom['hybridization'][0]])
+                if self.hybridization:
+                    rmi.append(self._hybridization_str[self.hybridization[0]])
+                if self.p_hybridization:
+                    pmi.append(self._hybridization_str[self.p_hybridization[0]])
         if neighbors:
-            if len(ratom['neighbors']) > 1:
-                r, p = zip(*sorted(zip(ratom['neighbors'], patom['neighbors'])))
+            if len(self.neighbors) > 1:
+                r, p = zip(*sorted(zip(self.neighbors, self.p_neighbors)))
                 rmi.append('<%s>' % ''.join(str(x) for x in r))
                 pmi.append('<%s>' % ''.join(str(x) for x in p))
             else:
-                if ratom['neighbors']:
-                    rmi.append(str(ratom['neighbors'][0]))
-                if patom['neighbors']:
-                    pmi.append(str(patom['neighbors'][0]))
+                if self.neighbors:
+                    rmi.append(str(self.neighbors[0]))
+                if self.p_neighbors:
+                    pmi.append(str(self.p_neighbors[0]))
         if rmi:
             rmi.append(';')
             rmi.insert(0, ';')
@@ -92,46 +89,46 @@ class DynQueryAtom(DynAtom):
             pmi.insert(0, ';')
 
         if atom:
-            if ratom['element'] == ('A',):
+            if self.element == ('A',):
                 atom = False
                 rmi.insert(0, '*')
                 pmi.insert(0, '*')
-            elif len(ratom['element']) > 1:
+            elif len(self.element) > 1:
                 atom = False
-                tmp = ','.join(sorted(ratom['element'], key=elements_numbers.get))
+                tmp = ','.join(sorted(self.element, key=elements_numbers.get))
                 rmi.insert(0, tmp)
                 pmi.insert(0, tmp)
             else:
-                if ratom['element'][0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                if self.element[0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
                     atom = False
-                rmi.insert(0, ratom['element'][0])
-                pmi.insert(0, ratom['element'][0])
+                rmi.insert(0, self.element[0])
+                pmi.insert(0, self.element[0])
 
-            if len(ratom['charge']) > 1:
-                r, p = zip(*sorted(zip(ratom['charge'], patom['charge'])))
+            if len(self.charge) > 1:
+                r, p = zip(*sorted(zip(self.charge, self.p_charge)))
                 rmi.append('<%s>' % ''.join(self._charge_str[x] for x in r))
                 pmi.append('<%s>' % ''.join(self._charge_str[x] for x in p))
             else:
-                if ratom['charge'] != (0,):
-                    rmi.append(self._charge_str[ratom['charge'][0]])
-                if patom['charge'] != (0,):
-                    pmi.append(self._charge_str[patom['charge'][0]])
-            if len(ratom['multiplicity']) > 1:
-                r, p = zip(*sorted(zip(ratom['multiplicity'], patom['multiplicity'])))
+                if self.charge != (0,):
+                    rmi.append(self._charge_str[self.charge[0]])
+                if self.p_charge != (0,):
+                    pmi.append(self._charge_str[self.p_charge[0]])
+            if len(self.multiplicity) > 1:
+                r, p = zip(*sorted(zip(self.multiplicity, self.p_multiplicity)))
                 rmi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in r))
                 pmi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in p))
             else:
-                if ratom['multiplicity']:
-                    rmi.append(self._multiplicity_str[ratom['multiplicity'][0]])
-                if patom['multiplicity']:
-                    pmi.append(self._multiplicity_str[patom['multiplicity'][0]])
+                if self.multiplicity:
+                    rmi.append(self._multiplicity_str[self.multiplicity[0]])
+                if self.p_multiplicity:
+                    pmi.append(self._multiplicity_str[self.p_multiplicity[0]])
             if isotope:
-                if len(ratom['isotope']) > 1:
-                    tmp = '<%s>' % ''.join(str(x) for x in sorted(ratom['isotope']))
+                if len(self.isotope) > 1:
+                    tmp = '<%s>' % ''.join(str(x) for x in sorted(self.isotope))
                     rmi.insert(0, tmp)
                     pmi.insert(0, tmp)
-                elif ratom['isotope']:
-                    tmp = str(ratom['isotope'][0])
+                elif self.isotope:
+                    tmp = str(self.isotope[0])
                     rmi.insert(0, tmp)
                     pmi.insert(0, tmp)
         else:
@@ -147,41 +144,39 @@ class DynQueryAtom(DynAtom):
         return ''.join(rmi), ''.join(pmi)
 
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
-        ratom = self._reagent._atom
-        patom = self._product._atom
         r_weight, p_weight = [], []
         if atom:
-            tmp = tuple(sorted(elements_numbers[x] for x in ratom['element']))
+            tmp = tuple(sorted(elements_numbers[x] for x in self.element))
             r_weight.append(tmp)
             p_weight.append(tmp)
             if isotope:
-                tmp = tuple(sorted(ratom['isotope']))
+                tmp = tuple(sorted(self.isotope))
                 r_weight.append(tmp)
                 p_weight.append(tmp)
-            r, p = zip(*sorted(zip(ratom['charge'], patom['charge'])))
+            r, p = zip(*sorted(zip(self.charge, self.p_charge)))
             r_weight.append(tuple(r))
             p_weight.append(tuple(p))
-            if ratom['multiplicity']:
-                r, p = zip(*sorted(zip(ratom['multiplicity'], patom['multiplicity'])))
+            if self.multiplicity:
+                r, p = zip(*sorted(zip(self.multiplicity, self.p_multiplicity)))
                 r_weight.append(tuple(r))
                 p_weight.append(tuple(p))
             else:
                 r_weight.append(())
                 p_weight.append(())
         if stereo:
-            r_weight.append(ratom['stereo'] or 0)
-            p_weight.append(patom['stereo'] or 0)
+            r_weight.append(self.stereo or 0)
+            p_weight.append(self.p_stereo or 0)
         if hybridization:
-            if ratom['hybridization']:
-                r, p = zip(*sorted(zip(ratom['hybridization'], patom['hybridization'])))
+            if self.hybridization:
+                r, p = zip(*sorted(zip(self.hybridization, self.p_hybridization)))
                 r_weight.append(tuple(r))
                 p_weight.append(tuple(p))
             else:
                 r_weight.append(())
                 p_weight.append(())
         if neighbors:
-            if ratom['neighbors']:
-                r, p = zip(*sorted(zip(ratom['neighbors'], patom['neighbors'])))
+            if self.neighbors:
+                r, p = zip(*sorted(zip(self.neighbors, self.p_neighbors)))
                 r_weight.append(tuple(r))
                 p_weight.append(tuple(p))
             else:
