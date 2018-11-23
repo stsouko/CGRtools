@@ -34,9 +34,9 @@ class DynAtom(MutableMapping):
         super().__setattr__('_reagent', self._atom_factory(skip_checks=True))
         super().__setattr__('_product', self._atom_factory(skip_checks=True))
 
-    def __init_copy__(self, parent):
-        super().__setattr__('_reagent', parent._reagent.copy())
-        super().__setattr__('_product', parent._product.copy())
+    def __init_copy__(self, reagent, product):
+        super().__setattr__('_reagent', reagent)
+        super().__setattr__('_product', product)
 
     def __setattr__(self, key, value):
         if key in self._p_static:
@@ -100,7 +100,7 @@ class DynAtom(MutableMapping):
         self._product._update(p_value, p)
 
     def stringify(self, *args, **kwargs):
-        return DynamicContainer(self._reagent.format(*args, **kwargs), self._product.format(*args, **kwargs))
+        return DynamicContainer(self._reagent.stringify(*args, **kwargs), self._product.stringify(*args, **kwargs))
 
     def weight(self, *args, **kwargs):
         return DynamicContainer(self._reagent.weight(*args, **kwargs), self._product.weight(*args, **kwargs))
@@ -162,7 +162,7 @@ class DynAtom(MutableMapping):
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)
-        copy.__init_copy__(self)
+        copy.__init_copy__(self._reagent.copy(), self._product.copy())
         return copy
 
     @classmethod
@@ -192,9 +192,9 @@ class DynBond(MutableMapping):
         super().__setattr__('_reagent', self._bond_factory(skip_checks=True))
         super().__setattr__('_product', self._bond_factory(skip_checks=True))
 
-    def __init_copy__(self, parent):
-        super().__setattr__('_reagent', parent._reagent.copy())
-        super().__setattr__('_product', parent._product.copy())
+    def __init_copy__(self, reagent, product):
+        super().__setattr__('_reagent', reagent)
+        super().__setattr__('_product', product)
 
     def __setattr__(self, key, value):
         if key == 'p_order':
@@ -356,7 +356,7 @@ class DynBond(MutableMapping):
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)
-        copy.__init_copy__(self)
+        copy.__init_copy__(self._reagent.copy(), self._product.copy())
         return copy
 
     _bond_factory = Bond

@@ -17,8 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .common import BaseContainer
-from ..algorithms import StringMolecule
-from ..attributes import QueryAtom, QueryBond
+from ..algorithms import StringMolecule, StringCGR
+from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
 
 
 class QueryContainer(StringMolecule, BaseContainer):
@@ -27,6 +27,17 @@ class QueryContainer(StringMolecule, BaseContainer):
 
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
+
+    def _wedge_map(self):
+        return {}
+
+
+class QueryCGRContainer(StringCGR, BaseContainer):
+    def add_stereo(self, *args, **kwargs):
+        pass
+
+    node_attr_dict_factory = DynQueryAtom
+    edge_attr_dict_factory = DynQueryBond
 
     def _wedge_map(self):
         return {}

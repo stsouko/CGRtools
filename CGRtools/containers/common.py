@@ -23,7 +23,7 @@ from itertools import cycle
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR, StringCommon
-from ..attributes import Bond
+from ..attributes import Bond, DynAtom, DynBond
 from ..periodictable import elements_list, radical_unmap
 
 
@@ -287,7 +287,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             for m, b in m_b.items():
                 u.add_bond(n, m, b)
 
-    def compose(self, g, balance=False):
+    def compose(self, g):
         """
         compose 2 graphs to CGR
 
@@ -298,7 +298,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             raise TypeError('BaseContainer subclass expected')
 
         # dynamic container resolving
-        qc = _search_subclass('QueryContainer')
+        qc = _search_subclass('QueryCGRContainer')
         cc = _search_subclass('CGRContainer')
 
         # try to use custom containers
@@ -317,59 +317,120 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         unique_reagent = self._node.keys() - common
         unique_product = g._node.keys() - common
 
+        none_bond = Bond(skip_checks=True)
+        none_bond.order = None
+
         for n in common:
-            h.add_atom(h.node_attr_dict_factory(self._node[n], g._node[n]), n)
+            r, p = self._node[n], g._node[n]
+            if r.element != p.element or r.isotope != p.isotope:
+                raise ValueError('invalid atom mapping')
+            if isinstance(r, DynAtom):
+                r = r._reagent
+            if isinstance(p, DynAtom):
+                p = p._product
+            atom = h.node_attr_dict_factory()
+            atom.__init_copy__(r, p)
+            h.add_atom(atom, n)
         for n in unique_reagent:
-            h.add_atom(h.node_attr_dict_factory(self._node[n], self._node[n]), n)
+            r = self._node[n]
+            if isinstance(r, DynAtom):
+                p = r._product
+                r = r._reagent
+            else:
+                p = r
+            atom = h.node_attr_dict_factory()
+            atom.__init_copy__(r, p)
+            h.add_atom(atom, n)
         for n in unique_product:
-            h.add_atom(h.node_attr_dict_factory(g._node[n], g._node[n]), n)
+            r = g._node[n]
+            if isinstance(r, DynAtom):
+                p = r._product
+                r = r._reagent
+            else:
+                p = r
+            atom = h.node_attr_dict_factory()
+            atom.__init_copy__(r, p)
+            h.add_atom(atom, n)
 
         skin_reagent = defaultdict(list)
         seen = set()
         for n, m_b in self._adj.items():
             seen.add(n)
             if n in common:
-                for m, b in m_b.items():
+                for m, r in m_b.items():
                     if m in seen:
                         continue
+                    if isinstance(r, DynBond):
+                        r = r._reagent
                     if m in common:
-                        h.add_bond(n, m, h.edge_attr_dict_factory(b, g._adj[n][m]))
+                        p = g._adj[n][m]
+                        if isinstance(p, DynBond):
+                            p = p._product
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(r, p)
+                        h.add_bond(n, m, bond)
                     else:
                         skin_reagent[n].append(m)
-                        h.add_bond(n, m, h.edge_attr_dict_factory(b, Bond(None, allow_none=True)))
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(r, none_bond)
+                        h.add_bond(n, m, bond)
             else:
-                for m, b in m_b.items():
+                for m, r in m_b.items():
                     if m in seen:
                         continue
                     if m in common:
+                        if isinstance(r, DynBond):
+                            r = r._reagent
                         skin_reagent[m].append(n)
-                        h.add_bond(n, m, h.edge_attr_dict_factory(b, Bond(None, allow_none=True)))
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(r, none_bond)
+                        h.add_bond(n, m, bond)
                     else:
-                        h.add_bond(n, m, h.edge_attr_dict_factory(b, b))
+                        if isinstance(r, DynBond):
+                            p = r._product
+                            r = r._reagent
+                        else:
+                            p = r
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(r, p)
+                        h.add_bond(n, m, bond)
 
         skin_product = defaultdict(list)
         seen = set()
         for n, m_b in g._adj.items():
             seen.add(n)
             if n in common:
-                for m, b in m_b.items():
-                    if m in seen:
-                        continue
-                    if m in common:
-                        h.add_bond(n, m, h.edge_attr_dict_factory(self._adj[n][m], b))
-                    else:
+                for m, p in m_b.items():
+                    if m not in common:
+                        if isinstance(p, DynBond):
+                            p = p._product
                         skin_product[n].append(m)
-                        h.add_bond(n, m, h.edge_attr_dict_factory(Bond(None, allow_none=True), b))
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(none_bond, p)
+                        h.add_bond(n, m, bond)
             else:
-                for m, b in m_b.items():
+                for m, p in m_b.items():
                     if m in seen:
                         continue
                     if m in common:
+                        if isinstance(p, DynBond):
+                            p = p._product
                         skin_product[m].append(n)
-                        h.add_bond(n, m, h.edge_attr_dict_factory(Bond(None, allow_none=True), b))
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(none_bond, p)
+                        h.add_bond(n, m, bond)
                     else:
-                        h.add_bond(n, m, h.edge_attr_dict_factory(b, b))
+                        if isinstance(p, DynBond):
+                            r = p._reagent
+                            p = p._product
+                        else:
+                            r = p
+                        bond = h.edge_attr_dict_factory()
+                        bond.__init_copy__(r, p)
+                        h.add_bond(n, m, bond)
+        return h
 
+    def __balance(self, ):
         if balance:
             """ calc unbalanced charges and radicals for skin atoms
             """

@@ -54,12 +54,14 @@ class Atom(MutableMapping):
         if key == 'element':
             value = self._element_check(value)
             if value != self._atom:
-                super().__setattr__('_atom', value(self._atom.charge, self._atom.multiplicity, self._atom.isotope))
+                super().__setattr__('_atom', value(self._atom.charge, self._atom.multiplicity))
+            return
         elif key in ('charge', 'isotope', 'multiplicity'):
             value = getattr(self, f'_{key}_check')(value)
             attrs = {'multiplicity': self._atom.multiplicity, 'isotope': self._atom.isotope,
                      'charge': self._atom.charge, key: value}
             super().__setattr__('_atom', type(self._atom)(**attrs))
+            return
         elif key in ('neighbors', 'hybridization'):
             raise AttributeError('neighbors and hybridization change not allowed')
         elif key in ('_neighbors', '_hybridization'):
