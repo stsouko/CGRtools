@@ -190,19 +190,30 @@ class DynQueryAtom(DynAtom):
         return tuple(r_weight), tuple(p_weight)
 
     def __eq__(self, other):
-        if isinstance(other, DynAtom):
-            return self._reagent == other._reagent and self._product == other._product
-        elif isinstance(other, Atom):
-            return self._reagent == other == self._product
+        if isinstance(other, DynQueryAtom):
+            return all(sorted(self._reagent[x]) == sorted(other._reagent[x]) for x in self._static) and \
+                       all(sorted(zip(self._reagent[x], self._product[x])) ==
+                           sorted(zip(other._reagent[x], other._product[x]))
+                           for x in ('charge', 'multiplicity', 'hybridization', 'neighbors'))
+        elif isinstance(other, DynAtom):
+            return all(other._reagent[x] in self._reagent[x] for x in self._static) and \
+                all((other._reagent[x], other._product[x]) in zip(self._reagent[x], self._product[x])
+                    for x in ('charge', 'multiplicity', 'hybridization', 'neighbors'))
+        elif isinstance(other, (QueryAtom, Atom)):
+            return self._reagent == self._product == other
         return False
 
     def __ne__(self, other):
         """
         != equality checks with stereo
         """
-        if isinstance(other, DynAtom):
-            return self._reagent != other._reagent and self._product != other._product
-        return self._reagent != self._product != other
+        if self == other:
+            if self.stereo is self.p_stereo is None:
+                return True
+            elif isinstance(other, DynAtom):
+                return self.stereo == other.stereo and self.p_stereo == other.p_stereo
+            return self.stereo == self.p_stereo == other.stereo
+        return False
 
     @classmethod
     def _split_check_kwargs(cls, kwargs):
