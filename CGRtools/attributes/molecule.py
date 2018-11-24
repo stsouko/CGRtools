@@ -516,8 +516,7 @@ class Bond(MutableMapping):
 
         need for nx.readwrite.json_graph.node_link_data
         """
-        if self.order != self._defaults['order']:
-            yield 'order'
+        yield 'order'
         if self.stereo != self._defaults['stereo']:
             yield 'stereo'
 

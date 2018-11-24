@@ -199,18 +199,18 @@ class DynBond(MutableMapping):
     def __setattr__(self, key, value):
         if key == 'p_order':
             if value is None:
-                if not self._reagent.order:
+                if not self.order:
                     raise ValueError('empty bond not allowed')
-                elif self._product.stereo:
+                elif self.p_stereo:
                     raise ValueError('stereo bond not nullable')
             else:
                 value = self._bond_factory._order_check(value)
             self._product.order = value
         elif key == 'order':
             if value is None:
-                if not self._product.order:
+                if not self.p_order:
                     raise ValueError('empty bond not allowed')
-                elif self._reagent.stereo:
+                elif self.stereo:
                     raise ValueError('stereo bond not nullable')
             else:
                 value = self._bond_factory._order_check(value)
@@ -244,11 +244,11 @@ class DynBond(MutableMapping):
             r, p = self._split_check_kwargs(kwargs)
             if r or p:
                 if isinstance(value, DynBond):
-                    r = {**self._bond_factory._defaults, **value._reagent, **r}
-                    p = {**self._bond_factory._defaults, **value._product, **p}
+                    r = {'stereo': None, **value._reagent, **r}
+                    p = {'stereo': None, **value._product, **p}
                 else:
-                    r = {**self._bond_factory._defaults, **value, **r}
-                    p = {**self._bond_factory._defaults, **value, **p}
+                    r = {'stereo': None, **value, **r}
+                    p = {'stereo': None, **value, **p}
                 if not (r['order'] or p['order']):
                     raise ValueError('empty bond not allowed')
                 if r['stereo'] and not r['order'] or p['stereo'] and not p['order']:
@@ -269,28 +269,27 @@ class DynBond(MutableMapping):
                 return  # ad-hoc for add_edges_from method
 
             r, p = self._split_check_kwargs(value)
-            if not ((r.get('order', True) or p.get('order') or self._product.order) and
-                    (p.get('order', True) or r.get('order') or self._reagent.order)):
+            if not ((r.get('order', True) or p.get('order') or self.p_order) and
+                    (p.get('order', True) or r.get('order') or self.order)):
                 raise ValueError('empty bond not allowed')
-            if r.get('stereo') and (not r.get('order', True) or not self._reagent.stereo) or \
-                    p.get('stereo') and (not p.get('order', True) or not self._product.stereo):
+            if r.get('stereo') and (not r.get('order', True) or not self.stereo) or \
+                    p.get('stereo') and (not p.get('order', True) or not self.p_stereo):
                 raise ValueError('stereo bond not nullable')
 
         self._reagent._update(r, {})
         self._product._update(p, {})
 
     def stringify(self, stereo=False):
-        if not self._reagent.order:
+        if not self.order:
             return DynamicContainer('.', self._product.stringify(stereo=stereo))
-        elif not self._product.order:
+        elif not self.p_order:
             return DynamicContainer(self._reagent.stringify(stereo=stereo), '.')
         return DynamicContainer(self._reagent.stringify(stereo=stereo), self._product.stringify(stereo=stereo))
 
     def weight(self, stereo=False):
         if stereo:
-            return self._reagent.order or 0, self._product.order or 0,\
-                   self._reagent.stereo or 0, self._product.stereo or 0
-        return self._reagent.order or 0, self._product.order or 0
+            return self.order or 0, self.p_order or 0, self.stereo or 0, self.p_stereo or 0
+        return self.order or 0, self.p_order or 0
 
     def __eq__(self, other):
         """

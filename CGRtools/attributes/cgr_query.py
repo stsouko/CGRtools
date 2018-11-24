@@ -235,14 +235,14 @@ class DynQueryBond(DynBond):
         elif isinstance(value, (DynBond, Bond)):
             r, p = self._split_check_kwargs(kwargs)
             if isinstance(value, DynBond):
-                r = {**self._bond_factory._defaults,
+                r = {'stereo': None,
                      **{k: getattr(self._bond_factory, f'_{k}_check')(v) for k, v in value._reagent.items()}, **r}
-                p = {**self._bond_factory._defaults,
+                p = {'stereo': None,
                      **{k: getattr(self._bond_factory, f'_{k}_check')(v) for k, v in value._product.items()}, **p}
             else:
                 value = {k: getattr(self._bond_factory, f'_{k}_check')(v) for k, v in value.items()}
-                r = {**self._bond_factory._defaults, **value, **r}
-                p = {**self._bond_factory._defaults, **value, **p}
+                r = {'stereo': None, **value, **r}
+                p = {'stereo': None, **value, **p}
             if not (r['order'] or p['order']):
                 raise ValueError('empty bond not allowed')
             if r['stereo'] and not r['order'] or p['stereo'] and not p['order']:
@@ -256,64 +256,63 @@ class DynQueryBond(DynBond):
     def stringify(self, stereo=False):
         if self._reagent.order is None:
             return DynamicContainer('.', self._product.stringify(stereo=stereo))
-        elif self._product.order is None:
+        elif self.p_order is None:
             return DynamicContainer(self._reagent.stringify(stereo=stereo), '.')
 
-        r, p = zip(*sorted(zip(self._reagent.order, self._product.order)))
+        r, p = zip(*sorted(zip(self.order, self.p_order)))
         r_order = '<%s>' % ''.join(sorted(self._order_str[x] for x in r))
         p_order = '<%s>' % ''.join(sorted(self._order_str[x] for x in p))
         if stereo:
-            if self._reagent.stereo:
-                r_order += self._stereo_str[self._reagent.stereo]
-            if self._product.stereo:
-                p_order += self._stereo_str[self._product.stereo]
+            if self.stereo:
+                r_order += self._stereo_str[self.stereo]
+            if self.p_stereo:
+                p_order += self._stereo_str[self.p_stereo]
 
         return DynamicContainer(r_order, p_order)
 
     def weight(self, stereo=False):
-        if self._reagent.order is None:
+        if self.order is None:
             r = ()
-            p = tuple(sorted(self._product.order))
-        elif self._product.order is None:
-            r = tuple(sorted(self._reagent.order))
+            p = tuple(sorted(self.p_order))
+        elif self.p_order is None:
+            r = tuple(sorted(self.order))
             p = ()
         else:
-            r, p = zip(*sorted(zip(self._reagent.order, self._product.order)))
+            r, p = zip(*sorted(zip(self.order, self.p_order)))
 
         if stereo:
-            return r, p, self._reagent.stereo or 0, self._product.stereo or 0
+            return r, p, self.stereo or 0, self.p_stereo or 0
         return r, p
 
     def __eq__(self, other):
         if isinstance(other, DynQueryBond):
-            if self._reagent.order is None:
-                if other._reagent.order is not None:
+            if self.order is None:
+                if other.order is not None:
                     return False
-                return sorted(self._product.order) == sorted(other._product.order)
-            elif other._reagent.order is None:
+                return sorted(self.p_order) == sorted(other.p_order)
+            elif other.order is None:
                 return False
-            elif self._product.order is None:
-                if other._product.order is not None:
+            elif self.p_order is None:
+                if other.p_order is not None:
                     return False
-                return sorted(self._reagent.order) == sorted(other._reagent.order)
-            elif other._product.order is None:
+                return sorted(self.order) == sorted(other.order)
+            elif other.p_order is None:
                 return False
-            return sorted(zip(self._reagent.order, self._product.order)) == \
-                sorted(zip(other._reagent.order, other._product.order))
+            return sorted(zip(self.order, self.p_order)) == sorted(zip(other.order, other.p_order))
 
         elif isinstance(other, DynBond):
-            if self._reagent.order is None:
-                return other._reagent.order is None and other._product.order in self._product.order
-            elif self._product.order is None:
-                return other._product.order is None and other._reagent.order in self._reagent.order
-            return (other._reagent.order, other._product.order) in list(zip(self._reagent.order, self._product.order))
+            if self.order is None:
+                return other.order is None and other.p_order in self.p_order
+            elif self.p_order is None:
+                return other.p_order is None and other.order in self.order
+            return (other.order, other.p_order) in list(zip(self.order, self.p_order))
 
         elif isinstance(other, QueryBond):
-            return self._reagent.order == self._product.order and sorted(self._reagent.order) == sorted(other.order)
+            return self.order == self.p_order and sorted(self.order) == sorted(other.order)
 
         elif isinstance(other, Bond):
             # before check for not None
-            return self._reagent.order == self._product.order and other.order in self._reagent.order
+            return self.order == self.p_order and other.order in self.order
         return False
 
     def __ne__(self, other):
@@ -321,11 +320,11 @@ class DynQueryBond(DynBond):
         != equality checks with stereo
         """
         if self == other:
-            if self._reagent.stereo is self._product.stereo is None:
+            if self.stereo is self.p_stereo is None:
                 return True
             if isinstance(other, DynBond):
-                return self._reagent.stereo == other._reagent.stereo and self._product.stereo == other._product.stereo
-            return self._reagent.stereo == self._product.stereo == other.stereo
+                return self.stereo == other.stereo and self.p_stereo == other.p_stereo
+            return self.stereo == self.p_stereo == other.stereo
         return False
 
     _bond_factory = QueryBond
