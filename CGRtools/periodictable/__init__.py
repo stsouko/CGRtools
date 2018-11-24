@@ -43,6 +43,15 @@ class PeriodicMeta(type):
 
 
 class ElementMeta(PeriodicMeta):
+    __instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        key = (cls, tuple(zip(('charge', 'multiplicity', 'isotope'), args)) + tuple(kwargs.items()))
+        print(key)
+        if key not in cls.__instances:
+            cls.__instances[key] = super().__call__(*args, **kwargs)
+        return cls.__instances[key]
+
     def __init__(cls, defined_name, bases, attrs, **extra):
         cls.__number = extra.get('number', 0)
         cls.__symbol = extra.get('name', defined_name)
