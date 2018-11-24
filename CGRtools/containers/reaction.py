@@ -338,4 +338,4 @@ class MergedReaction:
         return self.__pickle
 
 
-__all__ = [ReactionContainer.__name__, MergedReaction.__name__]
+__all__ = ['ReactionContainer', 'MergedReaction']

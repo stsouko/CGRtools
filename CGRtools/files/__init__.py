@@ -16,7 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .SDFrw import SDFwrite, SDFread
-from .SMILESrw import SMILESread
-from .RDFrw import RDFwrite, RDFread
-from .MRVrw import MRVwrite, MRVread
+from importlib.util import find_spec
+from .MRVrw import *
+from .RDFrw import *
+from .SDFrw import *
+
+if find_spec('coho'):
+    from .SMILESrw import *

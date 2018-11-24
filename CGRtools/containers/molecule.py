@@ -132,3 +132,6 @@ class MoleculeContainer(StringMolecule, StereoMolecule, Aromatize, BaseContainer
                 if not atom.check_valence(self.environment(x))]
 
     _visible = ()
+
+
+__all__ = ['MoleculeContainer']

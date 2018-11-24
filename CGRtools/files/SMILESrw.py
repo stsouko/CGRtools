@@ -97,3 +97,6 @@ class SMILESread(CGRread, WithMixin):
                 'meta': {}}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
+
+
+__all__ = ['SMILESread']

@@ -20,10 +20,10 @@
 implements all internal structures, which represents: molecules, reactions, CGR and over
 """
 from collections import namedtuple
-from .cgr import CGRContainer
-from .molecule import MoleculeContainer
-from .query import QueryContainer
-from .reaction import ReactionContainer, MergedReaction
+from .cgr import *
+from .molecule import *
+from .query import *
+from .reaction import *
 
 
 CGRTemplate = namedtuple('CGRTemplate', ['pattern', 'patch', 'meta'])

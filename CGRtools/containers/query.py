@@ -41,3 +41,6 @@ class QueryCGRContainer(StringCGR, BaseContainer):
 
     def _wedge_map(self):
         return {}
+
+
+__all__ = ['QueryContainer', 'QueryCGRContainer']

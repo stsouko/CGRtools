@@ -218,3 +218,6 @@ class CGRContainer(StringCGR, StereoCGR, AromatizeCGR, MoleculeContainer):
         return report
 
     _visible = ()
+
+
+__all__ = ['CGRContainer']
