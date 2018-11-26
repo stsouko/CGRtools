@@ -19,12 +19,12 @@
 from collections import defaultdict
 from itertools import repeat, zip_longest
 from .molecule import MoleculeContainer
-from ..algorithms import AromatizeCGR, StereoCGR, StringCGR
+from ..algorithms import AromatizeCGR, StringCGR
 from ..attributes import DynAtom, DynBond, DynamicContainer
 from ..periodictable import H
 
 
-class CGRContainer(StringCGR, StereoCGR, AromatizeCGR, MoleculeContainer):
+class CGRContainer(StringCGR, AromatizeCGR, MoleculeContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """

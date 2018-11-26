@@ -114,25 +114,6 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         self.remove_edge(n, m)
         self.flush_cache()
 
-    @abstractmethod
-    def add_stereo(self, *args, **kwargs):
-        """
-        implementation of stereo addition
-        """
-        pass
-
-    def get_stereo(self, atom1, atom2):
-        if self.__stereo_cache is None:
-            self.__stereo_cache = self._wedge_map()
-        return self.__stereo_cache.get((atom1, atom2))
-
-    @abstractmethod
-    def _wedge_map(self):
-        """
-        :return: dict of stereo labels on bonds
-        """
-        pass
-
     @property
     def meta(self):
         return self.graph
@@ -672,7 +653,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         pass
 
     def flush_cache(self):
-        self.__weights = self.__signatures = self.__pickle = self.__hash = self.__stereo_cache = None
+        self.__weights = self.__signatures = self.__pickle = self.__hash = None
 
     def __and__(self, other):
         """
@@ -718,7 +699,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
     def __eq__(self, other):
         return str(self) == str(other)
 
-    __weights = __signatures = __pickle = __stereo_cache = __hash = None
+    __weights = __signatures = __pickle = __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _visible = ()
 

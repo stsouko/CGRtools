@@ -22,25 +22,13 @@ from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
 
 
 class QueryContainer(StringMolecule, BaseContainer):
-    def add_stereo(self, *args, **kwargs):
-        pass
-
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
 
-    def _wedge_map(self):
-        return {}
-
 
 class QueryCGRContainer(StringCGR, BaseContainer):
-    def add_stereo(self, *args, **kwargs):
-        pass
-
     node_attr_dict_factory = DynQueryAtom
     edge_attr_dict_factory = DynQueryBond
-
-    def _wedge_map(self):
-        return {}
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']

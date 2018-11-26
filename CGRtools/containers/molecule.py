@@ -18,12 +18,12 @@
 #
 from collections import defaultdict
 from .common import BaseContainer
-from ..algorithms import Aromatize, StereoMolecule, StringMolecule
+from ..algorithms import Aromatize, StringMolecule
 from ..attributes import Atom, Bond
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, StereoMolecule, Aromatize, BaseContainer):
+class MoleculeContainer(StringMolecule, Aromatize, BaseContainer):
     """
     storage for Molecules
 
