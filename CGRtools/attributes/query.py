@@ -33,7 +33,7 @@ class QueryAtom(MutableMapping):
 
     def __setattr__(self, key, value):
         if not self._skip_checks:
-            value = getattr(self, f'_{key}_check')(value)
+            value = getattr(self, f'_{key}_check')(value, True)
         self._atom[key] = value
 
     def update(self, *args, **kwargs):
@@ -63,7 +63,8 @@ class QueryAtom(MutableMapping):
                               multiplicity=(value.multiplicity,) if value.multiplicity else (),
                               isotope=(value.isotope,) if value.isotope != value.common_isotope else (),
                               neighbors=(value.neighbors,) if value.neighbors else (),
-                              hybridization=(value.hybridization,) if value.hybridization else ())
+                              hybridization=(value.hybridization,) if value.hybridization else (),
+                              x=value.x, y=value.y, z=value.z)
             self._atom.update(kwargs)
         elif isinstance(value, type):
             if not issubclass(value, Element):
@@ -101,12 +102,12 @@ class QueryAtom(MutableMapping):
             smi.append(self._stereo_str[self.stereo])
         if hybridization:
             if len(self.hybridization) > 1:
-                smi.append('<%s>' % ''.join(self._hybridization_str[x] for x in sorted(self.hybridization)))
+                smi.append('<%s>' % ''.join(self._hybridization_str[x] for x in self.hybridization))
             elif self.hybridization:
                 smi.append(self._hybridization_str[self.hybridization[0]])
         if neighbors:
             if len(self.neighbors) > 1:
-                smi.append('<%s>' % ''.join(str(x) for x in sorted(self.neighbors)))
+                smi.append('<%s>' % ''.join(str(x) for x in self.neighbors))
             elif self.neighbors:
                 smi.append(str(self.neighbors[0]))
         if smi:
@@ -119,25 +120,25 @@ class QueryAtom(MutableMapping):
                 smi.insert(0, '*')
             elif len(self.element) > 1:
                 atom = False
-                smi.insert(0, ','.join(sorted(self.element, key=elements_numbers.get)))
+                smi.insert(0, ','.join(self.element))
             else:
                 if self.element[0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
                     atom = False
                 smi.insert(0, self.element[0])
 
             if len(self.charge) > 1:
-                smi.append('<%s>' % ''.join(self._charge_str[x] for x in sorted(self.charge)))
+                smi.append('<%s>' % ''.join(self._charge_str[x] for x in self.charge))
             elif self.charge != (0,):
                 smi.append(self._charge_str[self.charge[0]])
 
             if len(self.multiplicity) > 1:
-                smi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in sorted(self.multiplicity)))
+                smi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in self.multiplicity))
             elif self.multiplicity:
                 smi.append(self._multiplicity_str[self.multiplicity[0]])
 
             if isotope:
                 if len(self.isotope) > 1:
-                    smi.insert(0, '<%s>' % ''.join(str(x) for x in sorted(self.isotope)))
+                    smi.insert(0, '<%s>' % ''.join(str(x) for x in self.isotope))
                 elif self.isotope:
                     smi.insert(0, str(self.isotope[0]))
         else:
@@ -152,23 +153,24 @@ class QueryAtom(MutableMapping):
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
         weight = []
         if atom:
-            weight.append(tuple(sorted(elements_numbers[x] for x in self.element)))
+            weight.append(tuple(elements_numbers[x] for x in self.element))
             if isotope:
-                weight.append(tuple(sorted(self.isotope)))
-            weight.append(tuple(sorted(self.charge)))
-            weight.append(self.multiplicity and tuple(sorted(self.multiplicity)))
+                weight.append(self.isotope)
+            weight.append(self.charge)
+            weight.append(self.multiplicity)
         if stereo:
             weight.append(self.stereo or 0)
         if hybridization:
-            weight.append(self.hybridization and tuple(sorted(self.hybridization)))
+            weight.append(self.hybridization)
         if neighbors:
-            weight.append(self.neighbors and tuple(sorted(self.neighbors)))
+            weight.append(self.neighbors)
         return tuple(weight)
 
     def __eq__(self, other):
         if isinstance(other, QueryAtom):
-            return all(sorted(self[attr]) == sorted(other[attr])
-                       for attr in ('element', 'isotope', 'charge', 'multiplicity', 'hybridization', 'neighbors'))
+            return all(set(self[attr]).issuperset(other[attr])
+                       for attr in ('isotope', 'charge', 'multiplicity', 'hybridization', 'neighbors') if self[attr]) \
+                   and (self.element == ('A',) or set(self.element).issuperset(other.element))
         elif isinstance(other, Atom):
             return (other.element in self.element or self.element == ('A',)) and \
                     all(other[attr] in self[attr] for attr in
@@ -221,19 +223,17 @@ class QueryAtom(MutableMapping):
         return copy
 
     @staticmethod
-    def _element_check(x):
+    def _element_check(x, sort=None):
         if x == ('A',):
             return x
         elif x == 'A':
             return 'A',
-        elif not isinstance(x, tuple):
-            x = tuple(x)
-        if 0 < len(x) == len(set(x)) and all(x != 'A' and x in elements_classes for x in x):
-            return x
+        elif 0 < len(x) == len(set(x)) and all(x != 'A' and x in elements_classes for x in x):
+            return tuple(sorted(x, key=elements_numbers.get))
         raise ValueError('invalid element')
 
     @staticmethod
-    def _stereo_check(x):
+    def _stereo_check(x, sort=None):
         if x is None:
             return None
         x = int(x)
@@ -242,76 +242,80 @@ class QueryAtom(MutableMapping):
         raise ValueError('stereo can be: None, 1 or -1')
 
     @staticmethod
-    def _isotope_check(x):
+    def _isotope_check(x, sort=None):
         if isinstance(x, int):
             if x > 0:
                 return x,
             raise ValueError('invalid isotope')
-        elif not isinstance(x, tuple):
-            x = tuple(x)
-        if len(x) == len(set(x)) and all(isinstance(x, int) and x > 0 for x in x):
-            return x
+        elif len(x) == len(set(x)) and all(isinstance(x, int) and x > 0 for x in x):
+            return tuple(sorted(x))
         raise ValueError('invalid isotope')
 
     @staticmethod
-    def _charge_check(x):
+    def _charge_check(x, sort=False):
         if isinstance(x, int):
             if -3 <= x <= 3:
                 return x,
             raise ValueError('invalid charge')
-        if not isinstance(x, tuple):
-            x = tuple(x)
-        if 0 < len(x) == len(set(x)) and all(isinstance(x, int) and -3 <= x <= 3 for x in x):
+        elif 0 < len(x) == len(set(x)) and all(isinstance(x, int) and -3 <= x <= 3 for x in x):
+            if sort:
+                return tuple(sorted(x))
             return x
         raise ValueError('invalid charge')
 
     @staticmethod
-    def _multiplicity_check(x):
+    def _multiplicity_check(x, sort=False):
         if isinstance(x, int):
             if 1 <= x <= 3:
                 return x,
             raise ValueError('invalid multiplicity')
-        if not isinstance(x, tuple):
-            x = tuple(x)
-        if len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 3 for x in x):
+        elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 3 for x in x):
+            if sort:
+                return tuple(sorted(x))
             return x
         raise ValueError('invalid multiplicity')
 
     @staticmethod
-    def _neighbors_check(x):
+    def _neighbors_check(x, sort=False):
         if isinstance(x, int):
             if 0 <= x <= 998:
                 return x,
             raise ValueError('invalid neighbors')
-        if not isinstance(x, tuple):
-            x = tuple(x)
-        if len(x) == len(set(x)) and all(isinstance(x, int) and 0 <= x <= 998 for x in x):
+        elif len(x) == len(set(x)) and all(isinstance(x, int) and 0 <= x <= 998 for x in x):
+            if sort:
+                return tuple(sorted(x))
             return x
         raise ValueError('invalid neighbors')
 
     @staticmethod
-    def _hybridization_check(x):
+    def _hybridization_check(x, sort=False):
         if isinstance(x, int):
             if 1 <= x <= 4:
                 return x,
             raise ValueError('invalid hybridization')
-        if not isinstance(x, tuple):
-            x = tuple(x)
-        if len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 4 for x in x):
+        elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 4 for x in x):
+            if sort:
+                return tuple(sorted(x))
             return x
         raise ValueError('invalid hybridization')
 
     def _check_kwargs(self, kwargs):
         if not self._skip_checks:
-            kwargs = {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
+            kwargs = {k: getattr(self, f'_{k}_check')(v, True) for k, v in kwargs.items()}
         return kwargs
+
+    @staticmethod
+    def _x_check(x, sort=None):
+        return float(x)
+
+    _z_check = _y_check = _x_check
 
     _hybridization_str = Atom._hybridization_str
     _stereo_str = Atom._stereo_str
     _multiplicity_str = Atom._multiplicity_str
     _charge_str = Atom._charge_str
     __defaults = {'element': ('A',), 'isotope': (), 'charge': (0,), 'multiplicity': (),
-                  'neighbors': (), 'hybridization': (), 'stereo': None}
+                  'neighbors': (), 'hybridization': (), 'stereo': None, 'x': 0., 'y': 0., 'z': 0.}
 
 
 class QueryBond(Bond):
@@ -329,14 +333,14 @@ class QueryBond(Bond):
             super()._update(value, kwargs)
 
     def stringify(self, stereo=True):
-        order = '<%s>' % ''.join(sorted(self._order_str[x] for x in sorted(self.order)))
+        order = '<%s>' % ''.join(self._order_str[x] for x in self.order)
         if stereo and self.stereo:
             return order + self._stereo_str[self.stereo]
         return order
 
     def weight(self, stereo=False):
         if stereo:
-            return tuple(sorted(self.order)), self.stereo or 0
+            return self.order, self.stereo or 0
         return self.order
 
     def __eq__(self, other):
@@ -344,7 +348,7 @@ class QueryBond(Bond):
         == equality checks. if stereo mark is presented in query, stereo also will be compared
         """
         if isinstance(other, QueryBond):
-            return sorted(self.order) == sorted(other.order)
+            return set(self.order).issuperset(other.order)
         elif isinstance(other, Bond):
             return other.order in self.order
         return False
@@ -365,10 +369,8 @@ class QueryBond(Bond):
             if x in (1, 2, 3, 4, 9):
                 return x,
             raise ValueError('invalid order')
-        elif not isinstance(x, tuple):
-            x = tuple(x)
-        if x and all(x in (1, 2, 3, 4, 9) for x in x):
-            return x
+        elif x and all(x in (1, 2, 3, 4, 9) for x in x):
+            return tuple(sorted(x))
         raise ValueError('invalid order')
 
     _defaults = {'order': (1,), 'stereo': None}

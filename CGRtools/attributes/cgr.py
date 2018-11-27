@@ -16,15 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import namedtuple
 from collections.abc import MutableMapping
 from itertools import chain
 from .molecule import Bond, Atom
 from .query import QueryAtom
 from ..periodictable import Element
-
-
-DynamicContainer = namedtuple('DynamicContainer', ['reagent', 'product'])
 
 
 class DynAtom(MutableMapping):
@@ -44,12 +40,12 @@ class DynAtom(MutableMapping):
         elif key.startswith('p_'):
             key = key[2:]
             value = getattr(self._atom_factory, f'_{key}_check')(value)
-            setattr(self._product, key, value)
+            self._product[key] = value
         else:
             value = getattr(self._atom_factory, f'_{key}_check')(value)
-            setattr(self._reagent, key, value)
+            self._reagent[key] = value
             if key in self._static:
-                setattr(self._product, key, value)
+                self._product[key] = value
 
     def update(self, *args, **kwargs):
         """
@@ -100,10 +96,10 @@ class DynAtom(MutableMapping):
         self._product._update(p_value, p)
 
     def stringify(self, *args, **kwargs):
-        return DynamicContainer(self._reagent.stringify(*args, **kwargs), self._product.stringify(*args, **kwargs))
+        return self._reagent.stringify(*args, **kwargs), self._product.stringify(*args, **kwargs)
 
     def weight(self, *args, **kwargs):
-        return DynamicContainer(self._reagent.weight(*args, **kwargs), self._product.weight(*args, **kwargs))
+        return self._reagent.weight(*args, **kwargs), self._product.weight(*args, **kwargs)
 
     def __eq__(self, other):
         if isinstance(other, DynAtom):
@@ -204,7 +200,7 @@ class DynBond(MutableMapping):
                 elif self.p_stereo:
                     raise ValueError('stereo bond not nullable')
             else:
-                value = self._bond_factory._order_check(value)
+                value = self._order_check(value)
             self._product.order = value
         elif key == 'order':
             if value is None:
@@ -213,15 +209,24 @@ class DynBond(MutableMapping):
                 elif self.stereo:
                     raise ValueError('stereo bond not nullable')
             else:
-                value = self._bond_factory._order_check(value)
+                value = self._order_check(value)
             self._reagent.order = value
-        else:
-            if key.startswith('p_'):
-                key = key[2:]
-                container = self._product
+        elif key == 'p_stereo':
+            if value is None:
+                if not self.p_order:
+                    raise ValueError('null-bond stereo impossible')
             else:
-                container = self._reagent
-            setattr(container, key, getattr(self._bond_factory, f'_{key}_check')(value))
+                value = self._stereo_check(value)
+            self._product.stereo = value
+        elif key == 'stereo':
+            if value is None:
+                if not self.order:
+                    raise ValueError('null-bond stereo impossible')
+            else:
+                value = self._stereo_check(value)
+            self._reagent.stereo = value
+        else:
+            raise AttributeError('invalid bond attribute')
 
     def update(self, *args, **kwargs):
         """
@@ -244,11 +249,12 @@ class DynBond(MutableMapping):
             r, p = self._split_check_kwargs(kwargs)
             if r or p:
                 if isinstance(value, DynBond):
-                    r = {'stereo': None, **value._reagent, **r}
-                    p = {'stereo': None, **value._product, **p}
+                    r = {'stereo': value.stereo, 'order': value.order, **r}
+                    p = {'stereo': value.p_stereo, 'order': value.p_order, **p}
                 else:
-                    r = {'stereo': None, **value, **r}
-                    p = {'stereo': None, **value, **p}
+                    r = {'stereo': value.stereo, 'order': value.order, **r}
+                    p = {'stereo': value.stereo, 'order': value.order, **p}
+
                 if not (r['order'] or p['order']):
                     raise ValueError('empty bond not allowed')
                 if r['stereo'] and not r['order'] or p['stereo'] and not p['order']:
@@ -272,8 +278,8 @@ class DynBond(MutableMapping):
             if not ((r.get('order', True) or p.get('order') or self.p_order) and
                     (p.get('order', True) or r.get('order') or self.order)):
                 raise ValueError('empty bond not allowed')
-            if r.get('stereo') and (not r.get('order', True) or not self.stereo) or \
-                    p.get('stereo') and (not p.get('order', True) or not self.p_stereo):
+            if r.get('stereo') and (not r.get('order', True) or not self.order) or \
+                    p.get('stereo') and (not p.get('order', True) or not self.p_order):
                 raise ValueError('stereo bond not nullable')
 
         self._reagent._update(r, {})
@@ -281,10 +287,10 @@ class DynBond(MutableMapping):
 
     def stringify(self, stereo=False):
         if not self.order:
-            return DynamicContainer('.', self._product.stringify(stereo=stereo))
+            return '.', self._product.stringify(stereo=stereo)
         elif not self.p_order:
-            return DynamicContainer(self._reagent.stringify(stereo=stereo), '.')
-        return DynamicContainer(self._reagent.stringify(stereo=stereo), self._product.stringify(stereo=stereo))
+            return self._reagent.stringify(stereo=stereo), '.'
+        return self._reagent.stringify(stereo=stereo), self._product.stringify(stereo=stereo)
 
     def weight(self, stereo=False):
         if stereo:
@@ -344,12 +350,16 @@ class DynBond(MutableMapping):
     def _split_check_kwargs(cls, kwargs):
         r, p = {}, {}
         for k, v in kwargs.items():
-            if k.startswith('p_'):
-                k = k[2:]
-                d = p
+            if k == 'p_order':
+                p['order'] = None if v is None else cls._order_check(v)
+            elif k == 'order':
+                r['order'] = None if v is None else cls._order_check(v)
+            elif k == 'p_stereo':
+                p['stereo'] = cls._stereo_check(v)
+            elif k == 'stereo':
+                r['stereo'] = cls._stereo_check(v)
             else:
-                d = r
-            d[k] = getattr(cls._bond_factory, f'_{k}_check')(v)
+                raise AttributeError('invalid bond attribute')
         return r, p
 
     def copy(self):
@@ -359,6 +369,8 @@ class DynBond(MutableMapping):
         return copy
 
     _bond_factory = Bond
+    _stereo_check = Bond._stereo_check
+    _order_check = Bond._order_check
 
 
-__all__ = ['DynamicContainer', 'DynAtom', 'DynBond']
+__all__ = ['DynAtom', 'DynBond']
