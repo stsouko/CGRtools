@@ -16,18 +16,17 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import defaultdict
 from itertools import chain
+from logging import warning
 from traceback import format_exc
-from warnings import warn
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread
-from ..exceptions import EmptyMolecule
+from ._MDLrw import MOLwrite, MOLread, EMOLread, prepare_meta
 
 
 class SDFread(CGRread, WithMixin):
-    def __init__(self, file, *args, is_template=None, **kwargs):
-        assert not is_template, 'is_tepmlate works only for reactions'
-        super().__init__(*args, is_template=False, **kwargs)
+    def __init__(self, file, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
 
@@ -43,61 +42,63 @@ class SDFread(CGRread, WithMixin):
     def __reader(self):
         im = 3
         failkey = False
-        mkey = parser = molecule = None
+        mkey = parser = record = None
+        meta = defaultdict(list)
         for line in self._file:
             if failkey and not line.startswith("$$$$"):
                 continue
             elif parser:
                 try:
                     if parser(line):
-                        molecule = parser.getvalue()
+                        record = parser.getvalue()
                         parser = None
-                except (EmptyMolecule, ValueError):
+                except ValueError:
                     failkey = True
                     parser = None
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
+                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
 
             elif line.startswith("$$$$"):
-                if molecule:
+                if record:
+                    record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_molecule(molecule)
-                    except Exception:
-                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
-                    molecule = None
+                        yield self._get_molecule(record)
+                    except ValueError:
+                        warning(f'record consist errors:\n{format_exc()}')
+                    record = None
 
                 im = 3
                 failkey = False
                 mkey = None
-
-            elif molecule:
+                meta = defaultdict(list)
+            elif record:
                 if line.startswith('>  <'):
                     mkey = line.rstrip()[4:-1].strip()
                     if not mkey:
-                        continue
-                    molecule['meta'][mkey] = []
+                        warning(f'invalid metadata entry: {line}')
                 elif mkey:
                     data = line.strip()
                     if data:
-                        molecule['meta'][mkey].append(data)
+                        meta[mkey].append(data)
             elif im:
                 im -= 1
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLread(line)
+                        parser = MOLread(line, self._ignore)
                     elif 'V3000' in line:
-                        parser = EMOLread(line)
+                        parser = EMOLread(line, self._ignore)
                     else:
-                        raise ValueError('invalid MOL')
-                except (EmptyMolecule, ValueError):
+                        raise ValueError('invalid MOL entry')
+                except ValueError:
                     failkey = True
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
+                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
 
-        if molecule:  # True for MOL file only.
+        if record:  # True for MOL file only.
+            record['meta'] = prepare_meta(meta)
             try:
-                yield self._get_molecule(molecule)
-            except Exception:
-                warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
+                yield self._get_molecule(record)
+            except ValueError:
+                warning(f'record consist errors:\n{format_exc()}')
 
 
 class SDFwrite(MOLwrite, WithMixin):

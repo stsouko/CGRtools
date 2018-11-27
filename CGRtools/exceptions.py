@@ -38,9 +38,15 @@ class InvalidTemplate(Exception):
     pass
 
 
-class EmptyMolecule(Exception):
+class EmptyMolecule(ValueError):
+    """
+    bad files parsing
+    """
     pass
 
 
-class MapError(Exception):
+class MappingError(ValueError):
+    """
+    bad files parsing
+    """
     pass

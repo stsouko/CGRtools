@@ -17,39 +17,74 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from csv import reader
+from logging import warning
 from itertools import count, chain
-from ._CGRrw import CGRwrite, elements_set, fromMDL
+from ._CGRrw import CGRwrite, elements_set, cgr_keys
 from ..exceptions import EmptyMolecule
+from ..periodictable import common_isotopes
+
+
+def prepare_meta(meta):
+    new_meta = {}
+    for k, v in meta.items():
+        if v:
+            new_meta[k] = '\n'.join(v)
+        else:
+            warning(f'invalid metadata entry: {k}: {v}')
+    return new_meta
 
 
 class MOLread:
-    def __init__(self, line):
+    def __init__(self, line, ignore=False):
         atom_count = int(line[0:3])
         if not atom_count:
-            raise EmptyMolecule('molecule without atoms')
+            raise EmptyMolecule
 
         self.__bonds_count = int(line[3:6])
         self.__atoms_count = atom_count
-        self.__props = {}
+        self.__extra = []
+        self.__cgr = {}
         self.__atoms = []
         self.__bonds = []
 
     def getvalue(self):
         if self.__mend:
-            return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=list(self.__props.values()), meta={})
+            return {'atoms': self.__atoms, 'bonds': self.__bonds, 'extra': self.__extra, 'cgr': self.__cgr}
         raise ValueError('molecule not complete')
 
     def __call__(self, line):
         if self.__mend:
             raise SyntaxError('invalid usage')
         elif len(self.__atoms) < self.__atoms_count:
-            self.__atoms.append(dict(element=line[31:34].strip(), isotope=int(line[34:36]),
-                                     charge=fromMDL[int(line[38:39])],
-                                     map=int(line[60:63]), mark=line[54:57].strip(),
-                                     x=float(line[0:10]), y=float(line[10:20]), z=float(line[20:30])))
+            element = line[31:34].strip()
+            isotope = line[34:36]
+            if isotope != ' 0':
+                try:
+                    isotope = common_isotopes[element] + int(isotope)
+                except KeyError:
+                    raise ValueError('invalid element')
+            else:
+                isotope = None
+            mark = line[54:57]
+
+            self.__atoms.append({'element': element, 'charge': self.__charge_map[line[38]],
+                                 'isotope': isotope, 'multiplicity': None,
+                                 'mark': int(mark) if mark != '  0' else None, 'map': int(line[60:63]),
+                                 'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
+
         elif len(self.__bonds) < self.__bonds_count:
-            self.__bonds.append((int(line[0:3]), int(line[3:6]), int(line[6:9]), int(line[9:12])))
-        elif line.startswith("M  END"):
+            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, int(line[6:9]), self.__stereo_map[line[11]]))
+        elif line.startswith('M  END'):
+            cgr = []
+            for x in self.__cgr.values():
+                try:
+                    if x['type'] in cgr_keys:
+                        if cgr_keys[x['type']] != len(x['atoms']) or -1 in x['atoms'] or not x['value']:
+                            raise ValueError(f'CGR spec invalid {x}')
+                        cgr.append((x['atoms'], x['type'], x['value']))
+                except KeyError:
+                    raise ValueError(f'CGR spec invalid {x}')
+            self.__cgr = cgr
             self.__mend = True
             return True
         else:
@@ -58,43 +93,56 @@ class MOLread:
     def __collect(self, line):
         if line.startswith('M  ALS'):
             atom = int(line[7:10])
-            self.__props[('list', atom)] = dict(atoms=(atom,), type='atomlist' if line[14] == 'F' else 'atomnotlist',
-                                                value=[line[16 + x*4: 20 + x*4].strip()
-                                                       for x in range(int(line[10:13]))])
-
+            if not atom or atom > len(self.__atoms):
+                raise ValueError('invalid atom number')
+            self.__extra.append((atom - 1, 'atomlist' if line[14] == 'F' else 'atomnotlist',
+                                 [line[16 + x * 4: 20 + x * 4].strip() for x in range(int(line[10:13]))]))
         elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
             _type = self.__ctf_data[line[3]]
             for i in range(int(line[6:9])):
-                atom = int(line[10 + i * 8:13 + i * 8])
-                self.__props[(_type, atom)] = dict(atoms=(atom,), type=_type, value=line[14 + i * 8:17 + i * 8].strip())
+                i8 = i * 8
+                atom = int(line[10 + i8:13 + i8])
+                if not atom or atom > len(self.__atoms):
+                    raise ValueError('invalid atom number')
+                atom = self.__atoms[atom - 1]
+                atom[_type] = int(line[14 + i8:17 + i8].strip())
 
         elif line.startswith('M  STY'):
-            for i in range(int(line[8])):
-                if 'DAT' in line[10 + 8 * i:17 + 8 * i]:
-                    self.__props[int(line[10 + 8 * i:13 + 8 * i])] = {}
+            for i in range(int(line[6:9])):
+                i8 = i * 8
+                if 'DAT' == line[14 + i8:17 + i8]:
+                    self.__cgr[int(line[10 + i8:13 + i8])] = {}
         elif line.startswith('M  SAL'):
-            self.__props[int(line[7:10])]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i])
-                                                           for i in range(int(line[10:13])))
+            i = int(line[7:10])
+            if i in self.__cgr:
+                self.__cgr[i]['atoms'] = tuple(int(line[14 + 4 * i:17 + 4 * i]) - 1 for i in range(int(line[10:13])))
         elif line.startswith('M  SDT'):
-            self.__props[int(line[7:10])]['type'] = line.split()[-1].lower()
+            i = int(line[7:10])
+            if i in self.__cgr:
+                self.__cgr[i]['type'] = line.split()[-1].lower()
         elif line.startswith('M  SED'):
-            self.__props[int(line[7:10])]['value'] = line[10:].strip().replace('/', '').lower()
+            i = int(line[7:10])
+            if i in self.__cgr:
+                self.__cgr[i]['value'] = line[10:].strip().replace('/', '').lower()
 
-    __ctf_data = {'R': 'radical', 'C': 'charge', 'I': 'isotope'}
+    __ctf_data = {'R': 'multiplicity', 'C': 'charge', 'I': 'isotope'}
+    __charge_map = {'0': 0, '1': 3, '2': 2, '3': 1, '4': 0, '5': -1, '6': -2, '7': -3}
+    __stereo_map = {'0': 0, '1': 1, '6': -1}
     __mend = False
 
 
 class EMOLread:
-    def __init__(self, line=None):
-        self.__props = []
-        self.__sgroup = []
+    def __init__(self, line=None, ignore=False):
+        self.__extra = []
+        self.__cgr = []
         self.__atoms = []
         self.__bonds = []
+        self.__sgroup = 0
 
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return dict(atoms=self.__atoms, bonds=self.__bonds, CGR_DAT=self.__props + self.__sgroup, meta={})
+        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'extra': self.__extra, 'cgr': self.__cgr}
 
     def __call__(self, line, lineu=None):
         if lineu is None:
@@ -116,7 +164,7 @@ class EMOLread:
                         if cp == self.__bond_parser and len(self.__bonds) == self.__bonds_count:
                             return
                     elif x == 'SGROUP':
-                        if cp == self.__sgroup_parser and len(self.__sgroup) == self.__sgroup_count:
+                        if cp == self.__sgroup_parser and self.__sgroup == self.__sgroup_count:
                             return
                     else:
                         return
@@ -140,7 +188,7 @@ class EMOLread:
                 a, b, s, *_ = line[13:].split()
                 atom_count = int(a)
                 if not atom_count:
-                    raise EmptyMolecule('molecule without atoms')
+                    raise EmptyMolecule
                 self.__bonds_count = int(b)
                 self.__sgroup_count = int(s)
                 self.__atoms_count = atom_count
@@ -148,7 +196,7 @@ class EMOLread:
         elif self.__in_mol is not None:
             raise SyntaxError('invalid usage')
         elif not lineu.startswith('M  V30 BEGIN CTAB'):
-            raise SyntaxError('invalid CTAB')
+            raise ValueError('invalid CTAB')
         else:
             self.__in_mol = True
 
@@ -172,42 +220,52 @@ class EMOLread:
         s = 0
         for kv in kvs:
             k, v = kv.split('=')
-            if k.upper() == 'CFG':
-                s = self.__stereo_map[v]
-
-        self.__bonds.append((int(a1), int(a2), int(t), s))
+            if k in ('CFG', 'cfg', 'Cfg'):
+                try:
+                    s = self.__stereo_map[v]
+                except KeyError:
+                    warning('invalid or unsupported stereo')
+                break
+        self.__bonds.append((int(a1) - 1, int(a2) - 1, int(t), s))
 
     def __atom_parser(self, line):
         n, a, x, y, z, m, *kvs = line
         atom = int(n)
 
         if a.startswith('['):
-            self.__props.append(dict(atoms=(atom,), type='atomlist', value=a[1:-1].split(',')))
+            a = a[1:-1]
+            if not a:
+                raise ValueError('invalid atomlist')
+            self.__extra.append((atom, 'atomlist', a.split(',')))
             a = 'L'
-        elif a.startswith(('NOT', 'Not', 'not')):
+        elif a.startswith(('NOT', 'not', 'Not')):
+            a = a[5:-1]
+            if not a:
+                raise ValueError('invalid atomlist')
+            self.__extra.append((atom, 'atomnotlist', a.split(',')))
             a = 'L'
-            self.__props.append(dict(atoms=(atom,), type='atomnotlist', value=a[5:-1].split(',')))
-
-        r = '0'
+        mk = i = r = None
         c = 0
         for kv in kvs:
             k, v = kv.split('=', 1)
             k = k.strip().upper()
             if not v:
                 raise ValueError('invalid atom record')
+            v = int(v)
             if k == 'ISIDAMARK':
-                r = v
+                mk = v
             elif k == 'CHG':
-                c = int(v)
+                c = v
             elif k == 'MASS':
-                self.__props.append(dict(atoms=(atom,), type='isotope', value=v))
+                i = v
             elif k == 'RAD':
-                self.__props.append(dict(atoms=(atom,), type='radical', value=v))
+                r = v
 
-        self.__atoms.append(dict(element=a, x=float(x), y=float(y), z=float(z), map=int(m),
-                                 isotope=0, charge=c, mark=r))
+        self.__atoms.append({'element': a, 'isotope': i, 'charge': c, 'multiplicity': r,
+                             'x': float(x), 'y': float(y), 'z': float(z), 'map': int(m), 'mark': mk})
 
     def __sgroup_parser(self, line):
+        self.__sgroup += 1
         if line[1] == 'DAT':
             i = int(line[3][7:])
             if i == 1:
@@ -217,29 +275,32 @@ class EMOLread:
             else:
                 return
 
-            res = dict(atoms=atoms)
+            _type = value = None
             for kv in line[i + 4:]:
                 if '=' not in kv:
                     continue
                 k, v = kv.split('=', 1)
                 if k == 'FIELDNAME':
-                    res['type'] = v.lower()
+                    _type = v.lower()
                 elif k == 'FIELDDATA':
-                    res['value'] = v.lower()
-
-            if len(res) == 3:
-                self.__sgroup.append(res)
+                    value = v.lower()
+            if _type in cgr_keys:
+                if value and cgr_keys[_type] == len(atoms):
+                    self.__cgr.append((atoms, _type, value))
+                else:
+                    raise ValueError(f'CGR spec invalid {line}')
 
     __record = __atoms_count = __in_mol = __parser = None
-    __stereo_map = {'0': 0, '1': 1, '2': 4, '3': 6}
+    __stereo_map = {'0': 0, '1': 1, '3': -1}
 
 
 class RXNread:
-    def __init__(self, line):
+    def __init__(self, line, ignore=False):
         self.__reagents_count = int(line[:3])
         self.__products_count = int(line[3:6]) + self.__reagents_count
         self.__reactants_count = int(line[6:].rstrip() or 0) + self.__products_count
         self.__molecules = []
+        self.__ignore = ignore
 
     def __call__(self, line):
         if self.__parser:
@@ -250,31 +311,51 @@ class RXNread:
                 if len(self.__molecules) == self.__reactants_count:
                     self.__rend = True
                     return True
+        elif self.__empty_skip:
+            if not line.startswith('$MOL'):
+                return
+            self.__empty_skip = False
+            self.__im = 3
         elif self.__rend:
             raise SyntaxError('invalid usage')
         elif self.__im == 4:
-            if not line.startswith("$MOL"):
+            if not line.startswith('$MOL'):
                 raise ValueError('invalid RXN')
             self.__im = 3
         elif self.__im:
             self.__im -= 1
         else:
-            self.__parser = MOLread(line)
+            try:
+                self.__parser = MOLread(line)
+            except EmptyMolecule:
+                if not self.__ignore:
+                    raise
+                self.__empty_skip = True
+                if len(self.__molecules) < self.__reagents_count:
+                    self.__reagents_count -= 1
+                    self.__products_count -= 1
+                    self.__reactants_count -= 1
+                elif len(self.__molecules) < self.__products_count:
+                    self.__products_count -= 1
+                    self.__reactants_count -= 1
+                elif len(self.__molecules) < self.__reactants_count:
+                    self.__reactants_count -= 1
+                warning('empty molecule ignored')
 
     def getvalue(self):
         if self.__rend:
-            return dict(reagents=self.__molecules[:self.__reagents_count],
-                        products=self.__molecules[self.__reagents_count:self.__products_count],
-                        reactants=self.__molecules[self.__products_count:self.__reactants_count], meta={})
+            return {'reagents': self.__molecules[:self.__reagents_count],
+                    'products': self.__molecules[self.__reagents_count:self.__products_count],
+                    'reactants': self.__molecules[self.__products_count:self.__reactants_count]}
         raise ValueError('reaction not complete')
 
     __parser = None
-    __rend = False
+    __empty_skip = __rend = False
     __im = 4
 
 
 class ERXNread:
-    def __init__(self, line):
+    def __init__(self, line, ignore=False):
         tmp = line[13:].split()
         self.__reagents_count = int(tmp[0])
         self.__products_count = int(tmp[1])
@@ -283,22 +364,37 @@ class ERXNread:
         self.__reagents = []
         self.__products = []
         self.__reactants = []
-        self.__parser = EMOLread()
+        self.__ignore = ignore
 
     def __call__(self, line):
         lineu = line.upper()
-        if self.__in_mol:
-            if self.__parser(line, lineu):
-                m = self.__parser.getvalue()
-                self.__parser = EMOLread()
+        if self.__empty_skip:
+            if not lineu.startswith('M  V30 END CTAB'):
+                return
+            self.__empty_skip = False
+        elif self.__in_mol:
+            try:
+                x = self.__parser(line, lineu)
+            except EmptyMolecule:
+                if not self.__ignore:
+                    raise
+                self.__empty_skip = True
                 self.__in_mol -= 1
-
-                if self.__parser_group == 'REACTANT':
-                    self.__reagents.append(m)
-                elif self.__parser_group == 'PRODUCT':
-                    self.__products.append(m)
-                elif self.__parser_group == 'AGENT':
-                    self.__reactants.append(m)
+                if self.__in_mol:
+                    self.__parser = EMOLread()
+                warning('empty molecule ignored')
+            else:
+                if x:
+                    x = self.__parser.getvalue()
+                    self.__in_mol -= 1
+                    if self.__in_mol:
+                        self.__parser = EMOLread()
+                    if self.__parser_group == 'REACTANT':
+                        self.__reagents.append(x)
+                    elif self.__parser_group == 'PRODUCT':
+                        self.__products.append(x)
+                    elif self.__parser_group == 'AGENT':
+                        self.__reactants.append(x)
         elif self.__rend:
             raise SyntaxError('invalid usage')
         elif lineu.startswith('M  V30 END'):
@@ -315,6 +411,8 @@ class ERXNread:
             else:
                 raise ValueError('invalid RXN CTAB')
             self.__parser_group = x
+            if self.__in_mol:
+                self.__parser = EMOLread()
         elif lineu.startswith('M  END'):
             self.__rend = True
             return True
@@ -323,11 +421,11 @@ class ERXNread:
 
     def getvalue(self):
         if self.__rend:
-            return dict(reagents=self.__reagents, products=self.__products, reactants=self.__reactants, meta={})
+            return {'reagents': self.__reagents, 'products': self.__products, 'reactants': self.__reactants}
         raise ValueError('reaction not complete')
 
-    __parser_group = None
-    __rend = False
+    __parser_group = __parser = None
+    __rend = __empty_skip = False
     __in_mol = 0
 
 
@@ -346,10 +444,11 @@ class MOLwrite(CGRwrite):
             elif it == 'radical':
                 mol_prop.append(f'M  RAD  1 {ia:3d} {iv:3d}\n')
 
-        for j in count():
-            sty = len(cgr[j * 8:j * 8 + 8])
+        for i in count():
+            i8 = i * 8
+            sty = len(cgr[i8: i8 + 8])
             if sty:
-                mol_prop.append(f'M  STY  {sty} {" ".join(f"{x + j * 8:3d} DAT" for x in range(1, 1 + sty))}\n')
+                mol_prop.append(f'M  STY  {sty} {" ".join(f"{x + i8:3d} DAT" for x in range(1, 1 + sty))}\n')
             else:
                 break
 

@@ -17,12 +17,13 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import chain, count, repeat
+from itertools import chain, count
+from logging import warning
 from lxml.etree import iterparse, QName, tostring
 from traceback import format_exc
-from warnings import warn
-from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set
+from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set, cgr_keys
 from ..containers.common import BaseContainer
+from ..exceptions import EmptyMolecule
 
 
 def xml_dict(parent_element, stop_list=None):
@@ -66,11 +67,10 @@ def xml_dict(parent_element, stop_list=None):
 
 
 class MRVread(CGRread, WithMixin):
-    def __init__(self, file, *args, ignore=False, **kwargs):
-        super().__init__(*args, ignore=ignore, **kwargs)
+    def __init__(self, file, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
-        self.__ignore = ignore
 
     def read(self):
         return list(self.__data)
@@ -86,132 +86,175 @@ class MRVread(CGRread, WithMixin):
             parsed = xml_dict(element)
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
+                data = parsed['molecule']
                 try:
-                    molecule = self.__parse_molecule(parsed['molecule'])
-                except KeyError:
-                    warn('molecule consist errors: %s' % format_exc(), ResourceWarning)
+                    record = self.__parse_molecule(data)
+                except (KeyError, ValueError):
+                    warning(f'record consist errors:\n{format_exc()}')
                 else:
+                    if 'propertyList' in data and 'property' in data['propertyList']:
+                        record['meta'] = self.__parse_property(data['propertyList']['property'])
+                    else:
+                        record['meta'] = {}
                     try:
-                        yield self._get_molecule(molecule)
-                    except Exception:
-                        warn('record consist errors: %s' % format_exc(), ResourceWarning)
+                        yield self._get_molecule(record)
+                    except ValueError:
+                        warning(f'record consist errors:\n{format_exc()}')
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
+                data = parsed['reaction']
                 try:
-                    reaction = self.__parse_reaction(parsed['reaction'])
-                except KeyError:
-                    warn('reaction consist errors: %s' % format_exc(), ResourceWarning)
+                    record = self.__parse_reaction(data)
+                except (KeyError, ValueError):
+                    warning(f'record consist errors:\n{format_exc()}')
                 else:
+                    if 'propertyList' in data and 'property' in data['propertyList']:
+                        record['meta'] = self.__parse_property(data['propertyList']['property'])
+                    else:
+                        record['meta'] = {}
                     try:
-                        yield self._get_reaction(reaction)
-                    except Exception:
-                        warn('record consist errors: %s' % format_exc(), ResourceWarning)
+                        yield self._get_reaction(record)
+                    except ValueError:
+                        warning(f'record consist errors:\n{format_exc()}')
             else:
-                warn('record invalid', ResourceWarning)
+                warning('invalid MDocument')
 
-    @classmethod
-    def __parse_reaction(cls, data):
-        reaction = dict(reagents=[], products=[], reactants=[], meta={})
-        if 'propertyList' in data and 'property' in data['propertyList']:
-            reaction['meta'].update(cls.__parse_property(data['propertyList']))
-
+    def __parse_reaction(self, data):
+        reaction = dict(reagents=[], products=[], reactants=[])
         for tag, group in (('reactantList', 'reagents'), ('productList', 'products'), ('agentList', 'reactants')):
             if tag in data and 'molecule' in data[tag]:
                 molecule = data[tag]['molecule']
                 if isinstance(molecule, dict):
-                    reaction[group].append(cls.__parse_molecule(molecule))
-                else:
-                    for m in molecule:
-                        reaction[group].append(cls.__parse_molecule(m))
+                    molecule = (molecule,)
+                for m in molecule:
+                    try:
+                        reaction[group].append(self.__parse_molecule(m))
+                    except EmptyMolecule:
+                        if not self._ignore:
+                            raise
+                        warning('empty molecule ignored')
         return reaction
 
-    @classmethod
-    def __parse_property(cls, data):
-        meta = defaultdict(list)
-        dp = data['property']
-        for x in (dp,) if isinstance(dp, dict) else dp:
-            key = x['@title']
-            val = x['scalar']['$']
-            if key:
-                meta[key].append(val)
+    @staticmethod
+    def __parse_property(data):
+        meta = {}
+        if isinstance(data, dict):
+            key = data['@title']
+            val = data['scalar']['$'].strip()
+            if key and val:
+                meta[key] = val
+            else:
+                warning(f'invalid metadata entry: {data}')
+        else:
+            for x in data:
+                key = x['@title']
+                val = x['scalar']['$'].strip()
+                if key and val:
+                    meta[key] = val
+                else:
+                    warning(f'invalid metadata entry: {x}')
         return meta
 
-    @classmethod
-    def __parse_molecule(cls, data):
-        molecule = dict(atoms=[], bonds=[], CGR_DAT=[], meta={})
-
-        if 'propertyList' in data and 'property' in data['propertyList']:
-            molecule['meta'].update(cls.__parse_property(data['propertyList']))
-
+    def __parse_molecule(self, data):
+        atoms, bonds, extra, cgr = [], [], [], []
         atom_map = {}
         if 'atom' in data['atomArray']:
             da = data['atomArray']['atom']
-            for n, atom in (((1, da),) if isinstance(da, dict) else enumerate(da, start=1)):
+            for n, atom in (((1, da),) if isinstance(da, dict) else enumerate(da)):
                 atom_map[atom['@id']] = n
-                molecule['atoms'].append(dict(element=atom['@elementType'], isotope=0,
-                                              charge=int(atom.get('@formalCharge', 0)),
-                                              map=int(atom.get('@mrvMap', 0)), mark=atom.get('@ISIDAmark', '0'),
-                                              x=float(atom['@x3'] if '@x3' in atom else atom['@x2']),
-                                              y=float(atom['@y3'] if '@y3' in atom else atom['@y2']),
-                                              z=float(atom['@z3'] if '@z3' in atom else atom.get('@z2', 0))))
-                if '@isotope' in atom:
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=atom['@isotope']))
+                atoms.append(dict(element=atom['@elementType'],
+                                  isotope=int(atom['@isotope']) if '@isotope' in atom else None,
+                                  charge=int(atom.get('@formalCharge', 0)),
+                                  multiplicity=self.__radical_map[atom['@radical']] if '@radical' in atom else None,
+                                  map=int(atom.get('@mrvMap', 0)),
+                                  mark=int(atom['@ISIDAmark']) if '@ISIDAmark' in atom else None,
+                                  x=float(atom['@x3'] if '@x3' in atom else atom['@x2']),
+                                  y=float(atom['@y3'] if '@y3' in atom else atom['@y2']),
+                                  z=float(atom['@z3'] if '@z3' in atom else 0.)))
                 if '@mrvQueryProps' in atom and atom['@mrvQueryProps'][0] == 'L':
-                    _type = atom['@mrvQueryProps'][1]
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
-                                                    value=atom['@mrvQueryProps'][2:-1].split(_type)))
-                if '@radical' in atom:
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='radical',
-                                                    value=cls.__radical_map[atom['@radical']]))
+                    al = atom['@mrvQueryProps']
+                    _type = al[1]
+                    al = al[2:-1]
+                    if not al:
+                        raise ValueError('invalid atomlist')
+                    extra.append((n, 'atomlist' if _type == ',' else 'atomnotlist', al.split(_type)))
         else:
             atom = data['atomArray']
-            for n, (_id, el, iz, ch, mp, mk, al, rd, x, y, z) in \
-                    enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split(),
-                                  atom['@isotope'].split() if '@isotope' in atom else repeat('0'),
-                                  atom['@formalCharge'].split() if '@formalCharge' in atom else repeat(0),
-                                  atom['@mrvMap'].split() if '@mrvMap' in atom else repeat(0),
-                                  atom['@ISIDAmark'].split() if '@ISIDAmark' in atom else repeat('0'),
-                                  atom['@mrvQueryProps'].split() if '@mrvQueryProps' in atom else repeat('0'),
-                                  atom['@radical'].split() if '@radical' in atom else repeat('0'),
-                                  (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
-                                  (atom['@y3'] if '@y3' in atom else atom['@y2']).split(),
-                                  (atom['@z3'].split() if '@z3' in atom else
-                                   atom['@z2'].split() if '@z2' in atom else repeat(0))), start=1):
+            for n, (_id, e, x, y) in enumerate(zip(atom['@atomID'].split(),
+                                                   atom['@elementType'].split(),
+                                                   (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
+                                                   (atom['@y3'] if '@y3' in atom else atom['@y2']).split())):
                 atom_map[_id] = n
-                molecule['atoms'].append(dict(element=el, isotope=0, charge=int(ch), map=int(mp), mark=mk,
-                                              x=float(x), y=float(y), z=float(z)))
-                if iz != '0':
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='isotope', value=iz))
-                if al != '0' and al[0] == 'L':
-                    _type = al[1]
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='atomlist' if _type == ',' else 'atomnotlist',
-                                                    value=al[2:-1].split(_type)))
-                if rd != '0':
-                    molecule['CGR_DAT'].append(dict(atoms=(n,), type='radical', value=cls.__radical_map[rd]))
+                atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'map': 0, 'mark': None,
+                              'isotope': None, 'multiplicity': None})
+            if '@z3' in atom:
+                for a, x in zip(atoms, atom['@z3'].split()):
+                    a['z'] = float(x)
+            if '@isotope' in atom:
+                for a, x in zip(atoms, atom['@isotope'].split()):
+                    if x != '0':
+                        a['isotope'] = int(x)
+            if '@formalCharge' in atom:
+                for a, x in zip(atoms, atom['@formalCharge'].split()):
+                    if x != '0':
+                        a['charge'] = int(x)
+            if '@mrvMap' in atom:
+                for a, x in zip(atoms, atom['@mrvMap'].split()):
+                    if x != '0':
+                        a['map'] = int(x)
+            if '@ISIDAmark' in atom:
+                for a, x in zip(atoms, atom['@mrvMap'].split()):
+                    if x != '0':
+                        a['mark'] = int(x)
+            if '@radical' in atom:
+                for a, x in zip(atoms, atom['@radical'].split()):
+                    if x != '0':
+                        a['multiplicity'] = self.__radical_map[x]
+            if '@mrvQueryProps' in atom:
+                for n, x in enumerate(atom['@mrvQueryProps'].split(), start=1):
+                    if x[0] == 'L':
+                        _type = x[1]
+                        x = x[2:-1]
+                        if not x:
+                            raise ValueError('invalid atomlist')
+                        extra.append((n, 'atomlist' if _type == ',' else 'atomnotlist', x.split(_type)))
+        if not atoms:
+            raise EmptyMolecule
 
         if 'bond' in data['bondArray']:
             db = data['bondArray']['bond']
             for bond in ((db,) if isinstance(db, dict) else db):
-                order = cls.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
+                order = self.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
                 a1, a2 = bond['@atomRefs2'].split()
-                stereo = cls.__stereo_map.get(bond['bondStereo'].get('$'), 0) if 'bondStereo' in bond else 0
-                molecule['bonds'].append((atom_map[a1], atom_map[a2], order, stereo))
+                if 'bondStereo' in bond:
+                    if '$' in bond['bondStereo']:
+                        try:
+                            stereo = self.__stereo_map[bond['bondStereo']['$']]
+                        except KeyError:
+                            warning('invalid or unsupported stereo')
+                            stereo = 0
+                    else:
+                        warning('incorrect bondStereo tag')
+                        stereo = 0
+                else:
+                    stereo = 0
+                bonds.append((atom_map[a1], atom_map[a2], order, stereo))
 
         if 'molecule' in data:
             dm = data['molecule']
             for cgr_dat in ((dm,) if isinstance(dm, dict) else dm):
                 if cgr_dat['@role'] == 'DataSgroup':
                     t = cgr_dat['@fieldName']
-                    if t not in cls._cgr_keys:
+                    if t not in cgr_keys:
                         continue
-
                     a = tuple(atom_map[x] for x in cgr_dat['@atomRefs'].split())
-                    if len(a) == cls._cgr_keys[t]:
-                        molecule['CGR_DAT'].append(dict(atoms=a, type=t,
-                                                        value=cgr_dat['@fieldData'].replace('/', '').lower()))
-        return molecule
+                    v = cgr_dat['@fieldData'].replace('/', '').lower()
+                    if len(a) != cgr_keys[t] or not v:
+                        raise ValueError(f'CGR spec invalid: {cgr_dat}')
+                    cgr.append((a, t, v))
+        return {'atoms': atoms, 'bonds': bonds, 'extra': extra, 'cgr': cgr}
 
-    __bond_map = {'Any': 8, 'any': 8, 'A': 4, '1': 1, '2': 2, '3': 3}
-    __radical_map = {'monovalent': '2', 'divalent': '1', 'divalent1': '1', 'divalent3': '3'}
+    __bond_map = {'Any': 8, 'any': 8, 'A': 4, 'a': 4, '1': 1, '2': 2, '3': 3}
+    __radical_map = {'monovalent': 2, 'divalent': 1, 'divalent1': 1, 'divalent3': 3}
     __stereo_map = {'H': -1, 'W': 1}
 
 
@@ -220,11 +263,11 @@ class MRVwrite(CGRwrite, WithMixin):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
 
-    def close(self):
+    def close(self, *args, **kwargs):
         if not self.__finalized:
             self._file.write('</cml>')
             self.__finalized = True
-        super().close()
+        super().close(*args, **kwargs)
 
     def write(self, data):
         self._file.write('<cml>')
@@ -278,8 +321,7 @@ class MRVwrite(CGRwrite, WithMixin):
     @classmethod
     def __format_mol(cls, atoms, bonds, extra, cgr):
         isotope, atom_query, radical, isida, stereo = {}, {}, {}, {}, {}
-        for i in extra:
-            ia, it, iv = i
+        for ia, it, iv in extra:
             if it == 'isotope':
                 isotope[ia] = f' isotope="{iv}"'
             elif it == 'atomlist':
@@ -303,7 +345,7 @@ class MRVwrite(CGRwrite, WithMixin):
                               for n, (i, j, order, stereo) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
                              (f'<molecule id="sg{n}" role="DataSgroup" fieldName="{t}" '
-                              f'fieldData="{v.replace(">", "&gt;")}" '
+                              f'fieldData="{v.replace(">", "&gt;").replace("<", "&lt;")}" '
                               f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
                               for n, (i, t, v) in enumerate(cgr, start=1))))
 

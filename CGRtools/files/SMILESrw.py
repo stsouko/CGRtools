@@ -17,9 +17,9 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from coho.smi import Parser
+from logging import warning
 from re import split
 from traceback import format_exc
-from warnings import warn
 from ._CGRrw import WithMixin, CGRread
 
 
@@ -32,9 +32,8 @@ class SMILESread(CGRread, WithMixin):
     example:
     C=C>>CC id:123 key=value\n
     """
-    def __init__(self, file, *args, is_template=None, **kwargs):
-        assert not is_template, 'is_tepmlate works unavailable for SMILES/SMIRKS'
-        super().__init__(*args, is_template=False, **kwargs)
+    def __init__(self, file, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__parser = Parser()
         self.__data = self.__reader()
@@ -53,48 +52,66 @@ class SMILESread(CGRread, WithMixin):
             smi, *data = line.split()
             meta = {}
             for x in data:
-                x = split('[=:]', x, 1)
-                if len(x) == 2:
-                    meta[x[0].strip()] = x[1].strip()
+                try:
+                    k, v = split('[=:]', x, 1)
+                    meta[k.strip()] = v.strip()
+                except ValueError:
+                    warning(f'invalid metadata entry: {x}')
 
             if '>' in smi:
-                reaction = dict(reagents=[], reactants=[], products=[], meta=meta)
+                record = dict(reagents=[], reactants=[], products=[], meta=meta)
                 try:
                     reagents, reactants, products = smi.split('>')
+                except ValueError:
+                    warning('invalid SMIRKS')
+                    continue
+
+                try:
                     if reagents:
-                        reaction['reagents'].extend(self.__parse_molecule(x) for x in reagents.split('.'))
+                        for x in reagents.split('.'):
+                            if not x and self._ignore:
+                                warning('empty molecule ignored')
+                            else:
+                                record['reagents'].append(self.__parse_smiles(x))
                     if products:
-                        reaction['products'].extend(self.__parse_molecule(x) for x in products.split('.'))
+                        for x in products.split('.'):
+                            if not x and self._ignore:
+                                warning('empty molecule ignored')
+                            else:
+                                record['products'].append(self.__parse_smiles(x))
                     if reactants:
-                        reaction['reactants'].extend(self.__parse_molecule(x) for x in reactants.split('.'))
-                except (ValueError, KeyError):
-                    warn('line: %s\nconsist errors:\n%s' % (smi, format_exc()), ResourceWarning)
-                else:
-                    try:
-                        yield self._get_reaction(reaction)
-                    except Exception:
-                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
+                        for x in reactants.split('.'):
+                            if not x and self._ignore:
+                                warning('empty molecule ignored')
+                            else:
+                                record['reactants'].append(self.__parse_smiles(x))
+                except ValueError:
+                    warning(f'record consist errors:\n{format_exc()}')
+                    continue
+
+                try:
+                    yield self._get_reaction(record)
+                except ValueError:
+                    warning(f'record consist errors:\n{format_exc()}')
             else:
                 try:
-                    molecule = self.__parse_molecule(smi)
-                except (ValueError, KeyError):
-                    warn('line: %s\nconsist errors:\n%s' % (smi, format_exc()), ResourceWarning)
-                else:
-                    if meta:
-                        molecule['meta'].update(meta)
-                    try:
-                        yield self._get_molecule(molecule)
-                    except Exception:
-                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
+                    record = self.__parse_smiles(smi)
+                except ValueError:
+                    warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
+                    continue
 
-    def __parse_molecule(self, smiles):
+                record['meta'] = meta
+                try:
+                    yield self._get_molecule(record)
+                except ValueError:
+                    warning(f'record consist errors:\n{format_exc()}')
+
+    def __parse_smiles(self, smiles):
         self.__parser.parse(smiles)
-        return {'atoms': [dict(element=a['symbol'], charge=a['charge'], map=a['aclass'] or 0,
-                               x=0, y=0, z=0, isotope=0, mark='0') for a in self.__parser.atoms],
-                'CGR_DAT': [dict(atoms=(n,), type='isotope', value=a['isotope'])
-                            for n, a in enumerate(self.__parser.atoms, start=1) if a['isotope']],
-                'bonds': [(b['a0'] + 1, b['a1'] + 1, self.__bond_map[b['order']], 0) for b in self.__parser.bonds],
-                'meta': {}}
+        return {'atoms': [{'element': a['symbol'], 'charge': a['charge'], 'map': a['aclass'] or 0,
+                           'x': 0., 'y': 0., 'z': 0., 'mark': None, 'isotope': a['isotope'], 'multiplicity': None}
+                          for a in self.__parser.atoms], 'extra': [], 'cgr': [],
+                'bonds': [(b['a0'], b['a1'], self.__bond_map[b['order']], 0) for b in self.__parser.bonds]}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
 

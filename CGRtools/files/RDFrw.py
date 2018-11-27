@@ -16,22 +16,21 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import defaultdict
 from itertools import chain
+from logging import warning
 from time import strftime
 from traceback import format_exc
-from warnings import warn
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread
+from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
-from ..exceptions import EmptyMolecule
 
 
 class RDFread(CGRread, WithMixin):
-    def __init__(self, file, *args, ignore=False, **kwargs):
-        super().__init__(*args, ignore=ignore, **kwargs)
+    def __init__(self, file, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
-        self.__ignore = ignore
 
     def read(self):
         return list(self.__data)
@@ -44,7 +43,7 @@ class RDFread(CGRread, WithMixin):
 
     def __reader(self):
         ir = 0
-        isreaction = reaction = parser = mkey = None
+        isreaction = record = parser = mkey = meta = None
         failkey = True  # skip header
         for line in self._file:
             if failkey and not line.startswith(('$RFMT', '$MFMT', '$RXN')):
@@ -52,78 +51,76 @@ class RDFread(CGRread, WithMixin):
             elif parser:
                 try:
                     if parser(line):
-                        reaction = parser.getvalue()
+                        record = parser.getvalue()
                         parser = None
-                except EmptyMolecule:
-                    if not (isreaction and self.__ignore):
-                        failkey = True
-                        parser = None
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
                 except ValueError:
                     failkey = True
                     parser = None
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
+                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
 
             elif line.startswith('$RFMT'):
-                if reaction:
+                if record:
+                    record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
+                        yield self._get_reaction(record) if isreaction else self._get_molecule(record)
                     except Exception:
-                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
-                    reaction = None
+                        warning(f'record consist errors:\n{format_exc()}')
+                    record = None
                 isreaction = True
                 ir = 4
                 failkey = False
                 mkey = None
+                meta = defaultdict(list)
             elif line.startswith('$MFMT'):
-                if reaction:
+                if record:
+                    record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
-                    except Exception:
-                        warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
-                    reaction = None
+                        yield self._get_reaction(record) if isreaction else self._get_molecule(record)
+                    except ValueError:
+                        warning(f'record consist errors:\n{format_exc()}')
+                    record = None
                 ir = 3
                 failkey = isreaction = False
                 mkey = None
+                meta = defaultdict(list)
             elif line.startswith('$RXN'):  # parse RXN file
                 isreaction = True
                 ir = 3
                 failkey = False
-            elif reaction:
+            elif record:
                 if line.startswith('$DTYPE'):
                     mkey = line[7:].strip()
                     if not mkey:
-                        continue
-                    reaction['meta'][mkey] = []
+                        warning(f'invalid metadata entry: {line}')
                 elif mkey:
                     data = line.lstrip("$DATUM").strip()
                     if data:
-                        reaction['meta'][mkey].append(data)
+                        meta[mkey].append(data)
             elif ir:
                 ir -= 1
             elif not ir:
                 try:
                     if isreaction:
                         if line.startswith('M  V30 COUNTS'):
-                            parser = ERXNread(line)
+                            parser = ERXNread(line, self._ignore)
                         else:
-                            parser = RXNread(line)
+                            parser = RXNread(line, self._ignore)
                     else:
                         if 'V2000' in line:
-                            parser = MOLread(line)
+                            parser = MOLread(line, self._ignore)
                         elif 'V3000' in line:
-                            parser = EMOLread(line)
+                            parser = EMOLread(line, self._ignore)
                         else:
-                            raise ValueError('invalid MOL')
-                except (EmptyMolecule, ValueError):
+                            raise ValueError('invalid MOL entry')
+                except ValueError:
                     failkey = True
-                    warn('line: \n%s\nconsist errors:\n%s' % (line, format_exc()), ResourceWarning)
-
-        if reaction:
+                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+        if record:
+            record['meta'] = prepare_meta(meta)
             try:
-                yield self._get_reaction(reaction) if isreaction else self._get_molecule(reaction)
-            except Exception:
-                warn('record consist errors:\n%s' % format_exc(), ResourceWarning)
+                yield self._get_reaction(record) if isreaction else self._get_molecule(record)
+            except ValueError:
+                warning(f'record consist errors:\n{format_exc()}')
 
 
 class RDFwrite(MOLwrite, WithMixin):
