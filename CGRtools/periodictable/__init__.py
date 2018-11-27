@@ -47,7 +47,6 @@ class ElementMeta(PeriodicMeta):
 
     def __call__(cls, *args, **kwargs):
         key = (cls, tuple(zip(('charge', 'multiplicity', 'isotope'), args)) + tuple(kwargs.items()))
-        print(key)
         if key not in cls.__instances:
             cls.__instances[key] = super().__call__(*args, **kwargs)
         return cls.__instances[key]

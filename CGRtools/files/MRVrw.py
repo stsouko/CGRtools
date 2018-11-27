@@ -219,7 +219,6 @@ class MRVwrite(CGRwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
-        self.write = self.__init_write
 
     def close(self):
         if not self.__finalized:
@@ -227,7 +226,7 @@ class MRVwrite(CGRwrite, WithMixin):
             self.__finalized = True
         super().close()
 
-    def __init_write(self, data):
+    def write(self, data):
         self._file.write('<cml>')
         self.__write(data)
         self.write = self.__write
@@ -236,15 +235,14 @@ class MRVwrite(CGRwrite, WithMixin):
         self._file.write('<MDocument><MChemicalStruct>')
 
         if isinstance(data, BaseContainer):
-            m = self.get_formatted_cgr(data)
+            m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
             for k, v in chain(m['colors'].items(), data.meta.items()):
                 if '\n' in v:
-                    v = '<![CDATA[%s]]>' % v
-                self._file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
-
+                    v = f'<![CDATA[{v}]]>'
+                self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList>')
-            self._file.write(m['CGR'])
+            self._file.write(self.__format_mol(*m['structure']))
             self._file.write('</molecule>')
         else:
             colors = {}
@@ -253,9 +251,9 @@ class MRVwrite(CGRwrite, WithMixin):
             rl = len(data.reagents)
             self._file.write('<reaction>')
             for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
-                self._file.write('<%s>' % j)
+                self._file.write(f'<{j}>')
                 for cnext, m in zip(c, data[i]):
-                    m = self.get_formatted_cgr(m, s)
+                    m = self._convert_structure(m, s)
                     if self._fix_position:
                         s = m['max_x'] + (3 if cnext == rl else 1)
                     if cnext == rl:  # get last reagent right atom position
@@ -263,60 +261,57 @@ class MRVwrite(CGRwrite, WithMixin):
                     elif not rl and cnext == 1:
                         x = m['min_x'] - 3
                     self._file.write('<molecule>')
-                    self._file.write(m['CGR'])
+                    self._file.write(self.__format_mol(*m['structure']))
                     self._file.write('</molecule>')
-                    colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
-                self._file.write('</%s>' % j)
+                    colors.update({f'{k}.{cnext}': v for k, v in m['colors'].items()})
+                self._file.write('</{j]>')
 
-            self._file.write('<arrow type="DEFAULT" x1="{:.4f}" y1="0" x2="{:.4f}" y2="0"/>'
-                             '<propertyList>'.format(x + .5, x + 2.5))
+            self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
+                             '<propertyList>')
             for k, v in chain(colors.items(), data.meta.items()):
                 if '\n' in v:
-                    v = '<![CDATA[%s]]>' % v
-                    self._file.write('<property title="%s"><scalar>%s</scalar></property>' % (k, v))
-
+                    v = f'<![CDATA[{v}]]>'
+                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList></reaction>')
-
         self._file.write('</MChemicalStruct></MDocument>')
 
     @classmethod
-    def _format_mol(cls, atoms, bonds, extended, cgr_dat):
-        isotope, atom_query, radical = {}, {}, {}
-        for i in extended:
-            it, iv, ia = i['type'], i['value'], i['atom']
+    def __format_mol(cls, atoms, bonds, extra, cgr):
+        isotope, atom_query, radical, isida, stereo = {}, {}, {}, {}, {}
+        for i in extra:
+            ia, it, iv = i
             if it == 'isotope':
-                isotope[ia] = ' isotope="%d"' % iv
+                isotope[ia] = f' isotope="{iv}"'
             elif it == 'atomlist':
-                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join(('!%s' % x for x in elements_set.difference(iv))
+                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join((f'!{x}' for x in elements_set.difference(iv))
                                                                    if len(iv) > cls._half_table else
                                                                    (',%s' % x for x in iv))
             elif it == 'radical':
-                radical[ia] = ' radical="%s"' % iv
+                radical[ia] = f' radical="{iv}"'
+        for n, atom in enumerate(atoms, start=1):
+            if atom['mark']:
+                isida[n] = f' ISIDAmark="{atom["mark"]}"'
 
         return ''.join(chain(('<atomArray>',),
-                             ('<atom id="a{0}" elementType="{1[element]}" x3="{1[x]:.4f}" y3="{1[y]:.4f}" '
-                              'z3="{1[z]:.4f}" mrvMap="{1[map]}" formalCharge="{1[charge]}"{2}{3}{4}{5}/>'
-                              .format(i, j, radical.get(i, ''), isotope.get(i, ''), atom_query.get(i, ''),
-                                      ' ISIDAmark="%s"' % j['mark'] if j['mark'] != '0' else '')
-                              for i, j in enumerate(atoms, start=1)),
+                             (f'<atom id="a{n}" elementType="{atom["element"]}" x3="{atom["x"]:.4f}" '
+                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["map"]}" '
+                              f'formalCharge="{atom["charge"]}"{radical.get(n, "")}{isotope.get(n, "")}'
+                              f'{atom_query.get(n, "")}{isida.get(n, "")}/>'
+                              for n, atom in enumerate(atoms, start=1)),
                              ('</atomArray><bondArray>',),
-                             ('<bond id="b{0}" atomRefs2="a{1} a{2}" order="{3}"{4}'
-                              .format(i, j, l, cls.__bond_map[k],
-                                      '><bondStereo>%s</bondStereo></bond>' % s if s else '/>')
-                              for i, (j, l, k, s) in enumerate(bonds, start=1)),
+                             (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
+                              for n, (i, j, order, stereo) in enumerate(bonds, start=1)),
                              ('</bondArray>',),
-                             ('<molecule id="sg{0}" role="DataSgroup" fieldName="{1}" fieldData="{2}" '
-                              'atomRefs="{3}" x="{4[0]}" y="{4[1]}" '
-                              '/>'.format(i, j['type'], j['value'].replace('>', '&gt;'),
-                                          ' '.join('a%d' % x for x in j['atoms']),
-                                          cls._get_position([atoms[i - 1] for i in j['atoms']]))
-                              for i, j in enumerate(cgr_dat, start=1))))
+                             (f'<molecule id="sg{n}" role="DataSgroup" fieldName="{t}" '
+                              f'fieldData="{v.replace(">", "&gt;")}" '
+                              f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
+                              for n, (i, t, v) in enumerate(cgr, start=1))))
 
-    _stereo_map = {-1: 'H', 0: 0, 1: 'W', None: 0}
+    _stereo_map = {-1: '><bondStereo>H</bondStereo></bond>', 1: '><bondStereo>W</bondStereo></bond>', None: '/>'}
     _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
-    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3', None: None}
-    __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3'}
+    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
+    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's'}
     __finalized = False
 
 
-__all__ = [MRVread.__name__, MRVwrite.__name__]
+__all__ = ['MRVread', 'MRVwrite']

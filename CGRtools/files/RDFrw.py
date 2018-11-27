@@ -130,37 +130,35 @@ class RDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
-        self.write = self.__init_write
 
-    def __init_write(self, data):
-        self._file.write(strftime("$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n"))
+    def write(self, data):
+        self._file.write(strftime('$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n'))
         self.__write(data)
         self.write = self.__write
 
     def __write(self, data):
         if isinstance(data, BaseContainer):
-            m = self.get_formatted_cgr(data)
+            m = self._convert_structure(data)
             self._file.write('$MFMT\n')
-            self._file.write(m['CGR'])
-            self._file.write("M  END\n")
+            self._file.write(self._format_mol(*m['structure']))
+            self._file.write('M  END\n')
             colors = m['colors']
         else:
-            self._file.write('$RFMT\n$RXN\n\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n\n%3d%3d\n' %
-                             (len(data.reagents), len(data.products)))
+            self._file.write(f'$RFMT\n$RXN\n\n\n\n{len(data.reagents):3d}{len(data.products):3d}\n')
             colors = {}
             s = 0
             rl = len(data.reagents)
-            for cnext, m in enumerate(chain(data.reagents + data.products), start=1):
-                m = self.get_formatted_cgr(m, s)
+            for cnext, m in enumerate(chain(data.reagents, data.products), start=1):
+                m = self._convert_structure(m, s)
                 if self._fix_position:
                     s = m['max_x'] + (3 if cnext == rl else 1)
                 self._file.write('$MOL\n')
-                self._file.write(m['CGR'])
-                self._file.write("M  END\n")
-                colors.update({'%s.%d' % (k, cnext): v for k, v in m['colors'].items()})
+                self._file.write(self._format_mol(*m['structure']))
+                self._file.write('M  END\n')
+                colors.update({f'{k}.{cnext}': v for k, v in m['colors'].items()})
 
-        for p in chain(colors.items(), data.meta.items()):
-            self._file.write('$DTYPE %s\n$DATUM %s\n' % p)
+        for k, v in chain(colors.items(), data.meta.items()):
+            self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
 
-__all__ = [RDFread.__name__, RDFwrite.__name__]
+__all__ = ['RDFread', 'RDFwrite']

@@ -104,16 +104,15 @@ class SDFwrite(MOLwrite, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
-        self.write = self.__write
 
-    def __write(self, data):
-        m = self.get_formatted_cgr(data)
-        self._file.write(m['CGR'])
-        self._file.write("M  END\n")
+    def write(self, data):
+        m = self._convert_structure(data)
+        self._file.write(self._format_mol(*m['structure']))
+        self._file.write('M  END\n')
 
-        for i in chain(m['colors'].items(), m['meta'].items()):
-            self._file.write(">  <%s>\n%s\n" % i)
-        self._file.write("$$$$\n")
+        for k, v in chain(m['colors'].items(), data.meta.items()):
+            self._file.write(f'>  <{k}>\n{v}\n')
+        self._file.write('$$$$\n')
 
 
-__all__ = [SDFread.__name__, SDFwrite.__name__]
+__all__ = ['SDFread', 'SDFwrite']

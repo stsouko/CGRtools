@@ -332,41 +332,39 @@ class ERXNread:
 
 
 class MOLwrite(CGRwrite):
-    @classmethod
-    def _format_mol(cls, atoms, bonds, extended, cgr_dat):
+    def _format_mol(self, atoms, bonds, extra, cgr):
         mol_prop = []
-        for i in extended:
-            it, iv, ia = i['type'], i['value'], i['atom']
+        for ia, it, iv in extra:
             if it == 'isotope':
-                mol_prop.append('M  ISO  1 %3d %3d\n' % (ia, iv))
+                mol_prop.append(f'M  ISO  1 {ia:3d} {iv:3d}\n')
             elif it == 'atomlist':
-                atomslist, _type = (elements_set.difference(iv), 'T') if len(iv) > cls._half_table else (iv, 'F')
-                mol_prop.append('M  ALS %3d%3d %s %s\n' % (ia, len(atomslist), _type,
-                                                           ''.join('%-4s' % x for x in atomslist)))
+                if len(iv) > self._half_table:
+                    al, _type = elements_set.difference(iv), 'T'
+                else:
+                    al, _type = iv, 'F'
+                mol_prop.append(f'M  ALS {ia:3d}{len(al):3d} {_type} {"".join(f"{x:-4s}" for x in al)}\n')
             elif it == 'radical':
-                mol_prop.append('M  RAD  1 %3d %3d\n' % (ia, iv))
+                mol_prop.append(f'M  RAD  1 {ia:3d} {iv:3d}\n')
 
         for j in count():
-            sty = len(cgr_dat[j * 8:j * 8 + 8])
+            sty = len(cgr[j * 8:j * 8 + 8])
             if sty:
-                stydat = ' '.join(['%3d DAT' % (x + j * 8) for x in range(1, 1 + sty)])
-                mol_prop.append('M  STY  %d %s\n' % (sty, stydat))
+                mol_prop.append(f'M  STY  {sty} {" ".join(f"{x + j * 8:3d} DAT" for x in range(1, 1 + sty))}\n')
             else:
                 break
 
-        for i, j in enumerate(cgr_dat, start=1):
-            cx, cy = cls._get_position([atoms[x - 1] for x in j['atoms']])
-            mol_prop.append('M  SAL %3d%3d %s\n' % (i, len(j['atoms']), ' '.join(['%3d' % x for x in j['atoms']])))
-            mol_prop.append('M  SDT %3d %s\n' % (i, j['type']))
-            mol_prop.append('M  SDD %3d %10.4f%10.4f    DAU   ALL  0       0\n' % (i, cx, cy))
-            mol_prop.append('M  SED %3d %s\n' % (i, j['value']))
+        for i, (ja, jt, jv) in enumerate(cgr, start=1):
+            mol_prop.append(f'M  SAL {i:3d}{len(ja):3d} {" ".join("f{x:3d}" for x in ja)}\n')
+            mol_prop.append(f'M  SDT {i:3d} {jt}\n')
+            mol_prop.append(f'M  SDD {i:3d}     0.0000{i / 3:10.4f}    DAU   ALL  0       0\n')
+            mol_prop.append(f'M  SED {i:3d} {jv}\n')
 
-        return ''.join(chain(("\n  CGRtools. (c) Dr. Ramil I. Nugmanov\n"
-                             "\n%3s%3s  0  0  0  0            999 V2000\n" % (len(atoms), len(bonds)),),
-                             ("%(x)10.4f%(y)10.4f%(z)10.4f %(element)-3s 0%(charge)3s  0  0  0  0  0"
-                              "%(mark)3s  0%(map)3s  0  0\n" % i for i in atoms),
-                             ("%3d%3d%3s%3d  0  0  0\n" % i for i in bonds), mol_prop))
+        return ''.join(chain((f'\n\n\n{len(atoms):3d}{len(bonds):3d}  0  0  0  0            999 V2000\n',),
+                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["element"]:>3s} 0{i["charge"]:3d}  0  0  '
+                              f'0  0  0{i["mark"]:3d}  0{i["map"]:3d}  0  0\n' for i in atoms),
+                             ("%3d%3d%3s%3s  0  0  0\n" % i for i in bonds), mol_prop))
 
-    _stereo_map = {-1: 6, 0: 0, 1: 1, None: 0}
+    _stereo_map = {-1: '6', 1: '1', None: '0'}
     _charge_map = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
-    _radical_map = {2: 2, 1: 1, 3: 3, None: None}
+    _radical_map = {2: 2, 1: 1, 3: 3}
+    _bond_map = {8: '8', 4: '4', 1: '1', 2: '2', 3: '3', 9: 's'}

@@ -22,13 +22,30 @@ from itertools import count, chain
 from io import StringIO, BytesIO, TextIOWrapper
 from pathlib import Path
 from warnings import warn
-from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
+from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..exceptions import InvalidStereo, InvalidAtom, InvalidConfig, MapError, InvalidData
 from ..periodictable import elements_set
 from ..periodictable import common_isotopes
 
 
 fromMDL = (0, 3, 2, 1, 0, -1, -2, -3)
+
+
+def _pyramid_volume(n, u, v, w):
+    nx, ny, nz = n
+    ux, uy, uz = u
+    vx, vy, vz = v
+    wx, wy, wz = w
+    ux -= nx
+    uy -= ny
+    uz -= nz
+    vx -= nx
+    vy -= ny
+    vz -= nz
+    wx -= nx
+    wy -= ny
+    wz -= nz
+    return ux * (vy * wz - vz * wy) + uy * (vz * wx - vx * wz) + uz * (vx * wy - vy * wx)
 
 
 class WithMixin:
@@ -498,230 +515,258 @@ class CGRwrite:
         self._fix_position = fix_position
         self.__colors = colors
 
-    def get_formatted_cgr(self, g, shift=0):
-        is_cgr = isinstance(g, (CGRContainer, QueryContainer))
-        s_x = [x.x for x in g._node.values()]
-        s_y = [x.y for x in g._node.values()]
-        y_shift = -(max(s_y) + min(s_y)) / 2
-        min_x, max_x = min(s_x), max(s_x)
+    def _convert_structure(self, g, shift=0):
+        data = {'colors': {}}
+        if isinstance(g, CGRContainer):
+            format_atom = self.__format_dyn_atom
+            format_bond = self.__format_dyn_bond
+            stereo_map = {}
+
+        elif isinstance(g, QueryCGRContainer):
+            format_atom = self.__format_dyn_query_atom
+            format_bond = self.__format_dyn_query_bond
+            stereo_map = {}
+        elif isinstance(g, QueryContainer):
+            format_atom = self.__format_query_atom
+            format_bond = self.__format_query_bond
+            stereo_map = {}
+        else:
+            format_atom = self.__format_atom
+            format_bond = self.__format_bond
+            stereo_map = self.__wedge_map(g)
+
+            #  colors supported only for molecules due to ambiguity for other types
+            colors = defaultdict(list)
+            for n, atom in enumerate(g._node.values(), start=1):
+                if atom.color:
+                    for part, val in atom.color.items():
+                        colors[part].append(f'{n}:{val}')
+            if colors:
+                data['colors'][self.__colors] = '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in colors.items())
+
+        list_x, list_y = zip(*((x.x, x.y) for x in g._node.values()))
+        min_x, max_x = min(list_x), max(list_x)
+        data['y_shift'] = y_shift = -(max(list_y) + min(list_y)) / 2
         x_shift = shift - min_x
-        data = dict(meta=g.meta.copy(), y_shift=y_shift)
         if self._fix_position:
             data.update(max_x=max_x + x_shift, min_x=shift)
         else:
             data.update(max_x=max_x, min_x=min_x)
 
-        cgr_dat, extended, atoms, bonds = [], [], [], []
-        renum, colors = {}, defaultdict(list)
-        for n, (i, l) in enumerate(g._node.items(), start=1):
+        cgr_data, extra_data, atoms, bonds = [], [], [], []
+        renum = {}
+        for n, (i, atom) in enumerate(g._node.items(), start=1):
             renum[i] = n
+            cgr, extra, charge, element = format_atom(atom, n)
+            cgr_data.extend(cgr)
+            extra_data.extend(extra)
 
-            if is_cgr:
-                charge, meta = self.__dyn_atom(l.charge, l.p_charge, 'c')
-                if meta:
-                    meta['atoms'] = (n,)
-                    cgr_dat.append(meta)
-
-                radical, meta = self.__dyn_atom(l.multiplicity, l.p_multiplicity, 'r')
-                if meta:
-                    meta['atoms'] = (n,)
-                    cgr_dat.append(meta)
-            else:
-                charge = self._charge_map[l.charge]
-                radical = self._radical_map[l.multiplicity]
-
-            if radical:
-                extended.append(dict(atom=n, value=radical, type='radical'))
-
-            if self.__extralabels:
-                if is_cgr:
-                    meta = self.__get_state(l.hybridization, l.p_hybridization, 'atomhyb', 'dynatomhyb')
-                    if meta:
-                        meta['atoms'] = (n,)
-                        cgr_dat.append(meta)
-                    meta = self.__get_state(l.neighbors, l.p_neighbors, 'atomneighbors', 'dynatomneighbors')
-                    if meta:
-                        meta['atoms'] = (n,)
-                        cgr_dat.append(meta)
-                else:
-                    if l.hybridization:
-                        cgr_dat.append({'atoms': (n,), 'type': 'atomhyb', 'value': l.hybridization})
-                    if l.neighbors:
-                        cgr_dat.append({'atoms': (n,), 'type': 'atomneighbors', 'value': l.neighbors})
-
-            if l.isotope != l.common_isotope:
-                if isinstance(l.isotope, list):
-                    cgr_dat.append(dict(atoms=(n,), value=','.join(str(x) for x in l.isotope), type='isotope'))
-                else:
-                    extended.append(dict(atom=n, value=l.isotope, type='isotope'))
-
-            l_colors = l.colors
-            if l_colors:
-                if is_cgr:
-                    l_p_colors = l.p_colors
-                    for part, s_val in l_colors.items():
-                        p_val = l_p_colors[part]
-                        if s_val != p_val:
-                            val = f'{n}:{s_val}>{p_val}'
-                        else:
-                            val = f'{n}:{s_val}'
-                        colors[part].append(val)
-                else:
-                    for part, s_val in l_colors.items():
-                        colors[part].append(f'{n}:{s_val}')
-
-            element = l.element
-            if isinstance(element, list):
-                extended.append(dict(atom=n, value=element, type='atomlist'))
-                element = 'L'
-
-            if self.__xyz and is_cgr:
-                dx, dy, dz = l.p_x - l.x, l.p_y - l.y, l.p_z - l.z
-                if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
-                    cgr_dat.append(dict(atoms=(n,), value='x%.4f,%.4f,%.4f' % (dx, dy, dz), type='dynatom'))
-
-            x, y = l.x, l.y
+            x, y = atom.x, atom.y
             if self._fix_position:
                 x += x_shift
                 y += y_shift
-            atoms.append(dict(map=l.mark if self.__mark_to_map else i, charge=charge,
-                              element=element, mark=l.mark, x=x, y=y, z=l.z))
+            atoms.append({'map': (atom.mark or 0) if self.__mark_to_map else i, 'charge': charge, 'element': element,
+                          'mark': atom.mark or 0, 'x': x, 'y': y, 'z': atom.z})
 
-        data['colors'] = {self.__colors: '\n'.join(f'%s %s' % (x, ' '.join(y)) for x, y in colors.items())}
+        seen = set()
+        for i, j_bond in g._adj.items():
+            seen.add(i)
+            for j, bond in j_bond.items():
+                if j in seen:
+                    continue
 
-        for i, j, l in g.edges(data=True):
-            if is_cgr:
-                tmp = g.get_stereo(i, j)
-                if tmp:
-                    s_stereo, p_stereo = tmp
-                else:
-                    tmp = g.get_stereo(j, i)
-                    if tmp:
-                        s_stereo, p_stereo = tmp
-                        i, j = j, i
-                    else:
-                        s_stereo = p_stereo = None
-            else:
-                s_stereo = g.get_stereo(i, j)
-                if s_stereo:
-                    p_stereo = s_stereo
-                else:
-                    s_stereo = p_stereo = g.get_stereo(j, i)
-                    if s_stereo:
+                stereo = stereo_map.get((i, j))
+                if not stereo:
+                    stereo = stereo_map.get((j, i))
+                    if stereo:
                         i, j = j, i
 
-            re_atoms = (renum[i], renum[j])
-            if s_stereo or p_stereo:
-                stereo = {'value': '%s>%s' % (s_stereo or 'n', p_stereo or 'n'), 'type': 'dynstereo', 'atoms': re_atoms}
-                if s_stereo != p_stereo:
-                    s_mark = 0
-                    s_dyn = True
-                else:
-                    s_mark = self._stereo_map[s_stereo]
-                    s_dyn = False
-            else:
-                stereo = False
-                s_mark = 0
-                s_dyn = False
+                cgr, order = format_bond(bond, renum[i], renum[j])
+                cgr_data.extend(cgr)
+                bonds.append((renum[i], renum[j], order, self._stereo_map[stereo]))
 
-            s_bond = l.order or 0
-            p_bond = l.p_order or 0 if is_cgr else s_bond
-            if isinstance(s_bond, list):
-                if s_bond == p_bond:
-                    cgr_dat.append({'value': ','.join(s_bond), 'type': 'extrabond', 'atoms': re_atoms})
-                else:
-                    cgr_dat.append({'value': ','.join('%s>%s' % x for x in zip(s_bond, p_bond)), 'type': 'dynbond',
-                                    'atoms': re_atoms})
-                if stereo:
-                    cgr_dat.append(stereo)
-                bond = 8
-            elif s_bond != p_bond:
-                cgr_dat.append({'value': '%s>%s' % (s_bond, p_bond), 'type': 'dynbond', 'atoms': re_atoms})
-                if stereo:
-                    cgr_dat.append(stereo)
-                bond = 8
-            elif s_bond == 9:
-                cgr_dat.append({'value': 's', 'type': 'extrabond', 'atoms': re_atoms})
-                if stereo:
-                    cgr_dat.append(stereo)
-                bond = 8
-            elif s_dyn:
-                cgr_dat.append({'value': s_bond, 'type': 'extrabond', 'atoms': re_atoms})
-                cgr_dat.append(stereo)
-                bond = 8
-            else:
-                bond = s_bond
-
-            bonds.append((*re_atoms, bond, s_mark))
-
-        data['CGR'] = self._format_mol(atoms, bonds, extended, cgr_dat)
+        data['structure'] = (atoms, bonds, extra_data, cgr_data)
         return data
 
-    @classmethod
-    @abstractmethod
-    def _format_mol(cls, atoms, bonds, extended, cgr_dat):
-        pass
+    def __format_atom(self, atom, n):
+        extra = []
+        if atom.multiplicity:
+            extra.append((n, 'radical', self._radical_map[atom.multiplicity]))
+        if atom.isotope != atom.common_isotope:
+            extra.append((n, 'isotope', atom.isotope))
+        return (), extra, self._charge_map[atom.charge], atom.element
+
+    def __format_dyn_atom(self, atom, n):
+        cgr = []
+        extra = []
+        nt = (n,)
+        if atom.charge != atom.p_charge:
+            cgr.append((nt, 'dynatom', f'c{atom.p_charge - atom.charge:+d}'))
+        if atom.multiplicity != atom.p_multiplicity:
+            cgr.append((nt, 'dynatom', f'r{atom.p_radical - atom.radical:+d}'))
+        if atom.multiplicity:
+            extra.append((n, 'radical', self._radical_map[atom.multiplicity]))
+        if atom.isotope != atom.common_isotope:
+            extra.append((n, 'isotope', atom.isotope))
+
+        if self.__xyz:
+            dx, dy, dz = atom.p_x - atom.x, atom.p_y - atom.y, atom.p_z - atom.z
+            if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
+                cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
+        return cgr, extra, self._charge_map[atom.charge], atom.element
+
+    def __format_query_atom(self, atom, n):
+        charge = atom.charge[0]
+        cgr = []
+        extra = []
+        nt = (n,)
+        if len(atom.element) > 1:
+            extra.append((n, 'atomlist', atom.element))
+            element = 'L'
+        else:
+            element = atom.element[0]
+
+        if len(atom.charge) > 1:
+            cgr.append((nt, 'dynatom', 'c0,' + ','.join(f'{x - charge:+d}' for x in atom.charge[1:])))
+        if len(atom.multiplicity) > 1:
+            radical = atom.radical[0]
+            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - radical:+d}' for x in atom.radical[1:])))
+        if atom.multiplicity:
+            extra.append((n, 'radical', self._radical_map[atom.multiplicity[0]]))
+
+        if atom.isotope:
+            extra.append((n, 'isotope', ','.join(str(x) for x in atom.isotope)))
+
+        if atom.hybridization:
+            cgr.append((nt, 'atomhyb', ','.join(str(x) for x in atom.hybridization)))
+        if atom.neighbors:
+            cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
+        return cgr, extra, self._charge_map[charge], element
+
+    def __format_dyn_query_atom(self, atom, n):
+        charge = atom.charge[0]
+        cgr = []
+        extra = []
+        nt = (n,)
+        if len(atom.element) > 1:
+            extra.append(dict(atom=n, value=atom.element, type='atomlist'))
+            element = 'L'
+        else:
+            element = atom.element[0]
+
+        if atom.charge != atom.p_charge:
+            if len(atom.charge) > 1:
+                cgr.append((nt, 'dynatom', f'c{atom.p_charge[0] - charge:+d},' +
+                                           ','.join(f'{x - charge:+d},{y - charge:+d}'
+                                                    for x, y in zip(atom.charge[1:], atom.p_charge[1:]))))
+            else:
+                cgr.append((nt, 'dynatom', f'c{atom.p_charge[0] - charge:+d},'))
+        elif len(atom.charge) > 1:
+            cgr.append((nt, 'dynatom', 'c0,' + ','.join(f'{x - charge:+d}' for x in atom.charge[1:])))
+
+        if atom.multiplicity != atom.p_multiplicity:
+            radical = atom.radical[0]
+            if len(atom.multiplicity) > 1:
+                cgr.append((nt, 'dynatom', f'r{atom.p_radical[0] - radical:+d},' +
+                                           ','.join(f'{x - radical:+d},{y - radical:+d}'
+                                                    for x, y in zip(atom.radical[1:], atom.p_radical[1:]))))
+            else:
+                cgr.append((nt, 'dynatom', f'r{atom.p_radical[0] - radical:+d}'))
+        elif len(atom.multiplicity) > 1:
+            radical = atom.radical[0]
+            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - radical:+d}' for x in atom.radical[1:])))
+        if atom.multiplicity:
+            extra.append((n, 'radical', self._radical_map[atom.multiplicity[0]]))
+
+        if atom.isotope:
+            extra.append((n, 'isotope', ','.join(str(x) for x in atom.isotope)))
+
+        if atom.hybridization != atom.p_hybridization:
+            cgr.append((nt, 'dynatomhyb',
+                        ','.join(f'{x}>{y}' for x, y in zip(atom.hybridization, atom.p_hybridization))))
+        elif atom.hybridization:
+            cgr.append((nt, 'atomhyb', ','.join(str(x) for x in atom.hybridization)))
+
+        if atom.neighbors != atom.p_neighbors:
+            cgr.append((nt, 'dynatomneighbors', ','.join(f'{x}>{y}' for x, y in zip(atom.neighbors, atom.p_neighbors))))
+        elif atom.neighbors:
+            cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
+        return cgr, extra, self._charge_map[charge], element
+
+    def __format_bond(self, bond, n, m):
+        if bond.order == 9:
+            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
+        return (), self._bond_map[bond.order]
+
+    def __format_dyn_bond(self, bond, n, m):
+        if bond.order != bond.p_order:
+            return (((n, m), 'dynbond',
+                     f'{self._bond_map[bond.order]}>{self._bond_map[bond.p_order]}'),), self._bond_map[8]
+        elif bond.order == 9:
+            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
+        return (), self._bond_map[bond.order]
+
+    def __format_query_bond(self, bond, n, m):
+        if len(bond.order) > 1:
+            return (((n, m), 'extrabond', ','.join(self._bond_map[x] for x in bond.order)),), self._bond_map[8]
+        elif bond.order == (9,):
+            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
+        return (), self._bond_map[bond.order[0]]
+
+    def __format_dyn_query_bond(self, bond, n, m):
+        if bond.order != bond.p_order:
+            return (((n, m), 'dynbond', ','.join(f'{self._bond_map[x]}>{self._bond_map[y]}'
+                                                 for x, y in zip(bond.order, bond.p_order))),), self._bond_map[8]
+        elif len(bond.order) > 1:
+            return (((n, m), 'extrabond', ','.join(self._bond_map[x] for x in bond.order)),), self._bond_map[8]
+        elif bond.order == (9,):
+            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
+        return (), self._bond_map[bond.order[0]]
 
     @staticmethod
-    def __get_state(s, p, t1, t2):
-        if isinstance(s, list):
-            if s == p:
-                _val = ','.join(x and str(x) or 'n' for x in s)
-                _type = t1
+    def __wedge_map(g):
+        stereo_map = {}
+        nodes = list(g._node.items())
+        while True:
+            failed = []
+            for i, tmp in enumerate(nodes, start=1):
+                n, atom = tmp
+                s = atom.stereo
+                if not s:
+                    continue
+                neighbors = list(g._adj[n])
+                len_n = len(neighbors)
+                if len_n in (3, 4):  # tetrahedron
+                    for _ in range(len_n):
+                        if (neighbors[0], n) in stereo_map:
+                            neighbors.append(neighbors.pop(0))
+                        else:
+                            failed.append(tmp)
+                            break
+                    else:
+                        failed.insert(0, tmp)
+                        failed.extend(nodes[i:])
+                        stereo_map = None
+                        nodes = failed
+                        break
+
+                    if len_n == 4:
+                        zero = g._node[neighbors[0]]
+                        zero = (zero.x, zero.y, 1)
+                        first = g._node[neighbors[1]]
+                        first = (first.x, first.y, 0)
+                    else:
+                        zero = (atom.x, atom.y, 0)
+                        first = g._node[neighbors[0]]
+                        first = (first.x, first.y, 1)
+
+                    second = g._node[neighbors[-2]]
+                    third = g._node[neighbors[-1]]
+                    vol = _pyramid_volume(zero, first, (second.x, second.y, 0), (third.x, third.y, 0))
+
+                    stereo_map[(n, neighbors[0])] = 1 if vol > 0 and s == 1 or vol < 0 and s == -1 else -1
             else:
-                _val = ','.join('%s>%s' % (x or 'n', y or 'n') for x, y in zip(s, p) if x != y)
-                _type = t2
-
-        elif s != p:
-            _val = '%s>%s' % (s or 'n', p or 'n')
-            _type = t2
-        else:
-            _val = s
-            _type = t1
-
-        return _val and {'value': _val, 'type': _type}
-
-    def __dyn_atom(self, s, p, mark):
-        if isinstance(s, list):
-            value = s[0]
-            if s == p:
-                meta = dict(type='dynatom',
-                            value='%s0%s' % (mark, ','.join(str(x) for x in s[1:]))) if len(s) > 1 else None
-            elif s[0] != p[0]:
-                meta = dict(type='dynatom',
-                            value='%s%s' % (mark, ','.join(chain(('%+d' % (p[0] - value),),
-                                                                 ('%+d,%+d' % (x - value, y - value) for x, y in
-                                                                  zip(s[1:], p[1:]) if x != y)))))
-            else:
-                meta = None
-        elif p != s:
-            if p is None:
-                p = 0
-            if s is None:
-                s = 0
-            meta = dict(value='%s%+d' % (mark, (p - s)), type='dynatom')
-            value = s
-        else:
-            meta = None
-            value = s
-        res = self._charge_map[value] if mark == 'c' else self._radical_map[value]
-        return res, meta
-
-    @staticmethod
-    def _get_position(cord):
-        if len(cord) > 1:
-            x = (cord[-1]['x'] + cord[0]['x']) / 2 + .2
-            y = (cord[-1]['y'] + cord[0]['y']) / 2
-            dy = cord[-1]['y'] - cord[0]['y']
-            dx = cord[-1]['x'] - cord[0]['x']
-            if dx > 0:
-                y += -.2 if dy > 0 else .2
-            elif dx < 0:
-                y += -.2 if dy < 0 else .2
-        else:
-            x, y = cord[0]['x'] + .25, cord[0]['y']
-
-        return x, y
+                return stereo_map
 
     @property
     @abstractmethod
@@ -736,6 +781,11 @@ class CGRwrite:
     @property
     @abstractmethod
     def _radical_map(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _bond_map(self):
         pass
 
     _half_table = len(elements_set) // 2
