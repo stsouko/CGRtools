@@ -32,7 +32,7 @@ class Atom(MutableMapping):
         super().__setattr__('_Atom__z', 0)
         super().__setattr__('_Atom__mapping', None)
         super().__setattr__('_Atom__stereo', None)
-        super().__setattr__('_Atom__mark', '0')
+        super().__setattr__('_Atom__mark', None)
         super().__setattr__('_Atom__color', None)
         super().__setattr__('_Atom__hybridization', None)
         super().__setattr__('_Atom__neighbors', None)
@@ -317,16 +317,17 @@ class Atom(MutableMapping):
 
     @staticmethod
     def _mark_check(x):
-        if not isinstance(x, str):
-            raise TypeError('mark can be str')
-        if 1 <= len(x) <= 3:
+        if x is None:
+            return None
+        x = int(x)
+        if 1 <= x <= 999:
             return x
-        raise ValueError('mark can be 1-3 symbol length')
+        raise ValueError('mark can be: None or in range 1-999')
 
     @property
     def color(self):
         if self.__color:
-            return self.__color.copy()
+            return self.__color
 
     @color.setter
     def color(self, value):
@@ -414,7 +415,7 @@ class Atom(MutableMapping):
     _stereo_str = {1: '@', -1: '@@'}
     _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
     _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
-    __defaults = {'mapping': None, 'mark': '0', 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'color': None}
+    __defaults = {'mapping': None, 'mark': None, 'x': 0, 'y': 0, 'z': 0, 'stereo': None, 'color': None}
 
 
 class Bond(MutableMapping):

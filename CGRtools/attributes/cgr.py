@@ -180,7 +180,7 @@ class DynAtom(MutableMapping):
                 r[k] = getattr(cls._atom_factory, f'_{k}_check')(v)
         return r, p
 
-    _static = {'color', 'element', 'isotope', 'mark', 'mapping'}
+    _static = {'element', 'isotope', 'mark', 'mapping'}
     _p_static = {f'p_{x}' for x in _static}
     _atom_factory = Atom
 
