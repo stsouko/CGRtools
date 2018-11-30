@@ -408,7 +408,7 @@ class Atom(MutableMapping):
 
     def _check_kwargs(self, kwargs):
         if not self._skip_checks:
-            kwargs = {f'_Atom__{k}': getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
+            return {f'_Atom__{k}': getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
         return {f'_Atom__{k}': v for k, v in kwargs.items()}
 
     _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}

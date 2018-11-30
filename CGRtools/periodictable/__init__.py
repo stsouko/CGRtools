@@ -160,9 +160,13 @@ def get_element(symbol, number):
     class ElementClass(Element, Period, Group, Type, name=symbol, number=number):
         __slots__ = ('_ElementClass__charge', '_ElementClass__multiplicity', '_ElementClass__isotope')
 
-        def __init__(self, charge: int = 0, multiplicity: int = None, isotope: int = _common_isotope):
-            if not (isinstance(charge, int) and isinstance(isotope, int)):
-                raise TypeError('charge, isotope can be int')
+        def __init__(self, charge: int = 0, multiplicity: int = None, isotope: int = None):
+            if isotope is None:
+                isotope = _common_isotope
+            elif not isinstance(isotope, int):
+                raise TypeError('isotope can be int')
+            if not isinstance(charge, int):
+                raise TypeError('charge can be int')
             if not (multiplicity is None or isinstance(multiplicity, int)):
                 raise TypeError('multiplicity can be None or int')
             if charge > 3 or charge < -3:

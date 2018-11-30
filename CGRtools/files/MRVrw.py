@@ -159,7 +159,9 @@ class MRVread(CGRread, WithMixin):
         atom_map = {}
         if 'atom' in data['atomArray']:
             da = data['atomArray']['atom']
-            for n, atom in (((1, da),) if isinstance(da, dict) else enumerate(da)):
+            if isinstance(da, dict):
+                da = (da,)
+            for n, atom in enumerate(da):
                 atom_map[atom['@id']] = n
                 atoms.append(dict(element=atom['@elementType'],
                                   isotope=int(atom['@isotope']) if '@isotope' in atom else None,
@@ -184,8 +186,8 @@ class MRVread(CGRread, WithMixin):
                                                    (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
                                                    (atom['@y3'] if '@y3' in atom else atom['@y2']).split())):
                 atom_map[_id] = n
-                atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'map': 0, 'mark': None,
-                              'isotope': None, 'multiplicity': None})
+                atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'mapping': 0,
+                              'mark': None, 'isotope': None, 'multiplicity': None})
             if '@z3' in atom:
                 for a, x in zip(atoms, atom['@z3'].split()):
                     a['z'] = float(x)
@@ -200,7 +202,7 @@ class MRVread(CGRread, WithMixin):
             if '@mrvMap' in atom:
                 for a, x in zip(atoms, atom['@mrvMap'].split()):
                     if x != '0':
-                        a['map'] = int(x)
+                        a['mapping'] = int(x)
             if '@ISIDAmark' in atom:
                 for a, x in zip(atoms, atom['@mrvMap'].split()):
                     if x != '0':
@@ -210,7 +212,7 @@ class MRVread(CGRread, WithMixin):
                     if x != '0':
                         a['multiplicity'] = self.__radical_map[x]
             if '@mrvQueryProps' in atom:
-                for n, x in enumerate(atom['@mrvQueryProps'].split(), start=1):
+                for n, x in enumerate(atom['@mrvQueryProps'].split()):
                     if x[0] == 'L':
                         _type = x[1]
                         x = x[2:-1]
@@ -222,7 +224,9 @@ class MRVread(CGRread, WithMixin):
 
         if 'bond' in data['bondArray']:
             db = data['bondArray']['bond']
-            for bond in ((db,) if isinstance(db, dict) else db):
+            if isinstance(db, dict):
+                db = (db,)
+            for bond in db:
                 order = self.__bond_map[bond['@queryType' if '@queryType' in bond else '@order']]
                 a1, a2 = bond['@atomRefs2'].split()
                 if 'bondStereo' in bond:
@@ -231,17 +235,19 @@ class MRVread(CGRread, WithMixin):
                             stereo = self.__stereo_map[bond['bondStereo']['$']]
                         except KeyError:
                             warning('invalid or unsupported stereo')
-                            stereo = 0
+                            stereo = None
                     else:
                         warning('incorrect bondStereo tag')
-                        stereo = 0
+                        stereo = None
                 else:
-                    stereo = 0
+                    stereo = None
                 bonds.append((atom_map[a1], atom_map[a2], order, stereo))
 
         if 'molecule' in data:
             dm = data['molecule']
-            for cgr_dat in ((dm,) if isinstance(dm, dict) else dm):
+            if isinstance(dm, dict):
+                dm = (dm,)
+            for cgr_dat in dm:
                 if cgr_dat['@role'] == 'DataSgroup':
                     t = cgr_dat['@fieldName']
                     if t not in cgr_keys:
@@ -318,28 +324,13 @@ class MRVwrite(CGRwrite, WithMixin):
             self._file.write('</propertyList></reaction>')
         self._file.write('</MChemicalStruct></MDocument>')
 
-    @classmethod
-    def __format_mol(cls, atoms, bonds, extra, cgr):
-        isotope, atom_query, radical, isida, stereo = {}, {}, {}, {}, {}
-        for ia, it, iv in extra:
-            if it == 'isotope':
-                isotope[ia] = f' isotope="{iv}"'
-            elif it == 'atomlist':
-                atom_query[ia] = ' mrvQueryProps="L%s:"' % ''.join((f'!{x}' for x in elements_set.difference(iv))
-                                                                   if len(iv) > cls._half_table else
-                                                                   (',%s' % x for x in iv))
-            elif it == 'radical':
-                radical[ia] = f' radical="{iv}"'
-        for n, atom in enumerate(atoms, start=1):
-            if atom['mark']:
-                isida[n] = f' ISIDAmark="{atom["mark"]}"'
-
+    @staticmethod
+    def __format_mol(atoms, bonds, cgr):
         return ''.join(chain(('<atomArray>',),
-                             (f'<atom id="a{n}" elementType="{atom["element"]}" x3="{atom["x"]:.4f}" '
-                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["map"]}" '
-                              f'formalCharge="{atom["charge"]}"{radical.get(n, "")}{isotope.get(n, "")}'
-                              f'{atom_query.get(n, "")}{isida.get(n, "")}/>'
-                              for n, atom in enumerate(atoms, start=1)),
+                             (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
+                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}" '
+                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["mark"]}'
+                              f'{atom["elements"]}/>' for atom in atoms),
                              ('</atomArray><bondArray>',),
                              (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
                               for n, (i, j, order, stereo) in enumerate(bonds, start=1)),
@@ -349,10 +340,40 @@ class MRVwrite(CGRwrite, WithMixin):
                               f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
                               for n, (i, t, v) in enumerate(cgr, start=1))))
 
-    _stereo_map = {-1: '><bondStereo>H</bondStereo></bond>', 1: '><bondStereo>W</bondStereo></bond>', None: '/>'}
-    _charge_map = {-3: -3, -2: -2, -1: -1, 0: 0, 1: 1, 2: 2, 3: 3}
-    _radical_map = {2: 'monovalent', 1: 'divalent1', 3: 'divalent3'}
-    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's'}
+    @staticmethod
+    def _atom_list_map(x, n):
+        if x:
+            return ' mrvQueryProps="L,%s:"' % ','.join(x)
+        return ''
+
+    @staticmethod
+    def _atom_not_list_map(x, n):
+        if x:
+            return ' mrvQueryProps="L!%s:"' % '!'.join(x)
+        return ''
+
+    @staticmethod
+    def _isotope_map(x, n):
+        return x and f' isotope="{x}"' or ''
+
+    @staticmethod
+    def _mark_map(x):
+        return x and f' ISIDAmark="{x}"' or ''
+
+    @staticmethod
+    def _multiplicity_map(x, n):
+        if x == 3:
+            return ' radical="divalent3"'
+        elif x == 2:
+            return ' radical="monovalent"'
+        else:
+            return ''
+
+    _stereo_map = {-1: '><bondStereo>H</bondStereo></bond>', 1: '><bondStereo>W</bondStereo></bond>',
+                   None: '/>'}.__getitem__
+    _charge_map = {-3: ' formalCharge="-3"', -2: ' formalCharge="-2"', -1: ' formalCharge="-1"', 0: '',
+                   1: ' formalCharge="1"', 2: ' formalCharge="2"', 3: ' formalCharge="3"'}.__getitem__
+    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's'}.__getitem__
     __finalized = False
 
 

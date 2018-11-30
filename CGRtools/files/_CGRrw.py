@@ -110,13 +110,14 @@ class CGRread:
             for molecule in reaction[i]:
                 used = set()
                 for atom in molecule['atoms']:
-                    m = atom['map']
-                    if m and m in used:
-                        if not self._ignore:
-                            raise MappingError('mapping in molecules should be unique')
-                        warning(f'non-unique mapping in molecule: {m}')
-                    else:
-                        used.add(m)
+                    m = atom['mapping']
+                    if m:
+                        if m in used:
+                            if not self._ignore:
+                                raise MappingError('mapping in molecules should be unique')
+                            warning(f'non-unique mapping in molecule: {m}')
+                        else:
+                            used.add(m)
                     tmp.append(m)
 
         length = count(max(max(maps['products'], default=0), max(maps['reagents'], default=0),
@@ -129,37 +130,36 @@ class CGRread:
             maps[i] = remap = []
             for m in tmp:
                 if not m:
-                    remap.append((m, next(length)))
+                    remap.append(next(length))
                 elif m in used:
                     if not self._ignore:
                         raise MappingError('mapping in reagents or products or reactants should be unique')
                     # force remap non unique atoms in molecules.
-                    remap.append((m, next(length)))
+                    remap.append(next(length))
+                    warning(f'mapping changed: {m} to {remap[-1]}')
                 else:
-                    remap.append((m, m))
+                    remap.append(m)
                     used.add(m)
 
         if maps['reactants']:
-            tmp = (set(x for _, x in maps['reagents']) |
-                   set(x for _, x in maps['products'])) & set(x for _, x in maps['reactants'])
+            tmp = (set(maps['reagents']) | set(maps['products'])) & set(maps['reactants'])
             if tmp:
                 if not self._ignore:
-                    raise MappingError('reactants has map intersection with reagents or products')
-                maps['reactants'] = [(x, y if y not in tmp else next(length)) for x, y in maps['reactants']]
+                    raise MappingError(f'reactants has map intersection with reagents or products: {tmp}')
+                warning(f'reactants has map intersection with reagents or products: {tmp}')
+                maps['reactants'] = [x if x not in tmp else next(length) for x in maps['reactants']]
 
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
         if self.__remap:
-            lose = sorted(set(range(1, next(length))) -
-                          (set(x for _, x in maps['reagents']) |
-                           set(x for _, x in maps['products']) |
-                           set(x for _, x in maps['reactants'])), reverse=True)
+            lose = sorted(set(range(1, next(length))) - set(maps['reagents']) - set(maps['products']) -
+                          set(maps['reactants']), reverse=True)
             if lose:
                 for i, tmp in maps.items():
                     if not tmp:
                         continue
                     for j in lose:
-                        maps[i] = [(x, y if y < j else y - 1) for x, y in tmp]
+                        maps[i] = [x if x < j else x - 1 for x in tmp]
         ''' end
         '''
         rc = ReactionContainer(meta=reaction['meta'])
@@ -183,7 +183,7 @@ class CGRread:
             shift = 0
             for j in reaction[i]:
                 atom_len = len(j['atoms'])
-                remapped = {x: y for x, y in enumerate(tmp[shift: atom_len + shift], start=1)}
+                remapped = {x: y for x, y in enumerate(tmp[shift: atom_len + shift])}
                 shift += atom_len
                 c = next(counter)
                 c = self.__parse_colors(colors[c]) if c in colors else {}
@@ -193,21 +193,21 @@ class CGRread:
 
     def _get_molecule(self, molecule):
         if self.__remap:
-            remapped = {k: (atom['map'], k) for k, atom in enumerate(molecule['atoms'], start=1)}
+            remapped = {k: k for k in range(len(molecule['atoms']))}
         else:
-            length = count(max(x['map'] for x in molecule['atoms']) + 1)
+            length = count(max(x['mapping'] for x in molecule['atoms']) + 1)
             remapped, used = {}, set()
-            for k, atom in enumerate(molecule['atoms'], start=1):
-                m = atom['map']
+            for k, atom in enumerate(molecule['atoms']):
+                m = atom['mapping']
                 if not m:
-                    remapped[k] = (m, next(length))
+                    remapped[k] = next(length)
                 elif m in used:
                     if not self._ignore:
                         raise MappingError('mapping in molecules should be unique')
-                    remapped[k] = (m, next(length))
-                    warning(f'mapping in molecule changed: {remapped[k]}')
+                    remapped[k] = next(length)
+                    warning(f'mapping in molecule changed: {m} to {remapped[k]}')
                 else:
-                    remapped[k] = (m, m)
+                    remapped[k] = m
                     used.add(m)
 
         if self.__colors and self.__colors in molecule['meta']:
@@ -270,10 +270,24 @@ class CGRread:
         return res
 
     def __parse_molecule(self, molecule, mapping, colors):
-        cgr_dat_atom, cgr_dat_bond = defaultdict(dict), defaultdict(dict)
+        atom_data, bond_data, bond_list = defaultdict(dict), defaultdict(dict), []
         atoms = molecule['atoms']
         is_cgr = False
         is_query = any(x['element'] in ('A', '*') for x in atoms)
+
+        for e_atom, e_type, e_value in molecule['extra']:
+            if e_type == 'atomlist':
+                if set(e_value) - elements_set:
+                    raise ValueError('atom list contain invalid atoms')
+                if not is_query:
+                    is_query = True
+                atom_data[e_atom]['element'] = e_value
+            else:
+                if set(e_value) - elements_set:
+                    raise ValueError('atom not_list contain invalid atoms')
+                if not is_query:
+                    is_query = True
+                atom_data[e_atom]['element'] = elements_set - e_value
 
         for c_atoms, c_type, c_value in molecule['cgr']:
             a1 = c_atoms[0]
@@ -281,19 +295,19 @@ class CGRread:
                 key = c_value[0]
                 if key == 'x':
                     x, y, z = (float(x) for x in c_value[1:].split(','))
-                    cgr_dat_atom[a1].update(p_x=x, p_y=y, p_z=z)
+                    atom_data[a1].update(p_x=x, p_y=y, p_z=z)
                     if not is_cgr:
                         is_cgr = True
                 elif key == 'c':
                     value, iq, ic = self.__parse_cgr_atom(c_value, atoms[a1]['charge'], 'charge')
-                    cgr_dat_atom[a1].update(value)
+                    atom_data[a1].update(value)
                     if iq and not is_query:
                         is_query = True
                     if ic and not is_cgr:
                         is_cgr = True
                 elif key == 'r':
                     value, iq, ic = self.__parse_cgr_atom(c_value, atoms[a1]['multiplicity'] or 0, 'multiplicity')
-                    cgr_dat_atom[a1].update(value)
+                    atom_data[a1].update(value)
                     if iq and not is_query:
                         is_query = True
                     if ic and not is_cgr:
@@ -305,12 +319,16 @@ class CGRread:
                 if len(value) > 1:
                     if not is_query:
                         is_query = True
+                    value = {'order': value}
                 else:
-                    value = value[0]
+                    value = {'order': value[0]}
                 a2 = c_atoms[1]
-                cgr_dat_bond[a1][a2] = cgr_dat_bond[a2][a1] = value
+                bond_data[a1][a2] = bond_data[a2][a1] = value
+                bond_list.append(value)
             elif c_type == 'dynbond':
                 value = [x.split('>') for x in c_value.split(',')]
+                if not is_cgr:
+                    is_cgr = True
                 if len(value) > 1:
                     if not is_query:
                         is_query = True
@@ -322,67 +340,73 @@ class CGRread:
                 else:
                     value = {'order': self.__bondlabels[value[0][0]], 'p_order': self.__bondlabels[value[0][1]]}
                 a2 = c_atoms[1]
-                cgr_dat_bond[a1][a2] = cgr_dat_bond[a2][a1] = value
+                bond_data[a1][a2] = bond_data[a2][a1] = value
+                bond_list.append(value)
             elif c_type == 'isotope':
-                cgr_dat_atom[a1]['isotope'] = [int(x) for x in c_value.split(',')]
+                atom_data[a1]['isotope'] = [int(x) for x in c_value.split(',')]
                 if not is_query:
                     is_query = True
-            elif c_type == 'atomlist':
-                if set(c_value) - elements_set:
-                    raise ValueError('atom list contain invalid atoms')
-                if not is_query:
-                    is_query = True
-                cgr_dat_atom[a1]['element'] = c_value
-            elif c_type == 'atomnotlist':
-                if set(c_value) - elements_set:
-                    raise ValueError('atom not_list contain invalid atoms')
-                if not is_query:
-                    is_query = True
-                cgr_dat_atom[a1]['element'] = elements_set - c_value
             elif c_type == 'atomhyb':
-                cgr_dat_atom[a1]['hybridization'] = self.__parse_list(c_value)
+                atom_data[a1]['hybridization'] = self.__parse_list(c_value)
                 if not is_query:
                     is_query = True
             elif c_type == 'atomneighbors':
-                cgr_dat_atom[a1]['neighbors'] = self.__parse_list(c_value)
+                atom_data[a1]['neighbors'] = self.__parse_list(c_value)
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomhyb':
-                cgr_dat_atom[a1]['hybridization'], cgr_dat_atom[c_atoms[1]]['p_hybridization'] = \
+                atom_data[a1]['hybridization'], atom_data[c_atoms[1]]['p_hybridization'] = \
                     self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomneighbors':
-                cgr_dat_atom[a1]['neighbors'], cgr_dat_atom[c_atoms[1]]['p_neighbors'] = self.__parse_dyn(c_value)
+                atom_data[a1]['neighbors'], atom_data[c_atoms[1]]['p_neighbors'] = self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
                     is_query = True
 
+        for n, m, b, s in molecule['bonds']:
+            if n in bond_data and m in bond_data[n] and b != 8:
+                raise ValueError('invalid CGR spec')
+            elif s and b not in (1, 4):
+                raise ValueError('invalid wedge stereo spec')
+
         if is_cgr:
-            for v in cgr_dat_atom.values():
-                if 'charge' in v and 'p_charge' not in v:
-                    v['p_charge'] = v['charge']
-                if 'multiplicity' in v and 'p_multiplicity' not in v:
-                    v['p_multiplicity'] = v['multiplicity']
+            for v in bond_list:
+                if 'p_order' not in v:
+                    v['p_order'] = v['order']
+
+            for k, v in atom_data.items():
+                atoms[k].update(v)
             if is_query:
-                for v in cgr_dat_atom.values():
+                for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
-                        v['p_hybridization'] = v['hybridization']
+                        atoms[k]['p_hybridization'] = v['hybridization']
                     if 'neighbors' in v and 'p_neighbors' not in v:
-                        v['p_neighbors'] = v['neighbors']
+                        atoms[k]['p_neighbors'] = v['neighbors']
                 g = QueryCGRContainer()
             else:
                 g = CGRContainer()
+
+            for atom in atoms:
+                if 'p_charge' not in atom:
+                    atom['p_charge'] = atom['charge']
+                if 'p_multiplicity' not in atom:
+                    atom['p_multiplicity'] = atom['multiplicity']
+                if 'p_x' not in atom:
+                    atom.update(p_x=atom['x'], p_y=atom['y'], p_z=atom['z'])
         elif is_query:
+            for k, v in atom_data.items():
+                atoms[k].update(v)
             g = QueryContainer()
         else:
             g = MoleculeContainer()
 
-        for n, atom in enumerate(atoms, start=1):
-            parsed_map, atom_map = mapping[n]
+        for n, atom in enumerate(atoms):
+            atom_map = mapping[n]
             element = atom['element']
             if element == 'D':
                 atom['element'] = 'H'
@@ -392,96 +416,17 @@ class CGRread:
                 atom['isotope'] = 3
             elif element == '*':
                 atom['element'] = 'A'
+            if n in colors:
+                atom['color'] = colors[n]
 
-            if is_cgr:
-                if n in cgr_dat_atom:
-                    atom_dat = cgr_dat_atom[n]
-                    if 'element' not in atom_dat:
-                        atom_dat['element'] = element
-                    if 'charge' not in atom_dat:
-                        lc = charge_dat.get(k, l['charge'])
-                        atom_dat.update(charge=lc, p_charge=lc)
-                    if 'multiplicity' not in atom_dat:
-                        lr = radical_dat.get(k)
-                        atom_dat.update(multiplicity=lr, p_multiplicity=lr)
-                    if 'p_x' in atom_dat:
-                        atom_dat['p_x'] += l['x']
-                        atom_dat['p_y'] += l['y']
-                        atom_dat['p_z'] += l['z']
-                    else:
-                        atom_dat.update(p_x=l['x'], p_y=l['y'], p_z=l['z'])
-                    if k in colors:
-                        atom_dat['color'] = colors[k]
-                    if 'isotope' not in atom_dat:
-                        if k in isotope_dat:
-                            atom_dat['isotope'] = isotope_dat[k]
-                        elif l['isotope']:
-                            atom_dat['isotope'] = common_isotopes[element] + l['isotope']
+            g.add_atom(atom, atom_map)
 
-                    g.add_node(atom_map, mark=l['mark'], mapping=parsed_map, x=l['x'], y=l['y'], z=l['z'], **atom_dat)
-                else:
-                    lc = charge_dat.get(k, l['charge'])
-                    lr = radical_dat.get(k)
-                    g.add_node(atom_map, element=element, mark=l['mark'], mapping=parsed_map,
-                               isotope=isotope_dat.get(k) or common_isotopes[element] + l['isotope'],
-                               charge=lc, p_charge=lc, multiplicity=lr, p_multiplicity=lr,
-                               x=l['x'], y=l['y'], z=l['z'], p_x=l['x'], p_y=l['y'], p_z=l['z'], color=colors.get(k))
+        for n, m, b, s in molecule['bonds']:
+            n_map, m_map = mapping[n], mapping[m]
+            if n in bond_data and m in bond_data[n]:
+                g.add_bond(n_map, m_map, bond_data[n][m])
             else:
-                g.add_atom(atom, atom_map)
-
-        for k, l, m, s in molecule['bonds']:
-            k_map, l_map = mapping[k][0], mapping[l][0]
-            if is_cgr:
-                if m == 8 and k in cgr_dat_bond and l in cgr_dat_bond[k]:  # dynbond only for any bond accept.
-                    g.add_edge(k_map, l_map, **cgr_dat_bond[k][l])
-                else:
-                    g.add_edge(k_map, l_map, order=m, p_order=m)
-                if m == 8:
-                    any_bonds.append((k, l))
-                    any_bonds.append((l, k))
-            else:
-                g.add_edge(k_map, l_map, order=m)
-
-            if s in (1, 6) and m in (1, 4):
-                s_mark = self.__stereolabels[s]
-                normal_stereo.append((k_map, l_map, s_mark))
-
-        while True:
-            failed_cgr_dat_stereo = {}
-            for (k, l), (s_mark, p_mark) in cgr_dat_stereo.items():
-                if (k, l) in any_bonds:  # remove dynamic stereo if bond not any [8]. INVALID SPEC.
-                    k_map, l_map = mapping[k][0], mapping[l][0]
-                    try:
-                        g.add_stereo(k_map, l_map, s_mark, p_mark)
-                    except InvalidStereo as e:
-                        warn(str(e), ResourceWarning)
-                        failed_cgr_dat_stereo[(k, l)] = (s_mark, p_mark)
-                    except InvalidAtom as e:
-                        if not self._ignore:
-                            raise
-                        warn(str(e), ResourceWarning)
-
-            failed_normal_stereo = []
-            for k_map, l_map, s_mark in normal_stereo:
-                try:
-                    if is_cgr:
-                        g.add_stereo(k_map, l_map, s_mark, s_mark)
-                    else:
-                        g.add_stereo(k_map, l_map, s_mark)
-                except InvalidStereo as e:
-                    warn(str(e), ResourceWarning)
-                    failed_normal_stereo.append((k_map, l_map, s_mark))
-                except InvalidAtom as e:
-                    if not self._ignore:
-                        raise
-                    warn(str(e), ResourceWarning)
-
-            if failed_cgr_dat_stereo and len(cgr_dat_stereo) > len(failed_cgr_dat_stereo) or \
-                    failed_normal_stereo and len(normal_stereo) > len(failed_normal_stereo):
-                cgr_dat_stereo = failed_cgr_dat_stereo
-                normal_stereo = failed_normal_stereo
-                continue
-            break
+                g.add_bond(n_map, m_map, {'order': b})
 
         return g
 
@@ -504,7 +449,6 @@ class CGRwrite:
             format_atom = self.__format_dyn_atom
             format_bond = self.__format_dyn_bond
             stereo_map = {}
-
         elif isinstance(g, QueryCGRContainer):
             format_atom = self.__format_dyn_query_atom
             format_bond = self.__format_dyn_query_bond
@@ -536,20 +480,20 @@ class CGRwrite:
         else:
             data.update(max_x=max_x, min_x=min_x)
 
-        cgr_data, extra_data, atoms, bonds = [], [], [], []
+        cgr_data, atoms, bonds = [], [], []
         renum = {}
         for n, (i, atom) in enumerate(g._node.items(), start=1):
             renum[i] = n
-            cgr, extra, charge, element = format_atom(atom, n)
+            cgr, symbol, isotope, charge, multiplicity, mark, elements = format_atom(atom, n)
             cgr_data.extend(cgr)
-            extra_data.extend(extra)
 
             x, y = atom.x, atom.y
             if self._fix_position:
                 x += x_shift
                 y += y_shift
-            atoms.append({'map': (atom.mark or 0) if self.__mark_to_map else i, 'charge': charge, 'element': element,
-                          'mark': atom.mark or 0, 'x': x, 'y': y, 'z': atom.z})
+            atoms.append({'mapping': (atom.mark or 0) if self.__mark_to_map else i, 'symbol': symbol,
+                          'isotope': isotope, 'charge': charge, 'multiplicity': multiplicity, 'mark': mark,
+                          'x': x, 'y': y, 'z': atom.z, 'elements': elements, 'id': n})
 
         seen = set()
         for i, j_bond in g._adj.items():
@@ -566,78 +510,85 @@ class CGRwrite:
 
                 cgr, order = format_bond(bond, renum[i], renum[j])
                 cgr_data.extend(cgr)
-                bonds.append((renum[i], renum[j], order, self._stereo_map[stereo]))
+                bonds.append((renum[i], renum[j], order, self._stereo_map(stereo)))
 
-        data['structure'] = (atoms, bonds, extra_data, cgr_data)
+        data['structure'] = (atoms, bonds, cgr_data)
         return data
 
     def __format_atom(self, atom, n):
-        extra = []
-        if atom.multiplicity:
-            extra.append((n, 'radical', self._radical_map[atom.multiplicity]))
-        if atom.isotope != atom.common_isotope:
-            extra.append((n, 'isotope', atom.isotope))
-        return (), extra, self._charge_map[atom.charge], atom.element
+        isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)
+        return (), atom.element, isotope, self._charge_map(atom.charge), \
+            self._multiplicity_map(atom.multiplicity, n), self._mark_map(atom.mark), self._atom_list_map(None, n)
 
     def __format_dyn_atom(self, atom, n):
         cgr = []
-        extra = []
         nt = (n,)
         if atom.charge != atom.p_charge:
             cgr.append((nt, 'dynatom', f'c{atom.p_charge - atom.charge:+d}'))
         if atom.multiplicity != atom.p_multiplicity:
-            cgr.append((nt, 'dynatom', f'r{atom.p_radical - atom.radical:+d}'))
-        if atom.multiplicity:
-            extra.append((n, 'radical', self._radical_map[atom.multiplicity]))
-        if atom.isotope != atom.common_isotope:
-            extra.append((n, 'isotope', atom.isotope))
+            cgr.append((nt, 'dynatom', f'r{(atom.p_multiplicity or 0) - (atom.multiplicity or 0):+d}'))
 
         if self.__xyz:
             dx, dy, dz = atom.p_x - atom.x, atom.p_y - atom.y, atom.p_z - atom.z
             if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                 cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
-        return cgr, extra, self._charge_map[atom.charge], atom.element
+        isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)
+        return cgr, atom.element, isotope, self._charge_map(atom.charge), \
+            self._multiplicity_map(atom.multiplicity, n), self._mark_map(atom.mark), self._atom_list_map(None, n)
 
     def __format_query_atom(self, atom, n):
         charge = atom.charge[0]
         cgr = []
-        extra = []
         nt = (n,)
-        if len(atom.element) > 1:
-            extra.append((n, 'atomlist', atom.element))
-            element = 'L'
+        if len(atom.element) > self._half_table:
+            symbol = 'L'
+            elements = self._atom_not_list_map(elements_set.difference(atom.element), n)
+        elif len(atom.element) > 1:
+            symbol = 'L'
+            elements = self._atom_list_map(atom.element, n)
         else:
-            element = atom.element[0]
+            symbol = atom.element[0]
+            elements = self._atom_list_map(None, n)
 
         if len(atom.charge) > 1:
             cgr.append((nt, 'dynatom', 'c0,' + ','.join(f'{x - charge:+d}' for x in atom.charge[1:])))
+
         if len(atom.multiplicity) > 1:
-            radical = atom.radical[0]
-            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - radical:+d}' for x in atom.radical[1:])))
-        if atom.multiplicity:
-            extra.append((n, 'radical', self._radical_map[atom.multiplicity[0]]))
+            multiplicity = atom.multiplicity[0]
+            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - multiplicity:+d}' for x in atom.multiplicity[1:])))
+        elif atom.multiplicity:
+            multiplicity = atom.multiplicity[0]
+        else:
+            multiplicity = None
 
         if len(atom.isotope) > 1:
+            isotope = None
             cgr.append((nt, 'isotope', ','.join(str(x) for x in atom.isotope)))
         elif atom.isotope:
-            extra.append((n, 'isotope', atom.isotope[0]))
+            isotope = atom.isotope[0]
+        else:
+            isotope = None
 
         if atom.hybridization:
             cgr.append((nt, 'atomhyb', ','.join(str(x) for x in atom.hybridization)))
         if atom.neighbors:
             cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
-        return cgr, extra, self._charge_map[charge], element
+        return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
+            self._multiplicity_map(multiplicity, n), self._mark_map(atom.mark), elements
 
     def __format_dyn_query_atom(self, atom, n):
         charge = atom.charge[0]
         cgr = []
-        extra = []
         nt = (n,)
-        if len(atom.element) > 1:
-            extra.append(dict(atom=n, value=atom.element, type='atomlist'))
-            element = 'L'
+        if len(atom.element) > self._half_table:
+            symbol = 'L'
+            elements = self._atom_not_list_map(elements_set.difference(atom.element), n)
+        elif len(atom.element) > 1:
+            symbol = 'L'
+            elements = self._atom_list_map(atom.element, n)
         else:
-            element = atom.element[0]
+            symbol = atom.element[0]
+            elements = self._atom_list_map(None, n)
 
         if atom.charge != atom.p_charge:
             if len(atom.charge) > 1:
@@ -650,23 +601,28 @@ class CGRwrite:
             cgr.append((nt, 'dynatom', 'c0,' + ','.join(f'{x - charge:+d}' for x in atom.charge[1:])))
 
         if atom.multiplicity != atom.p_multiplicity:
-            radical = atom.radical[0]
+            multiplicity = atom.multiplicity[0]
             if len(atom.multiplicity) > 1:
-                cgr.append((nt, 'dynatom', f'r{atom.p_radical[0] - radical:+d},' +
-                                           ','.join(f'{x - radical:+d},{y - radical:+d}'
-                                                    for x, y in zip(atom.radical[1:], atom.p_radical[1:]))))
+                cgr.append((nt, 'dynatom', f'r{atom.p_multiplicity[0] - multiplicity:+d},' +
+                                           ','.join(f'{x - multiplicity:+d},{y - multiplicity:+d}'
+                                                    for x, y in zip(atom.multiplicity[1:], atom.p_multiplicity[1:]))))
             else:
-                cgr.append((nt, 'dynatom', f'r{atom.p_radical[0] - radical:+d}'))
+                cgr.append((nt, 'dynatom', f'r{atom.p_multiplicity[0] - multiplicity:+d}'))
         elif len(atom.multiplicity) > 1:
-            radical = atom.radical[0]
-            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - radical:+d}' for x in atom.radical[1:])))
-        if atom.multiplicity:
-            extra.append((n, 'radical', self._radical_map[atom.multiplicity[0]]))
+            multiplicity = atom.multiplicity[0]
+            cgr.append((nt, 'dynatom', 'r0,' + ','.join(f'{x - multiplicity:+d}' for x in atom.multiplicity[1:])))
+        elif atom.multiplicity:
+            multiplicity = atom.multiplicity[0]
+        else:
+            multiplicity = None
 
         if len(atom.isotope) > 1:
+            isotope = None
             cgr.append((nt, 'isotope', ','.join(str(x) for x in atom.isotope)))
         elif atom.isotope:
-            extra.append((n, 'isotope', atom.isotope[0]))
+            isotope = atom.isotope[0]
+        else:
+            isotope = None
 
         if atom.hybridization != atom.p_hybridization:
             cgr.append((nt, 'dynatomhyb',
@@ -678,41 +634,43 @@ class CGRwrite:
             cgr.append((nt, 'dynatomneighbors', ','.join(f'{x}>{y}' for x, y in zip(atom.neighbors, atom.p_neighbors))))
         elif atom.neighbors:
             cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
+
         if self.__xyz:
             dx, dy, dz = atom.p_x - atom.x, atom.p_y - atom.y, atom.p_z - atom.z
             if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                 cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
-        return cgr, extra, self._charge_map[charge], element
+        return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
+            self._multiplicity_map(multiplicity, n), self._mark_map(atom.mark), elements
 
     def __format_bond(self, bond, n, m):
         if bond.order == 9:
-            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
-        return (), self._bond_map[bond.order]
+            return (((n, m), 'extrabond', self._bond_map(9)),), self._bond_map(8)
+        return (), self._bond_map(bond.order)
 
     def __format_dyn_bond(self, bond, n, m):
         if bond.order != bond.p_order:
             return (((n, m), 'dynbond',
-                     f'{self._bond_map[bond.order]}>{self._bond_map[bond.p_order]}'),), self._bond_map[8]
+                     f'{self._bond_map(bond.order)}>{self._bond_map(bond.p_order)}'),), self._bond_map(8)
         elif bond.order == 9:
-            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
-        return (), self._bond_map[bond.order]
+            return (((n, m), 'extrabond', self._bond_map(9)),), self._bond_map(8)
+        return (), self._bond_map(bond.order)
 
     def __format_query_bond(self, bond, n, m):
         if len(bond.order) > 1:
-            return (((n, m), 'extrabond', ','.join(self._bond_map[x] for x in bond.order)),), self._bond_map[8]
+            return (((n, m), 'extrabond', ','.join(self._bond_map(x) for x in bond.order)),), self._bond_map(8)
         elif bond.order == (9,):
-            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
-        return (), self._bond_map[bond.order[0]]
+            return (((n, m), 'extrabond', self._bond_map(9)),), self._bond_map(8)
+        return (), self._bond_map(bond.order[0])
 
     def __format_dyn_query_bond(self, bond, n, m):
         if bond.order != bond.p_order:
-            return (((n, m), 'dynbond', ','.join(f'{self._bond_map[x]}>{self._bond_map[y]}'
-                                                 for x, y in zip(bond.order, bond.p_order))),), self._bond_map[8]
+            return (((n, m), 'dynbond', ','.join(f'{self._bond_map(x)}>{self._bond_map(y)}'
+                                                 for x, y in zip(bond.order, bond.p_order))),), self._bond_map(8)
         elif len(bond.order) > 1:
-            return (((n, m), 'extrabond', ','.join(self._bond_map[x] for x in bond.order)),), self._bond_map[8]
+            return (((n, m), 'extrabond', ','.join(self._bond_map(x) for x in bond.order)),), self._bond_map(8)
         elif bond.order == (9,):
-            return (((n, m), 'extrabond', self._bond_map[9]),), self._bond_map[8]
-        return (), self._bond_map[bond.order[0]]
+            return (((n, m), 'extrabond', self._bond_map(9)),), self._bond_map(8)
+        return (), self._bond_map(bond.order[0])
 
     @staticmethod
     def __wedge_map(g):
@@ -759,24 +717,44 @@ class CGRwrite:
             else:
                 return stereo_map
 
-    @property
+    @staticmethod
     @abstractmethod
-    def _stereo_map(self):
+    def _stereo_map(x):
         pass
 
-    @property
+    @staticmethod
     @abstractmethod
-    def _charge_map(self):
+    def _charge_map(x):
         pass
 
-    @property
+    @staticmethod
     @abstractmethod
-    def _radical_map(self):
+    def _isotope_map(x, n):
         pass
 
-    @property
+    @staticmethod
     @abstractmethod
-    def _bond_map(self):
+    def _mark_map(x):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _multiplicity_map(x, n):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _bond_map(x):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _atom_list_map(x, n):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _atom_not_list_map(x, n):
         pass
 
     _half_table = len(elements_set) // 2

@@ -69,7 +69,7 @@ class MOLread:
 
             self.__atoms.append({'element': element, 'charge': self.__charge_map[line[38]],
                                  'isotope': isotope, 'multiplicity': None,
-                                 'mark': int(mark) if mark != '  0' else None, 'map': int(line[60:63]),
+                                 'mark': int(mark) if mark != '  0' else None, 'mapping': int(line[60:63]),
                                  'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
 
         elif len(self.__bonds) < self.__bonds_count:
@@ -95,8 +95,10 @@ class MOLread:
             atom = int(line[7:10])
             if not atom or atom > len(self.__atoms):
                 raise ValueError('invalid atom number')
-            self.__extra.append((atom - 1, 'atomlist' if line[14] == 'F' else 'atomnotlist',
-                                 [line[16 + x * 4: 20 + x * 4].strip() for x in range(int(line[10:13]))]))
+            value = [line[16 + x * 4: 20 + x * 4].strip() for x in range(int(line[10:13]))]
+            if not value:
+                raise ValueError('invalid atom list')
+            self.__extra.append((atom - 1, 'atomlist' if line[14] == 'F' else 'atomnotlist', value))
         elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
             _type = self.__ctf_data[line[3]]
             for i in range(int(line[6:9])):
@@ -127,7 +129,7 @@ class MOLread:
 
     __ctf_data = {'R': 'multiplicity', 'C': 'charge', 'I': 'isotope'}
     __charge_map = {'0': 0, '1': 3, '2': 2, '3': 1, '4': 0, '5': -1, '6': -2, '7': -3}
-    __stereo_map = {'0': 0, '1': 1, '6': -1}
+    __stereo_map = {'0': None, '1': 1, '6': -1}
     __mend = False
 
 
@@ -138,6 +140,7 @@ class EMOLread:
         self.__atoms = []
         self.__bonds = []
         self.__sgroup = 0
+        self.__atom_map = {}
 
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
@@ -217,7 +220,6 @@ class EMOLread:
 
     def __bond_parser(self, line):
         _, t, a1, a2, *kvs = line
-        s = 0
         for kv in kvs:
             k, v = kv.split('=')
             if k in ('CFG', 'cfg', 'Cfg'):
@@ -225,24 +227,26 @@ class EMOLread:
                     s = self.__stereo_map[v]
                 except KeyError:
                     warning('invalid or unsupported stereo')
+                    s = None
                 break
-        self.__bonds.append((int(a1) - 1, int(a2) - 1, int(t), s))
+        else:
+            s = None
+        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], int(t), s))
 
     def __atom_parser(self, line):
         n, a, x, y, z, m, *kvs = line
-        atom = int(n)
-
+        self.__atom_map[n] = n = len(self.__atoms)
         if a.startswith('['):
             a = a[1:-1]
             if not a:
                 raise ValueError('invalid atomlist')
-            self.__extra.append((atom, 'atomlist', a.split(',')))
+            self.__extra.append((n, 'atomlist', a.split(',')))
             a = 'L'
         elif a.startswith(('NOT', 'not', 'Not')):
             a = a[5:-1]
             if not a:
                 raise ValueError('invalid atomlist')
-            self.__extra.append((atom, 'atomnotlist', a.split(',')))
+            self.__extra.append((n, 'atomnotlist', a.split(',')))
             a = 'L'
         mk = i = r = None
         c = 0
@@ -262,16 +266,16 @@ class EMOLread:
                 r = v
 
         self.__atoms.append({'element': a, 'isotope': i, 'charge': c, 'multiplicity': r,
-                             'x': float(x), 'y': float(y), 'z': float(z), 'map': int(m), 'mark': mk})
+                             'x': float(x), 'y': float(y), 'z': float(z), 'mapping': int(m), 'mark': mk})
 
     def __sgroup_parser(self, line):
         self.__sgroup += 1
         if line[1] == 'DAT':
             i = int(line[3][7:])
             if i == 1:
-                atoms = (int(line[4][:-1]),)
+                atoms = (self.__atom_map[line[4][:-1]],)
             elif i == 2:
-                atoms = (int(line[4]), int(line[5][:-1]))
+                atoms = (self.__atom_map[line[4]], self.__atom_map[line[5][:-1]])
             else:
                 return
 
@@ -285,13 +289,13 @@ class EMOLread:
                 elif k == 'FIELDDATA':
                     value = v.lower()
             if _type in cgr_keys:
-                if value and cgr_keys[_type] == len(atoms):
+                if value and cgr_keys[_type] == i:
                     self.__cgr.append((atoms, _type, value))
                 else:
                     raise ValueError(f'CGR spec invalid {line}')
 
     __record = __atoms_count = __in_mol = __parser = None
-    __stereo_map = {'0': 0, '1': 1, '3': -1}
+    __stereo_map = {'0': None, '1': 1, '3': -1}
 
 
 class RXNread:
@@ -430,19 +434,16 @@ class ERXNread:
 
 
 class MOLwrite(CGRwrite):
-    def _format_mol(self, atoms, bonds, extra, cgr):
+    @staticmethod
+    def _format_mol(atoms, bonds, cgr):
         mol_prop = []
-        for ia, it, iv in extra:
-            if it == 'isotope':
-                mol_prop.append(f'M  ISO  1 {ia:3d} {iv:3d}\n')
-            elif it == 'atomlist':
-                if len(iv) > self._half_table:
-                    al, _type = elements_set.difference(iv), 'T'
-                else:
-                    al, _type = iv, 'F'
-                mol_prop.append(f'M  ALS {ia:3d}{len(al):3d} {_type} {"".join(f"{x:-4s}" for x in al)}\n')
-            elif it == 'radical':
-                mol_prop.append(f'M  RAD  1 {ia:3d} {iv:3d}\n')
+        for atom in atoms:
+            if atom['isotope']:
+                mol_prop.append(atom['isotope'])
+            if atom['elements']:
+                mol_prop.append(atom['elements'])
+            if atom['multiplicity']:
+                mol_prop.append(atom['multiplicity'])
 
         for i in count():
             i8 = i * 8
@@ -451,7 +452,6 @@ class MOLwrite(CGRwrite):
                 mol_prop.append(f'M  STY  {sty} {" ".join(f"{x + i8:3d} DAT" for x in range(1, 1 + sty))}\n')
             else:
                 break
-
         for i, (ja, jt, jv) in enumerate(cgr, start=1):
             mol_prop.append(f'M  SAL {i:3d}{len(ja):3d} {" ".join("f{x:3d}" for x in ja)}\n')
             mol_prop.append(f'M  SDT {i:3d} {jt}\n')
@@ -459,11 +459,34 @@ class MOLwrite(CGRwrite):
             mol_prop.append(f'M  SED {i:3d} {jv}\n')
 
         return ''.join(chain((f'\n\n\n{len(atoms):3d}{len(bonds):3d}  0  0  0  0            999 V2000\n',),
-                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["element"]:>3s} 0{i["charge"]:3d}  0  0  '
-                              f'0  0  0{i["mark"]:3d}  0{i["map"]:3d}  0  0\n' for i in atoms),
-                             ("%3d%3d%3s%3s  0  0  0\n" % i for i in bonds), mol_prop))
+                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:>3s} 0{i["charge"]}  0  0  '
+                              f'0  0  0{i["mark"]}  0{i["mapping"]:3d}  0  0\n' for i in atoms),
+                             ("%3d%3d  %s  %s  0  0  0\n" % i for i in bonds), mol_prop))
 
-    _stereo_map = {-1: '6', 1: '1', None: '0'}
-    _charge_map = {-3: 7, -2: 6, -1: 5, 0: 0, 1: 3, 2: 2, 3: 1}
-    _radical_map = {2: 2, 1: 1, 3: 3}
-    _bond_map = {8: '8', 4: '4', 1: '1', 2: '2', 3: '3', 9: 's'}
+    @staticmethod
+    def _mark_map(x):
+        return x and f'{x:3d}' or '  0'
+
+    @staticmethod
+    def _isotope_map(x, n):
+        if x:
+            return f'M  ISO  1 {n:3d} {x:3d}\n'
+
+    @staticmethod
+    def _atom_list_map(x, n):
+        if x:
+            return f'M  ALS {n:3d}{len(x):3d} F {"".join(f"{x:-4s}" for x in x)}\n'
+
+    @staticmethod
+    def _atom_not_list_map(x, n):
+        if x:
+            return f'M  ALS {n:3d}{len(x):3d} T {"".join(f"{x:-4s}" for x in x)}\n'
+
+    @staticmethod
+    def _multiplicity_map(x, n):
+        if x in (2, 3):
+            return f'M  RAD  1 {n:3d} {x:3d}\n'
+
+    _stereo_map = {-1: '6', 1: '1', None: '0'}.__getitem__
+    _charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}.__getitem__
+    _bond_map = {8: '8', 4: '4', 1: '1', 2: '2', 3: '3', 9: 's'}.__getitem__

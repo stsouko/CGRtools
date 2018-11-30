@@ -20,7 +20,7 @@ from collections import defaultdict
 from itertools import repeat, zip_longest
 from .molecule import MoleculeContainer
 from ..algorithms import AromatizeCGR, StringCGR
-from ..attributes import DynAtom, DynBond, DynamicContainer
+from ..attributes import DynAtom, DynBond
 from ..periodictable import H
 
 
@@ -60,7 +60,7 @@ class CGRContainer(StringCGR, AromatizeCGR, MoleculeContainer):
         nmb = list(self.edges(data=True))
         reagents.add_edges_from((n, m, bond.reagent) for n, m, bond in nmb if bond.order)
         products.add_edges_from((n, m, bond.product) for n, m, bond in nmb if bond.p_order)
-        return DynamicContainer(reagents, products)
+        return reagents, products
 
     def __invert__(self):
         """
@@ -191,17 +191,17 @@ class CGRContainer(StringCGR, AromatizeCGR, MoleculeContainer):
         atom = self._node[atom]
         ri = atom.reagent.get_implicit_h([x.order for x in self._adj[atom].values()])
         pi = atom.product.get_implicit_h([x.p_order for x in self._adj[atom].values()])
-        return DynamicContainer(ri, pi)
+        return ri, pi
 
     def atom_explicit_h(self, atom):
         rh = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('s_bond'))
         ph = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('p_bond'))
-        return DynamicContainer(rh, ph)
+        return rh, ph
 
     def atom_total_h(self, atom):
         rh, ph = self.atom_explicit_h(atom)
         ri, pi = self.atom_implicit_h(atom)
-        return DynamicContainer(ri + rh, pi + ph)
+        return ri + rh, pi + ph
 
     def check_valence(self):
         """
