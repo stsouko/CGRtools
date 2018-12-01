@@ -22,5 +22,4 @@ Molecules and CGRs analysis and representation algorithms
 from .aromatics import *
 from .morgan import *
 from .sssr import *
-from .stereo import *
 from .strings import *

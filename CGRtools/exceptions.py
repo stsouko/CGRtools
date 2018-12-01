@@ -18,26 +18,6 @@
 #
 
 
-class InvalidConfig(Exception):
-    pass
-
-
-class InvalidData(Exception):
-    pass
-
-
-class InvalidAtom(Exception):
-    pass
-
-
-class InvalidStereo(Exception):
-    pass
-
-
-class InvalidTemplate(Exception):
-    pass
-
-
 class EmptyMolecule(ValueError):
     """
     bad files parsing

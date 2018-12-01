@@ -134,38 +134,6 @@ class Aromatize:
         return init - old
 
 
-class AromatizeCGR(Aromatize):
-    def aromatize(self):
-        """
-        convert structure to aromatic form
-
-        :return: number of processed reagent and product state rings
-        """
-        rings = [x for x in self.get_sssr() if 4 < len(x) < 7]
-        if not rings:
-            return 0, 0
-        total_s = total_p = 0
-        while True:
-            c_s = self._quinonize(rings, 'order')
-            c_p = self._quinonize(rings, 'p_order')
-            if c_s or c_p:
-                total_s += c_s
-                total_p += c_p
-            elif total_s or total_p:
-                break
-
-            c_s = self._aromatize(rings, 'order')
-            c_p = self._aromatize(rings, 'p_order')
-            if not (c_s or c_p):
-                break
-            total_s += c_s
-            total_p += c_p
-
-        if total_s or total_p:
-            self.flush_cache()
-        return total_s, total_p
-
-
 def _clock(a):
     yield a
     for _ in range(1, len(a)):
@@ -284,4 +252,4 @@ _pyrole_fix = dict(_pyrole_fix)
 del x, y, i, p, _ind
 
 
-__all__ = ['Aromatize', 'AromatizeCGR']
+__all__ = ['Aromatize']

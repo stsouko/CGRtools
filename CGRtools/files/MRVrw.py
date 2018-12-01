@@ -21,7 +21,7 @@ from itertools import chain, count
 from logging import warning
 from lxml.etree import iterparse, QName, tostring
 from traceback import format_exc
-from ._CGRrw import CGRread, CGRwrite, WithMixin, elements_set, cgr_keys
+from ._CGRrw import CGRread, CGRwrite, WithMixin, cgr_keys
 from ..containers.common import BaseContainer
 from ..exceptions import EmptyMolecule
 
@@ -97,7 +97,7 @@ class MRVread(CGRread, WithMixin):
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._get_molecule(record)
+                        yield self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
@@ -112,7 +112,7 @@ class MRVread(CGRread, WithMixin):
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._get_reaction(record)
+                        yield self._convert_reaction(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
             else:
@@ -294,30 +294,28 @@ class MRVwrite(CGRwrite, WithMixin):
             self._file.write(self.__format_mol(*m['structure']))
             self._file.write('</molecule>')
         else:
-            colors = {}
             c = count(1)
             s = x = 0
             rl = len(data.reagents)
             self._file.write('<reaction>')
             for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
                 self._file.write(f'<{j}>')
-                for cnext, m in zip(c, data[i]):
+                for n, m in zip(c, data[i]):
                     m = self._convert_structure(m, s)
                     if self._fix_position:
-                        s = m['max_x'] + (3 if cnext == rl else 1)
-                    if cnext == rl:  # get last reagent right atom position
+                        s = m['max_x'] + (3 if n == rl else 1)
+                    if n == rl:  # get last reagent right atom position
                         x = m['max_x']
-                    elif not rl and cnext == 1:
+                    elif not rl and n == 1:
                         x = m['min_x'] - 3
                     self._file.write('<molecule>')
                     self._file.write(self.__format_mol(*m['structure']))
                     self._file.write('</molecule>')
-                    colors.update({f'{k}.{cnext}': v for k, v in m['colors'].items()})
                 self._file.write(f'</{j}>')
 
             self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
                              '<propertyList>')
-            for k, v in chain(colors.items(), data.meta.items()):
+            for k, v in data.meta.items():
                 if '\n' in v:
                     v = f'<![CDATA[{v}]]>'
                     self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')

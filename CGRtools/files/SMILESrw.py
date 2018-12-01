@@ -90,7 +90,7 @@ class SMILESread(CGRread, WithMixin):
                     continue
 
                 try:
-                    yield self._get_reaction(record)
+                    yield self._convert_reaction(record)
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
             else:
@@ -102,7 +102,7 @@ class SMILESread(CGRread, WithMixin):
 
                 record['meta'] = meta
                 try:
-                    yield self._get_molecule(record)
+                    yield self._convert_structure(record)
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
 

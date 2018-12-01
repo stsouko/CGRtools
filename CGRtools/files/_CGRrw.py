@@ -22,11 +22,9 @@ from itertools import count
 from io import StringIO, BytesIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
-from warnings import warn
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..exceptions import MappingError
 from ..periodictable import elements_set
-from ..periodictable import common_isotopes
 
 
 cgr_keys = dict(extrabond=2, dynbond=2, dynatom=1, isotope=1, atomhyb=1, atomneighbors=1, dynatomhyb=1,
@@ -102,7 +100,7 @@ class CGRread:
         self._ignore = ignore
         self.__colors = colors
 
-    def _get_reaction(self, reaction):
+    def _convert_reaction(self, reaction):
         if not (reaction['reagents'] or reaction['products'] or reaction['reactants']):
             raise ValueError('empty reaction')
         maps = {'reagents': [], 'products': [], 'reactants': []}
@@ -163,35 +161,17 @@ class CGRread:
         ''' end
         '''
         rc = ReactionContainer(meta=reaction['meta'])
-
-        colors = {}
-        if self.__colors:
-            for k, v in reaction['meta'].items():
-                if k.startswith(self.__colors):
-                    try:
-                        mol_num = int(k.split('.', 1)[1])
-                    except (ValueError, IndexError):
-                        warning(f'coloring data invalid: {k}, {v}')
-                    else:
-                        if mol_num in colors:
-                            warning(f'color data for molecule {mol_num} already exists')
-                        else:
-                            colors[mol_num] = v
-
-        counter = count(1)
         for i, tmp in maps.items():
             shift = 0
             for j in reaction[i]:
                 atom_len = len(j['atoms'])
                 remapped = {x: y for x, y in enumerate(tmp[shift: atom_len + shift])}
                 shift += atom_len
-                c = next(counter)
-                c = self.__parse_colors(colors[c]) if c in colors else {}
-                g = self.__parse_molecule(j, remapped, c)
+                g = self.__convert_structure(j, remapped, {})
                 rc[i].append(g)
         return rc
 
-    def _get_molecule(self, molecule):
+    def _convert_structure(self, molecule):
         if self.__remap:
             remapped = {k: k for k in range(len(molecule['atoms']))}
         else:
@@ -214,7 +194,7 @@ class CGRread:
             colors = self.__parse_colors(molecule['meta'][self.__colors])
         else:
             colors = {}
-        g = self.__parse_molecule(molecule, remapped, colors)
+        g = self.__convert_structure(molecule, remapped, colors)
         g.meta.update(molecule['meta'])
         return g
 
@@ -269,7 +249,7 @@ class CGRread:
                 res[a][p] = val
         return res
 
-    def __parse_molecule(self, molecule, mapping, colors):
+    def __convert_structure(self, molecule, mapping, colors):
         atom_data, bond_data, bond_list = defaultdict(dict), defaultdict(dict), []
         atoms = molecule['atoms']
         is_cgr = False
@@ -429,6 +409,45 @@ class CGRread:
                 g.add_bond(n_map, m_map, {'order': b})
 
         return g
+
+    def __add_stereo(self, atom1, atom2, mark):
+        if mark not in (1, -1):
+            raise ValueError('stereo mark invalid')
+        if not self.has_edge(atom1, atom2):
+            raise KeyError('atom or bond not found')
+
+        if any(x.z for x in self._node.values()):
+            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
+
+        implicit = self.atom_implicit_h(atom1)
+        total = implicit + len(self._adj[atom1])
+
+        if total == 4:  # tetrahedron
+            if implicit:
+                self._node[atom1].stereo = self.__pyramid_calc(atom1, atom2, mark)
+            else:
+                self._node[atom1].stereo = self.__tetrahedron_calc(atom1, atom2, mark)
+        else:
+            raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
+
+    def __pyramid_calc(self, atom1, atom2, mark):
+        center = self._node[atom1]
+        order = ((self._node[x], mark if x == atom2 else 0) for x in self._adj[atom1])
+        vol = self._pyramid_volume((center.x, center.y, 0), *((atom.x, atom.y, z) for atom, z in order))
+        if vol > 0:
+            return 1
+        elif vol < 0:
+            return -1
+        raise InvalidStereo('unknown')
+
+    def __tetrahedron_calc(self, atom1, atom2, mark):
+        order = ((self._node[x], mark if x == atom2 else 0) for x in self._adj[atom1])
+        vol = self._pyramid_volume(*((atom.x, atom.y, z) for atom, z in order))
+        if vol > 0:
+            return 1
+        elif vol < 0:
+            return -1
+        raise InvalidStereo('unknown')
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}

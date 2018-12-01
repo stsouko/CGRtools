@@ -61,7 +61,7 @@ class SDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_molecule(record)
+                        yield self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
@@ -96,7 +96,7 @@ class SDFread(CGRread, WithMixin):
         if record:  # True for MOL file only.
             record['meta'] = prepare_meta(meta)
             try:
-                yield self._get_molecule(record)
+                yield self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
 

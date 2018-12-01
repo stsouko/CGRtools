@@ -17,14 +17,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
-from warnings import warn
 from .containers import MoleculeContainer, MergedReaction
-from .core import CGRcore
-from .exceptions import InvalidData
 
 
-class CGRpreparer(CGRcore):
-    def __init__(self, cgr_type='0', extralabels=False, balance=False):
+class CGRpreparer:
+    def __init__(self, cgr_type='0'):
         """
         main object for CGR creation and manipulation
 
@@ -44,20 +41,9 @@ class CGRpreparer(CGRcore):
 
             also supported CGR on parts of reagents or/and products molecules. e.g. 101,102,-201 - CGR on only first and
             second reagents molecules with all products molecules excluding first
-        :param extralabels: [re]create query labels in Graphs before condensation. also see CGRreactor init and
-            reset_query_marks in MoleculeContainer
-        :param balance: do electron balancing for atom unbalanced reactions
         """
         self.__cgr_type_code = cgr_type
-        self.__extralabels = extralabels
-        self.__balance = balance
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
-
-    def __getstate__(self):
-        return dict(cgr_type=self.__cgr_type_code, extralabels=self.__extralabels)
-
-    def __setstate__(self, state):
-        self.__init__(**state)
 
     def condense(self, data):
         """
@@ -186,4 +172,4 @@ class CGRpreparer(CGRcore):
         return reduce(cls.union, data) if data else MoleculeContainer()
 
 
-__all__ = [CGRpreparer.__name__]
+__all__ = ['CGRpreparer']

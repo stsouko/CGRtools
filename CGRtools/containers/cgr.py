@@ -16,15 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
-from itertools import repeat, zip_longest
+from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import AromatizeCGR, StringCGR
+from ..algorithms import StringCGR
 from ..attributes import DynAtom, DynBond
-from ..periodictable import H
 
 
-class CGRContainer(StringCGR, AromatizeCGR, MoleculeContainer):
+class CGRContainer(StringCGR, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
@@ -121,101 +119,6 @@ class CGRContainer(StringCGR, AromatizeCGR, MoleculeContainer):
         if copy:
             return g
         self.flush_cache()
-
-    def implicify_hydrogens(self):
-        """
-        remove explicit hydrogens if possible
-
-        :return: number of removed hydrogens
-        """
-        explicit = defaultdict(list)
-        hydrogens = set()
-        for_remove = []
-        c = 0
-        for n, attr in self.nodes(data='element'):
-            if attr == 'H':
-                for m in self.neighbors(n):
-                    if self.nodes[m]['element'] != 'H':
-                        explicit[m].append(n)
-                    else:
-                        hydrogens.add(m)
-                        hydrogens.add(n)
-
-        for n, h in explicit.items():
-            s_atom, p_atom = self.atom(n)
-            self_n = self[n]
-
-            s_bonds = [y['s_bond'] for x, y in self_n.items() if x not in h and y.get('s_bond')]
-            p_bonds = [y['p_bond'] for x, y in self_n.items() if x not in h and y.get('p_bond')]
-
-            s_implicit = s_atom.get_implicit_h(s_bonds)
-            p_implicit = p_atom.get_implicit_h(p_bonds)
-
-            if not s_implicit and any(self_n[x].get('s_bond') for x in h):
-                hydrogens.update(h)
-            elif not p_implicit and any(self_n[x].get('p_bond') for x in h):
-                hydrogens.update(h)
-            else:
-                for x in h:
-                    for_remove.append(x)
-
-        for x in for_remove:
-            if x not in hydrogens:
-                self.remove_node(x)
-                c += 1
-
-        self.flush_cache()
-        return c
-
-    def explicify_hydrogens(self):
-        """
-        add explicit hydrogens to atoms
-
-        :return: number of added atoms
-        """
-        tmp = []
-        for n, attr in self.nodes(data='element'):
-            if attr != 'H':
-                si, pi = self.atom_implicit_h(n)
-                if si or pi:
-                    for s_mark, p_mark in zip_longest(repeat(1, si), repeat(1, pi)):
-                        tmp.append((n, s_mark, p_mark))
-
-        for n, s_mark, p_mark in tmp:
-            self.add_bond(n, self.add_atom(H()), s_mark, p_mark)
-
-        self.flush_cache()
-        return len(tmp)
-
-    def atom_implicit_h(self, atom):
-        atom = self._node[atom]
-        ri = atom.reagent.get_implicit_h([x.order for x in self._adj[atom].values()])
-        pi = atom.product.get_implicit_h([x.p_order for x in self._adj[atom].values()])
-        return ri, pi
-
-    def atom_explicit_h(self, atom):
-        rh = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('s_bond'))
-        ph = sum(self.nodes[x]['element'] == 'H' for x, a in self[atom].items() if a.get('p_bond'))
-        return rh, ph
-
-    def atom_total_h(self, atom):
-        rh, ph = self.atom_explicit_h(atom)
-        ri, pi = self.atom_implicit_h(atom)
-        return ri + rh, pi + ph
-
-    def check_valence(self):
-        """
-        check valences of all atoms
-
-        :return: list of invalid atoms
-        """
-        report = []
-        for x, atom in self._node.items():
-            env = self.environment(x)
-            if not atom.reagent.check_valence([(b.reagent, a.reagent) for b, a in env if b.order]) or \
-                    not atom.product.check_valence([(b.product, a.product) for b, a in env if b.p_order]):
-                report.append(f'atom {x} has invalid valence')
-        return report
 
     _visible = ()
 

@@ -62,7 +62,7 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_reaction(record) if isreaction else self._get_molecule(record)
+                        yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
                     except Exception:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
@@ -75,7 +75,7 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._get_reaction(record) if isreaction else self._get_molecule(record)
+                        yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
@@ -118,7 +118,7 @@ class RDFread(CGRread, WithMixin):
         if record:
             record['meta'] = prepare_meta(meta)
             try:
-                yield self._get_reaction(record) if isreaction else self._get_molecule(record)
+                yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
 
@@ -145,14 +145,13 @@ class RDFwrite(MOLwrite, WithMixin):
             colors = {}
             s = 0
             rl = len(data.reagents)
-            for cnext, m in enumerate(chain(data.reagents, data.products), start=1):
+            for n, m in enumerate(chain(data.reagents, data.products), start=1):
                 m = self._convert_structure(m, s)
                 if self._fix_position:
-                    s = m['max_x'] + (3 if cnext == rl else 1)
+                    s = m['max_x'] + (3 if n == rl else 1)
                 self._file.write('$MOL\n')
                 self._file.write(self._format_mol(*m['structure']))
                 self._file.write('M  END\n')
-                colors.update({f'{k}.{cnext}': v for k, v in m['colors'].items()})
 
         for k, v in chain(colors.items(), data.meta.items()):
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')

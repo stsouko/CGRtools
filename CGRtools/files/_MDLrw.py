@@ -19,7 +19,7 @@
 from csv import reader
 from logging import warning
 from itertools import count, chain
-from ._CGRrw import CGRwrite, elements_set, cgr_keys
+from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
 

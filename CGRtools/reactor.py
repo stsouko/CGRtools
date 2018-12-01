@@ -17,25 +17,15 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
-from itertools import product, combinations
-from networkx import compose, has_path
 from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
                                              categorical_edge_match)
-from warnings import warn
 from .containers import CGRTemplate, MatchContainer, CGRContainer, QueryContainer, MoleculeContainer
-from .core import CGRcore
-from .exceptions import InvalidData, InvalidTemplate
 
 
 class CGRreactor:
-    def __init__(self, extralabels=False, isotope=False, element=True, stereo=False):
+    def __init__(self):
         """
         CGR isomorphism based operations
-
-        :param extralabels: compare hybridization and neighbors count marks on isomorphism procedure
-        :param isotope: compare isotope marks on isomorphism procedure
-        :param element: compare elements symbols and charges on isomorphism procedure
-        :param stereo: compare stereo marks on isomorphism procedure
         """
         gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge', 'p_radical']
         if isotope:
@@ -67,12 +57,6 @@ class CGRreactor:
         self.__edge_match_products = categorical_edge_match('p_bond', None)
 
         self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
-
-    def __getstate__(self):
-        return self.__pickle.copy()
-
-    def __setstate__(self, state):
-        self.__init__(**state)
 
     def is_substructure(self, g, h):
         return self.get_cgr_matcher(g, h).subgraph_is_isomorphic()
@@ -134,141 +118,6 @@ class CGRreactor:
                     yield MatchContainer(j, self.__remap_group(i.patch, g, {y: x for x, y in j.items()})[0], i.meta)
 
         return searcher
-
-    @classmethod
-    def __split_graph(cls, g):
-        g = g.copy()
-        lost_bonds = []
-        term_atoms = []
-
-        for l, n, m in list(cls.__get_substitution_paths(g)):
-            nl = (n, l)
-            if nl in lost_bonds:
-                continue
-
-            lost_bonds.append(nl)
-            g.remove_edge(n, l)
-            g.remove_edge(n, m)
-
-        for n, m in list(cls.__get_broken_paths(g)):
-            if not any(has_path(g, *x) for x in product((y for x in lost_bonds for y in x), (n, m))):
-                g.remove_edge(n, m)
-                term_atoms.append(n)
-                term_atoms.append(m)
-
-        return CGRcore.split(g), lost_bonds, term_atoms
-
-    @staticmethod
-    def __get_substitution_paths(g):
-        """
-        get atoms paths from detached atom to attached
-
-        :param g: CGRContainer
-        :return: tuple of atoms numbers
-        """
-        for n, nbrdict in g.adjacency():
-            for m, l in combinations(nbrdict, 2):
-                nms = nbrdict[m]['sp_bond']
-                nls = nbrdict[l]['sp_bond']
-                if nms == (1, None) and nls == (None, 1):
-                    yield m, n, l
-                elif nms == (None, 1) and nls == (1, None):
-                    yield l, n, m
-
-    @staticmethod
-    def __get_broken_paths(g):
-        for m, n, attr in g.edges(data=True):
-            if attr['sp_bond'] == (None, 1):
-                yield n, m
-
-    def clone_subgraphs(self, g):
-        if not isinstance(g, CGRContainer):
-            raise InvalidData('only CGRContainer acceptable')
-
-        r_group = []
-        x_group = {}
-        r_group_clones = []
-        newcomponents = []
-
-        ''' search bond breaks and creations
-        '''
-        components, lost_bonds, term_atoms = self.__split_graph(g)
-        lost_map = {x: y for x, y in lost_bonds}
-        ''' extract subgraphs and sort by group type (R or X)
-        '''
-        x_terminals = set(lost_map.values())
-        r_terminals = set(lost_map)
-
-        for i in components:
-            x_terminal_atom = x_terminals.intersection(i)
-            if x_terminal_atom:
-                x_group[x_terminal_atom.pop()] = i
-                continue
-
-            r_terminal_atom = r_terminals.intersection(i)
-            if r_terminal_atom:
-                r_group.append([r_terminal_atom, i])
-                continue
-
-            newcomponents.append(i)
-        ''' search similar R groups and patch.
-        '''
-        tmp = g
-        for i in newcomponents:
-            for k, j in r_group:
-                gm = GraphMatcher(j, i, node_match=self.__node_match_products,
-                                  edge_match=self.__edge_match_products)
-                ''' search for similar R-groups started from bond breaks.
-                '''
-                mapping = next((x for x in gm.subgraph_isomorphisms_iter() if k.issubset(x) and
-                                all(x[y] in term_atoms for y in k)), None)
-                if mapping:
-                    r_group_clones.append([k, mapping])
-                    tmp = compose(tmp, self.__remap_group(j, tmp, mapping)[0])
-                    break
-
-        ''' add lose X groups to R groups
-        '''
-        for i, j in r_group_clones:
-            for k in i:
-                remappedgroup, mapping = self.__remap_group(x_group[lost_map[k]], tmp, {})
-                tmp = CGRcore.union(tmp, remappedgroup)
-                tmp.add_edge(j[k], mapping[lost_map[k]], s_bond=1, sp_bond=(1, None))
-
-        if r_group_clones:
-            tmp.meta.update(g.meta)
-            return tmp
-
-        return tmp.copy()
-
-    @staticmethod
-    def __list_eq(a, b):
-        if b is None:
-            return True
-        elif isinstance(b, list):
-            return a in b
-        return a == b
-
-    @staticmethod
-    def __query_eq(a, b):
-        """
-        only fully equal acceptable
-        """
-        if isinstance(a, list):
-            if isinstance(b, list):
-                if isinstance(a[0], tuple):
-                    if isinstance(b[0], tuple):
-                        a = sorted(('n' if x is None else x, 'n' if y is None else y) for x, y in a)
-                        b = sorted(('n' if x is None else x, 'n' if y is None else y) for x, y in b)
-                        return a == b
-                    return False
-                elif isinstance(b[0], tuple):
-                    return False
-                return sorted(a) == sorted(b)
-            return False
-        elif isinstance(b, list):
-            return False
-        return a == b
 
     @staticmethod
     def __remap_group(g, h, mapping):
@@ -371,15 +220,5 @@ class CGRreactor:
     __bond_marks = {'s_bond', 's_stereo'}
     __cgr_bond_marks = __bond_marks.union(('p_bond', 'p_stereo'))
 
-    @classmethod
-    def get_templates(cls, raw_templates):
-        warn('get_templates name deprecated. use prepare_templates instead', DeprecationWarning)
-        return cls.prepare_templates(raw_templates)
 
-
-def patcher(*args, **kwargs):
-    warn('patcher moved to CGRreactor. use patcher static method.', DeprecationWarning)
-    return CGRreactor.patcher(*args, **kwargs)
-
-
-__all__ = [CGRreactor.__name__]
+__all__ = ['CGRreactor']
