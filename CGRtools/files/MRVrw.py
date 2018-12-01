@@ -313,7 +313,7 @@ class MRVwrite(CGRwrite, WithMixin):
                     self._file.write(self.__format_mol(*m['structure']))
                     self._file.write('</molecule>')
                     colors.update({f'{k}.{cnext}': v for k, v in m['colors'].items()})
-                self._file.write('</{j]>')
+                self._file.write(f'</{j}>')
 
             self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
                              '<propertyList>')
@@ -328,7 +328,7 @@ class MRVwrite(CGRwrite, WithMixin):
     def __format_mol(atoms, bonds, cgr):
         return ''.join(chain(('<atomArray>',),
                              (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
-                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}" '
+                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}"'
                               f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["mark"]}'
                               f'{atom["elements"]}/>' for atom in atoms),
                              ('</atomArray><bondArray>',),
