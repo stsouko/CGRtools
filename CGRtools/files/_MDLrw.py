@@ -73,7 +73,8 @@ class MOLread:
                                  'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
 
         elif len(self.__bonds) < self.__bonds_count:
-            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, int(line[6:9]), self.__stereo_map[line[11]]))
+            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, {'order': int(line[6:9])},
+                                self.__stereo_map[line[11]]))
         elif line.startswith('M  END'):
             cgr = []
             for x in self.__cgr.values():
@@ -231,7 +232,7 @@ class EMOLread:
                 break
         else:
             s = None
-        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], int(t), s))
+        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], {'order': int(t)}, s))
 
     def __atom_parser(self, line):
         n, a, x, y, z, m, *kvs = line

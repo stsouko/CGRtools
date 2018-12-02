@@ -250,8 +250,9 @@ class CGRread:
         return res
 
     def __convert_structure(self, molecule, mapping, colors):
-        atom_data, bond_data, bond_list = defaultdict(dict), defaultdict(dict), []
+        atom_data, bond_data = defaultdict(dict), defaultdict(dict)
         atoms = molecule['atoms']
+        bonds = molecule['bonds']
         is_cgr = False
         is_query = any(x['element'] in ('A', '*') for x in atoms)
 
@@ -304,7 +305,6 @@ class CGRread:
                     value = {'order': value[0]}
                 a2 = c_atoms[1]
                 bond_data[a1][a2] = bond_data[a2][a1] = value
-                bond_list.append(value)
             elif c_type == 'dynbond':
                 value = [x.split('>') for x in c_value.split(',')]
                 if not is_cgr:
@@ -321,7 +321,6 @@ class CGRread:
                     value = {'order': self.__bondlabels[value[0][0]], 'p_order': self.__bondlabels[value[0][1]]}
                 a2 = c_atoms[1]
                 bond_data[a1][a2] = bond_data[a2][a1] = value
-                bond_list.append(value)
             elif c_type == 'isotope':
                 atom_data[a1]['isotope'] = [int(x) for x in c_value.split(',')]
                 if not is_query:
@@ -348,19 +347,17 @@ class CGRread:
                 if not is_query:
                     is_query = True
 
-        for n, m, b, s in molecule['bonds']:
-            if n in bond_data and m in bond_data[n] and b != 8:
-                raise ValueError('invalid CGR spec')
-            elif s and b not in (1, 4):
-                raise ValueError('invalid wedge stereo spec')
-
         if is_cgr:
-            for v in bond_list:
-                if 'p_order' not in v:
-                    v['p_order'] = v['order']
-
             for k, v in atom_data.items():
                 atoms[k].update(v)
+            for a1, a2, bond, _ in bonds:
+                if a1 in bond_data and a2 in bond_data[a1]:
+                    if bond['order'] != 8:
+                        raise ValueError('invalid CGR spec')
+                    bond.update(bond_data[a1][a2])
+                if 'p_order' not in bond:
+                    bond['p_order'] = bond['order']
+
             if is_query:
                 for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
@@ -381,8 +378,17 @@ class CGRread:
         elif is_query:
             for k, v in atom_data.items():
                 atoms[k].update(v)
+            if bond_data:
+                for a1, a2, bond, _ in bonds:
+                    if a1 in bond_data and a2 in bond_data[a1]:
+                        if bond['order'] != 8:
+                            raise ValueError('invalid CGR spec')
+                        bond.update(bond_data[a1][a2])
             g = QueryContainer()
         else:
+            for *_, bond, s in bonds:
+                if s and bond['order'] not in (1, 4):
+                    raise ValueError('invalid wedge stereo spec')
             g = MoleculeContainer()
 
         for n, atom in enumerate(atoms):
@@ -401,12 +407,9 @@ class CGRread:
 
             g.add_atom(atom, atom_map)
 
-        for n, m, b, s in molecule['bonds']:
+        for n, m, b, _ in molecule['bonds']:
             n_map, m_map = mapping[n], mapping[m]
-            if n in bond_data and m in bond_data[n]:
-                g.add_bond(n_map, m_map, bond_data[n][m])
-            else:
-                g.add_bond(n_map, m_map, {'order': b})
+            g.add_bond(n_map, m_map, b)
 
         return g
 

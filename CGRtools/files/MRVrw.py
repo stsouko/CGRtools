@@ -241,7 +241,7 @@ class MRVread(CGRread, WithMixin):
                         stereo = None
                 else:
                     stereo = None
-                bonds.append((atom_map[a1], atom_map[a2], order, stereo))
+                bonds.append((atom_map[a1], atom_map[a2], {'order': order}, stereo))
 
         if 'molecule' in data:
             dm = data['molecule']
