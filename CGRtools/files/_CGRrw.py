@@ -250,7 +250,7 @@ class CGRread:
         return res
 
     def __convert_structure(self, molecule, mapping, colors):
-        atom_data, bond_data = defaultdict(dict), defaultdict(dict)
+        atom_data, bond_data, stereo = defaultdict(dict), defaultdict(dict), []
         atoms = molecule['atoms']
         bonds = molecule['bonds']
         is_cgr = False
@@ -271,24 +271,24 @@ class CGRread:
                 atom_data[e_atom]['element'] = elements_set - e_value
 
         for c_atoms, c_type, c_value in molecule['cgr']:
-            a1 = c_atoms[0]
+            n = c_atoms[0]
             if c_type == 'dynatom':
                 key = c_value[0]
                 if key == 'x':
                     x, y, z = (float(x) for x in c_value[1:].split(','))
-                    atom_data[a1].update(p_x=x, p_y=y, p_z=z)
+                    atom_data[n].update(p_x=x, p_y=y, p_z=z)
                     if not is_cgr:
                         is_cgr = True
                 elif key == 'c':
-                    value, iq, ic = self.__parse_cgr_atom(c_value, atoms[a1]['charge'], 'charge')
-                    atom_data[a1].update(value)
+                    value, iq, ic = self.__parse_cgr_atom(c_value, atoms[n]['charge'], 'charge')
+                    atom_data[n].update(value)
                     if iq and not is_query:
                         is_query = True
                     if ic and not is_cgr:
                         is_cgr = True
                 elif key == 'r':
-                    value, iq, ic = self.__parse_cgr_atom(c_value, atoms[a1]['multiplicity'] or 0, 'multiplicity')
-                    atom_data[a1].update(value)
+                    value, iq, ic = self.__parse_cgr_atom(c_value, atoms[n]['multiplicity'] or 0, 'multiplicity')
+                    atom_data[n].update(value)
                     if iq and not is_query:
                         is_query = True
                     if ic and not is_cgr:
@@ -303,8 +303,8 @@ class CGRread:
                     value = {'order': value}
                 else:
                     value = {'order': value[0]}
-                a2 = c_atoms[1]
-                bond_data[a1][a2] = bond_data[a2][a1] = value
+                m = c_atoms[1]
+                bond_data[n][m] = bond_data[m][n] = value
             elif c_type == 'dynbond':
                 value = [x.split('>') for x in c_value.split(',')]
                 if not is_cgr:
@@ -319,29 +319,29 @@ class CGRread:
                     value = {'order': r_value, 'p_order': p_value}
                 else:
                     value = {'order': self.__bondlabels[value[0][0]], 'p_order': self.__bondlabels[value[0][1]]}
-                a2 = c_atoms[1]
-                bond_data[a1][a2] = bond_data[a2][a1] = value
+                m = c_atoms[1]
+                bond_data[n][m] = bond_data[m][n] = value
             elif c_type == 'isotope':
-                atom_data[a1]['isotope'] = [int(x) for x in c_value.split(',')]
+                atom_data[n]['isotope'] = [int(x) for x in c_value.split(',')]
                 if not is_query:
                     is_query = True
             elif c_type == 'atomhyb':
-                atom_data[a1]['hybridization'] = self.__parse_list(c_value)
+                atom_data[n]['hybridization'] = self.__parse_list(c_value)
                 if not is_query:
                     is_query = True
             elif c_type == 'atomneighbors':
-                atom_data[a1]['neighbors'] = self.__parse_list(c_value)
+                atom_data[n]['neighbors'] = self.__parse_list(c_value)
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomhyb':
-                atom_data[a1]['hybridization'], atom_data[c_atoms[1]]['p_hybridization'] = \
+                atom_data[n]['hybridization'], atom_data[c_atoms[1]]['p_hybridization'] = \
                     self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomneighbors':
-                atom_data[a1]['neighbors'], atom_data[c_atoms[1]]['p_neighbors'] = self.__parse_dyn(c_value)
+                atom_data[n]['neighbors'], atom_data[c_atoms[1]]['p_neighbors'] = self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
@@ -350,11 +350,11 @@ class CGRread:
         if is_cgr:
             for k, v in atom_data.items():
                 atoms[k].update(v)
-            for a1, a2, bond, _ in bonds:
-                if a1 in bond_data and a2 in bond_data[a1]:
+            for n, m, bond, _ in bonds:
+                if n in bond_data and m in bond_data[n]:
                     if bond['order'] != 8:
                         raise ValueError('invalid CGR spec')
-                    bond.update(bond_data[a1][a2])
+                    bond.update(bond_data[n][m])
                 if 'p_order' not in bond:
                     bond['p_order'] = bond['order']
 
@@ -379,20 +379,22 @@ class CGRread:
             for k, v in atom_data.items():
                 atoms[k].update(v)
             if bond_data:
-                for a1, a2, bond, _ in bonds:
-                    if a1 in bond_data and a2 in bond_data[a1]:
+                for n, m, bond, _ in bonds:
+                    if n in bond_data and m in bond_data[n]:
                         if bond['order'] != 8:
                             raise ValueError('invalid CGR spec')
-                        bond.update(bond_data[a1][a2])
+                        bond.update(bond_data[n][m])
             g = QueryContainer()
         else:
-            for *_, bond, s in bonds:
-                if s and bond['order'] not in (1, 4):
-                    raise ValueError('invalid wedge stereo spec')
+            if not any(x['z'] for x in atoms):
+                for n, m, bond, s in bonds:
+                    if s:
+                        if bond['order'] not in (1, 4):
+                            raise ValueError('invalid wedge stereo spec')
+                        stereo.append((mapping[n], mapping[m], s))
             g = MoleculeContainer()
 
         for n, atom in enumerate(atoms):
-            atom_map = mapping[n]
             element = atom['element']
             if element == 'D':
                 atom['element'] = 'H'
@@ -404,53 +406,31 @@ class CGRread:
                 atom['element'] = 'A'
             if n in colors:
                 atom['color'] = colors[n]
+            g.add_atom(atom, mapping[n])
 
-            g.add_atom(atom, atom_map)
-
-        for n, m, b, _ in molecule['bonds']:
+        for n, m, b, _ in bonds:
             n_map, m_map = mapping[n], mapping[m]
             g.add_bond(n_map, m_map, b)
-
+        for n, m, s in stereo:
+            self.__add_stereo(g, n, m, s)
         return g
 
-    def __add_stereo(self, atom1, atom2, mark):
-        if mark not in (1, -1):
-            raise ValueError('stereo mark invalid')
-        if not self.has_edge(atom1, atom2):
-            raise KeyError('atom or bond not found')
-
-        if any(x.z for x in self._node.values()):
-            raise InvalidStereo('molecule have 3d coordinates. bond up/down stereo unusable')
-
-        implicit = self.atom_implicit_h(atom1)
-        total = implicit + len(self._adj[atom1])
+    @classmethod
+    def __add_stereo(cls, g, a1, a2, mark):
+        adj = g._adj[a1]
+        atom = g._node[a1]
+        implicit = g.atom_implicit_h(a1)
+        total = implicit + len(adj)
 
         if total == 4:  # tetrahedron
+            order = ((g._node[x], mark if x == a2 else 0) for x in adj)
             if implicit:
-                self._node[atom1].stereo = self.__pyramid_calc(atom1, atom2, mark)
+                vol = _pyramid_volume((atom.x, atom.y, 0), *((atom.x, atom.y, z) for atom, z in order))
             else:
-                self._node[atom1].stereo = self.__tetrahedron_calc(atom1, atom2, mark)
+                vol = _pyramid_volume(*((atom.x, atom.y, z) for atom, z in order))
+            atom.stereo = 1 if vol > 0 else -1
         else:
-            raise InvalidStereo('unsupported stereo or stereo impossible. tetrahedron only supported')
-
-    def __pyramid_calc(self, atom1, atom2, mark):
-        center = self._node[atom1]
-        order = ((self._node[x], mark if x == atom2 else 0) for x in self._adj[atom1])
-        vol = self._pyramid_volume((center.x, center.y, 0), *((atom.x, atom.y, z) for atom, z in order))
-        if vol > 0:
-            return 1
-        elif vol < 0:
-            return -1
-        raise InvalidStereo('unknown')
-
-    def __tetrahedron_calc(self, atom1, atom2, mark):
-        order = ((self._node[x], mark if x == atom2 else 0) for x in self._adj[atom1])
-        vol = self._pyramid_volume(*((atom.x, atom.y, z) for atom, z in order))
-        if vol > 0:
-            return 1
-        elif vol < 0:
-            return -1
-        raise InvalidStereo('unknown')
+            warning('unsupported stereo or stereo impossible. tetrahedron only supported')
 
     __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
@@ -518,21 +498,28 @@ class CGRwrite:
                           'x': x, 'y': y, 'z': atom.z, 'elements': elements, 'id': n})
 
         seen = set()
-        for i, j_bond in g._adj.items():
-            seen.add(i)
-            for j, bond in j_bond.items():
-                if j in seen:
+        for n, m_bond in g._adj.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m in seen:
                     continue
-
-                stereo = stereo_map.get((i, j))
-                if not stereo:
-                    stereo = stereo_map.get((j, i))
+                if stereo_map:
+                    stereo = stereo_map.get((n, m))
                     if stereo:
-                        i, j = j, i
+                        n_map, m_map = renum[n], renum[m]
+                    else:
+                        stereo = stereo_map.get((m, n))
+                        if stereo:
+                            n_map, m_map = renum[m], renum[n]
+                        else:
+                            n_map, m_map = renum[n], renum[m]
+                else:
+                    n_map, m_map = renum[n], renum[m]
+                    stereo = None
 
-                cgr, order = format_bond(bond, renum[i], renum[j])
+                cgr, order = format_bond(bond, n_map, m_map)
                 cgr_data.extend(cgr)
-                bonds.append((renum[i], renum[j], order, self._stereo_map(stereo)))
+                bonds.append((n_map, m_map, order, self._stereo_map(stereo)))
 
         data['structure'] = (atoms, bonds, cgr_data)
         return data

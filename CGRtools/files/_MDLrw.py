@@ -73,8 +73,12 @@ class MOLread:
                                  'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
 
         elif len(self.__bonds) < self.__bonds_count:
-            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, {'order': int(line[6:9])},
-                                self.__stereo_map[line[11]]))
+            try:
+                stereo = self.__stereo_map[line[11]]
+            except KeyError:
+                warning('unsupported or invalid stereo')
+                stereo = None
+            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, {'order': int(line[6:9])}, stereo))
         elif line.startswith('M  END'):
             cgr = []
             for x in self.__cgr.values():
@@ -296,7 +300,7 @@ class EMOLread:
                     raise ValueError(f'CGR spec invalid {line}')
 
     __record = __atoms_count = __in_mol = __parser = None
-    __stereo_map = {'0': None, '1': 1, '3': -1}
+    __stereo_map = {'1': 1, '3': -1}
 
 
 class RXNread:
