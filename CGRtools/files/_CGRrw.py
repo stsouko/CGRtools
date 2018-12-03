@@ -27,6 +27,8 @@ from ..exceptions import MappingError
 from ..periodictable import elements_set
 
 
+elements_set = elements_set.copy()
+elements_set.discard('A')
 cgr_keys = dict(extrabond=2, dynbond=2, dynatom=1, isotope=1, atomhyb=1, atomneighbors=1, dynatomhyb=1,
                 dynatomneighbors=1)
 
@@ -211,13 +213,6 @@ class CGRread:
             p_value = int(value[0][1])
         return r_value, p_value
 
-    @staticmethod
-    def __parse_list(value):
-        value = [int(x) for x in value.split(',')]
-        if len(value) == 1:
-            value = value[0]
-        return value
-
     @classmethod
     def __parse_cgr_atom(cls, value, base, name):
         p_name = f'p_{name}'
@@ -268,7 +263,7 @@ class CGRread:
                     raise ValueError('atom not_list contain invalid atoms')
                 if not is_query:
                     is_query = True
-                atom_data[e_atom]['element'] = elements_set - e_value
+                atom_data[e_atom]['element'] = elements_set - set(e_value)
 
         for c_atoms, c_type, c_value in molecule['cgr']:
             n = c_atoms[0]
@@ -326,11 +321,11 @@ class CGRread:
                 if not is_query:
                     is_query = True
             elif c_type == 'atomhyb':
-                atom_data[n]['hybridization'] = self.__parse_list(c_value)
+                atom_data[n]['hybridization'] = [int(x) for x in c_value.split(',')]
                 if not is_query:
                     is_query = True
             elif c_type == 'atomneighbors':
-                atom_data[n]['neighbors'] = self.__parse_list(c_value)
+                atom_data[n]['neighbors'] = [int(x) for x in c_value.split(',')]
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomhyb':
@@ -350,6 +345,16 @@ class CGRread:
         if is_cgr:
             for k, v in atom_data.items():
                 atoms[k].update(v)
+            for atom in atoms:
+                del atom['mark']
+                del atom['mapping']
+                if 'p_charge' not in atom:
+                    atom['p_charge'] = atom['charge']
+                if 'p_multiplicity' not in atom:
+                    atom['p_multiplicity'] = atom['multiplicity']
+                if 'p_x' not in atom:
+                    atom.update(p_x=atom['x'], p_y=atom['y'], p_z=atom['z'])
+
             for n, m, bond, _ in bonds:
                 if n in bond_data and m in bond_data[n]:
                     if bond['order'] != 8:
@@ -367,17 +372,12 @@ class CGRread:
                 g = QueryCGRContainer()
             else:
                 g = CGRContainer()
-
-            for atom in atoms:
-                if 'p_charge' not in atom:
-                    atom['p_charge'] = atom['charge']
-                if 'p_multiplicity' not in atom:
-                    atom['p_multiplicity'] = atom['multiplicity']
-                if 'p_x' not in atom:
-                    atom.update(p_x=atom['x'], p_y=atom['y'], p_z=atom['z'])
         elif is_query:
             for k, v in atom_data.items():
                 atoms[k].update(v)
+            for atom in atoms:
+                del atom['mark']
+                del atom['mapping']
             if bond_data:
                 for n, m, bond, _ in bonds:
                     if n in bond_data and m in bond_data[n]:
