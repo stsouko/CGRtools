@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from hashlib import md5, sha256
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
@@ -179,7 +178,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             data = {'graph': data['meta'], 'nodes': nodes, 'bonds': bonds, 'class': _class}
 
         graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
-        return _search_subclass(data['class'])(graph)
+        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == data['class'])(graph)
 
     def environment(self, atom):
         """
@@ -234,181 +233,55 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         """
         return [self.substructure(c, meta) for c in connected_components(self)]
 
-    def union(self, g):
-        if not isinstance(g, BaseContainer):
+    def union(self, other):
+        if not isinstance(other, BaseContainer):
             raise TypeError('BaseContainer subclass expected')
-        if self._node.keys() & set(g):
+        if self._node.keys() & set(other):
             raise KeyError('mapping of graphs is not disjoint')
 
         # dynamic container resolving
-        qc = _search_subclass('QueryContainer')
-        cc = _search_subclass('CGRContainer')
+        qc = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'QueryCGRContainer')
+        qq = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'QueryContainer')
+        cc = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'CGRContainer')
 
-        if isinstance(self, qc):  # self has precedence
+        if isinstance(self, qc):
             u = type(self)()
-        elif isinstance(g, qc):
-            u = type(g)()
+        elif isinstance(other, qc):
+            u = type(other)()
         elif isinstance(self, cc):
+            if isinstance(other, qq):  # force QueryCGRContainer
+                u = qc()
+            else:
+                u = type(self)()
+        elif isinstance(other, cc):
+            if isinstance(self, qq):
+                u = qc()
+            else:
+                u = type(other)()
+        elif isinstance(self, qq):  # self has precedence
             u = type(self)()
-        elif isinstance(g, cc):
-            u = type(g)()
+        elif isinstance(other, qq):
+            u = type(other)()
         else:
             u = type(self)()
 
         for n, a in self._node.items():
             u.add_atom(a, n)
-        for n, a in g._node.items():
+        for n, a in other._node.items():
             u.add_atom(a, n)
 
-        for n, m_b in self._adj.items():
-            for m, b in m_b.items():
-                u.add_bond(n, m, b)
-        for n, m_b in g._adj.items():
-            for m, b in m_b.items():
-                u.add_bond(n, m, b)
-
-    def compose(self, g):
-        """
-        compose 2 graphs to CGR
-
-        :param g: Molecule or CGR Container
-        :return: CGRContainer or QueryContainer
-        """
-        if not isinstance(g, BaseContainer):
-            raise TypeError('BaseContainer subclass expected')
-
-        # dynamic container resolving
-        qc = _search_subclass('QueryCGRContainer')
-        cc = _search_subclass('CGRContainer')
-
-        # try to use custom containers
-        if isinstance(self, qc):  # self has precedence
-            h = type(self)()
-        elif isinstance(g, qc):
-            h = type(g)()
-        elif isinstance(self, cc):
-            h = type(self)()
-        elif isinstance(g, cc):
-            h = type(g)()
-        else:  # use common CGR
-            h = cc()
-
-        common = self._node.keys() & g
-        unique_reagent = self._node.keys() - common
-        unique_product = g._node.keys() - common
-
-        none_bond = Bond(skip_checks=True)
-        none_bond.order = None
-
-        for n in common:
-            r, p = self._node[n], g._node[n]
-            if r.element != p.element or r.isotope != p.isotope:
-                raise ValueError('invalid atom mapping')
-            if isinstance(r, DynAtom):
-                r = r._reagent
-            if isinstance(p, DynAtom):
-                p = p._product
-            atom = h.node_attr_dict_factory()
-            atom.__init_copy__(r, p)
-            h.add_atom(atom, n)
-        for n in unique_reagent:
-            r = self._node[n]
-            if isinstance(r, DynAtom):
-                p = r._product
-                r = r._reagent
-            else:
-                p = r
-            atom = h.node_attr_dict_factory()
-            atom.__init_copy__(r, p)
-            h.add_atom(atom, n)
-        for n in unique_product:
-            r = g._node[n]
-            if isinstance(r, DynAtom):
-                p = r._product
-                r = r._reagent
-            else:
-                p = r
-            atom = h.node_attr_dict_factory()
-            atom.__init_copy__(r, p)
-            h.add_atom(atom, n)
-
-        skin_reagent = defaultdict(list)
         seen = set()
         for n, m_b in self._adj.items():
             seen.add(n)
-            if n in common:
-                for m, r in m_b.items():
-                    if m in seen:
-                        continue
-                    if isinstance(r, DynBond):
-                        r = r._reagent
-                    if m in common:
-                        p = g._adj[n][m]
-                        if isinstance(p, DynBond):
-                            p = p._product
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(r, p)
-                        h.add_bond(n, m, bond)
-                    else:
-                        skin_reagent[n].append(m)
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(r, none_bond)
-                        h.add_bond(n, m, bond)
-            else:
-                for m, r in m_b.items():
-                    if m in seen:
-                        continue
-                    if m in common:
-                        if isinstance(r, DynBond):
-                            r = r._reagent
-                        skin_reagent[m].append(n)
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(r, none_bond)
-                        h.add_bond(n, m, bond)
-                    else:
-                        if isinstance(r, DynBond):
-                            p = r._product
-                            r = r._reagent
-                        else:
-                            p = r
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(r, p)
-                        h.add_bond(n, m, bond)
-
-        skin_product = defaultdict(list)
-        seen = set()
-        for n, m_b in g._adj.items():
+            for m, b in m_b.items():
+                if m not in seen:
+                    u.add_bond(n, m, b)
+        for n, m_b in other._adj.items():
             seen.add(n)
-            if n in common:
-                for m, p in m_b.items():
-                    if m not in common:
-                        if isinstance(p, DynBond):
-                            p = p._product
-                        skin_product[n].append(m)
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(none_bond, p)
-                        h.add_bond(n, m, bond)
-            else:
-                for m, p in m_b.items():
-                    if m in seen:
-                        continue
-                    if m in common:
-                        if isinstance(p, DynBond):
-                            p = p._product
-                        skin_product[m].append(n)
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(none_bond, p)
-                        h.add_bond(n, m, bond)
-                    else:
-                        if isinstance(p, DynBond):
-                            r = p._reagent
-                            p = p._product
-                        else:
-                            r = p
-                        bond = h.edge_attr_dict_factory()
-                        bond.__init_copy__(r, p)
-                        h.add_bond(n, m, bond)
-        return h
+            for m, b in m_b.items():
+                if m not in seen:
+                    u.add_bond(n, m, b)
+        return u
 
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
@@ -485,12 +358,6 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         if n:
             return self.substructure(n)
 
-    def __xor__(self, other):
-        """
-        G ^ H is CGR generation
-        """
-        return self.compose(other)
-
     def __or__(self, other):
         """
         G | H is union of graphs
@@ -519,10 +386,4 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
     _visible = ()
 
 
-def _search_subclass(name, start=BaseContainer):
-    for x in start.__subclasses__():
-        if x.__name__ == name:
-            return x
-        d = _search_subclass(name, x)
-        if d is not None:
-            return d
+__all__ = ['BaseContainer']

@@ -17,13 +17,14 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
-from .containers import MoleculeContainer, MergedReaction
+from operator import or_
+from .containers import MoleculeContainer
 
 
 class CGRpreparer:
     def __init__(self, cgr_type='0'):
         """
-        main object for CGR creation and manipulation
+        CGR creation
 
         :param cgr_type: control condensation procedure:
 
@@ -49,49 +50,12 @@ class CGRpreparer:
         """
         condense reaction container to CGR. see init for details about cgr_type
 
-        :param data: ReactionContainer or MergedReaction object
+        :param data: ReactionContainer
         :return: CGRContainer
         """
-        is_merged = isinstance(data, MergedReaction)
-        if self.__cgr_type in (1, 2, 3, 4, 5, 6):
-            if is_merged:
-                raise InvalidData('invalid data')
-            g = self.__reaction_splitter(data)
-            if self.__extralabels:
-                g.reset_query_marks()
-        else:
-            res = data if is_merged else self.merge_mols(data)
-            if self.__extralabels:
-                res.reagents.reset_query_marks()
-                res.products.reset_query_marks()
-
-            g = self.compose(res.reagents, res.products, self.__balance)
-
+        g = self.__separate(data) if self.__cgr_type in (1, 2, 3, 4, 5, 6) else self.__condense(data)
         g.meta.update(data.meta)
         return g
-
-    def merge_mols(self, data):
-        if self.__cgr_type == 0:
-            reagents = self.__union_all(data.reagents)
-            products = self.__union_all(data.products)
-
-        elif self.__cgr_type == 7:
-            reagents = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
-            products = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 8:
-            reagents = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
-            products = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 9:
-            reagents = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
-            products = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
-        elif self.__cgr_type == 10:
-            reagents = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
-            products = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
-        else:
-            raise InvalidData('Merging need reagents and products')
-
-        res = MergedReaction(reagents=reagents, products=products, meta=data.meta)
-        return res
 
     @staticmethod
     def __get_cgr_type(_type):
@@ -130,25 +94,42 @@ class CGRpreparer:
 
         return t, ind
 
-    def __reaction_splitter(self, data):
+    def __condense(self, data):
+        if self.__cgr_type == 0:
+            reagents = self.__unite(data.reagents)
+            products = self.__unite(data.products)
+        elif self.__cgr_type == 7:
+            reagents = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
+            products = self.__unite(self.__include(data.products, self.__needed['products']))
+        elif self.__cgr_type == 8:
+            reagents = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+            products = self.__unite(self.__exclude(data.products, self.__needed['products']))
+        elif self.__cgr_type == 9:
+            reagents = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+            products = self.__unite(self.__include(data.products, self.__needed['products']))
+        else:  # 10
+            reagents = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
+            products = self.__unite(self.__exclude(data.products, self.__needed['products']))
+
+        return reagents ^ products
+
+    def __separate(self, data):
         if self.__cgr_type == 1:
-            g = self.__union_all(data.reagents)
+            g = self.__unite(data.reagents)
         elif self.__cgr_type == 2:
-            g = self.__union_all(data.products)
+            g = self.__unite(data.products)
         elif self.__cgr_type == 3:
-            g = self.__union_all(self.__get_mols(data.reagents, self.__needed['reagents']))
+            g = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
         elif self.__cgr_type == 4:
-            g = self.__union_all(self.__get_mols(data.products, self.__needed['products']))
+            g = self.__unite(self.__include(data.products, self.__needed['products']))
         elif self.__cgr_type == 5:
-            g = self.__union_all(self.__exc_mols(data.reagents, self.__needed['reagents']))
-        elif self.__cgr_type == 6:
-            g = self.__union_all(self.__exc_mols(data.products, self.__needed['products']))
-        else:
-            raise InvalidData('Splitter Error')
+            g = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+        else:  # 6
+            g = self.__unite(self.__exclude(data.products, self.__needed['products']))
         return g
 
     @staticmethod
-    def __get_mols(data, needed):
+    def __include(data, needed):
         mols = []
         for x in needed:
             try:
@@ -158,7 +139,7 @@ class CGRpreparer:
         return mols
 
     @staticmethod
-    def __exc_mols(data, needed):
+    def __exclude(data, needed):
         mols = data.copy()
         for x in needed:
             try:
@@ -167,9 +148,9 @@ class CGRpreparer:
                 pass
         return mols
 
-    @classmethod
-    def __union_all(cls, data):
-        return reduce(cls.union, data) if data else MoleculeContainer()
+    @staticmethod
+    def __unite(data):
+        return reduce(or_, data) if data else MoleculeContainer()
 
 
 __all__ = ['CGRpreparer']

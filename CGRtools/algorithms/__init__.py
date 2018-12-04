@@ -20,6 +20,7 @@
 Molecules and CGRs analysis and representation algorithms
 """
 from .aromatics import *
+from .compose import *
 from .morgan import *
 from .sssr import *
 from .strings import *

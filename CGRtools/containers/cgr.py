@@ -18,11 +18,11 @@
 #
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import StringCGR
+from ..algorithms import StringCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
 
 
-class CGRContainer(StringCGR, BaseContainer):
+class CGRContainer(StringCGR, CGRCompose, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
@@ -34,14 +34,25 @@ class CGRContainer(StringCGR, BaseContainer):
         """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
         """
         nodes = set()
-        for n, atom in self.nodes(data=True):
-            if atom.reagent != atom.product or stereo and atom.stereo != atom.p_stereo:
+        for n, atom in self._node.items():
+            if stereo:
+                if atom._reagent != atom._product:
+                    nodes.add(n)
+            elif atom.stereo == atom.p_stereo:
                 nodes.add(n)
 
-        for *n, bond in self.edges(data=True):
-            if bond.reagent != bond.product or stereo and bond.stereo != bond.p_stereo:
-                nodes.update(n)
-
+        seen = set()
+        for n, m_bond in self._adj.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    if stereo:
+                        if bond._reagent != bond._product:
+                            nodes.add(n)
+                            nodes.add(m)
+                    elif bond._reagent == bond._product:
+                        nodes.add(n)
+                        nodes.add(m)
         return list(nodes)
 
     def decompose(self):
@@ -53,11 +64,19 @@ class CGRContainer(StringCGR, BaseContainer):
         reagents = MoleculeContainer()
         products = MoleculeContainer()
 
-        reagents.add_nodes_from((n, atom.reagent) for n, atom in self.nodes(data=True))
-        products.add_nodes_from((n, atom.product) for n, atom in self.nodes(data=True))
-        nmb = list(self.edges(data=True))
-        reagents.add_edges_from((n, m, bond.reagent) for n, m, bond in nmb if bond.order)
-        products.add_edges_from((n, m, bond.product) for n, m, bond in nmb if bond.p_order)
+        for n, atom in self._node.items():
+            reagents.add_atom(atom._reagent, n)
+            products.add_atom(atom._product, n)
+
+        seen = set()
+        for n, m_bond in self._adj.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    if bond.order:
+                        reagents.add_bond(n, m, bond._reagent)
+                    if bond.p_order:
+                        products.add_bond(n, m, bond._product)
         return reagents, products
 
     def __invert__(self):
