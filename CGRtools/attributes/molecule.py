@@ -20,9 +20,97 @@ from collections.abc import MutableMapping
 from ..periodictable import Element, elements_classes, C
 
 
-class Atom(MutableMapping):
+class Attribute(MutableMapping):
+    __slots__ = '_skip_checks'
+
+    def __setitem__(self, key, value):
+        try:
+            setattr(self, key, value)
+        except AttributeError as e:
+            raise KeyError from e
+
+    def update(self, *args, **kwargs):
+        if len(args) > 1:
+            raise TypeError('update expected at most 1 arguments')
+        elif args:
+            value = args[0]
+        else:
+            value = kwargs
+            kwargs = ()
+        self._update(value, kwargs)
+
+    def __delitem__(self, key):
+        raise TypeError('attribute deletion impossible')
+
+    def __len__(self):
+        return sum(1 for _ in self)
+
+    def __str__(self):
+        return self.stringify(stereo=True)
+
+    def copy(self):
+        cls = type(self)
+        copy = cls.__new__(cls)
+        copy.__init_copy__(self)
+        return copy
+
+    def _check_kwargs(self, kwargs):
+        if not self._skip_checks:
+            kwargs = {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
+        return kwargs
+
+    @staticmethod
+    def _stereo_check(x):
+        if x is None:
+            return None
+        x = int(x)
+        if x in (-1, 1):
+            return x
+        raise ValueError('stereo can be: None, 1 or -1')
+
+    _stereo_str = {1: '@', -1: '@@'}
+
+
+class AtomAttribute(Attribute):
+    @staticmethod
+    def _x_check(x):
+        return float(x)
+
+    _z_check = _y_check = _x_check
+    _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
+    _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
+    _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
+
+
+class BondAttribute(Attribute):
+    __slots__ = ('order', 'stereo')
+
+    def __init_copy__(self, parent):
+        super().__setattr__('_skip_checks', parent._skip_checks)
+        super().__setattr__('order', parent.order)
+        super().__setattr__('stereo', parent.stereo)
+
+    def __setattr__(self, key, value):
+        if not self._skip_checks:
+            value = getattr(self, f'_{key}_check')(value)
+        super().__setattr__(key, value)
+
+    def __getitem__(self, key):
+        if key not in ('order', 'stereo'):
+            raise KeyError('unknown bond attribute')
+        return getattr(self, key)
+
+    def __iter__(self):
+        yield 'order'
+        if self.stereo:
+            yield 'stereo'
+
+    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~'}
+
+
+class Atom(AtomAttribute):
     __slots__ = ('_atom', '__hybridization', '__neighbors', '__color', '__stereo', '__mapping', '__mark',
-                 '__x', '__y', '__z', '_skip_checks')
+                 '__x', '__y', '__z')
 
     def __init__(self, *, skip_checks=False):
         super().__setattr__('_skip_checks', skip_checks)
@@ -69,22 +157,6 @@ class Atom(MutableMapping):
                 super().__setattr__(f'_Atom__{key}', value)
             else:
                 super().__setattr__(key, value)
-
-    def update(self, *args, **kwargs):
-        """
-        update atom
-
-        :param args: tuple with 1 or 0 elements. element can be dict of atom attrs or atom object or atom class.
-        :param kwargs: atom attrs. has precedence other args[0] if it's dict
-        """
-        if len(args) > 1:
-            raise TypeError('update expected at most 1 arguments')
-        elif args:
-            value = args[0]
-        else:
-            value = kwargs
-            kwargs = ()
-        self._update(value, kwargs)
 
     def _update(self, value, kwargs):
         if isinstance(value, Atom):
@@ -233,12 +305,6 @@ class Atom(MutableMapping):
     def z(self, value):
         super().__setattr__('_Atom__z', self._z_check(value))
 
-    @staticmethod
-    def _x_check(x):
-        return float(x)
-
-    _z_check = _y_check = _x_check
-
     @property
     def mapping(self):
         return self.__mapping
@@ -263,15 +329,6 @@ class Atom(MutableMapping):
     @stereo.setter
     def stereo(self, value):
         super().__setattr__('_Atom__stereo', self._stereo_check(value))
-
-    @staticmethod
-    def _stereo_check(x):
-        if x is None:
-            return None
-        x = int(x)
-        if x in (-1, 1):
-            return x
-        raise ValueError('stereo can be: None, 1 or -1')
 
     @property
     def neighbors(self):
@@ -359,24 +416,14 @@ class Atom(MutableMapping):
             return getattr(self, key)
         raise KeyError('unknown atom attribute')
 
-    def __setitem__(self, key, value):
-        try:
-            setattr(self, key, value)
-        except AttributeError as e:
-            raise KeyError from e
-
     def __getattr__(self, key):
+        if key == '__dict__':
+            raise AttributeError()
         if key == 'element':
             return self._atom.symbol
         return getattr(self._atom, key)
 
-    def __len__(self):
-        return sum(1 for _ in self)
-
     def __iter__(self):
-        """
-        iterate other non-default atom's init attrs
-        """
         yield 'element'
         if self.isotope != self.common_isotope:
             yield 'isotope'
@@ -384,21 +431,12 @@ class Atom(MutableMapping):
             yield 'charge'
         if self.multiplicity:
             yield 'multiplicity'
-        for k, d in self.__defaults.items():
-            if d != getattr(self, k):
+        for k in ('mapping', 'mark', 'stereo', 'color'):
+            if getattr(self, k) is not None:
                 yield k
-
-    def __delitem__(self, key):
-        raise TypeError('attribute deletion impossible')
-
-    def __str__(self):
-        return self.stringify(stereo=True)
-
-    def copy(self):
-        cls = type(self)
-        copy = cls.__new__(cls)
-        copy.__init_copy__(self)
-        return copy
+        for k in ('x', 'y', 'z'):
+            if getattr(self, k):
+                yield k
 
     @staticmethod
     def _element_check(x):
@@ -411,54 +449,20 @@ class Atom(MutableMapping):
             return {f'_Atom__{k}': getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
         return {f'_Atom__{k}': v for k, v in kwargs.items()}
 
-    _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-    _stereo_str = {1: '@', -1: '@@'}
-    _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
-    _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
-    __defaults = {'mapping': None, 'mark': None, 'x': 0., 'y': 0., 'z': 0., 'stereo': None, 'color': None}
 
-
-class Bond(MutableMapping):
-    __slots__ = ('order', 'stereo', '_skip_checks')
-
+class Bond(BondAttribute):
     def __init__(self, *, skip_checks=False):
-        super().__setattr__('_skip_checks', skip_checks)
-        super().__setattr__('order', 1)
-        super().__setattr__('stereo', None)
-
-    def __init_copy__(self, parent):
-        super().__setattr__('_skip_checks', parent._skip_checks)
-        super().__setattr__('order', parent.order)
-        super().__setattr__('stereo', parent.stereo)
-
-    def __setattr__(self, key, value):
-        if not self._skip_checks:
-            value = getattr(self, f'_{key}_check')(value)
-        super().__setattr__(key, value)
-
-    def update(self, *args, **kwargs):
-        """
-        update bond
-
-        :param args: tuple with 1 or 0 elements. element can be Bond object or dict of bond attrs.
-        :param kwargs: bond attrs. has precedence other args[0]
-        """
-        if len(args) > 1:
-            raise TypeError('update expected at most 1 arguments')
-        elif args:
-            value = args[0]
-        else:
-            value = kwargs
-            kwargs = ()
-        self._update(value, kwargs)
+        super(BondAttribute, self).__setattr__('_skip_checks', skip_checks)
+        super(BondAttribute, self).__setattr__('order', 1)
+        super(BondAttribute, self).__setattr__('stereo', None)
 
     def _update(self, value, kwargs):
         if isinstance(value, Bond):
             kwargs = self._check_kwargs(kwargs)
-            super().__setattr__('order', value.order)
-            super().__setattr__('stereo', value.stereo)
+            super(BondAttribute, self).__setattr__('order', value.order)
+            super(BondAttribute, self).__setattr__('stereo', value.stereo)
             for k, v in kwargs.items():
-                super().__setattr__(k, v)
+                super(BondAttribute, self).__setattr__(k, v)
         else:
             if not isinstance(value, dict):
                 try:
@@ -471,7 +475,7 @@ class Bond(MutableMapping):
                 return  # ad-hoc for add_edges_from method
 
             for k, v in self._check_kwargs(value).items():
-                super().__setattr__(k, v)
+                super(BondAttribute, self).__setattr__(k, v)
 
     def stringify(self, stereo=False):
         if stereo and self.stereo:
@@ -497,65 +501,11 @@ class Bond(MutableMapping):
         """
         return self == other and self.stereo == other.stereo
 
-    def __getitem__(self, key):
-        if key not in self._defaults:
-            raise KeyError('unknown bond attribute')
-        return getattr(self, key)
-
-    def __setitem__(self, key, value):
-        try:
-            setattr(self, key, value)
-        except AttributeError as e:
-            raise KeyError from e
-
-    def __len__(self):
-        return sum(1 for _ in self)
-
-    def __iter__(self):
-        """
-        iterate other non-default bonds attrs
-
-        need for nx.readwrite.json_graph.node_link_data
-        """
-        yield 'order'
-        if self.stereo != self._defaults['stereo']:
-            yield 'stereo'
-
-    def __delitem__(self, key):
-        raise TypeError('attribute deletion impossible')
-
-    def __str__(self):
-        return self.stringify(stereo=True)
-
-    def copy(self):
-        cls = type(self)
-        copy = cls.__new__(cls)
-        copy.__init_copy__(self)
-        return copy
-
-    def _check_kwargs(self, kwargs):
-        if not self._skip_checks:
-            kwargs = {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
-        return kwargs
-
     @staticmethod
     def _order_check(x):
         if isinstance(x, int) and x in (1, 2, 3, 4, 9):
             return x
         raise ValueError('invalid order')
-
-    @staticmethod
-    def _stereo_check(x):
-        if x is None:
-            return None
-        x = int(x)
-        if x in (-1, 1):
-            return x
-        raise ValueError('stereo can be: None, 1 or -1')
-
-    _defaults = {'order': 1, 'stereo': None}
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~'}
-    _stereo_str = {1: '@', -1: '@@'}
 
 
 __all__ = ['Atom', 'Bond']

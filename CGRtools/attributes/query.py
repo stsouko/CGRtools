@@ -16,17 +16,17 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections.abc import MutableMapping
-from .molecule import Bond, Atom
+from .molecule import Bond, Atom, AtomAttribute, BondAttribute
 from ..periodictable import Element, elements_classes, elements_numbers
 
 
-class QueryAtom(MutableMapping):
-    __slots__ = ('_atom', '_skip_checks')
+class QueryAtom(AtomAttribute):
+    __slots__ = '_atom'
 
     def __init__(self, *, skip_checks=False):
         super().__setattr__('_skip_checks', skip_checks)
-        super().__setattr__('_atom', self.__defaults.copy())
+        super().__setattr__('_atom', {'element': ('A',), 'isotope': (), 'charge': (0,), 'multiplicity': (),
+                                      'neighbors': (), 'hybridization': (), 'stereo': None, 'x': 0., 'y': 0., 'z': 0.})
 
     def __init_copy__(self, parent):
         super().__setattr__('_atom', parent._atom.copy())
@@ -35,22 +35,6 @@ class QueryAtom(MutableMapping):
         if not self._skip_checks:
             value = getattr(self, f'_{key}_check')(value, True)
         self._atom[key] = value
-
-    def update(self, *args, **kwargs):
-        """
-        update atom
-
-        :param args: tuple with 1 or 0 elements. element can be dict of atom attrs or atom object or atom class.
-        :param kwargs: atom attrs. has precedence other args[0]
-        """
-        if len(args) > 1:
-            raise TypeError('update expected at most 1 arguments')
-        elif args:
-            value = args[0]
-        else:
-            value = kwargs
-            kwargs = ()
-        self._update(value, kwargs)
 
     def _update(self, value, kwargs):
         if isinstance(value, QueryAtom):
@@ -138,7 +122,7 @@ class QueryAtom(MutableMapping):
 
             if isotope:
                 if len(self.isotope) > 1:
-                    smi.insert(0, '<%s>' % ''.join(str(x) for x in self.isotope))
+                    smi.insert(0, '<%s>' % ','.join(str(x) for x in self.isotope))
                 elif self.isotope:
                     smi.insert(0, str(self.isotope[0]))
         else:
@@ -198,139 +182,108 @@ class QueryAtom(MutableMapping):
         except KeyError as e:
             raise AttributeError from e
 
-    def __setitem__(self, key, value):
-        try:
-            setattr(self, key, value)
-        except AttributeError as e:
-            raise KeyError from e
-
-    def __len__(self):
-        return sum(1 for _ in self)
-
     def __iter__(self):
         return iter(self._atom)
 
-    def __delitem__(self, key):
-        raise TypeError('attribute deletion impossible')
-
-    def __str__(self):
-        return self.stringify()
-
-    def copy(self):
-        cls = type(self)
-        copy = cls.__new__(cls)
-        copy.__init_copy__(self)
-        return copy
-
     @staticmethod
-    def _element_check(x, sort=None):
+    def _element_check(x):
         if x == ('A',):
             return x
-        elif x == 'A':
-            return 'A',
+        elif isinstance(x, str):
+            if x in elements_classes:
+                return x,
         elif 0 < len(x) == len(set(x)) and all(x != 'A' and x in elements_classes for x in x):
             return tuple(sorted(x, key=elements_numbers.get))
         raise ValueError('invalid element')
 
     @staticmethod
-    def _stereo_check(x, sort=None):
+    def _isotope_check(x):
         if x is None:
-            return None
-        x = int(x)
-        if x in (-1, 1):
-            return x
-        raise ValueError('stereo can be: None, 1 or -1')
-
-    @staticmethod
-    def _isotope_check(x, sort=None):
-        if isinstance(x, int):
+            return ()
+        elif isinstance(x, int):
             if x > 0:
                 return x,
-            raise ValueError('invalid isotope')
         elif len(x) == len(set(x)) and all(isinstance(x, int) and x > 0 for x in x):
             return tuple(sorted(x))
         raise ValueError('invalid isotope')
 
-    @staticmethod
-    def _charge_check(x, sort=False):
+    def _charge_check(self, x):
         if isinstance(x, int):
             if -3 <= x <= 3:
                 return x,
-            raise ValueError('invalid charge')
         elif 0 < len(x) == len(set(x)) and all(isinstance(x, int) and -3 <= x <= 3 for x in x):
-            if sort:
+            if not self._skip_checks:
                 return tuple(sorted(x))
-            return x
+            return tuple(x)
         raise ValueError('invalid charge')
 
-    @staticmethod
-    def _multiplicity_check(x, sort=False):
-        if isinstance(x, int):
+    def _multiplicity_check(self, x):
+        if x is None:
+            return ()
+        elif isinstance(x, int):
             if 1 <= x <= 3:
                 return x,
-            raise ValueError('invalid multiplicity')
         elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 3 for x in x):
-            if sort:
+            if not self._skip_checks:
                 return tuple(sorted(x))
             return x
         raise ValueError('invalid multiplicity')
 
-    @staticmethod
-    def _neighbors_check(x, sort=False):
+    def _neighbors_check(self, x):
         if isinstance(x, int):
             if 0 <= x <= 998:
                 return x,
             raise ValueError('invalid neighbors')
         elif len(x) == len(set(x)) and all(isinstance(x, int) and 0 <= x <= 998 for x in x):
-            if sort:
+            if not self._skip_checks:
                 return tuple(sorted(x))
             return x
         raise ValueError('invalid neighbors')
 
-    @staticmethod
-    def _hybridization_check(x, sort=False):
+    def _hybridization_check(self, x):
         if isinstance(x, int):
             if 1 <= x <= 4:
                 return x,
             raise ValueError('invalid hybridization')
         elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 4 for x in x):
-            if sort:
+            if not self._skip_checks:
                 return tuple(sorted(x))
             return x
         raise ValueError('invalid hybridization')
 
-    def _check_kwargs(self, kwargs):
-        if not self._skip_checks:
-            kwargs = {k: getattr(self, f'_{k}_check')(v, True) for k, v in kwargs.items()}
-        return kwargs
 
-    @staticmethod
-    def _x_check(x, sort=None):
-        return float(x)
+class QueryBond(BondAttribute):
+    def __init__(self, *, skip_checks=False):
+        super(BondAttribute, self).__setattr__('_skip_checks', skip_checks)
+        super(BondAttribute, self).__setattr__('order', (1,))
+        super(BondAttribute, self).__setattr__('stereo', None)
 
-    _z_check = _y_check = _x_check
-
-    _hybridization_str = Atom._hybridization_str
-    _stereo_str = Atom._stereo_str
-    _multiplicity_str = Atom._multiplicity_str
-    _charge_str = Atom._charge_str
-    __defaults = {'element': ('A',), 'isotope': (), 'charge': (0,), 'multiplicity': (),
-                  'neighbors': (), 'hybridization': (), 'stereo': None, 'x': 0., 'y': 0., 'z': 0.}
-
-
-class QueryBond(Bond):
     def _update(self, value, kwargs):
-        if isinstance(value, Bond):
+        if isinstance(value, QueryBond):
             kwargs = self._check_kwargs(kwargs)
-            if isinstance(value, QueryBond):
-                super().__setattr__('order', value.order)
-            else:
-                super().__setattr__('order', (value.order,))
-            super().__setattr__('stereo', value.stereo)
+            super(BondAttribute, self).__setattr__('order', value.order)
+            super(BondAttribute, self).__setattr__('stereo', value.stereo)
             for k, v in kwargs.items():
-                super().__setattr__(k, v)
+                super(BondAttribute, self).__setattr__(k, v)
+        elif isinstance(value, Bond):
+            kwargs = self._check_kwargs(kwargs)
+            super(BondAttribute, self).__setattr__('order', (value.order,))
+            super(BondAttribute, self).__setattr__('stereo', value.stereo)
+            for k, v in kwargs.items():
+                super(BondAttribute, self).__setattr__(k, v)
         else:
-            super()._update(value, kwargs)
+            if not isinstance(value, dict):
+                try:
+                    value = dict(value)
+                except (TypeError, ValueError):
+                    raise TypeError('invalid attrs sequence')
+
+            value.update(kwargs)
+            if not value:
+                return  # ad-hoc for add_edges_from method
+
+            for k, v in self._check_kwargs(value).items():
+                super(BondAttribute, self).__setattr__(k, v)
 
     def stringify(self, stereo=True):
         order = '<%s>' % ''.join(self._order_str[x] for x in self.order)
@@ -363,17 +316,15 @@ class QueryBond(Bond):
             return True
         return False
 
-    @staticmethod
-    def _order_check(x):
+    def _order_check(self, x):
         if isinstance(x, int):
             if x in (1, 2, 3, 4, 9):
                 return x,
-            raise ValueError('invalid order')
         elif x and all(x in (1, 2, 3, 4, 9) for x in x):
-            return tuple(sorted(x))
+            if not self._skip_checks:
+                return tuple(sorted(x))
+            return tuple(x)
         raise ValueError('invalid order')
-
-    _defaults = {'order': (1,), 'stereo': None}
 
 
 __all__ = ['QueryAtom', 'QueryBond']

@@ -16,12 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .cgr import DynAtom, DynBond
+from .cgr import DynAtom, DynBond, DynAtomAttribute, DynBondAttribute
 from .molecule import Atom, Bond
 from .query import QueryAtom, QueryBond
+from ..periodictable import Element
 
 
-class DynQueryAtom(DynAtom):
+class DynQueryAtom(DynAtomAttribute):
     def __setattr__(self, key, value):
         if key in self._p_static:
             raise AttributeError(f'{key} is invalid')
@@ -43,15 +44,30 @@ class DynQueryAtom(DynAtom):
             self._reagent[key] = value
 
     def _update(self, value, kwargs):
-        if isinstance(value, DynQueryAtom):
+        if isinstance(value, (DynQueryAtom, DynAtom)):
             r, p = self._split_check_kwargs(kwargs)
             p_value = value._product
             value = value._reagent
-        elif isinstance(value, QueryAtom):
+        elif isinstance(value, (QueryAtom, Atom, Element)):
+            r, p = self._split_check_kwargs(kwargs)
+            p_value = value
+        elif isinstance(value, type):
+            if not issubclass(value, Element):
+                ValueError('only CGRtools.periodictable.Element subclasses allowed')
             r, p = self._split_check_kwargs(kwargs)
             p_value = value
         else:
-            return super()._update(value, kwargs)
+            if not isinstance(value, dict):
+                try:
+                    value = dict(value)
+                except (TypeError, ValueError):
+                    raise TypeError('invalid attrs sequence')
+
+            value.update(kwargs)
+            if not value:  # ad-hoc for add_nodes_from method
+                return
+            value, p_value = self._split_check_kwargs(value)
+            r = p = {}
 
         self._reagent._update(value, r)
         self._product._update(p_value, p)
@@ -89,16 +105,12 @@ class DynQueryAtom(DynAtom):
             return self.stereo == self.p_stereo == other.stereo
         return False
 
-    _hybridization_str = Atom._hybridization_str
-    _stereo_str = Atom._stereo_str
-    _multiplicity_str = Atom._multiplicity_str
-    _charge_str = Atom._charge_str
+    _factory = QueryAtom
     _static = {'element', 'isotope'}
-    _p_static = {f'p_{x}' for x in _static}
-    _atom_factory = QueryAtom
+    _p_static = {'p_element', 'p_isotope'}
 
 
-class DynQueryBond(DynBond):
+class DynQueryBond(DynBondAttribute):
     def __setattr__(self, key, value):
         if key == 'p_order':
             if value is None:
@@ -108,7 +120,7 @@ class DynQueryBond(DynBond):
                     raise ValueError('stereo bond not nullable')
                 self._reagent.order = tuple(sorted(self.order))
             else:
-                value = self._order_check(value)
+                value = self._reagent._order_check(value)
                 if self.order:
                     if len(value) != len(self.order):
                         raise ValueError('order lists in reagent and product should be equal size')
@@ -124,7 +136,7 @@ class DynQueryBond(DynBond):
                     raise ValueError('stereo bond not nullable')
                 self._product.order = tuple(sorted(self.p_order))
             else:
-                value = self._order_check(value)
+                value = self._reagent._order_check(value)
                 if self.p_order:
                     if len(value) != len(self.p_order):
                         raise ValueError('order lists in reagent and product should be equal size')
@@ -137,14 +149,14 @@ class DynQueryBond(DynBond):
                 if not self.p_order:
                     raise ValueError('null-bond stereo impossible')
             else:
-                value = self._stereo_check(value)
+                value = self._reagent._stereo_check(value)
             self._product.stereo = value
         elif key == 'stereo':
             if value is None:
                 if not self.order:
                     raise ValueError('null-bond stereo impossible')
             else:
-                value = self._stereo_check(value)
+                value = self._reagent._stereo_check(value)
             self._reagent.stereo = value
         else:
             raise AttributeError('invalid bond attribute')
@@ -277,19 +289,7 @@ class DynQueryBond(DynBond):
             return self.stereo == self.p_stereo == other.stereo
         return False
 
-    @staticmethod
-    def _order_check(x):
-        if isinstance(x, int):
-            if x in (1, 2, 3, 4, 9):
-                return x,
-            raise ValueError('invalid order')
-        elif x and all(x in (1, 2, 3, 4, 9) for x in x):
-            return tuple(x)
-        raise ValueError('invalid order')
-
-    _bond_factory = QueryBond
-    _order_str = Bond._order_str
-    _stereo_str = Bond._stereo_str
+    _factory = QueryBond
 
 
 __all__ = ['DynQueryAtom', 'DynQueryBond']
