@@ -155,7 +155,7 @@ class DynBondAttribute(DynAttribute):
                 raise AttributeError('invalid bond attribute')
         return r, p
 
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~'}
+    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
 
 class DynAtom(DynAtomAttribute):

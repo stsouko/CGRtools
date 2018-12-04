@@ -105,7 +105,7 @@ class BondAttribute(Attribute):
         if self.stereo:
             yield 'stereo'
 
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~'}
+    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
 
 class Atom(AtomAttribute):
@@ -171,7 +171,7 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__color', value.color)
             for k, v in kwargs.items():
                 super().__setattr__(k, v)
-        if isinstance(value, type):
+        elif isinstance(value, type):
             if not issubclass(value, Element):
                 ValueError('only CGRtools.periodictable.Element subclasses allowed')
             if not {'neighbors', 'hybridization', 'element'}.isdisjoint(kwargs):

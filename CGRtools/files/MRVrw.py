@@ -371,7 +371,7 @@ class MRVwrite(CGRwrite, WithMixin):
                    None: '/>'}.__getitem__
     _charge_map = {-3: ' formalCharge="-3"', -2: ' formalCharge="-2"', -1: ' formalCharge="-1"', 0: '',
                    1: ' formalCharge="1"', 2: ' formalCharge="2"', 3: ' formalCharge="3"'}.__getitem__
-    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's'}.__getitem__
+    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's', None: '0'}.__getitem__
     __finalized = False
 
 

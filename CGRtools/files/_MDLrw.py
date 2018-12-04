@@ -458,7 +458,7 @@ class MOLwrite(CGRwrite):
             else:
                 break
         for i, (ja, jt, jv) in enumerate(cgr, start=1):
-            mol_prop.append(f'M  SAL {i:3d}{len(ja):3d} {" ".join("f{x:3d}" for x in ja)}\n')
+            mol_prop.append(f'M  SAL {i:3d}{len(ja):3d} {" ".join(f"{x:3d}" for x in ja)}\n')
             mol_prop.append(f'M  SDT {i:3d} {jt}\n')
             mol_prop.append(f'M  SDD {i:3d}     0.0000{i / 3:10.4f}    DAU   ALL  0       0\n')
             mol_prop.append(f'M  SED {i:3d} {jv}\n')
@@ -494,4 +494,4 @@ class MOLwrite(CGRwrite):
 
     _stereo_map = {-1: '6', 1: '1', None: '0'}.__getitem__
     _charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}.__getitem__
-    _bond_map = {8: '8', 4: '4', 1: '1', 2: '2', 3: '3', 9: 's'}.__getitem__
+    _bond_map = {8: '8', 4: '4', 1: '1', 2: '2', 3: '3', 9: 's', None: '0'}.__getitem__
