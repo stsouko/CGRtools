@@ -199,7 +199,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         """
         s = self.subgraph(atoms).copy()
         if not meta:
-            s.graph.clean()
+            s.graph.clear()
         return s
 
     def augmented_substructure(self, atoms, dante=False, deep=1, meta=False):

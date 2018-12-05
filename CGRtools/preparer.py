@@ -18,7 +18,7 @@
 #
 from functools import reduce
 from operator import or_
-from .containers import MoleculeContainer
+from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
 class CGRpreparer:
@@ -46,7 +46,7 @@ class CGRpreparer:
         self.__cgr_type_code = cgr_type
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
 
-    def condense(self, data):
+    def compose(self, data):
         """
         condense reaction container to CGR. see init for details about cgr_type
 
@@ -56,6 +56,13 @@ class CGRpreparer:
         g = self.__separate(data) if self.__cgr_type in (1, 2, 3, 4, 5, 6) else self.__condense(data)
         g.meta.update(data.meta)
         return g
+
+    @staticmethod
+    def decompose(data):
+        if not isinstance(data, CGRContainer):
+            raise TypeError('CGR only supported')
+        r, p = ~data
+        return ReactionContainer(r.split(), p.split(), meta=data.meta)
 
     @staticmethod
     def __get_cgr_type(_type):

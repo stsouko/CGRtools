@@ -49,9 +49,10 @@ class CGRCompose:
         h = cgr()
         atoms = h._node
         bonds = []
+        common_adj = {n: {} for n in common}
+        common_bonds = []
 
         r_atoms = {}
-        r_bonds = []
         r_skin = defaultdict(list)
         if isinstance(self, cgr):
             for n in unique_reagent:
@@ -68,7 +69,9 @@ class CGRCompose:
                 r_atoms[n] = self._node[n]._reagent
                 for m, bond in self._adj[n].items():
                     if m not in r_atoms and m in common:
-                        r_bonds.append((n, m, bond._reagent))
+                        tmp = [bond._reagent, self.__none_bond]
+                        common_adj[n][m] = common_adj[m][n] = tmp
+                        common_bonds.append((n, m, tmp))
         else:
             for n in unique_reagent:
                 atom = DynAtom.__new__(DynAtom)
@@ -87,10 +90,11 @@ class CGRCompose:
                 r_atoms[n] = self._node[n]
                 for m, bond in self._adj[n].items():
                     if m not in r_atoms and m in common:
-                        r_bonds.append((n, m, bond))
+                        tmp = [bond, self.__none_bond]
+                        common_adj[n][m] = common_adj[m][n] = tmp
+                        common_bonds.append((n, m, tmp))
 
         p_atoms = {}
-        p_bonds = defaultdict(dict)
         p_skin = defaultdict(list)
         if isinstance(other, cgr):
             for n in unique_product:
@@ -105,9 +109,14 @@ class CGRCompose:
                         bonds.append((n, m, bond))
             for n in common:
                 p_atoms[n] = other._node[n]._product
+                n_bonds = common_adj[n]
                 for m, bond in other._adj[n].items():
-                    if m not in p_atoms and m in common:
-                        p_bonds[n][m] = p_bonds[m][n] = bond._product
+                    if m in n_bonds:
+                        n_bonds[m][1] = bond._product
+                    elif m not in p_atoms and m in common:
+                        tmp = [self.__none_bond, bond._product]
+                        n_bonds[m] = common_adj[m][n] = tmp
+                        common_bonds.append((n, m, tmp))
         else:
             for n in unique_product:
                 atom = DynAtom.__new__(DynAtom)
@@ -124,9 +133,14 @@ class CGRCompose:
                         bonds.append((n, m, bond))
             for n in common:
                 p_atoms[n] = other._node[n]
+                n_bonds = common_adj[n]
                 for m, bond in other._adj[n].items():
-                    if m not in p_atoms and m in common:
-                        p_bonds[n][m] = p_bonds[m][n] = bond
+                    if m in n_bonds:
+                        n_bonds[m][1] = bond
+                    elif m not in p_atoms and m in common:
+                        tmp = [self.__none_bond, bond]
+                        n_bonds[m] = common_adj[m][n] = tmp
+                        common_bonds.append((n, m, tmp))
 
         for n, r_atom in r_atoms.items():
             p_atom = p_atoms[n]
@@ -135,8 +149,8 @@ class CGRCompose:
             atom = DynAtom.__new__(DynAtom)
             atom.__init_copy__(r_atom, p_atom)
             h.add_atom(atom, n)
-        for n, m, r_bond in r_bonds:
-            p_bond = p_bonds[n][m]
+
+        for n, m, (r_bond, p_bond) in common_bonds:
             if r_bond.order is p_bond.order is None:
                 continue
             bond = DynBond.__new__(DynBond)
