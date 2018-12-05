@@ -28,19 +28,26 @@ class DynQueryAtom(DynAtomAttribute):
             raise AttributeError(f'{key} is invalid')
         elif key.startswith('p_'):
             key = key[2:]
-            value = getattr(self._atom_factory, f'_{key}_check')(value)
-            if key == 'stereo':
-                self._product[key] = value
-            elif len(value) != len(self[key]):
-                raise ValueError(f'{key} lists in reagent and product should be equal size')
-            elif value:
-                self._reagent[key], self._product[key] = zip(*sorted(zip(self._reagent[key], value)))
+            value = getattr(self._reagent, f'_{key}_check')(value)
+            if key not in ('stereo', 'x', 'y', 'z'):
+                if len(value) != len(self[key]):
+                    raise ValueError(f'{key} lists in reagent and product should be equal size')
+                value = sorted(zip(self[key], value))
+                if len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
+                self._reagent[key], value = zip(*value)
+            self._product[key] = value
         else:
-            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            value = getattr(self._reagent, f'_{key}_check')(value)
             if key in self._static:
                 self._product[key] = value
-            elif key != 'stereo' and len(value) != len(self._product[key]):
-                raise ValueError(f'{key} lists in reagent and product should be equal size')
+            elif key not in ('stereo', 'x', 'y', 'z'):
+                if len(value) != len(self._product[key]):
+                    raise ValueError(f'{key} lists in reagent and product should be equal size')
+                value = sorted(zip(value, self._product[key]))
+                if len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
+                value, self._product[key] = zip(*value)
             self._reagent[key] = value
 
     def _update(self, value, kwargs):
@@ -105,6 +112,20 @@ class DynQueryAtom(DynAtomAttribute):
             return self.stereo == self.p_stereo == other.stereo
         return False
 
+    def _split_check_kwargs(self, kwargs):
+        r, p = super()._split_check_kwargs(kwargs)
+        for k in ('charge', 'multiplicity', 'neighbors', 'hybridization'):
+            if k in r:
+                if k not in p:
+                    raise ValueError(f'{k} attribute should be presented with p_{k}')
+                elif len(r[k]) != len(p[k]):
+                    raise ValueError(f'{k} lists in reagent and product should be equal size')
+                value = sorted(zip(r[k], p[k]))
+                if len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
+                r[k], p[k] = zip(*value)
+        return r, p
+
     _factory = QueryAtom
     _static = {'element', 'isotope'}
     _p_static = {'p_element', 'p_isotope'}
@@ -124,7 +145,12 @@ class DynQueryBond(DynBondAttribute):
                 if self.order:
                     if len(value) != len(self.order):
                         raise ValueError('order lists in reagent and product should be equal size')
-                    self._reagent.order, value = zip(*sorted(zip(self.order, value)))
+                    value = sorted(zip(self.order, value))
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    self._reagent.order, value = zip(*value)
+                elif len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
                 else:
                     value = tuple(sorted(value))
             self._product.order = value
@@ -140,7 +166,12 @@ class DynQueryBond(DynBondAttribute):
                 if self.p_order:
                     if len(value) != len(self.p_order):
                         raise ValueError('order lists in reagent and product should be equal size')
-                    value, self._product.order = zip(*sorted(zip(value, self.p_order)))
+                    value = sorted(zip(value, self.p_order))
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    value, self._product.order = zip(*value)
+                elif len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
                 else:
                     value = tuple(sorted(value))
             self._reagent.order = value
@@ -181,10 +212,17 @@ class DynQueryBond(DynBondAttribute):
                 if r['order'] and p['order']:
                     if len(r['order']) != len(p['order']):
                         raise ValueError('order lists in reagent and product should be equal size')
-                    r['order'], p['order'] = zip(*sorted(zip(r['order'], p['order'])))
+                    value = sorted(zip(r['order'], p['order']))
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    r['order'], p['order'] = zip(*value)
                 elif r['order']:
+                    if len(r['order']) != len(set(r['order'])):
+                        raise ValueError('duplicates found')
                     r['order'] = tuple(sorted(r['order']))
                 elif p['order']:
+                    if len(p['order']) != len(set(p['order'])):
+                        raise ValueError('duplicates found')
                     p['order'] = tuple(sorted(p['order']))
                 else:
                     raise ValueError('empty bond not allowed')
@@ -216,21 +254,34 @@ class DynQueryBond(DynBondAttribute):
             if r.get('order') and p.get('order'):
                 if len(r['order']) != len(p['order']):
                     raise ValueError('order lists in reagent and product should be equal size')
-                r['order'], p['order'] = zip(*sorted(zip(r['order'], p['order'])))
+                value = sorted(zip(r['order'], p['order']))
+                if len(value) != len(set(value)):
+                    raise ValueError('duplicates found')
+                r['order'], p['order'] = zip(*value)
             elif r.get('order'):
                 if 'order' in p or not self.p_order:
+                    if len(r['order']) != len(set(r['order'])):
+                        raise ValueError('duplicates found')
                     r['order'] = tuple(sorted(r['order']))
                 else:
                     if len(r['order']) != len(self.p_order):
                         raise ValueError('order lists in reagent and product should be equal size')
-                    r['order'], p['order'] = zip(*sorted(zip(r['order'], self.p_order)))
+                    value = sorted(zip(r['order'], self.p_order))
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    r['order'], p['order'] = zip(*value)
             elif p.get('order'):
                 if 'order' in r or not self.order:
+                    if len(p['order']) != len(set(p['order'])):
+                        raise ValueError('duplicates found')
                     p['order'] = tuple(sorted(p['order']))
                 else:
                     if len(p['order']) != len(self.order):
                         raise ValueError('order lists in reagent and product should be equal size')
-                    r['order'], p['order'] = zip(*sorted(zip(self.order, p['order'])))
+                    value = sorted(zip(self.order, p['order']))
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    r['order'], p['order'] = zip(*value)
             elif 'order' in r and 'order' in p:
                 raise ValueError('empty bond not allowed')
 

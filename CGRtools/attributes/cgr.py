@@ -164,10 +164,10 @@ class DynAtom(DynAtomAttribute):
             raise AttributeError(f'{key} is invalid')
         elif key.startswith('p_'):
             key = key[2:]
-            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            value = getattr(self._reagent, f'_{key}_check')(value)
             self._product[key] = value
         else:
-            value = getattr(self._atom_factory, f'_{key}_check')(value)
+            value = getattr(self._reagent, f'_{key}_check')(value)
             self._reagent[key] = value
             if key in self._static:
                 self._product[key] = value

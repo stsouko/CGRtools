@@ -56,15 +56,14 @@ class Attribute(MutableMapping):
 
     def _check_kwargs(self, kwargs):
         if not self._skip_checks:
-            kwargs = {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
+            return {k: getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
         return kwargs
 
     @staticmethod
     def _stereo_check(x):
         if x is None:
             return None
-        x = int(x)
-        if x in (-1, 1):
+        elif x in (-1, 1):
             return x
         raise ValueError('stereo can be: None, 1 or -1')
 
@@ -104,6 +103,18 @@ class BondAttribute(Attribute):
         yield 'order'
         if self.stereo:
             yield 'stereo'
+
+    def _update_kwargs(self, value, kwargs):
+        if not isinstance(value, dict):
+            try:
+                value = dict(value)
+            except (TypeError, ValueError):
+                raise TypeError('invalid attrs sequence')
+
+        value.update(kwargs)
+        if value:
+            for k, v in self._check_kwargs(value).items():
+                super().__setattr__(k, v)
 
     _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
@@ -148,15 +159,14 @@ class Atom(AtomAttribute):
             attrs = {'multiplicity': self.multiplicity, 'isotope': self.isotope,
                      'charge': self.charge, key: value}
             super().__setattr__('_atom', type(self._atom)(**attrs))
-        elif key in ('neighbors', 'hybridization'):
-            raise AttributeError('neighbors and hybridization change not allowed')
+        elif key == '_neighbors':
+            super().__setattr__('_Atom__neighbors', value)
+        elif key == '_hybridization':
+            super().__setattr__('_Atom__hybridization', value)
+        elif self._skip_checks:
+            super().__setattr__(f'_Atom__{key}', value)
         else:
-            if key in ('_neighbors', '_hybridization'):
-                key = key[1:]
-            if self._skip_checks:
-                super().__setattr__(f'_Atom__{key}', value)
-            else:
-                super().__setattr__(key, value)
+            super().__setattr__(key, value)
 
     def _update(self, value, kwargs):
         if isinstance(value, Atom):
@@ -317,8 +327,7 @@ class Atom(AtomAttribute):
     def _mapping_check(x):
         if x is None:
             return None
-        x = int(x)
-        if 0 <= x <= 999:
+        elif isinstance(x, int) and 0 <= x <= 999:
             return x
         raise ValueError('mapping can be in range 0-999')
 
@@ -334,35 +343,9 @@ class Atom(AtomAttribute):
     def neighbors(self):
         return self.__neighbors
 
-    @neighbors.setter
-    def neighbors(self, value):
-        super().__setattr__('_Atom__neighbors', self._neighbors_check(value))
-
-    @staticmethod
-    def _neighbors_check(x):
-        if x is None:
-            return None
-        x = int(x)
-        if 0 <= x <= 998:
-            return x
-        raise ValueError('neighbors can be: None or in range 0-998')
-
     @property
     def hybridization(self):
         return self.__hybridization
-
-    @hybridization.setter
-    def hybridization(self, value):
-        super().__setattr__('_Atom__hybridization', self._hybridization_check(value))
-
-    @staticmethod
-    def _hybridization_check(x):
-        if x is None:
-            return None
-        x = int(x)
-        if x in (1, 2, 3, 4):
-            return x
-        raise ValueError('hybridization can be: None, 1, 2, 3 or 4')
 
     @property
     def mark(self):
@@ -376,8 +359,7 @@ class Atom(AtomAttribute):
     def _mark_check(x):
         if x is None:
             return None
-        x = int(x)
-        if 1 <= x <= 999:
+        elif isinstance(x, int) and 1 <= x <= 999:
             return x
         raise ValueError('mark can be: None or in range 1-999')
 
@@ -464,18 +446,7 @@ class Bond(BondAttribute):
             for k, v in kwargs.items():
                 super(BondAttribute, self).__setattr__(k, v)
         else:
-            if not isinstance(value, dict):
-                try:
-                    value = dict(value)
-                except (TypeError, ValueError):
-                    raise TypeError('invalid attrs sequence')
-
-            value.update(kwargs)
-            if not value:
-                return  # ad-hoc for add_edges_from method
-
-            for k, v in self._check_kwargs(value).items():
-                super(BondAttribute, self).__setattr__(k, v)
+            self._update_kwargs(value, kwargs)
 
     def stringify(self, stereo=False):
         if stereo and self.stereo:
@@ -503,7 +474,7 @@ class Bond(BondAttribute):
 
     @staticmethod
     def _order_check(x):
-        if isinstance(x, int) and x in (1, 2, 3, 4, 9):
+        if x in (1, 2, 3, 4, 9):
             return x
         raise ValueError('invalid order')
 

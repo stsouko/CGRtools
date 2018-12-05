@@ -211,8 +211,10 @@ class QueryAtom(AtomAttribute):
         if isinstance(x, int):
             if -3 <= x <= 3:
                 return x,
-        elif 0 < len(x) == len(set(x)) and all(isinstance(x, int) and -3 <= x <= 3 for x in x):
+        elif x and all(isinstance(x, int) and -3 <= x <= 3 for x in x):
             if not self._skip_checks:
+                if len(x) != len(set(x)):
+                    raise ValueError('duplicates found')
                 return tuple(sorted(x))
             return tuple(x)
         raise ValueError('invalid charge')
@@ -223,32 +225,35 @@ class QueryAtom(AtomAttribute):
         elif isinstance(x, int):
             if 1 <= x <= 3:
                 return x,
-        elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 3 for x in x):
+        elif all(isinstance(x, int) and 1 <= x <= 3 for x in x):
             if not self._skip_checks:
+                if len(x) != len(set(x)):
+                    raise ValueError('duplicates found')
                 return tuple(sorted(x))
-            return x
+            return tuple(x)
         raise ValueError('invalid multiplicity')
 
     def _neighbors_check(self, x):
         if isinstance(x, int):
             if 0 <= x <= 998:
                 return x,
-            raise ValueError('invalid neighbors')
-        elif len(x) == len(set(x)) and all(isinstance(x, int) and 0 <= x <= 998 for x in x):
+        elif all(isinstance(x, int) and 0 <= x <= 998 for x in x):
             if not self._skip_checks:
+                if len(x) != len(set(x)):
+                    raise ValueError('duplicates found')
                 return tuple(sorted(x))
-            return x
+            return tuple(x)
         raise ValueError('invalid neighbors')
 
     def _hybridization_check(self, x):
-        if isinstance(x, int):
-            if 1 <= x <= 4:
-                return x,
-            raise ValueError('invalid hybridization')
-        elif len(x) == len(set(x)) and all(isinstance(x, int) and 1 <= x <= 4 for x in x):
+        if x in (1, 2, 3, 4):
+            return x,
+        elif all(x in (1, 2, 3, 4) for x in x):
             if not self._skip_checks:
+                if len(x) != len(set(x)):
+                    raise ValueError('duplicates found')
                 return tuple(sorted(x))
-            return x
+            return tuple(x)
         raise ValueError('invalid hybridization')
 
 
@@ -272,18 +277,7 @@ class QueryBond(BondAttribute):
             for k, v in kwargs.items():
                 super(BondAttribute, self).__setattr__(k, v)
         else:
-            if not isinstance(value, dict):
-                try:
-                    value = dict(value)
-                except (TypeError, ValueError):
-                    raise TypeError('invalid attrs sequence')
-
-            value.update(kwargs)
-            if not value:
-                return  # ad-hoc for add_edges_from method
-
-            for k, v in self._check_kwargs(value).items():
-                super(BondAttribute, self).__setattr__(k, v)
+            self._update_kwargs(value, kwargs)
 
     def stringify(self, stereo=True):
         order = '<%s>' % ''.join(self._order_str[x] for x in self.order)
@@ -317,11 +311,12 @@ class QueryBond(BondAttribute):
         return False
 
     def _order_check(self, x):
-        if isinstance(x, int):
-            if x in (1, 2, 3, 4, 9):
-                return x,
+        if x in (1, 2, 3, 4, 9):
+            return x,
         elif x and all(x in (1, 2, 3, 4, 9) for x in x):
             if not self._skip_checks:
+                if len(x) != len(set(x)):
+                    raise ValueError('duplicates found')
                 return tuple(sorted(x))
             return tuple(x)
         raise ValueError('invalid order')
