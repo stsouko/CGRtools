@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from networkx import shortest_simple_paths, NetworkXNoPath
+from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
 from itertools import combinations
 
 
@@ -33,7 +33,7 @@ class SSSR:
 
         :return: list of lists of rings nodes
         """
-        n_sssr = self.number_of_edges() - len(self) + 1
+        n_sssr = self.size() - len(self) + number_connected_components(self)
         if not n_sssr:
             return []
 
