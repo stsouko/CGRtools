@@ -21,7 +21,6 @@ from hashlib import md5, sha256
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR, StringCommon
-from ..attributes import Bond, DynAtom, DynBond
 from ..periodictable import elements_list
 
 

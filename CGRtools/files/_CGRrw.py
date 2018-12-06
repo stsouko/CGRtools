@@ -175,21 +175,21 @@ class CGRread:
 
     def _convert_structure(self, molecule):
         if self.__remap:
-            remapped = {k: k for k in range(len(molecule['atoms']))}
+            remapped = {n: k for n, k in enumerate(range(1, len(molecule['atoms']) + 1))}
         else:
             length = count(max(x['mapping'] for x in molecule['atoms']) + 1)
             remapped, used = {}, set()
-            for k, atom in enumerate(molecule['atoms']):
+            for n, atom in enumerate(molecule['atoms']):
                 m = atom['mapping']
                 if not m:
-                    remapped[k] = next(length)
+                    remapped[n] = next(length)
                 elif m in used:
                     if not self._ignore:
                         raise MappingError('mapping in molecules should be unique')
-                    remapped[k] = next(length)
-                    warning(f'mapping in molecule changed: {m} to {remapped[k]}')
+                    remapped[n] = next(length)
+                    warning(f'mapping in molecule changed: {m} to {remapped[n]}')
                 else:
-                    remapped[k] = m
+                    remapped[n] = m
                     used.add(m)
 
         if self.__colors and self.__colors in molecule['meta']:
