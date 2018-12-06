@@ -17,89 +17,9 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
-from networkx.algorithms.isomorphism import (GraphMatcher, categorical_node_match, generic_node_match,
-                                             categorical_edge_match)
-from .containers import CGRTemplate, MatchContainer, CGRContainer, QueryContainer, MoleculeContainer
 
 
 class CGRreactor:
-    def __init__(self):
-        """
-        CGR isomorphism based operations
-        """
-        gnm_sp, gnm_s, cnm_p = [], [], ['element', 'p_charge', 'p_radical']
-        if isotope:
-            gnm_sp.append('isotope')
-            gnm_s.append('isotope')
-            cnm_p.append('isotope')
-        if element:
-            gnm_sp.extend(['sp_charge', 'element', 'sp_radical'])
-            gnm_s.extend(['s_charge', 'element', 's_radical'])
-        if extralabels:
-            gnm_sp.extend(['sp_neighbors', 'sp_hyb'])
-            gnm_s.extend(['s_neighbors', 's_hyb'])
-        if stereo:
-            gnm_sp.append('sp_stereo')
-            gnm_s.append('s_stereo')
-            cnm_p.append('p_stereo')
-
-        self.__node_match = generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__list_eq] * len(gnm_sp))
-        self.__edge_match = generic_node_match('sp_bond', None, self.__list_eq)
-
-        self.__node_match_query = generic_node_match(gnm_sp, [None] * len(gnm_sp), [self.__query_eq] * len(gnm_sp))
-        self.__edge_match_query = generic_node_match('sp_bond', None, self.__query_eq)
-
-        self.__node_match_reagents = generic_node_match(gnm_s, [None] * len(gnm_s), [self.__list_eq] * len(gnm_s))
-        self.__edge_match_reagents = generic_node_match('s_bond', None, self.__list_eq)
-
-        # for reaction CGR balancing
-        self.__node_match_products = categorical_node_match(cnm_p, [None] * len(cnm_p))
-        self.__edge_match_products = categorical_edge_match('p_bond', None)
-
-        self.__pickle = dict(stereo=stereo, extralabels=extralabels, isotope=isotope, element=element)
-
-    def is_substructure(self, g, h):
-        return self.get_cgr_matcher(g, h).subgraph_is_isomorphic()
-
-    def is_equal(self, g, h):
-        return self.get_cgr_matcher(g, h).is_isomorphic()
-
-    def get_mapping(self, g, h):
-        return next(self.get_cgr_matcher(g, h).isomorphisms_iter(), None)
-
-    def get_substructure_mapping(self, g, h, limit=1):
-        """
-        return mapping of h to g matching
-
-        :param g:
-        :param h:
-        :param limit: number of matches. if -1 return iterator for all possible
-        """
-        i = self.get_cgr_matcher(g, h).subgraph_isomorphisms_iter()
-        if limit == 1:
-            return next(i, None)
-        elif limit < 0:
-            return i
-        elif limit == 0:
-            raise ValueError('invalid limit')
-        else:
-            return [x for x, _ in zip(i, range(limit))]
-
-    def get_cgr_matcher(self, g, h):
-        if isinstance(g, CGRContainer):
-            nm = self.__node_match
-            em = self.__edge_match
-        elif isinstance(g, QueryContainer):
-            nm = self.__node_match_query
-            em = self.__edge_match_query
-        elif isinstance(g, MoleculeContainer):
-            nm = self.__node_match_reagents
-            em = self.__edge_match_reagents
-        else:
-            raise ValueError('invalid data type of g: %s' % type(g))
-
-        return GraphMatcher(g, h, node_match=nm, edge_match=em)
-
     def get_template_searcher(self, templates):
         def searcher(g, skip_intersection=True):
             if skip_intersection:
@@ -212,13 +132,6 @@ class CGRreactor:
             p.add_edge(m, n, **{x: y[structure[m][n][x]] if isinstance(y, dict) else y
                                 for x, y in attr.items() if x in bond_marks})
         return p
-
-    __node_marks = {'s_charge', 's_hyb', 's_neighbors', 's_stereo', 'element', 'map', 'mark', 's_radical'}
-    __full_node_marks = __node_marks.union(('s_x', 's_y', 's_z'))
-    __cgr_node_marks = __node_marks.union(('p_charge', 'p_hyb', 'p_neighbors', 'p_stereo', 'p_radical'))
-    __cgr_full_node_marks = __cgr_node_marks.union(('s_x', 's_y', 's_z', 'p_x', 'p_y', 'p_z'))
-    __bond_marks = {'s_bond', 's_stereo'}
-    __cgr_bond_marks = __bond_marks.union(('p_bond', 'p_stereo'))
 
 
 __all__ = ['CGRreactor']

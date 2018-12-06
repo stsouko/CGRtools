@@ -80,18 +80,18 @@ class DynQueryAtom(DynAtomAttribute):
         self._product._update(p_value, p)
 
     def __eq__(self, other):
-        if isinstance(other, DynQueryAtom):
-            return (self.element == ('A',) or set(self.element).issuperset(other.element)) and \
-                   (self.isotope == () or set(self.isotope).issuperset(other.isotope)) and \
-                   all(set(zip(self[x], self[y])).issuperset(zip(other[x], other[y]))
+        if isinstance(other, DynAtom):
+            return (self.element == ('A',) or other.element in self.element) and \
+                   (self.isotope == () or other.isotope in self.isotope) and \
+                   all((other[x], other[y]) in zip(self[x], self[y])
                        for x, y in (('charge', 'p_charge'),
                                     ('multiplicity', 'p_multiplicity'),
                                     ('hybridization', 'p_hybridization'),
                                     ('neighbors', 'p_neighbors')) if self[x])
-        elif isinstance(other, DynAtom):
-            return (self.element == ('A',) or other.element in self.element) and \
-                   (self.isotope == () or other.isotope in self.isotope) and \
-                   all((other[x], other[y]) in zip(self[x], self[y])
+        elif isinstance(other, DynQueryAtom):
+            return (self.element == ('A',) or set(self.element).issuperset(other.element)) and \
+                   (self.isotope == () or set(self.isotope).issuperset(other.isotope)) and \
+                   all(set(zip(self[x], self[y])).issuperset(zip(other[x], other[y]))
                        for x, y in (('charge', 'p_charge'),
                                     ('multiplicity', 'p_multiplicity'),
                                     ('hybridization', 'p_hybridization'),
@@ -299,7 +299,14 @@ class DynQueryBond(DynBondAttribute):
         return self.order or (), self.p_order or ()
 
     def __eq__(self, other):
-        if isinstance(other, DynQueryBond):
+        if isinstance(other, DynBond):
+            if self.order is None:
+                return other.order is None and other.p_order in self.p_order
+            elif self.p_order is None:
+                return other.p_order is None and other.order in self.order
+            return (other.order, other.p_order) in zip(self.order, self.p_order)
+
+        elif isinstance(other, DynQueryBond):
             if self.order is None:
                 if other.order is not None:
                     return False
@@ -313,13 +320,6 @@ class DynQueryBond(DynBondAttribute):
             elif other.p_order is None:
                 return False
             return set(zip(self.order, self.p_order)).issuperset(zip(other.order, other.p_order))
-
-        elif isinstance(other, DynBond):
-            if self.order is None:
-                return other.order is None and other.p_order in self.p_order
-            elif self.p_order is None:
-                return other.p_order is None and other.order in self.order
-            return (other.order, other.p_order) in zip(self.order, self.p_order)
 
         elif isinstance(other, QueryBond):
             return self.order == self.p_order and set(self.order).issuperset(other.order)

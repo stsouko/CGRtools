@@ -16,7 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from networkx.algorithms.isomorphism import GraphMatcher
+from .cgr import CGRContainer
 from .common import BaseContainer
+from .molecule import MoleculeContainer
 from ..algorithms import StringMolecule, StringCGR
 from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
 
@@ -25,10 +28,33 @@ class QueryContainer(StringMolecule, BaseContainer):
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
 
+    def _matcher(self, other):
+        """
+        QueryContainer < MoleculeContainer
+        QueryContainer < QueryContainer[more general]
+        QueryContainer < QueryCGRContainer[more general]
+        """
+        if isinstance(other, MoleculeContainer):
+            return GraphMatcher(other, self, lambda x, y: y == x, lambda x, y: y == x)
+        elif isinstance(other, (QueryContainer, QueryCGRContainer)):
+            return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
+        raise TypeError('only query-molecule, query-query or query-cgr_query possible')
+
 
 class QueryCGRContainer(StringCGR, BaseContainer):
     node_attr_dict_factory = DynQueryAtom
     edge_attr_dict_factory = DynQueryBond
+
+    def _matcher(self, other):
+        """
+        QueryCGRContainer < CGRContainer
+        QueryContainer < QueryCGRContainer[more general]
+        """
+        if isinstance(other, CGRContainer):
+            return GraphMatcher(other, self, lambda x, y: y == x, lambda x, y: y == x)
+        elif isinstance(other, QueryCGRContainer):
+            return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
+        raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']

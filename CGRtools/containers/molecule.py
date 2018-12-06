@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
 from ..algorithms import Aromatize, StringMolecule, CGRCompose
 from ..attributes import Atom, Bond
@@ -130,6 +131,15 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
         """
         return [f'atom {x} has invalid valence' for x, atom in self._node.items()
                 if not atom.check_valence(self.environment(x))]
+
+    def _matcher(self, other):
+        """
+        MoleculeContainer < MoleculeContainer
+        MoleculeContainer < CGRContainer
+        """
+        if isinstance(other, (self._get_subclass('CGRContainer'), MoleculeContainer)):
+            return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
+        raise TypeError('only cgr-cgr possible')
 
     _visible = ()
 

@@ -18,6 +18,7 @@
 #
 from abc import ABC, abstractmethod
 from hashlib import md5, sha256
+from itertools import islice
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR, StringCommon
@@ -177,7 +178,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             data = {'graph': data['meta'], 'nodes': nodes, 'bonds': bonds, 'class': _class}
 
         graph = node_link_graph(data, multigraph=False, attrs=cls.__attrs)
-        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == data['class'])(graph)
+        return cls._get_subclass(data['class'])(graph)
 
     def environment(self, atom):
         """
@@ -331,6 +332,44 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             return self.__weights[k]
         return self.__weights.setdefault(k, self._morgan(atom, isotope, stereo, hybridization, neighbors))
 
+    def is_substructure(self, other):
+        """
+        test self is substructure of other
+        """
+        return self._matcher(other).subgraph_is_isomorphic()
+
+    def is_equal(self, other):
+        """
+        test self is structure of other
+        """
+        return self._matcher(other).is_isomorphic()
+
+    def get_mapping(self, other):
+        """
+        get self to other mapping
+        """
+        return next(self._matcher(other).isomorphisms_iter(), None)
+
+    def get_substructure_mapping(self, other, limit=1):
+        """
+        get self to other substructure mapping
+
+        :param limit: number of matches. if -1 return iterator for all possible; if 1 return dict or None;
+        if > 1 return list of dicts or None
+        """
+        i = self._matcher(other).subgraph_isomorphisms_iter()
+        if limit == 1:
+            return next(i, None)
+        elif limit < 0:
+            return i
+        elif limit == 0:
+            raise ValueError('invalid limit')
+        return list(islice(i, limit)) or None
+
+    @abstractmethod
+    def _matcher(self, other):
+        pass
+
     @abstractmethod
     def _stringify(self, start=None, depth_limit=None, weights=None, atom=True, isotope=True, stereo=False,
                    hybridization=False, neighbors=False) -> str:
@@ -341,6 +380,13 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
 
     def flush_cache(self):
         self.__weights = self.__signatures = self.__pickle = self.__hash = None
+
+    @staticmethod
+    def _get_subclass(name):
+        """
+        need for cyclic import solving
+        """
+        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == name)
 
     def __and__(self, other):
         """
@@ -379,6 +425,18 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
 
     def __eq__(self, other):
         return str(self) == str(other)
+
+    def __lt__(self, other):
+        return self.is_substructure(other)
+
+    def __le__(self, other):
+        return self.is_equal(other)
+
+    def __gt__(self, other):
+        return other.is_substructure(self)
+
+    def __ge__(self, other):
+        return other.is_equal(self)
 
     __weights = __signatures = __pickle = __hash = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')

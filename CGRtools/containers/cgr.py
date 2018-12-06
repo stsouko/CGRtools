@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
 from .molecule import MoleculeContainer
 from ..algorithms import StringCGR, CGRCompose
@@ -138,6 +139,14 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
         if copy:
             return g
         self.flush_cache()
+
+    def _matcher(self, other):
+        """
+        CGRContainer < CGRContainer
+        """
+        if isinstance(other, CGRContainer):
+            return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
+        raise TypeError('only cgr-cgr possible')
 
     _visible = ()
 
