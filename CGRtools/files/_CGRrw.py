@@ -583,7 +583,7 @@ class CGRwrite:
         if atom.neighbors:
             cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
         return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
-            self._multiplicity_map(multiplicity, n), self._mark_map(atom.mark), elements
+            self._multiplicity_map(multiplicity, n), self._mark_map(None), elements
 
     def __format_dyn_query_atom(self, atom, n):
         charge = atom.charge[0]
@@ -649,7 +649,7 @@ class CGRwrite:
             if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                 cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
         return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
-            self._multiplicity_map(multiplicity, n), self._mark_map(atom.mark), elements
+            self._multiplicity_map(multiplicity, n), self._mark_map(None), elements
 
     def __format_bond(self, bond, n, m):
         if bond.order == 9:

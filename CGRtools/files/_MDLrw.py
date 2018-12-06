@@ -480,12 +480,12 @@ class MOLwrite(CGRwrite):
     @staticmethod
     def _atom_list_map(x, n):
         if x:
-            return f'M  ALS {n:3d}{len(x):3d} F {"".join(f"{x:-4s}" for x in x)}\n'
+            return f'M  ALS {n:3d}{len(x):3d} F {"".join(f"{x:>4s}" for x in x)}\n'
 
     @staticmethod
     def _atom_not_list_map(x, n):
         if x:
-            return f'M  ALS {n:3d}{len(x):3d} T {"".join(f"{x:-4s}" for x in x)}\n'
+            return f'M  ALS {n:3d}{len(x):3d} T {"".join(f"{x:>4s}" for x in x)}\n'
 
     @staticmethod
     def _multiplicity_map(x, n):

@@ -121,9 +121,10 @@ class DynQueryAtom(DynAtomAttribute):
                 elif len(r[k]) != len(p[k]):
                     raise ValueError(f'{k} lists in reagent and product should be equal size')
                 value = sorted(zip(r[k], p[k]))
-                if len(value) != len(set(value)):
-                    raise ValueError('duplicates found')
-                r[k], p[k] = zip(*value)
+                if value:
+                    if len(value) != len(set(value)):
+                        raise ValueError('duplicates found')
+                    r[k], p[k] = zip(*value)
         return r, p
 
     _factory = QueryAtom
