@@ -280,7 +280,9 @@ class QueryBond(BondAttribute):
             self._update_kwargs(value, kwargs)
 
     def stringify(self, stereo=True):
-        order = '<%s>' % ''.join(self._order_str[x] for x in self.order)
+        order = '<%s>' % ''.join(self._order_str[x] for x in self.order) \
+            if len(self.order) > 1 else self._order_str[self.order[0]]
+
         if stereo and self.stereo:
             return order + self._stereo_str[self.stereo]
         return order
