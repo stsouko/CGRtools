@@ -37,9 +37,9 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
         nodes = set()
         for n, atom in self._node.items():
             if stereo:
-                if atom._reagent != atom._product:
+                if not atom._reagent != atom._product:
                     nodes.add(n)
-            elif atom.stereo == atom.p_stereo:
+            elif not atom.stereo == atom.p_stereo:
                 nodes.add(n)
 
         seen = set()
@@ -48,10 +48,10 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
             for m, bond in m_bond.items():
                 if m not in seen:
                     if stereo:
-                        if bond._reagent != bond._product:
+                        if not bond._reagent != bond._product:
                             nodes.add(n)
                             nodes.add(m)
-                    elif bond._reagent == bond._product:
+                    elif not bond._reagent == bond._product:
                         nodes.add(n)
                         nodes.add(m)
         return list(nodes)
@@ -86,22 +86,18 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
         """
         return self.decompose()
 
-    def reset_query_marks(self, copy=False):
+    def reset_query_marks(self):
         """
         set or reset hyb and neighbors marks to atoms.
-
-        :param copy: if True return copy of graph and keep existing as is
-        :return: graph if copy True else None
         """
-        g = self.copy() if copy else self
-        for i, atom in g._node.items():
+        for i, atom in self._node.items():
             neighbors = 0
             hybridization = 1
             p_neighbors = 0
             p_hybridization = 1
             # hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
-            for j, bond in g._adj[i].items():
-                isnth = g._node[j] != 'H'
+            for j, bond in self._adj[i].items():
+                isnth = self._node[j] != 'H'
 
                 order = bond.order
                 if order:
@@ -136,8 +132,6 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
             atom.hybridization = hybridization
             atom.p_neighbors = p_neighbors
             atom.p_hybridization = p_hybridization
-        if copy:
-            return g
         self.flush_cache()
 
     def _matcher(self, other):

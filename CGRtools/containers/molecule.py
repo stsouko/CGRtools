@@ -33,20 +33,16 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
     node_attr_dict_factory = Atom
     edge_attr_dict_factory = Bond
 
-    def reset_query_marks(self, copy=False):
+    def reset_query_marks(self):
         """
         set or reset hyb and neighbors marks to atoms.
-
-        :param copy: if True return copy of graph and keep existing as is
-        :return: graph if copy True else None
         """
-        g = self.copy() if copy else self
-        for i, atom in g._node.items():
+        for i, atom in self._node.items():
             neighbors = 0
             hybridization = 1
             # hybridization 1- sp3; 2- sp2; 3- sp1; 4- aromatic
-            for j, bond in g._adj[i].items():
-                if g._node[j] != 'H':
+            for j, bond in self._adj[i].items():
+                if self._node[j] != 'H':
                     neighbors += 1
 
                 if hybridization in (3, 4):
@@ -64,9 +60,6 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
 
             atom.neighbors = neighbors
             atom.hybridization = hybridization
-
-        if copy:
-            return g
         self.flush_cache()
 
     def implicify_hydrogens(self):
