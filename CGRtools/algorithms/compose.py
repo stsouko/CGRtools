@@ -37,14 +37,16 @@ class CGRCompose:
         if not isinstance(other, CGRCompose):
             raise TypeError('CGRContainer or MoleculeContainer [sub]class expected')
 
+        cgr = self._get_subclass('CGRContainer')
         common = self._node.keys() & other
+
         if not common:
-            return self.union(other)
+            if not (isinstance(self, cgr) or isinstance(other, cgr)):
+                return cgr() | self | other
+            return self | other
 
         unique_reagent = self._node.keys() - common
         unique_product = other._node.keys() - common
-
-        cgr = next(x for x in CGRCompose.__subclasses__() if x.__name__ == 'CGRContainer')
 
         h = cgr()
         atoms = h._node
