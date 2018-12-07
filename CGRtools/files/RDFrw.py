@@ -42,11 +42,19 @@ class RDFread(CGRread, WithMixin):
         return next(self.__data)
 
     def __reader(self):
-        ir = 0
-        isreaction = record = parser = mkey = meta = None
-        failkey = True  # skip header
+        record = parser = mkey = None
+        failed = False
+        if next(self._file).startswith('$RXN'):  # parse RXN file
+            is_reaction = True
+            ir = 3
+            meta = defaultdict(list)
+        else:
+            next(self._file)  # skip header
+            ir = 0
+            is_reaction = meta = None
+
         for line in self._file:
-            if failkey and not line.startswith(('$RFMT', '$MFMT', '$RXN')):
+            if failed and not line.startswith(('$RFMT', '$MFMT')):
                 continue
             elif parser:
                 try:
@@ -54,39 +62,34 @@ class RDFread(CGRread, WithMixin):
                         record = parser.getvalue()
                         parser = None
                 except ValueError:
-                    failkey = True
+                    failed = True
                     parser = None
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
+                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except Exception:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
-                isreaction = True
+                is_reaction = True
                 ir = 4
-                failkey = False
+                failed = False
                 mkey = None
                 meta = defaultdict(list)
             elif line.startswith('$MFMT'):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
+                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
                 ir = 3
-                failkey = isreaction = False
+                failed = is_reaction = False
                 mkey = None
                 meta = defaultdict(list)
-            elif line.startswith('$RXN'):  # parse RXN file
-                isreaction = True
-                ir = 3
-                failkey = False
             elif record:
                 if line.startswith('$DTYPE'):
                     mkey = line[7:].strip()
@@ -100,7 +103,7 @@ class RDFread(CGRread, WithMixin):
                 ir -= 1
             elif not ir:
                 try:
-                    if isreaction:
+                    if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
                             parser = ERXNread(line, self._ignore)
                         else:
@@ -113,12 +116,12 @@ class RDFread(CGRread, WithMixin):
                         else:
                             raise ValueError('invalid MOL entry')
                 except ValueError:
-                    failkey = True
+                    failed = True
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
         if record:
             record['meta'] = prepare_meta(meta)
             try:
-                yield self._convert_reaction(record) if isreaction else self._convert_structure(record)
+                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
 
