@@ -194,7 +194,7 @@ class DynQueryBond(DynBondAttribute):
             raise AttributeError('invalid bond attribute')
 
     def _update(self, value, kwargs):
-        if isinstance(value, (DynBond, Bond)):
+        if isinstance(value, (DynQueryBond, QueryBond, DynBond, Bond)):
             r, p = self._split_check_kwargs(kwargs)
             if r or p:
                 if isinstance(value, DynQueryBond):

@@ -346,8 +346,6 @@ class CGRread:
             for k, v in atom_data.items():
                 atoms[k].update(v)
             for atom in atoms:
-                del atom['mark']
-                del atom['mapping']
                 if 'p_charge' not in atom:
                     atom['p_charge'] = atom['charge']
                 if 'p_multiplicity' not in atom:
@@ -364,6 +362,9 @@ class CGRread:
                     bond['p_order'] = bond['order']
 
             if is_query:
+                for atom in atoms:
+                    del atom['mark']
+                    del atom['mapping']
                 for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
                         atoms[k]['p_hybridization'] = v['hybridization']

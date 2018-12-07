@@ -240,9 +240,9 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             raise KeyError('mapping of graphs is not disjoint')
 
         # dynamic container resolving
-        qc = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'QueryCGRContainer')
-        qq = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'QueryContainer')
-        cc = next(x for x in BaseContainer.__subclasses__() if x.__name__ == 'CGRContainer')
+        qc = self._get_subclass('QueryCGRContainer')
+        qq = self._get_subclass('QueryContainer')
+        cc = self._get_subclass('CGRContainer')
 
         if isinstance(self, qc):
             u = type(self)()

@@ -62,7 +62,7 @@ class Attribute(MutableMapping):
     @staticmethod
     def _stereo_check(x):
         if x is None:
-            return None
+            return
         elif x in (-1, 1):
             return x
         raise ValueError('stereo can be: None, 1 or -1')
@@ -170,6 +170,8 @@ class Atom(AtomAttribute):
 
     def _update(self, value, kwargs):
         if isinstance(value, Atom):
+            if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
+                raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
             super().__setattr__('_atom', value._atom)
             super().__setattr__('_Atom__x', value.x)
@@ -184,15 +186,15 @@ class Atom(AtomAttribute):
         elif isinstance(value, type):
             if not issubclass(value, Element):
                 ValueError('only CGRtools.periodictable.Element subclasses allowed')
-            if not {'neighbors', 'hybridization', 'element'}.isdisjoint(kwargs):
-                raise KeyError('neighbors and hybridization change not allowed. element override not allowed')
+            if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
+                raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
             super().__setattr__('_atom', value())
             for k, v in kwargs.items():
                 super().__setattr__(k, v)
         elif isinstance(value, Element):
-            if not {'neighbors', 'hybridization', 'element'}.isdisjoint(kwargs):
-                raise KeyError('neighbors and hybridization change not allowed. element override not allowed')
+            if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
+                raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
             super().__setattr__('_atom', value)
             for k, v in kwargs.items():
@@ -209,25 +211,23 @@ class Atom(AtomAttribute):
                 return
             if not {'neighbors', 'hybridization'}.isdisjoint(kwargs):
                 raise KeyError('neighbors and hybridization change not allowed')
-            mutable_keys = self._check_kwargs({k: value[k] for k in value.keys() -
-                                               {'element', 'isotope', 'charge', 'multiplicity'}})
 
-            if 'element' in value:
-                element = self._element_check(value['element'])
-                attrs = {'multiplicity': value.get('multiplicity', self.multiplicity),
-                         'charge': value.get('charge', self.charge)}
-                if 'isotope' in value:
-                    attrs['isotope'] = value['isotope']
-                super().__setattr__('_atom', element(**attrs))
-            else:
-                atom_keys = value.keys() & {'isotope', 'charge', 'multiplicity'}
-                if atom_keys:
-                    attrs = {'multiplicity': self.multiplicity, 'isotope': self.isotope,
-                             'charge': self.charge, **{k: value[k] for k in atom_keys}}
-                    super().__setattr__('_atom', type(self._atom)(**attrs))
+            value = self._check_kwargs(value)
+            if '_Atom__element' in value:
+                super().__setattr__('_atom', 
+                                    value['_Atom__element'](charge=value.get('charge', self.charge),
+                                                            multiplicity=value.get('multiplicity', self.multiplicity),
+                                                            isotope=value.get('isotope')))
+            elif value.keys() & {'_Atom__isotope', '_Atom__charge', '_Atom__multiplicity'}:
+                super().__setattr__('_atom',
+                                    type(self._atom)(charge=value.get('_Atom__charge', self.charge),
+                                                     multiplicity=value.get('_Atom__multiplicity', self.multiplicity),
+                                                     isotope=value.get('_Atom__isotope', self.isotope)))
 
-            for k, v in mutable_keys.items():
-                super().__setattr__(k, v)
+            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark'):
+                super().__setattr__(k, value.get(k))
+            for k in ('_Atom__x', '_Atom__y', '_Atom__z'):
+                super().__setattr__(k, value.get(k, 0.))
 
     def stringify(self, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
         smi = []
@@ -326,7 +326,7 @@ class Atom(AtomAttribute):
     @staticmethod
     def _mapping_check(x):
         if x is None:
-            return None
+            return
         elif isinstance(x, int) and 0 <= x <= 999:
             return x
         raise ValueError('mapping can be in range 0-999')
@@ -358,7 +358,7 @@ class Atom(AtomAttribute):
     @staticmethod
     def _mark_check(x):
         if x is None:
-            return None
+            return
         elif isinstance(x, int) and 1 <= x <= 999:
             return x
         raise ValueError('mark can be: None or in range 1-999')
@@ -375,7 +375,7 @@ class Atom(AtomAttribute):
     @staticmethod
     def _color_check(x):
         if x is None:
-            return None
+            return
         if not isinstance(x, dict):
             raise TypeError('color can be dict')
         elif not x:
@@ -401,7 +401,7 @@ class Atom(AtomAttribute):
     def __getattr__(self, key):
         if key == '__dict__':
             raise AttributeError()
-        if key == 'element':
+        elif key == 'element':
             return self._atom.symbol
         return getattr(self._atom, key)
 
@@ -425,6 +425,28 @@ class Atom(AtomAttribute):
         if x != 'A' and x in elements_classes:
             return elements_classes[x]
         raise ValueError('invalid atom symbol')
+
+    @staticmethod
+    def _isotope_check(x):
+        if x is None:
+            return
+        elif isinstance(x, int) and x > 0:
+            return x
+        raise ValueError('invalid isotope')
+
+    @staticmethod
+    def _charge_check(x):
+        if isinstance(x, int) and -3 <= x <= 3:
+            return x
+        raise ValueError('invalid charge')
+
+    @staticmethod
+    def _multiplicity_check(x):
+        if x is None:
+            return
+        elif isinstance(x, int) and 1 <= x <= 3:
+            return x
+        raise ValueError('invalid multiplicity')
 
     def _check_kwargs(self, kwargs):
         if not self._skip_checks:
