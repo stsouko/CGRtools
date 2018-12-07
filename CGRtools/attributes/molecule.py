@@ -181,8 +181,22 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__stereo', value.stereo)
             super().__setattr__('_Atom__mark', value.mark)
             super().__setattr__('_Atom__color', value.color)
-            for k, v in kwargs.items():
-                super().__setattr__(k, v)
+            if '_Atom__element' in kwargs:
+                super().__setattr__('_atom',
+                                    kwargs['_Atom__element'](charge=kwargs.get('_Atom__charge', self.charge),
+                                                             multiplicity=kwargs.get('_Atom__multiplicity',
+                                                                                     self.multiplicity),
+                                                             isotope=kwargs.get('_Atom__isotope')))
+            elif kwargs.keys() & {'_Atom__isotope', '_Atom__charge', '_Atom__multiplicity'}:
+                super().__setattr__('_atom',
+                                    type(self._atom)(charge=kwargs.get('_Atom__charge', self.charge),
+                                                     multiplicity=kwargs.get('_Atom__multiplicity', self.multiplicity),
+                                                     isotope=kwargs.get('_Atom__isotope', self.isotope)))
+            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark',
+                      '_Atom__x', '_Atom__y', '_Atom__z'):
+                if k in kwargs:
+                    super().__setattr__(k, kwargs[k])
+
         elif isinstance(value, type):
             if not issubclass(value, Element):
                 ValueError('only CGRtools.periodictable.Element subclasses allowed')
@@ -215,19 +229,20 @@ class Atom(AtomAttribute):
             value = self._check_kwargs(value)
             if '_Atom__element' in value:
                 super().__setattr__('_atom', 
-                                    value['_Atom__element'](charge=value.get('charge', self.charge),
-                                                            multiplicity=value.get('multiplicity', self.multiplicity),
-                                                            isotope=value.get('isotope')))
+                                    value['_Atom__element'](charge=value.get('_Atom__charge', self.charge),
+                                                            multiplicity=value.get('_Atom__multiplicity',
+                                                                                   self.multiplicity),
+                                                            isotope=value.get('_Atom__isotope')))
             elif value.keys() & {'_Atom__isotope', '_Atom__charge', '_Atom__multiplicity'}:
                 super().__setattr__('_atom',
                                     type(self._atom)(charge=value.get('_Atom__charge', self.charge),
                                                      multiplicity=value.get('_Atom__multiplicity', self.multiplicity),
                                                      isotope=value.get('_Atom__isotope', self.isotope)))
 
-            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark'):
-                super().__setattr__(k, value.get(k))
-            for k in ('_Atom__x', '_Atom__y', '_Atom__z'):
-                super().__setattr__(k, value.get(k, 0.))
+            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark',
+                      '_Atom__x', '_Atom__y', '_Atom__z'):
+                if k in value:
+                    super().__setattr__(k, value[k])
 
     def stringify(self, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
         smi = []
