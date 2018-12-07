@@ -34,7 +34,7 @@ setup(
     entry_points={'console_scripts': ['cgrtools=CGRtools.CLI:launcher']},
     install_requires=['networkx>=2.3,<2.4', 'lxml>=4.1.1,<4.3', 'coho>=0.3,<0.4'],
     extras_require={'autocomplete': ['argcomplete'], 'sphinx': ['sphinx>=1.6']},
-    dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.3.dev'],
+    dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.3'],
     zip_safe=True,
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     classifiers=['Environment :: Console',

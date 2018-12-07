@@ -44,10 +44,7 @@ class DynAttribute(MutableMapping):
         self._update(value, kwargs)
 
     def __len__(self):
-        return len(self._reagent) + len(self._product)
-
-    def __iter__(self):
-        return chain(self._reagent, (f'p_{x}' for x in self._product))
+        return sum(1 for _ in self)
 
     def __setitem__(self, key, value):
         try:
@@ -98,6 +95,9 @@ class DynAtomAttribute(DynAttribute):
             return key[2:] in self._product
         return key in self._reagent
 
+    def __iter__(self):
+        return chain(self._reagent, (f'p_{x}' for x in self._product if x not in self._static))
+
     def _split_check_kwargs(self, kwargs):
         r, p = {}, {}
         for k, v in kwargs.items():
@@ -139,6 +139,9 @@ class DynBondAttribute(DynAttribute):
         if key.startswith('p_'):
             return key[2:] in self._product
         return key in self._reagent
+
+    def __iter__(self):
+        return chain(self._reagent, (f'p_{x}' for x in self._product))
 
     def _split_check_kwargs(self, kwargs):
         r, p = {}, {}
