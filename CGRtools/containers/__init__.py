@@ -19,31 +19,7 @@
 """
 implements all internal structures, which represents: molecules, reactions, CGR and over
 """
-from collections import namedtuple
 from .cgr import *
 from .molecule import *
 from .query import *
 from .reaction import *
-
-
-CGRTemplate = namedtuple('CGRTemplate', ['pattern', 'patch', 'meta'])
-MatchContainer = namedtuple('MatchContainer', ['mapping', 'patch', 'meta'])
-
-
-CGRTemplate.__doc__ = '''container for [sub]structure queries. 
-                         contains query structure and [sub]structure for replacement of found atoms and bonds'''
-CGRTemplate.pattern.__doc__ = 'query structure. CGRContainer'
-CGRTemplate.patch.__doc__ = '''replacement structure. CGRContainer.
-                               Atom-to-atom mapping can be intersect with query at least in one atom.
-                               replacement example for ketones:
-
-                               * pattern = C[C:1](=[O:2])C, patch = [C:1]=[N:2], result = C[C:1](=[N:2])C
-                               * pattern = C[C:1](=[O:2])C, patch = [C:1]=N, result = C[C:1](=[O:2])(=N)C
-                            '''
-
-MatchContainer.__doc__ = '''container with [sub]structure query result'''
-MatchContainer.patch.__doc__ = '''replacement structure. CGRContainer.
-                                  remapped to queried structure patch from CGRTemplate'''
-MatchContainer.mapping.__doc__ = '''dictionary of queried structure atoms (keys) mapped to query atoms (values)'''
-
-CGRTemplate.meta.__doc__ = MatchContainer.meta.__doc__ = 'dictionary of metadata. like DTYPE-DATUM in RDF'

@@ -348,7 +348,9 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         """
         get self to other mapping
         """
-        return next(self._matcher(other).isomorphisms_iter(), None)
+        m = next(self._matcher(other).isomorphisms_iter(), None)
+        if m:
+            return {v: k for k, v in m.items()}
 
     def get_substructure_mapping(self, other, limit=1):
         """
@@ -359,12 +361,15 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         """
         i = self._matcher(other).subgraph_isomorphisms_iter()
         if limit == 1:
-            return next(i, None)
+            m = next(i, None)
+            if m:
+                return {v: k for k, v in m.items()}
+            return
         elif limit < 0:
-            return i
+            return ({v: k for k, v in m.items()} for m in i)
         elif limit == 0:
             raise ValueError('invalid limit')
-        return list(islice(i, limit)) or None
+        return [{v: k for k, v in m.items()} for m in islice(i, limit)] or None
 
     @abstractmethod
     def _matcher(self, other):
