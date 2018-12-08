@@ -25,10 +25,12 @@ from ._CGRrw import WithMixin, CGRread
 
 class SMILESread(CGRread, WithMixin):
     """
-    accept file wich consist smiles/smirks per lines.
+    accept file wich consist smiles/smirks per lines
+
     line should be start with smiles/smirks string and
-    optionally continues with space/tab separated list of key:value [or key=value] data
-    for reactions . [dot] in bonds should be used only for molecules separation
+    optionally continues with space/tab separated list of key:value [or key=value] data.
+    for reactions . [dot] in bonds should be used only for molecules separation.
+
     example:
     C=C>>CC id:123 key=value\n
     """
