@@ -387,7 +387,8 @@ class CGRread:
                         bond.update(bond_data[n][m])
             g = QueryContainer()
         else:
-            if not any(x['z'] for x in atoms):
+            if not any(x['z'] for x in atoms) and any(x['x'] for x in atoms) and any(x['y'] for x in atoms):
+                # 0d, 1d and 3d stereo unsupported
                 for n, m, bond, s in bonds:
                     if s:
                         if bond['order'] not in (1, 4):
