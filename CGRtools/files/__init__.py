@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from importlib.util import find_spec
+from .INCHIrw import *
 from .MRVrw import *
 from .RDFrw import *
 from .SDFrw import *

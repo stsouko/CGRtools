@@ -18,17 +18,32 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, Distribution
+from sys import platform
+
+
+class BinaryDistribution(Distribution):
+    @staticmethod
+    def has_ext_modules():
+        return True
 
 
 version = '3.0.3'
+
+
+if platform == 'linux':
+    INCHI = ['LICENCE', 'readme.txt', 'libinchi.so']
+elif platform == 'win32':
+    INCHI = ['LICENCE', 'readme.txt', 'libinchi.dll']
+else:
+    INCHI = []
 
 
 setup(
     name='CGRtools',
     version=version,
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.attributes', 'CGRtools.containers', 'CGRtools.files',
-              'CGRtools.periodictable'],
+              'CGRtools.files.dll', 'CGRtools.periodictable'],
     url='https://github.com/stsouko/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
@@ -36,6 +51,7 @@ setup(
     install_requires=['networkx>=2.3rc1.dev,<2.4', 'lxml>=4.1.1,<4.3'],
     extras_require={'smiles': ['coho>=0.3,<0.4']},
     dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.3rc1.dev'],
+    package_data={'CGRtools.files.dll': INCHI},
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').open().read(),
     classifiers=['Environment :: Plugins',
@@ -56,5 +72,6 @@ setup(
                                       'build_dir':  ('setup.py', 'build/doc'),
                                       'all_files': ('setup.py', True),
                                       'copyright': ('setup.py', 'Dr. Ramil Nugmanov <stsouko@live.ru>')},
-                     'easy_install': {'allow_hosts': ('setup.py', 'github.com, pypi.python.org')}}
+                     'easy_install': {'allow_hosts': ('setup.py', 'github.com, pypi.python.org')}},
+    distclass=BinaryDistribution
 )
