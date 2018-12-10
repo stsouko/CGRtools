@@ -116,6 +116,14 @@ class BondAttribute(Attribute):
             for k, v in self._check_kwargs(value).items():
                 super().__setattr__(k, v)
 
+    def __getstate__(self):
+        return {'checks': self._skip_checks, 'order': self.order, 'stereo': self.stereo}
+
+    def __setstate__(self, state):
+        super().__setattr__('_skip_checks', state['checks'])
+        super().__setattr__('order', state['order'])
+        super().__setattr__('stereo', state['stereo'])
+
     _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
 
@@ -467,6 +475,24 @@ class Atom(AtomAttribute):
         if not self._skip_checks:
             return {f'_Atom__{k}': getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
         return {f'_Atom__{k}': v for k, v in kwargs.items()}
+
+    def __getstate__(self):
+        return {'checks': self._skip_checks, 'atom': self._atom, 'x': self.__x, 'y': self.__y, 'z': self.__z,
+                'mapping': self.__mapping, 'stereo': self.__stereo, 'mark': self.__mark, 'color': self.__color, 
+                'hybridization': self.__hybridization, 'neighbors': self.__neighbors}
+
+    def __setstate__(self, state):
+        super().__setattr__('_skip_checks', state['checks'])
+        super().__setattr__('_atom', state['atom'])
+        super().__setattr__('_Atom__x', state['x'])
+        super().__setattr__('_Atom__y', state['y'])
+        super().__setattr__('_Atom__z', state['z'])
+        super().__setattr__('_Atom__mapping', state['mapping'])
+        super().__setattr__('_Atom__stereo', state['stereo'])
+        super().__setattr__('_Atom__mark', state['mark'])
+        super().__setattr__('_Atom__color', state['color'])
+        super().__setattr__('_Atom__hybridization', state['hybridization'])
+        super().__setattr__('_Atom__neighbors', state['neighbors'])
 
 
 class Bond(BondAttribute):

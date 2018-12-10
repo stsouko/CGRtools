@@ -58,6 +58,13 @@ class DynAttribute(MutableMapping):
     def __str__(self):
         return '%s>>%s' % self.stringify(stereo=True)
 
+    def __getstate__(self):
+        return {'reagent': self._reagent, 'product': self._product}
+
+    def __setstate__(self, state):
+        super().__setattr__('_reagent', state['reagent'])
+        super().__setattr__('_product', state['product'])
+
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)

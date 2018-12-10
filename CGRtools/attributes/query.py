@@ -29,6 +29,7 @@ class QueryAtom(AtomAttribute):
                                       'neighbors': (), 'hybridization': (), 'stereo': None, 'x': 0., 'y': 0., 'z': 0.})
 
     def __init_copy__(self, parent):
+        super().__setattr__('_skip_checks', parent._skip_checks)
         super().__setattr__('_atom', parent._atom.copy())
 
     def __setattr__(self, key, value):
@@ -255,6 +256,13 @@ class QueryAtom(AtomAttribute):
                 return tuple(sorted(x))
             return tuple(x)
         raise ValueError('invalid hybridization')
+
+    def __getstate__(self):
+        return {'checks': self._skip_checks, 'atom': self._atom}
+
+    def __setstate__(self, state):
+        super().__setattr__('_skip_checks', state['checks'])
+        super().__setattr__('_atom', state['atom'])
 
 
 class QueryBond(BondAttribute):

@@ -332,6 +332,14 @@ def get_element(symbol, number):
         def __hash__(self):
             return hash((number, self.__charge, self.__isotope, self.__multiplicity))
 
+        def __getstate__(self):
+            return {'charge': self.__charge, 'isotope': self.__isotope, 'multiplicity': self.__multiplicity}
+
+        def __setstate__(self, state):
+            self.__charge = state['charge']
+            self.__isotope = state['isotope']
+            self.__multiplicity = state['multiplicity']
+
     return ElementClass
 
 
