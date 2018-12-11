@@ -25,8 +25,8 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 
 
 class CGRreactor:
-    def __init__(self, template):
-        pattern, absolute_atom, absolute_bond, conditional_atom, conditional_bond, is_cgr = \
+    def __init__(self, template, delete_atoms=False):
+        pattern, absolute_atom, absolute_bond, conditional_atom, conditional_bond, is_cgr, to_delete = \
             self.__prepare_template(template)
         self.__pattern = pattern
         self.__absolute_atom = absolute_atom
@@ -34,6 +34,7 @@ class CGRreactor:
         self.__conditional_atom = conditional_atom
         self.__conditional_bond = conditional_bond
         self.__is_cgr = is_cgr
+        self.__to_delete = delete_atoms and to_delete or set()
         self.__meta = template.meta.copy()
 
     def __call__(self, structure, limit=1, skip_intersection=True):
@@ -78,6 +79,8 @@ class CGRreactor:
             is_cgr = True
         else:
             is_cgr = False
+
+        to_delete = set(reagents).difference(products)
 
         absolute_atom = defaultdict(dict)
         conditional_atom = defaultdict(dict)
@@ -157,7 +160,7 @@ class CGRreactor:
             for m, bond in m_bond.items():
                 if m in seen:
                     continue
-                elif n not in reagents or m not in reagents or n not in products._adj[m]:
+                elif n not in reagents or m not in reagents or n not in reagents._adj[m]:
                     if is_cgr:
                         if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
                             # not sequential are more common
@@ -211,11 +214,12 @@ class CGRreactor:
                             {'order': dict(zip(r_bond.order, bond.order)), 'stereo': bond.stereo}
 
         return reagents, dict(absolute_atom), dict(absolute_bond), dict(conditional_atom), dict(conditional_bond), \
-            is_cgr
+            is_cgr, to_delete
 
     def __patcher(self, structure, mapping):
         new = type(structure)()
         new.meta.update(self.__meta)
+        to_delete = {mapping[x] for x in self.__to_delete}
 
         new_atoms = []
         for n, atom in self.__absolute_atom.items():
@@ -237,7 +241,7 @@ class CGRreactor:
                 else:
                     attr[k] = replace[r_atom[k]]
             new.add_atom(attr, n)
-        for n in structure._node.keys() - new._node.keys():  # add unmatched atoms
+        for n in structure._node.keys() - new._node.keys() - to_delete:  # add unmatched atoms
             new.add_atom(structure._node[n], n)
         for n in new_atoms:
             mapping[n] = new.add_atom(self.__absolute_atom[n])
@@ -267,11 +271,12 @@ class CGRreactor:
                     new.add_bond(n, m, {'order': bond['order'][r_bond['order']],
                                         'stereo': bond['stereo']})
         seen_matched = seen_a | seen_c
-        seen = set()
         for n, m_bond in structure._adj.items():
-            seen.add(n)
+            if n in to_delete:
+                continue
+            to_delete.add(n)
             for m, bond in m_bond.items():
-                if m in seen or n in seen_matched and m in seen_matched:
+                if m in to_delete or n in seen_matched and m in seen_matched:
                     continue
                 new.add_bond(n, m, bond)
 
