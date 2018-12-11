@@ -128,10 +128,10 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
                             else:
                                 p_hybridization = 2
 
-            atom.neighbors = neighbors
-            atom.hybridization = hybridization
-            atom.p_neighbors = p_neighbors
-            atom.p_hybridization = p_hybridization
+            atom._reagent._neighbors = neighbors
+            atom._reagent._hybridization = hybridization
+            atom._product._neighbors = p_neighbors
+            atom._product._hybridization = p_hybridization
         self.flush_cache()
 
     def _matcher(self, other):

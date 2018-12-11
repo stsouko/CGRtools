@@ -58,8 +58,8 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
                     else:
                         hybridization = 2
 
-            atom.neighbors = neighbors
-            atom.hybridization = hybridization
+            atom._neighbors = neighbors
+            atom._hybridization = hybridization
         self.flush_cache()
 
     def implicify_hydrogens(self):
