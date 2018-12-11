@@ -133,7 +133,7 @@ class CGRreactor:
             else:
                 if is_cgr:
                     conditional_atom[n]['charge'] = dict(zip(zip(r_atom.charge, r_atom.p_charge),
-                                                        zip(atom.charge, atom.p_charge)))
+                                                         zip(atom.charge, atom.p_charge)))
                 else:
                     conditional_atom[n]['charge'] = dict(zip(r_atom.charge, atom.charge))
 
@@ -220,17 +220,18 @@ class CGRreactor:
         new = type(structure)()
         new.meta.update(self.__meta)
         to_delete = {mapping[x] for x in self.__to_delete}
+        atoms = {}
+        new_atoms = {}
 
-        new_atoms = []
         for n, atom in self.__absolute_atom.items():
             if n in mapping:
                 n = mapping[n]
-                new.add_atom({**structure._node[n], **atom}, n)
+                atoms[n] = {**structure._node[n], **atom}
             else:
-                new_atoms.append(n)
-        for n, atom in self.__conditional_atom:
+                new_atoms[n] = atom
+        for n, atom in self.__conditional_atom.items():
             n = mapping[n]
-            attr = {}
+            attr = atoms.setdefault(n, {})
             r_atom = structure._node[n]
             for k, replace in atom.items():
                 if k in ('element', 'isotope'):
@@ -240,11 +241,12 @@ class CGRreactor:
                     attr[k], attr[p_k] = replace[(r_atom[k], r_atom[p_k])]
                 else:
                     attr[k] = replace[r_atom[k]]
-            new.add_atom(attr, n)
+        for n, atom in atoms.items():
+            new.add_atom(atom, n)
         for n in structure._node.keys() - new._node.keys() - to_delete:  # add unmatched atoms
             new.add_atom(structure._node[n], n)
-        for n in new_atoms:
-            mapping[n] = new.add_atom(self.__absolute_atom[n])
+        for n, atom in new_atoms.items():
+            mapping[n] = new.add_atom(atom)
 
         seen_a = set()
         for n, m_bond in self.__absolute_bond.items():
