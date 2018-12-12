@@ -19,12 +19,12 @@
 from collections import Counter
 from functools import reduce
 from itertools import count
+from logging import warning
 from operator import mul, itemgetter
-from warnings import warn
 
 
 class Morgan:
-    def _morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
+    def _morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False, tries=None):
         """
         Morgan like algorithm for graph nodes ordering
 
@@ -33,6 +33,7 @@ class Morgan:
         :param stereo: differentiate stereo atoms and bonds
         :param hybridization: differentiate hybridization of atoms
         :param neighbors: differentiate neighbors of atoms. useful for queries structures
+        :param tries: maximum number of iterations for stationary point search
         :return: dict of atom-weight pairs
         """
         if not len(self):  # for empty containers
@@ -41,16 +42,20 @@ class Morgan:
         params = {n: (node.weight(atom, isotope, stereo, hybridization, neighbors),
                       tuple(sorted(edge.weight(stereo) for edge in self._adj[n].values())))
                   for n, node in self._node.items()}
-        scaf = {n: tuple(m) for n, m in self._adj.items()}
         newlevels = {}
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                    for x, y in sorted(params.items(), key=itemgetter(1))}
 
+        if tries is None:
+            tries = len(self) * 4
+        elif tries == 1:
+            return weights
+
+        scaf = {n: tuple(m) for n, m in self._adj.items()}
         numb = len(set(weights.values()))
         stab = 0
 
-        tries = len(self) * 4  # limit for searching
         while tries:
             oldnumb = numb
             neweights = {}
@@ -77,10 +82,10 @@ class Morgan:
 
             tries -= 1
             if not tries and numb < oldnumb:
-                warn('morgan. number of attempts exceeded. uniqueness has decreased. last attempt will be made')
+                warning('morgan. number of attempts exceeded. uniqueness has decreased. next attempt will be made')
                 tries = 1
         else:
-            warn('morgan. number of attempts exceeded')
+            warning('morgan. number of attempts exceeded')
 
         return weights
 

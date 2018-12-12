@@ -21,11 +21,11 @@ from hashlib import md5, sha256
 from itertools import islice
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
-from ..algorithms import Morgan, SSSR, StringCommon
+from ..algorithms import Morgan, SSSR
 from ..periodictable import elements_list
 
 
-class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
+class BaseContainer(Graph, Morgan, SSSR, ABC):
     def __dir__(self):
         return list(self._visible) or super().__dir__()
 
@@ -289,17 +289,19 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
     def get_signature_hash(self, *args, **kwargs):
         """
         concatenated md5 and sha256 hashes of cgr string
+
         :return: 48 bytes length string
         """
         bs = self.get_signature(*args, **kwargs).encode()
         return md5(bs).digest() + sha256(bs).digest()
 
-    def get_signature(self, start=None, depth_limit=None, atom=True, isotope=False, stereo=False, hybridization=False,
-                      neighbors=False, flush_cache=False,  weights=None):
+    def get_signature(self, start=None, stop=None, depth_limit=None, atom=True, isotope=False, stereo=False,
+                      hybridization=False, neighbors=False, weights=None, *, flush_cache=False):
         """
         return string representation of structure
 
-        :param start: root atom map. need for augmented atom signatures
+        :param start: root atom map. need for augmented atom and chained signatures
+        :param stop: end atom map. need for chained signatures
         :param depth_limit: dept of augmented atom signature
         :param weights: dict of atoms in keys and orders in values
         :param isotope: set isotope marks
@@ -313,24 +315,46 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
             self.__signatures = {}
 
         if weights is None:
-            k = (start, depth_limit, atom, isotope, stereo, hybridization, neighbors)
+            k = (start, stop, depth_limit, atom, isotope, stereo, hybridization, neighbors)
             if k in self.__signatures:
                 return self.__signatures[k]
-            weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, flush_cache)
-            sg = self._stringify(start, depth_limit, weights, atom, isotope, stereo, hybridization, neighbors)
+            if start is None:
+                if stop is not None or depth_limit is not None:
+                    raise ValueError('stop and depth_limit should be None for full signature')
+                weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, flush_cache=flush_cache)
+                sg = self._stringify_full(weights.__getitem__, atom, isotope, stereo, hybridization, neighbors)
+            elif stop is None:
+                if depth_limit is None:
+                    raise ValueError('need depth_limit')
+                weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, 1, flush_cache=flush_cache)
+                sg = self._stringify_augmented(start, depth_limit, weights.__getitem__, atom, isotope, stereo,
+                                               hybridization, neighbors)
+            elif depth_limit is not None:
+                raise ValueError('depth_limit not possible for chained signature')
+            else:
+                sg = self._stringify_chain(start, stop, atom, isotope, stereo, hybridization, neighbors)
             self.__signatures[k] = sg
-            return sg
+        elif start is None:
+            if stop is not None or depth_limit is not None:
+                raise ValueError('stop and depth_limit should be None for full signature')
+            sg = self._stringify_full(weights.__getitem__, atom, isotope, stereo, hybridization, neighbors)
+        elif stop is None:
+            if depth_limit is None:
+                raise ValueError('need depth_limit')
+            sg = self._stringify_augmented(start, depth_limit, weights.__getitem__, atom, isotope, stereo,
+                                           hybridization, neighbors)
         else:
-            return self._stringify(start, depth_limit, weights, atom, isotope, stereo, hybridization, neighbors)
+            raise ValueError('weights for chained signature should be None')
+        return sg
 
-    def get_morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False,
+    def get_morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False, tries=None, *,
                    flush_cache=False):
         if flush_cache or self.__weights is None:
             self.__weights = {}
-        k = (atom, isotope, stereo, hybridization, neighbors)
+        k = (atom, isotope, stereo, hybridization, neighbors, tries)
         if k in self.__weights:
             return self.__weights[k]
-        return self.__weights.setdefault(k, self._morgan(atom, isotope, stereo, hybridization, neighbors))
+        return self.__weights.setdefault(k, self._morgan(atom, isotope, stereo, hybridization, neighbors, tries))
 
     def is_substructure(self, other):
         """
@@ -376,15 +400,31 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         pass
 
     @abstractmethod
-    def _stringify(self, start=None, depth_limit=None, weights=None, atom=True, isotope=True, stereo=False,
-                   hybridization=False, neighbors=False) -> str:
+    def _stringify_augmented(self, start, depth_limit, weights, atom=True, isotope=True, stereo=False,
+                             hybridization=False, neighbors=False) -> str:
+        """
+        container specific signature generation
+        """
+        pass
+
+    @abstractmethod
+    def _stringify_full(self, weights, atom=True, isotope=True, stereo=False,
+                        hybridization=False, neighbors=False) -> str:
+        """
+        container specific signature generation
+        """
+        pass
+
+    @abstractmethod
+    def _stringify_chain(self, start, stop, atom=True, isotope=True, stereo=False,
+                         hybridization=False, neighbors=False) -> str:
         """
         container specific signature generation
         """
         pass
 
     def flush_cache(self):
-        self.__weights = self.__signatures = self.__pickle = self.__hash = None
+        self.__weights = self.__signatures = self.__pickle = None
 
     @staticmethod
     def _get_subclass(name):
@@ -415,7 +455,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         return self.union(other)
 
     def __str__(self):
-        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+        return self.get_signature(isotope=True, stereo=True)
 
     def __repr__(self):
         if self.__pickle is None:
@@ -423,10 +463,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
         return self.__pickle
 
     def __hash__(self):
-        if self.__hash is None:
-            self.__hash = int.from_bytes(self.get_signature_hash(isotope=True, stereo=True, hybridization=True,
-                                                                 neighbors=True), 'big')
-        return self.__hash
+        hash(str(self))
 
     def __eq__(self, other):
         return str(self) == str(other)
@@ -443,7 +480,7 @@ class BaseContainer(Graph, StringCommon, Morgan, SSSR, ABC):
     def __ge__(self, other):
         return other.is_equal(self)
 
-    __weights = __signatures = __pickle = __hash = None
+    __weights = __signatures = __pickle = None
     __attrs = dict(source='atom1', target='atom2', name='atom', link='bonds')
     _visible = ()
 

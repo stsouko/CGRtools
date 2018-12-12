@@ -40,6 +40,9 @@ class QueryContainer(StringMolecule, BaseContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
+    def __str__(self):
+        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+
 
 class QueryCGRContainer(StringCGR, BaseContainer):
     node_attr_dict_factory = DynQueryAtom
@@ -55,6 +58,9 @@ class QueryCGRContainer(StringCGR, BaseContainer):
         elif isinstance(other, QueryCGRContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
+
+    def __str__(self):
+        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']
