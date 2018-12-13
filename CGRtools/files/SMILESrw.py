@@ -110,7 +110,7 @@ class SMILESread(CGRread, WithMixin):
 
     def __parse_smiles(self, smiles):
         self.__parser.parse(smiles)
-        return {'atoms': [{'element': a['symbol'], 'charge': a['charge'], 'mapping': a['aclass'] or 0,
+        return {'atoms': [{'element': a['symbol'].capitalize(), 'charge': a['charge'], 'mapping': a['aclass'] or 0,
                            'x': 0., 'y': 0., 'z': 0., 'mark': None, 'isotope': a['isotope'], 'multiplicity': None}
                           for a in self.__parser.atoms], 'extra': [], 'cgr': [],
                 'bonds': [(b['a0'], b['a1'], {'order': self.__bond_map[b['order']]}, None)
