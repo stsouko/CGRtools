@@ -80,7 +80,10 @@ class ReactionContainer:
         self.__reagents = MindfulList(reagents)
         self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
-        self.__meta = dict(meta) or {}
+        if meta is None:
+            self.__meta = {}
+        else:
+            self.__meta = dict(meta)
         self.__signatures = {}
         self.__pickle = None
 
@@ -238,7 +241,7 @@ class ReactionContainer:
         self.__pickle = self.__signatures = None
 
     def __str__(self):
-        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+        return self.get_signature(isotope=True, stereo=True)
 
     def __repr__(self):
         if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
