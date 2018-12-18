@@ -35,7 +35,7 @@ def prepare_meta(meta):
 
 
 class MOLread:
-    def __init__(self, line, ignore=False):
+    def __init__(self, line):
         atom_count = int(line[0:3])
         if not atom_count:
             raise EmptyMolecule
@@ -65,11 +65,9 @@ class MOLread:
                     raise ValueError('invalid element')
             else:
                 isotope = None
-            mark = line[54:57]
 
             self.__atoms.append({'element': element, 'charge': self.__charge_map[line[38]],
-                                 'isotope': isotope, 'multiplicity': None,
-                                 'mark': int(mark) if mark != '  0' else None, 'mapping': int(line[60:63]),
+                                 'isotope': isotope, 'multiplicity': None, 'mapping': int(line[60:63]),
                                  'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
 
         elif len(self.__bonds) < self.__bonds_count:
@@ -139,7 +137,7 @@ class MOLread:
 
 
 class EMOLread:
-    def __init__(self, line=None, ignore=False):
+    def __init__(self):
         self.__extra = []
         self.__cgr = []
         self.__atoms = []
@@ -253,7 +251,7 @@ class EMOLread:
                 raise ValueError('invalid atomlist')
             self.__extra.append((n, 'atomnotlist', a.split(',')))
             a = 'L'
-        mk = i = r = None
+        i = r = None
         c = 0
         for kv in kvs:
             k, v = kv.split('=', 1)
@@ -261,9 +259,7 @@ class EMOLread:
             if not v:
                 raise ValueError('invalid atom record')
             v = int(v)
-            if k == 'ISIDAMARK':
-                mk = v
-            elif k == 'CHG':
+            if k == 'CHG':
                 c = v
             elif k == 'MASS':
                 i = v
@@ -271,7 +267,7 @@ class EMOLread:
                 r = v
 
         self.__atoms.append({'element': a, 'isotope': i, 'charge': c, 'multiplicity': r,
-                             'x': float(x), 'y': float(y), 'z': float(z), 'mapping': int(m), 'mark': mk})
+                             'x': float(x), 'y': float(y), 'z': float(z), 'mapping': int(m)})
 
     def __sgroup_parser(self, line):
         self.__sgroup += 1
@@ -467,10 +463,6 @@ class MOLwrite(CGRwrite):
                              (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:>3s} 0{i["charge"]}  0  0  '
                               f'0  0  0{i["mark"]}  0{i["mapping"]:3d}  0  0\n' for i in atoms),
                              ("%3d%3d  %s  %s  0  0  0\n" % i for i in bonds), mol_prop))
-
-    @staticmethod
-    def _mark_map(x):
-        return x and f'{x:3d}' or '  0'
 
     @staticmethod
     def _isotope_map(x, n):

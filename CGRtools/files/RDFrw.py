@@ -110,9 +110,9 @@ class RDFread(CGRread, WithMixin):
                             parser = RXNread(line, self._ignore)
                     else:
                         if 'V2000' in line:
-                            parser = MOLread(line, self._ignore)
+                            parser = MOLread(line)
                         elif 'V3000' in line:
-                            parser = EMOLread(line, self._ignore)
+                            parser = EMOLread()
                         else:
                             raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -142,10 +142,8 @@ class RDFwrite(MOLwrite, WithMixin):
             self._file.write('$MFMT\n')
             self._file.write(self._format_mol(*m['structure']))
             self._file.write('M  END\n')
-            colors = m['colors']
         else:
             self._file.write(f'$RFMT\n$RXN\n\n\n\n{len(data.reagents):3d}{len(data.products):3d}\n')
-            colors = {}
             s = 0
             rl = len(data.reagents)
             for n, m in enumerate(chain(data.reagents, data.products), start=1):
@@ -156,7 +154,7 @@ class RDFwrite(MOLwrite, WithMixin):
                 self._file.write(self._format_mol(*m['structure']))
                 self._file.write('M  END\n')
 
-        for k, v in chain(colors.items(), data.meta.items()):
+        for k, v in data.meta.items():
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
 

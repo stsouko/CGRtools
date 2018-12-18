@@ -163,15 +163,14 @@ class MRVread(CGRread, WithMixin):
                 da = (da,)
             for n, atom in enumerate(da):
                 atom_map[atom['@id']] = n
-                atoms.append(dict(element=atom['@elementType'],
-                                  isotope=int(atom['@isotope']) if '@isotope' in atom else None,
-                                  charge=int(atom.get('@formalCharge', 0)),
-                                  multiplicity=self.__radical_map[atom['@radical']] if '@radical' in atom else None,
-                                  map=int(atom.get('@mrvMap', 0)),
-                                  mark=int(atom['@ISIDAmark']) if '@ISIDAmark' in atom else None,
-                                  x=float(atom['@x3'] if '@x3' in atom else atom['@x2']),
-                                  y=float(atom['@y3'] if '@y3' in atom else atom['@y2']),
-                                  z=float(atom['@z3'] if '@z3' in atom else 0.)))
+                atoms.append({'element': atom['@elementType'],
+                              'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
+                              'charge': int(atom.get('@formalCharge', 0)),
+                              'multiplicity': self.__radical_map[atom['@radical']] if '@radical' in atom else None,
+                              'map': int(atom.get('@mrvMap', 0)),
+                              'x': float(atom['@x3'] if '@x3' in atom else atom['@x2']),
+                              'y': float(atom['@y3'] if '@y3' in atom else atom['@y2']),
+                              'z': float(atom['@z3'] if '@z3' in atom else 0.)})
                 if '@mrvQueryProps' in atom and atom['@mrvQueryProps'][0] == 'L':
                     al = atom['@mrvQueryProps']
                     _type = al[1]
@@ -187,7 +186,7 @@ class MRVread(CGRread, WithMixin):
                                                    (atom['@y3'] if '@y3' in atom else atom['@y2']).split())):
                 atom_map[_id] = n
                 atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'mapping': 0,
-                              'mark': None, 'isotope': None, 'multiplicity': None})
+                              'isotope': None, 'multiplicity': None})
             if '@z3' in atom:
                 for a, x in zip(atoms, atom['@z3'].split()):
                     a['z'] = float(x)
@@ -203,10 +202,6 @@ class MRVread(CGRread, WithMixin):
                 for a, x in zip(atoms, atom['@mrvMap'].split()):
                     if x != '0':
                         a['mapping'] = int(x)
-            if '@ISIDAmark' in atom:
-                for a, x in zip(atoms, atom['@mrvMap'].split()):
-                    if x != '0':
-                        a['mark'] = int(x)
             if '@radical' in atom:
                 for a, x in zip(atoms, atom['@radical'].split()):
                     if x != '0':
@@ -286,7 +281,7 @@ class MRVwrite(CGRwrite, WithMixin):
         if isinstance(data, BaseContainer):
             m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
-            for k, v in chain(m['colors'].items(), data.meta.items()):
+            for k, v in data.meta.items():
                 if '\n' in v:
                     v = f'<![CDATA[{v}]]>'
                 self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
@@ -327,8 +322,8 @@ class MRVwrite(CGRwrite, WithMixin):
         return ''.join(chain(('<atomArray>',),
                              (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
                               f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}"'
-                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["mark"]}'
-                              f'{atom["elements"]}/>' for atom in atoms),
+                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["elements"]}/>'
+                              for atom in atoms),
                              ('</atomArray><bondArray>',),
                              (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
                               for n, (i, j, order, stereo) in enumerate(bonds, start=1)),
@@ -353,10 +348,6 @@ class MRVwrite(CGRwrite, WithMixin):
     @staticmethod
     def _isotope_map(x, n):
         return x and f' isotope="{x}"' or ''
-
-    @staticmethod
-    def _mark_map(x):
-        return x and f' ISIDAmark="{x}"' or ''
 
     @staticmethod
     def _multiplicity_map(x, n):

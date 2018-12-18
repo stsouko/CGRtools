@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import chain
 from logging import warning
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
@@ -84,9 +83,9 @@ class SDFread(CGRread, WithMixin):
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLread(line, self._ignore)
+                        parser = MOLread(line)
                     elif 'V3000' in line:
-                        parser = EMOLread(line, self._ignore)
+                        parser = EMOLread()
                     else:
                         raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -111,7 +110,7 @@ class SDFwrite(MOLwrite, WithMixin):
         self._file.write(self._format_mol(*m['structure']))
         self._file.write('M  END\n')
 
-        for k, v in chain(m['colors'].items(), data.meta.items()):
+        for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')
         self._file.write('$$$$\n')
 

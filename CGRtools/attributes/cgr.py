@@ -227,7 +227,7 @@ class DynAtom(DynAtomAttribute):
         return self._reagent != self._product != other
 
     _factory = Atom
-    _static = {'element', 'isotope', 'mark', 'mapping'}
+    _static = {'element', 'isotope', 'mapping'}
     _p_static = {f'p_{x}' for x in _static}
 
 

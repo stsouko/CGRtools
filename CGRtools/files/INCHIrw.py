@@ -98,7 +98,7 @@ class INCHIread(CGRread, WithMixin):
                 isotope = isotope - 10000 + common_isotopes[element]
 
             atoms.append({'element': element, 'charge': int.from_bytes(atom.charge, byteorder='big', signed=True),
-                          'mapping': 0, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'mark': None, 'isotope': isotope,
+                          'mapping': 0, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'isotope': isotope,
                           'multiplicity': int.from_bytes(atom.radical, byteorder='big') or None})
 
             for k in range(atom.num_bonds):

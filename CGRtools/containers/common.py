@@ -32,9 +32,6 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
     def __getstate__(self):
         return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
 
-    def mark(self, n):
-        return self._node[n].mark
-
     def atom(self, n):
         return self._node[n]
 
@@ -139,7 +136,7 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
 
             nodes = []
             for x in data['nodes']:
-                n = {'atom': x['atom'], 'element': x['element'], 'charge': x['s_charge'], 'mark': x['mark'],
+                n = {'atom': x['atom'], 'element': x['element'], 'charge': x['s_charge'],
                      'x': x['s_x'], 'y': x['s_y'], 'z': x['s_z']}
                 if 'isotope' in x:
                     n['isotope'] = x['isotope']

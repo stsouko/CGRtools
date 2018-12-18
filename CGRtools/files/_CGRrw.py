@@ -97,10 +97,9 @@ class WithMixin:
 
 
 class CGRread:
-    def __init__(self, remap=True, ignore=False, colors=None):
+    def __init__(self, remap=True, ignore=False):
         self.__remap = remap
         self._ignore = ignore
-        self.__colors = colors
 
     def _convert_reaction(self, reaction):
         if not (reaction['reagents'] or reaction['products'] or reaction['reactants']):
@@ -169,7 +168,7 @@ class CGRread:
                 atom_len = len(j['atoms'])
                 remapped = {x: y for x, y in enumerate(tmp[shift: atom_len + shift])}
                 shift += atom_len
-                g = self.__convert_structure(j, remapped, {})
+                g = self.__convert_structure(j, remapped)
                 rc[i].append(g)
         return rc
 
@@ -192,11 +191,7 @@ class CGRread:
                     remapped[n] = m
                     used.add(m)
 
-        if self.__colors and self.__colors in molecule['meta']:
-            colors = self.__parse_colors(molecule['meta'][self.__colors])
-        else:
-            colors = {}
-        g = self.__convert_structure(molecule, remapped, colors)
+        g = self.__convert_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
         return g
 
@@ -225,26 +220,7 @@ class CGRread:
         else:
             return {name: base, p_name: diff[0]}, False, True
 
-    @staticmethod
-    def __parse_colors(colors):
-        adhoc, before, res = [], [], defaultdict(dict)
-        for x in colors:
-            if (len(x) == 81 or len(x) == 75 and not before) and x[-1] == '+':
-                before.append(x[:-1])
-            else:
-                before.append(x)
-                adhoc.append(''.join(before).split())
-                before = []
-
-        for population, *keys in adhoc:
-            p = int(population)
-            for x in keys:
-                atom, val = x.split(':')
-                a = int(atom)
-                res[a][p] = val
-        return res
-
-    def __convert_structure(self, molecule, mapping, colors):
+    def __convert_structure(self, molecule, mapping):
         atom_data, bond_data, stereo = defaultdict(dict), defaultdict(dict), []
         atoms = molecule['atoms']
         bonds = molecule['bonds']
@@ -363,7 +339,6 @@ class CGRread:
 
             if is_query:
                 for atom in atoms:
-                    del atom['mark']
                     del atom['mapping']
                 for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
@@ -377,7 +352,6 @@ class CGRread:
             for k, v in atom_data.items():
                 atoms[k].update(v)
             for atom in atoms:
-                del atom['mark']
                 del atom['mapping']
             if bond_data:
                 for n, m, bond, _ in bonds:
@@ -406,8 +380,6 @@ class CGRread:
                 atom['isotope'] = 3
             elif element == '*':
                 atom['element'] = 'A'
-            if n in colors:
-                atom['color'] = colors[n]
             g.add_atom(atom, mapping[n])
 
         for n, m, b, _ in bonds:
@@ -434,21 +406,16 @@ class CGRread:
         else:
             warning('unsupported stereo or stereo impossible. tetrahedron only supported')
 
-    __marks = {mark: ('s_%s' % mark, 'p_%s' % mark, 'sp_%s' % mark) for mark in ('neighbors', 'hyb', 'bond')}
     __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
-    __stereolabels = {'0': None, '1': 1, '-1': -1, '+1': 1, 'n': None, 1: 1, 6: -1, -1: -1}
 
 
 class CGRwrite:
-    def __init__(self, extralabels=False, mark_to_map=False, xyz=False, fix_position=True, colors='ISIDA_COLORS'):
+    def __init__(self, extralabels=False, xyz=False, fix_position=True):
         self.__xyz = xyz
-        self.__mark_to_map = mark_to_map
         self.__extralabels = extralabels
         self._fix_position = fix_position
-        self.__colors = colors
 
     def _convert_structure(self, g, shift=0):
-        data = {'colors': {}}
         if isinstance(g, CGRContainer):
             format_atom = self.__format_dyn_atom
             format_bond = self.__format_dyn_bond
@@ -466,18 +433,10 @@ class CGRwrite:
             format_bond = self.__format_bond
             stereo_map = self.__wedge_map(g)
 
-            #  colors supported only for molecules due to ambiguity for other types
-            colors = defaultdict(list)
-            for n, atom in enumerate(g._node.values(), start=1):
-                if atom.color:
-                    for part, val in atom.color.items():
-                        colors[part].append(f'{n}:{val}')
-            if colors:
-                data['colors'][self.__colors] = '\n'.join('%s %s' % (x, ' '.join(y)) for x, y in colors.items())
-
         list_x, list_y = zip(*((x.x, x.y) for x in g._node.values()))
         min_x, max_x = min(list_x), max(list_x)
-        data['y_shift'] = y_shift = -(max(list_y) + min(list_y)) / 2
+        y_shift = -(max(list_y) + min(list_y)) / 2
+        data = {'y_shift': y_shift}
         x_shift = shift - min_x
         if self._fix_position:
             data.update(max_x=max_x + x_shift, min_x=shift)
@@ -488,16 +447,15 @@ class CGRwrite:
         renum = {}
         for n, (i, atom) in enumerate(g._node.items(), start=1):
             renum[i] = n
-            cgr, symbol, isotope, charge, multiplicity, mark, elements = format_atom(atom, n)
+            cgr, symbol, isotope, charge, multiplicity, elements = format_atom(atom, n)
             cgr_data.extend(cgr)
 
             x, y = atom.x, atom.y
             if self._fix_position:
                 x += x_shift
                 y += y_shift
-            atoms.append({'mapping': (atom.mark or 0) if self.__mark_to_map else i, 'symbol': symbol,
-                          'isotope': isotope, 'charge': charge, 'multiplicity': multiplicity, 'mark': mark,
-                          'x': x, 'y': y, 'z': atom.z, 'elements': elements, 'id': n})
+            atoms.append({'mapping': i, 'symbol': symbol, 'isotope': isotope, 'charge': charge,
+                          'multiplicity': multiplicity, 'x': x, 'y': y, 'z': atom.z, 'elements': elements, 'id': n})
 
         seen = set()
         for n, m_bond in g._adj.items():
@@ -529,7 +487,7 @@ class CGRwrite:
     def __format_atom(self, atom, n):
         isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)
         return (), atom.element, isotope, self._charge_map(atom.charge), \
-            self._multiplicity_map(atom.multiplicity, n), self._mark_map(atom.mark), self._atom_list_map(None, n)
+            self._multiplicity_map(atom.multiplicity, n), self._atom_list_map(None, n)
 
     def __format_dyn_atom(self, atom, n):
         cgr = []
@@ -545,7 +503,7 @@ class CGRwrite:
                 cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
         isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)
         return cgr, atom.element, isotope, self._charge_map(atom.charge), \
-            self._multiplicity_map(atom.multiplicity, n), self._mark_map(atom.mark), self._atom_list_map(None, n)
+            self._multiplicity_map(atom.multiplicity, n), self._atom_list_map(None, n)
 
     def __format_query_atom(self, atom, n):
         charge = atom.charge[0]
@@ -585,7 +543,7 @@ class CGRwrite:
         if atom.neighbors:
             cgr.append((nt, 'atomneighbors', ','.join(str(x) for x in atom.neighbors)))
         return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
-            self._multiplicity_map(multiplicity, n), self._mark_map(None), elements
+            self._multiplicity_map(multiplicity, n), elements
 
     def __format_dyn_query_atom(self, atom, n):
         charge = atom.charge[0]
@@ -651,7 +609,7 @@ class CGRwrite:
             if abs(dx) > .0001 or abs(dy) > .0001 or abs(dz) > .0001:
                 cgr.append((nt, 'dynatom', f'x{dx:.4f},{dy:.4f},{dz:.4f}'))
         return cgr, symbol, self._isotope_map(isotope, n), self._charge_map(charge), \
-            self._multiplicity_map(multiplicity, n), self._mark_map(None), elements
+            self._multiplicity_map(multiplicity, n), elements
 
     def __format_bond(self, bond, n, m):
         if bond.order == 9:
@@ -741,11 +699,6 @@ class CGRwrite:
     @staticmethod
     @abstractmethod
     def _isotope_map(x, n):
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def _mark_map(x):
         pass
 
     @staticmethod

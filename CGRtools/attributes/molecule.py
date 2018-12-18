@@ -128,8 +128,7 @@ class BondAttribute(Attribute):
 
 
 class Atom(AtomAttribute):
-    __slots__ = ('_atom', '__hybridization', '__neighbors', '__color', '__stereo', '__mapping', '__mark',
-                 '__x', '__y', '__z')
+    __slots__ = ('_atom', '__hybridization', '__neighbors', '__stereo', '__mapping', '__x', '__y', '__z')
 
     def __init__(self, *, skip_checks=False):
         super().__setattr__('_skip_checks', skip_checks)
@@ -139,8 +138,6 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__z', 0.)
         super().__setattr__('_Atom__mapping', None)
         super().__setattr__('_Atom__stereo', None)
-        super().__setattr__('_Atom__mark', None)
-        super().__setattr__('_Atom__color', None)
         super().__setattr__('_Atom__hybridization', None)
         super().__setattr__('_Atom__neighbors', None)
 
@@ -152,8 +149,6 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__z', parent.z)
         super().__setattr__('_Atom__mapping', parent.mapping)
         super().__setattr__('_Atom__stereo', parent.stereo)
-        super().__setattr__('_Atom__mark', parent.mark)
-        super().__setattr__('_Atom__color', parent.color)
         super().__setattr__('_Atom__hybridization', None)
         super().__setattr__('_Atom__neighbors', None)
 
@@ -187,8 +182,6 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__z', value.z)
             super().__setattr__('_Atom__mapping', value.mapping)
             super().__setattr__('_Atom__stereo', value.stereo)
-            super().__setattr__('_Atom__mark', value.mark)
-            super().__setattr__('_Atom__color', value.color)
             if '_Atom__element' in kwargs:
                 super().__setattr__('_atom',
                                     kwargs['_Atom__element'](charge=kwargs.get('_Atom__charge', self.charge),
@@ -200,8 +193,7 @@ class Atom(AtomAttribute):
                                     type(self._atom)(charge=kwargs.get('_Atom__charge', self.charge),
                                                      multiplicity=kwargs.get('_Atom__multiplicity', self.multiplicity),
                                                      isotope=kwargs.get('_Atom__isotope', self.isotope)))
-            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark',
-                      '_Atom__x', '_Atom__y', '_Atom__z'):
+            for k in ('_Atom__stereo', '_Atom__mapping', '_Atom__x', '_Atom__y', '_Atom__z'):
                 if k in kwargs:
                     super().__setattr__(k, kwargs[k])
 
@@ -247,8 +239,7 @@ class Atom(AtomAttribute):
                                                      multiplicity=value.get('_Atom__multiplicity', self.multiplicity),
                                                      isotope=value.get('_Atom__isotope', self.isotope)))
 
-            for k in ('_Atom__color', '_Atom__stereo', '_Atom__mapping', '_Atom__mark',
-                      '_Atom__x', '_Atom__y', '_Atom__z'):
+            for k in ('_Atom__stereo', '_Atom__mapping', '_Atom__x', '_Atom__y', '_Atom__z'):
                 if k in value:
                     super().__setattr__(k, value[k])
 
@@ -370,45 +361,6 @@ class Atom(AtomAttribute):
     def hybridization(self):
         return self.__hybridization
 
-    @property
-    def mark(self):
-        return self.__mark
-
-    @mark.setter
-    def mark(self, value):
-        super().__setattr__('_Atom__mark', self._mark_check(value))
-
-    @staticmethod
-    def _mark_check(x):
-        if x is None:
-            return
-        elif isinstance(x, int) and 1 <= x <= 999:
-            return x
-        raise ValueError('mark can be: None or in range 1-999')
-
-    @property
-    def color(self):
-        if self.__color:
-            return self.__color
-
-    @color.setter
-    def color(self, value):
-        super().__setattr__('_Atom__color', self._color_check(value))
-
-    @staticmethod
-    def _color_check(x):
-        if x is None:
-            return
-        if not isinstance(x, dict):
-            raise TypeError('color can be dict')
-        elif not x:
-            raise ValueError('empty colors dict not allowed')
-        elif not all(isinstance(x, int) for x in x):
-            raise TypeError('color keys can be int')
-        elif not all(isinstance(x, str) for x in x.values()):
-            raise TypeError('color values can be str')
-        return x.copy()
-
     def __getitem__(self, key):
         """
         dict like access to atom's attrs
@@ -417,7 +369,7 @@ class Atom(AtomAttribute):
             return self._atom.symbol
         elif key in ('isotope', 'charge', 'multiplicity'):
             return getattr(self._atom, key)
-        elif key in ('color', 'stereo', 'mapping', 'mark', 'x', 'y', 'z'):
+        elif key in ('stereo', 'mapping', 'x', 'y', 'z'):
             return getattr(self, key)
         raise KeyError('unknown atom attribute')
 
@@ -436,9 +388,10 @@ class Atom(AtomAttribute):
             yield 'charge'
         if self.multiplicity:
             yield 'multiplicity'
-        for k in ('mapping', 'mark', 'stereo', 'color'):
-            if getattr(self, k) is not None:
-                yield k
+        if self.mapping is not None:
+            yield 'mapping'
+        if self.stereo is not None:
+            yield 'stereo'
         for k in ('x', 'y', 'z'):
             if getattr(self, k):
                 yield k
@@ -478,7 +431,7 @@ class Atom(AtomAttribute):
 
     def __getstate__(self):
         return {'checks': self._skip_checks, 'atom': self._atom, 'x': self.__x, 'y': self.__y, 'z': self.__z,
-                'mapping': self.__mapping, 'stereo': self.__stereo, 'mark': self.__mark, 'color': self.__color, 
+                'mapping': self.__mapping, 'stereo': self.__stereo,
                 'hybridization': self.__hybridization, 'neighbors': self.__neighbors}
 
     def __setstate__(self, state):
@@ -489,8 +442,6 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__z', state['z'])
         super().__setattr__('_Atom__mapping', state['mapping'])
         super().__setattr__('_Atom__stereo', state['stereo'])
-        super().__setattr__('_Atom__mark', state['mark'])
-        super().__setattr__('_Atom__color', state['color'])
         super().__setattr__('_Atom__hybridization', state['hybridization'])
         super().__setattr__('_Atom__neighbors', state['neighbors'])
 
