@@ -41,7 +41,7 @@ class QueryContainer(StringMolecule, BaseContainer):
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
     def __str__(self):
-        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+        return self.get_signature(hybridization=True, neighbors=True)
 
 
 class QueryCGRContainer(StringCGR, BaseContainer):
@@ -60,7 +60,7 @@ class QueryCGRContainer(StringCGR, BaseContainer):
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
 
     def __str__(self):
-        return self.get_signature(isotope=True, stereo=True, hybridization=True, neighbors=True)
+        return self.get_signature(hybridization=True, neighbors=True)
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']

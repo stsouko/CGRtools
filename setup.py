@@ -48,6 +48,7 @@ setup(
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='stsouko@live.ru',
+    python_requires='>=3.6.7',
     install_requires=['networkx>=2.3rc1.dev,<2.4', 'lxml>=4.1.1,<4.3'],
     extras_require={'smiles': ['coho>=0.3,<0.4']},
     dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.3rc1.dev'],

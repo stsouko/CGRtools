@@ -292,7 +292,7 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         bs = self.get_signature(*args, **kwargs).encode()
         return md5(bs).digest() + sha256(bs).digest()
 
-    def get_signature(self, start=None, stop=None, depth_limit=None, atom=True, isotope=False, stereo=False,
+    def get_signature(self, start=None, stop=None, depth_limit=None, atom=True, isotope=True, stereo=True,
                       hybridization=False, neighbors=False, weights=None, *, flush_cache=False):
         """
         return string representation of structure
@@ -452,7 +452,7 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         return self.union(other)
 
     def __str__(self):
-        return self.get_signature(isotope=True, stereo=True)
+        return self.get_signature()
 
     def __repr__(self):
         if self.__pickle is None:
