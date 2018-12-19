@@ -19,9 +19,10 @@
 from collections.abc import MutableSequence
 from functools import reduce
 from hashlib import md5, sha256
-from operator import mul
+from operator import mul, or_
 from .cgr import CGRContainer
 from .common import BaseContainer
+from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
 
 
@@ -237,6 +238,24 @@ class ReactionContainer:
         if total:
             self.flush_cache()
         return total
+
+    def compose(self):
+        """
+        get CGR of reaction
+
+        reactants will be presented as unchanged molecules
+        :return: CGRContainer
+        """
+        rr = self.__reagents + self.__reactants
+        r = reduce(or_, rr) if rr else MoleculeContainer()
+        p = reduce(or_, self.__products) if self.__products else MoleculeContainer()
+        return r ^ p
+
+    def __invert__(self):
+        """
+        get CGR of reaction
+        """
+        return self.compose()
 
     def flush_cache(self):
         """clear cached signatures and representation strings. use if structures objects in reaction object changed"""
