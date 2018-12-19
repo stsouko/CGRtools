@@ -283,17 +283,17 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
 
-    def get_signature_hash(self, *args, **kwargs):
+    def get_signature_hash(self, **kwargs):
         """
         concatenated md5 and sha256 hashes of cgr string
 
         :return: 48 bytes length string
         """
-        bs = self.get_signature(*args, **kwargs).encode()
+        bs = self.get_signature(**kwargs).encode()
         return md5(bs).digest() + sha256(bs).digest()
 
-    def get_signature(self, start=None, stop=None, depth_limit=None, atom=True, isotope=True, stereo=True,
-                      hybridization=False, neighbors=False, weights=None, *, flush_cache=False):
+    def get_signature(self, *, start=None, stop=None, depth_limit=None, atom=True, isotope=True, stereo=True,
+                      hybridization=False, neighbors=False, weights=None, flush_cache=False):
         """
         return string representation of structure
 
@@ -318,12 +318,14 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
             if start is None:
                 if stop is not None or depth_limit is not None:
                     raise ValueError('stop and depth_limit should be None for full signature')
-                weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, flush_cache=flush_cache)
+                weights = self.get_morgan(atom=atom, isotope=isotope, stereo=stereo, hybridization=hybridization,
+                                          neighbors=neighbors, tries=1, flush_cache=flush_cache)
                 sg = self._stringify_full(weights.__getitem__, atom, isotope, stereo, hybridization, neighbors)
             elif stop is None:
                 if depth_limit is None:
                     raise ValueError('need depth_limit')
-                weights = self.get_morgan(atom, isotope, stereo, hybridization, neighbors, 1, flush_cache=flush_cache)
+                weights = self.get_morgan(atom=atom, isotope=isotope, stereo=stereo, hybridization=hybridization,
+                                          neighbors=neighbors, flush_cache=flush_cache)
                 sg = self._stringify_augmented(start, depth_limit, weights.__getitem__, atom, isotope, stereo,
                                                hybridization, neighbors)
             elif depth_limit is not None:
@@ -344,7 +346,7 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
             raise ValueError('weights for chained signature should be None')
         return sg
 
-    def get_morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False, tries=None, *,
+    def get_morgan(self, *, atom=True, isotope=True, stereo=True, hybridization=False, neighbors=False, tries=None,
                    flush_cache=False):
         if flush_cache or self.__weights is None:
             self.__weights = {}
@@ -460,7 +462,10 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         return self.__pickle
 
     def __hash__(self):
-        hash(str(self))
+        return hash(str(self))
+
+    def __bytes__(self):
+        return self.get_signature_hash()
 
     def __eq__(self, other):
         return str(self) == str(other)

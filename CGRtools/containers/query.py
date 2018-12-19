@@ -40,8 +40,8 @@ class QueryContainer(StringMolecule, BaseContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
-    def __str__(self):
-        return self.get_signature(hybridization=True, neighbors=True)
+    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
+        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
 
 class QueryCGRContainer(StringCGR, BaseContainer):
@@ -59,8 +59,8 @@ class QueryCGRContainer(StringCGR, BaseContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
 
-    def __str__(self):
-        return self.get_signature(hybridization=True, neighbors=True)
+    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
+        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']
