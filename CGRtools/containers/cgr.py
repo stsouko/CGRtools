@@ -97,7 +97,7 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
             p_hybridization = 1
             # hyb 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for j, bond in self._adj[i].items():
-                isnth = self._node[j] != 'H'
+                isnth = self._node[j].element != 'H'
 
                 order = bond.order
                 if order:

@@ -42,7 +42,7 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
             hybridization = 1
             # hybridization 1- sp3; 2- sp2; 3- sp1; 4- aromatic
             for j, bond in self._adj[i].items():
-                if self._node[j] != 'H':
+                if self._node[j].element != 'H':
                     neighbors += 1
 
                 if hybridization in (3, 4):

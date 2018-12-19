@@ -369,7 +369,7 @@ class Atom(AtomAttribute):
             return self._atom.symbol
         elif key in ('isotope', 'charge', 'multiplicity'):
             return getattr(self._atom, key)
-        elif key in ('stereo', 'mapping', 'x', 'y', 'z'):
+        elif key in ('stereo', 'mapping', 'x', 'y', 'z', 'neighbors', 'hybridization'):
             return getattr(self, key)
         raise KeyError('unknown atom attribute')
 
