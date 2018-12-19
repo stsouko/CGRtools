@@ -239,6 +239,16 @@ class ReactionContainer:
             self.flush_cache()
         return total
 
+    def reset_query_marks(self):
+        """
+        set or reset hyb and neighbors marks to atoms.
+        """
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if hasattr(m, 'reset_query_marks'):
+                    m.reset_query_marks()
+        self.flush_cache()
+
     def compose(self):
         """
         get CGR of reaction
@@ -247,8 +257,18 @@ class ReactionContainer:
         :return: CGRContainer
         """
         rr = self.__reagents + self.__reactants
-        r = reduce(or_, rr) if rr else MoleculeContainer()
-        p = reduce(or_, self.__products) if self.__products else MoleculeContainer()
+        if rr:
+            if not all(isinstance(x, (MoleculeContainer, CGRContainer)) for x in rr):
+                raise TypeError('Queries not composable')
+            r = reduce(or_, rr)
+        else:
+            r = MoleculeContainer()
+        if self.__products:
+            if not all(isinstance(x, (MoleculeContainer, CGRContainer)) for x in self.__products):
+                raise TypeError('Queries not composable')
+            p = reduce(or_, self.__products)
+        else:
+            p = MoleculeContainer()
         return r ^ p
 
     def __invert__(self):
