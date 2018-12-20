@@ -20,4 +20,5 @@ from .aromatics import *
 from .compose import *
 from .morgan import *
 from .sssr import *
+from .standardize import *
 from .strings import *

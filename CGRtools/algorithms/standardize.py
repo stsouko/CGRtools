@@ -16,47 +16,82 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import permutations
+from collections import defaultdict
+from itertools import permutations, repeat
 from ..attributes import QueryAtom, QueryBond
 
 
 class Standardize:
-    def __init__(self, query, patch):
-        self.__center = query[0]
-        self.__center_patch = patch[0]
-        self.__shell_patch = list(zip(permutations(query[1:]), permutations(patch[1:])))
+    def standardize(self):
+        """
+        standardize functional groups
 
-    def __call__(self, structure):
+        :return: amoun of found groups
+        """
+        self.reset_query_marks()
         seen = set()
-        for n, c in structure._node.items():
-            if n in seen:
-                continue
-            if self.__center == c:
-                shell = tuple((bond, structure._node[m]) for m, bond in structure._adj[n].items())
-                for q, p in self.__shell_patch:
-                    if q == shell:
-                        c.update(self.__center_patch)
-                        for (b_p, a_p), (b, a) in zip(p, shell):
-                            b.update(b_p)
-                            a.update(a_p)
-                        seen.add(n)
-                        seen.update(structure._adj[n])
-                        break
+        total = 0
+        for k, center in central.items():
+            for n, atom in self._node.items():
+                if n in seen:
+                    continue
+                if center == atom:
+                    shell = tuple((bond, self._node[m]) for m, bond in self._adj[n].items())
+                    for shell_query, shell_patch, atom_patch in query_patch[k]:
+                        if shell_query == shell:
+                            total += 1
+                            atom.update(atom_patch)
+                            for (b_p, a_p), (b, a) in zip(shell_patch, shell):
+                                b.update(b_p)
+                                a.update(a_p)
+                            seen.add(n)
+                            seen.update(self._adj[n])
+                            break
+        return total
 
 
-class Nitro(Standardize):
-    def __init__(self):
-        n = QueryAtom()
-        n.update(element='N', neighbors=3, hybridization=3)
-        o = QueryAtom()
-        o.update(element='O', neighbors=1, hybridization=2)
-        a = QueryAtom()
-        a.update(element='A')
-        b = QueryBond()
-        b.order = 2
-
-        super().__init__((n, (b, o), (b, o), (QueryBond(), a)),
-                         ({'charge': 1}, ({'order': 1}, {'charge': -1}), ({}, {}), ({}, {})))
+def _prepare(q, p):
+    d = len(q) - len(p) + 1
+    if d:
+        p.extend([({}, {})] * d)
+    return list(zip(permutations(q), permutations(p[1:]), repeat(p[0])))
 
 
-__all__ = ['Nitro']
+central = {}
+query_patch = defaultdict(list)
+
+# patterns
+b1 = QueryBond()
+b2 = QueryBond()
+b3 = QueryBond()
+b2.order = 2
+b3.order = 3
+
+# any atom need for full neighbors describing
+a = QueryAtom()
+a.element = 'A'
+
+o2 = QueryAtom()
+o2.update(element='O', neighbors=1, hybridization=2)
+
+# Nitro [A]-N(=O)=O>>[A]-[N+](=O)-[O-]
+n = QueryAtom()
+n.update(element='N', neighbors=3, hybridization=3)
+central[str(n)] = n
+query_patch[str(n)].extend(_prepare([(b2, o2), (b2, o2), (b1, a)], [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
+
+# Azide [A]-[N-]-[N+]#N>>[A]-N=[N+]=[N-]
+n1 = QueryAtom()
+n2 = QueryAtom()
+n3 = QueryAtom()
+n1.update(element='N', charge=-1, neighbors=2, hybridization=1)
+n2.update(element='N', charge=1, neighbors=2, hybridization=3)
+n3.update(element='N', neighbors=1, hybridization=3)
+central[str(n2)] = n2
+query_patch[str(n2)].extend(_prepare([(b1, n1), (b3, n3)],
+                                     [{}, ({'order': 2}, {'charge': 0}), ({'order': 2}, {'charge': -1})]))
+
+del b1, b2, b3, a, o2, n, n1, n2, n3
+
+
+__all__ = ['Standardize']

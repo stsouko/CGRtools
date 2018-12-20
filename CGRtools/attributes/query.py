@@ -34,7 +34,7 @@ class QueryAtom(AtomAttribute):
 
     def __setattr__(self, key, value):
         if not self._skip_checks:
-            value = getattr(self, f'_{key}_check')(value, True)
+            value = getattr(self, f'_{key}_check')(value)
         self._atom[key] = value
 
     def _update(self, value, kwargs):

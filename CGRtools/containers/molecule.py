@@ -19,12 +19,12 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
-from ..algorithms import Aromatize, StringMolecule, CGRCompose
+from ..algorithms import Aromatize, StringMolecule, CGRCompose, Standardize
 from ..attributes import Atom, Bond
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, BaseContainer):
+class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, BaseContainer):
     """
     storage for Molecules
 
