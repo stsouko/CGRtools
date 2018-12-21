@@ -319,13 +319,13 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
                 if stop is not None or depth_limit is not None:
                     raise ValueError('stop and depth_limit should be None for full signature')
                 weights = self.get_morgan(atom=atom, isotope=isotope, stereo=stereo, hybridization=hybridization,
-                                          neighbors=neighbors, tries=1, flush_cache=flush_cache)
+                                          neighbors=neighbors, flush_cache=flush_cache)
                 sg = self._stringify_full(weights.__getitem__, atom, isotope, stereo, hybridization, neighbors)
             elif stop is None:
                 if depth_limit is None:
                     raise ValueError('need depth_limit')
                 weights = self.get_morgan(atom=atom, isotope=isotope, stereo=stereo, hybridization=hybridization,
-                                          neighbors=neighbors, flush_cache=flush_cache)
+                                          neighbors=neighbors, tries=1, flush_cache=flush_cache)
                 sg = self._stringify_augmented(start, depth_limit, weights.__getitem__, atom, isotope, stereo,
                                                hybridization, neighbors)
             elif depth_limit is not None:
