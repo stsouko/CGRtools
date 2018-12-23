@@ -19,6 +19,7 @@
 from abc import ABC, abstractmethod
 from hashlib import md5, sha256
 from itertools import islice
+from math import cos, sin, atan2
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR
@@ -396,20 +397,50 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         dx = max_x - min_x + .4
         svg = [f'<svg width="{dx * scale:.4f}cm" height="{dy * scale:.4f}cm" '
                f'viewBox="{min_x - .2:.4f} {-max_y - .2:.4f} {dx:.4f} {dy:.4f}" '
-               'xmlns="http://www.w3.org/2000/svg" version="1.1"><g fill="none" stroke="black" stroke-width=".1">']
+               'xmlns="http://www.w3.org/2000/svg" version="1.1">\n<g fill="none" stroke="black" stroke-width=".03">\n']
 
         single = []
+        double = []
+        triple = []
         for n, m, bond in self._bonds():
             na = self._node[n]
             ma = self._node[m]
-            single.append(f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f}')
+            if bond.order == 1:
+                single.append(f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f}')
+            elif bond.order == 2:
+                dx, dy = self._rotate_vector(0, .04, ma.x, ma.y, na.x, na.y)
+                double.append(f'M {na.x + dx:.4f} {-na.y + dy:.4f} L {ma.x + dx:.4f} {-ma.y + dy:.4f} '
+                              f'M {na.x - dx:.4f} {-na.y - dy:.4f} L {ma.x - dx:.4f} {-ma.y - dy:.4f}')
+            elif bond.order == 3:
+                dx, dy = self._rotate_vector(0, .07, ma.x, ma.y, na.x, na.y)
+                triple.append(f'M {na.x + dx:.4f} {-na.y + dy:.4f} L {ma.x + dx:.4f} {-ma.y + dy:.4f} '
+                              f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f} '
+                              f'M {na.x - dx:.4f} {-na.y - dy:.4f} L {ma.x - dx:.4f} {-ma.y - dy:.4f}')
 
         svg.append('<path id="single" stroke="" d="')
         svg.append(' '.join(single))
-        svg.append('" />')
+        svg.append('" />\n')
 
-        svg.append('</g></svg>')
+        svg.append('<path id="double" stroke="" d="')
+        svg.append(' '.join(double))
+        svg.append('" />\n')
+
+        svg.append('<path id="triple" stroke="" d="')
+        svg.append(' '.join(triple))
+        svg.append('" />\n')
+
+        svg.append('</g>\n</svg>')
         return ''.join(svg)
+
+    @staticmethod
+    def _rotate_vector(x, y, x2, y2, x1, y1):
+        """
+        rotate x,y vector over x2-x1, y2-y1 angle
+        """
+        angle = atan2(y2 - y1, x2 - x1)
+        cos_rad = cos(angle)
+        sin_rad = sin(angle)
+        return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
 
     def _bonds(self):
         seen = set()
