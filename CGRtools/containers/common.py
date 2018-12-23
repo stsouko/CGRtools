@@ -19,7 +19,6 @@
 from abc import ABC, abstractmethod
 from hashlib import md5, sha256
 from itertools import islice
-from math import ceil
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR
@@ -387,6 +386,30 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         elif limit == 0:
             raise ValueError('invalid limit')
         return [{v: k for k, v in m.items()} for m in islice(i, limit)] or None
+
+    def depict(self, scale=1):
+        min_x = min(x.x for x in self._node.values())
+        max_x = max(x.x for x in self._node.values())
+        min_y = min(x.y for x in self._node.values())
+        max_y = max(x.y for x in self._node.values())
+        dy = max_y - min_y + .4
+        dx = max_x - min_x + .4
+        svg = [f'<svg width="{dx * scale:.4f}cm" height="{dy * scale:.4f}cm" '
+               f'viewBox="{min_x - .2:.4f} {-max_y - .2:.4f} {dx:.4f} {dy:.4f}" '
+               'xmlns="http://www.w3.org/2000/svg" version="1.1"><g fill="none" stroke="black" stroke-width=".1">']
+
+        single = []
+        for n, m, bond in self._bonds():
+            na = self._node[n]
+            ma = self._node[m]
+            single.append(f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f}')
+
+        svg.append('<path id="single" stroke="" d="')
+        svg.append(' '.join(single))
+        svg.append('" />')
+
+        svg.append('</g></svg>')
+        return ''.join(svg)
 
     def _bonds(self):
         seen = set()
