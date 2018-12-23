@@ -154,64 +154,59 @@ class CGRreactor:
         absolute_bond = defaultdict(dict)
         conditional_bond = defaultdict(dict)
 
-        seen = set()
-        for n, m_bond in products._adj.items():
-            seen.add(n)
-            for m, bond in m_bond.items():
-                if m in seen:
-                    continue
-                elif n not in reagents or m not in reagents or n not in reagents._adj[m]:
-                    if is_cgr:
-                        if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
-                            # not sequential are more common
-                            absolute_bond[n][m] = absolute_bond[m][n] = \
-                                {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
-                                 'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                        else:
-                            raise ValueError('new bonds in patch should be static')
-                    elif len(bond.order) == 1:
-                        absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
+        for n, m, bond in products._bonds():
+            if n not in reagents or m not in reagents or n not in reagents._adj[m]:
+                if is_cgr:
+                    if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
+                        # not sequential are more common
+                        absolute_bond[n][m] = absolute_bond[m][n] = \
+                            {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
+                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
                     else:
                         raise ValueError('new bonds in patch should be static')
+                elif len(bond.order) == 1:
+                    absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
                 else:
-                    r_bond = reagents._adj[n][m]
-                    if is_cgr:
-                        if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
-                            absolute_bond[n][m] = absolute_bond[m][n] = \
-                                {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
-                                 'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                        elif not bond.order:
-                            if not r_bond.p_order:
-                                raise ValueError('None bond not mappable')
-                            elif len(bond.p_order) != len(r_bond.p_order):
-                                raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                            conditional_bond[n][m] = conditional_bond[m][n] = \
-                                {'order': dict(zip(zip(repeat(None), r_bond.p_order),
-                                                   zip(repeat(None), bond.p_order))),
-                                 'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                        elif not bond.p_order:
-                            if not r_bond.order:
-                                raise ValueError('None bond not mappable')
-                            elif len(bond.order) != len(r_bond.order):
-                                raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                            conditional_bond[n][m] = conditional_bond[m][n] = \
-                                {'order': dict(zip(zip(r_bond.order, repeat(None)),
-                                                   zip(bond.order, repeat(None)))),
-                                 'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
+                    raise ValueError('new bonds in patch should be static')
+            else:
+                r_bond = reagents._adj[n][m]
+                if is_cgr:
+                    if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
+                        absolute_bond[n][m] = absolute_bond[m][n] = \
+                            {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
+                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
+                    elif not bond.order:
+                        if not r_bond.p_order:
+                            raise ValueError('None bond not mappable')
+                        elif len(bond.p_order) != len(r_bond.p_order):
+                            raise ValueError('bond order mapping invalid. possible n>n, n>1')
+                        conditional_bond[n][m] = conditional_bond[m][n] = \
+                            {'order': dict(zip(zip(repeat(None), r_bond.p_order),
+                                               zip(repeat(None), bond.p_order))),
+                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
+                    elif not bond.p_order:
+                        if not r_bond.order:
+                            raise ValueError('None bond not mappable')
                         elif len(bond.order) != len(r_bond.order):
                             raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                        else:
-                            conditional_bond[n][m] = conditional_bond[m][n] = \
-                                {'order': dict(zip(zip(r_bond.order, r_bond.p_order),
-                                                   zip(bond.order, bond.p_order))),
-                                 'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                    elif len(bond.order) == 1:
-                        absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
+                        conditional_bond[n][m] = conditional_bond[m][n] = \
+                            {'order': dict(zip(zip(r_bond.order, repeat(None)),
+                                               zip(bond.order, repeat(None)))),
+                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
                     elif len(bond.order) != len(r_bond.order):
-                        raise ValueError(f'bond order mapping invalid. possible n>n, n>1')
+                        raise ValueError('bond order mapping invalid. possible n>n, n>1')
                     else:
                         conditional_bond[n][m] = conditional_bond[m][n] = \
-                            {'order': dict(zip(r_bond.order, bond.order)), 'stereo': bond.stereo}
+                            {'order': dict(zip(zip(r_bond.order, r_bond.p_order),
+                                               zip(bond.order, bond.p_order))),
+                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
+                elif len(bond.order) == 1:
+                    absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
+                elif len(bond.order) != len(r_bond.order):
+                    raise ValueError(f'bond order mapping invalid. possible n>n, n>1')
+                else:
+                    conditional_bond[n][m] = conditional_bond[m][n] = \
+                        {'order': dict(zip(r_bond.order, bond.order)), 'stereo': bond.stereo}
 
         return reagents, dict(absolute_atom), dict(absolute_bond), dict(conditional_atom), dict(conditional_bond), \
             is_cgr, to_delete

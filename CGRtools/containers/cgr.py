@@ -42,18 +42,14 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
             elif not atom.stereo == atom.p_stereo:
                 nodes.add(n)
 
-        seen = set()
-        for n, m_bond in self._adj.items():
-            seen.add(n)
-            for m, bond in m_bond.items():
-                if m not in seen:
-                    if stereo:
-                        if not bond._reagent != bond._product:
-                            nodes.add(n)
-                            nodes.add(m)
-                    elif not bond._reagent == bond._product:
-                        nodes.add(n)
-                        nodes.add(m)
+        for n, m, bond in self._bonds():
+            if stereo:
+                if not bond._reagent != bond._product:
+                    nodes.add(n)
+                    nodes.add(m)
+            elif not bond._reagent == bond._product:
+                nodes.add(n)
+                nodes.add(m)
         return list(nodes)
 
     def decompose(self):
@@ -69,15 +65,11 @@ class CGRContainer(StringCGR, CGRCompose, BaseContainer):
             reagents.add_atom(atom._reagent, n)
             products.add_atom(atom._product, n)
 
-        seen = set()
-        for n, m_bond in self._adj.items():
-            seen.add(n)
-            for m, bond in m_bond.items():
-                if m not in seen:
-                    if bond.order:
-                        reagents.add_bond(n, m, bond._reagent)
-                    if bond.p_order:
-                        products.add_bond(n, m, bond._product)
+        for n, m, bond in self._bonds():
+            if bond.order:
+                reagents.add_bond(n, m, bond._reagent)
+            if bond.p_order:
+                products.add_bond(n, m, bond._product)
         return reagents, products
 
     def __invert__(self):

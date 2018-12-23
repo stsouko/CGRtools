@@ -19,6 +19,7 @@
 from abc import ABC, abstractmethod
 from hashlib import md5, sha256
 from itertools import islice
+from math import ceil
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR
@@ -267,17 +268,10 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         for n, a in other._node.items():
             u.add_atom(a, n)
 
-        seen = set()
-        for n, m_b in self._adj.items():
-            seen.add(n)
-            for m, b in m_b.items():
-                if m not in seen:
-                    u.add_bond(n, m, b)
-        for n, m_b in other._adj.items():
-            seen.add(n)
-            for m, b in m_b.items():
-                if m not in seen:
-                    u.add_bond(n, m, b)
+        for n, m, b in self._bonds():
+            u.add_bond(n, m, b)
+        for n, m, b in other._bonds():
+            u.add_bond(n, m, b)
         return u
 
     def remap(self, mapping, copy=False):
@@ -393,6 +387,14 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         elif limit == 0:
             raise ValueError('invalid limit')
         return [{v: k for k, v in m.items()} for m in islice(i, limit)] or None
+
+    def _bonds(self):
+        seen = set()
+        for n, m_bond in self._adj.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    yield n, m, bond
 
     @abstractmethod
     def _matcher(self, other):

@@ -457,29 +457,24 @@ class CGRwrite:
             atoms.append({'mapping': i, 'symbol': symbol, 'isotope': isotope, 'charge': charge,
                           'multiplicity': multiplicity, 'x': x, 'y': y, 'z': atom.z, 'elements': elements, 'id': n})
 
-        seen = set()
-        for n, m_bond in g._adj.items():
-            seen.add(n)
-            for m, bond in m_bond.items():
-                if m in seen:
-                    continue
-                if stereo_map:
-                    stereo = stereo_map.get((n, m))
-                    if stereo:
-                        n_map, m_map = renum[n], renum[m]
-                    else:
-                        stereo = stereo_map.get((m, n))
-                        if stereo:
-                            n_map, m_map = renum[m], renum[n]
-                        else:
-                            n_map, m_map = renum[n], renum[m]
-                else:
+        for n, m, bond in g._bonds():
+            if stereo_map:
+                stereo = stereo_map.get((n, m))
+                if stereo:
                     n_map, m_map = renum[n], renum[m]
-                    stereo = None
+                else:
+                    stereo = stereo_map.get((m, n))
+                    if stereo:
+                        n_map, m_map = renum[m], renum[n]
+                    else:
+                        n_map, m_map = renum[n], renum[m]
+            else:
+                n_map, m_map = renum[n], renum[m]
+                stereo = None
 
-                cgr, order = format_bond(bond, n_map, m_map)
-                cgr_data.extend(cgr)
-                bonds.append((n_map, m_map, order, self._stereo_map(stereo)))
+            cgr, order = format_bond(bond, n_map, m_map)
+            cgr_data.extend(cgr)
+            bonds.append((n_map, m_map, order, self._stereo_map(stereo)))
 
         data['structure'] = (atoms, bonds, cgr_data)
         return data
