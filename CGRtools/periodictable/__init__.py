@@ -347,6 +347,7 @@ radical_map = {1: 2, 2: 1, 3: 2, None: 0}
 radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
 common_isotopes = dict(zip(elements, isotopes))
 atomic_masses = dict(zip(elements, weights))
+cpk = dict(zip(elements, cpk))
 aromatic = ('B', 'C', 'N', 'P', 'O', 'S')
 
 elements_numbers = {s: n for n, s in enumerate(elements, start=1)}

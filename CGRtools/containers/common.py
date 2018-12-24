@@ -23,7 +23,7 @@ from math import cos, sin, atan2
 from networkx import Graph, relabel_nodes, connected_components
 from networkx.readwrite.json_graph import node_link_graph, node_link_data
 from ..algorithms import Morgan, SSSR
-from ..periodictable import elements_list
+from ..periodictable import elements_list, cpk
 
 
 class BaseContainer(Graph, Morgan, SSSR, ABC):
@@ -388,7 +388,10 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
             raise ValueError('invalid limit')
         return [{v: k for k, v in m.items()} for m in islice(i, limit)] or None
 
-    def depict(self, scale=1):
+    def depict(self, scale=1, double_space=.04, triple_space=.07, font=.4, font_shift=.15, bond_shift=.2,
+               color_map=None, carbon=False):
+        if color_map is None:
+            color_map = cpk
         min_x = min(x.x for x in self._node.values())
         max_x = max(x.x for x in self._node.values())
         min_y = min(x.y for x in self._node.values())
@@ -403,19 +406,27 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         double = []
         triple = []
         for n, m, bond in self._bonds():
-            na = self._node[n]
-            ma = self._node[m]
+            na, ma = self._node[n], self._node[m]
+            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
+            if carbon or na.element != 'C':
+                dx, dy = self._rotate_vector(bond_shift, 0, mx, my, nx, ny)
+                nx += dx
+                ny -= dy
+            if carbon or ma.element != 'C':
+                dx, dy = self._rotate_vector(bond_shift, 0, mx, my, nx, ny)
+                mx -= dx
+                my += dy
             if bond.order == 1:
-                single.append(f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f}')
+                single.append(f'M {nx:.4f} {-ny:.4f} L {mx:.4f} {-my:.4f}')
             elif bond.order == 2:
-                dx, dy = self._rotate_vector(0, .04, ma.x, ma.y, na.x, na.y)
-                double.append(f'M {na.x + dx:.4f} {-na.y + dy:.4f} L {ma.x + dx:.4f} {-ma.y + dy:.4f} '
-                              f'M {na.x - dx:.4f} {-na.y - dy:.4f} L {ma.x - dx:.4f} {-ma.y - dy:.4f}')
+                dx, dy = self._rotate_vector(0, double_space, mx, my, nx, ny)
+                double.append(f'M {nx + dx:.4f} {-ny + dy:.4f} L {mx + dx:.4f} {-my + dy:.4f} '
+                              f'M {nx - dx:.4f} {-ny - dy:.4f} L {mx - dx:.4f} {-my - dy:.4f}')
             elif bond.order == 3:
-                dx, dy = self._rotate_vector(0, .07, ma.x, ma.y, na.x, na.y)
-                triple.append(f'M {na.x + dx:.4f} {-na.y + dy:.4f} L {ma.x + dx:.4f} {-ma.y + dy:.4f} '
-                              f'M {na.x:.4f} {-na.y:.4f} L {ma.x:.4f} {-ma.y:.4f} '
-                              f'M {na.x - dx:.4f} {-na.y - dy:.4f} L {ma.x - dx:.4f} {-ma.y - dy:.4f}')
+                dx, dy = self._rotate_vector(0, triple_space, mx, my, nx, ny)
+                triple.append(f'M {nx + dx:.4f} {-ny + dy:.4f} L {mx + dx:.4f} {-my + dy:.4f} '
+                              f'M {nx:.4f} {-ny:.4f} L {mx:.4f} {-my:.4f} '
+                              f'M {nx - dx:.4f} {-ny - dy:.4f} L {mx - dx:.4f} {-my - dy:.4f}')
 
         svg.append('<path id="single" stroke="" d="')
         svg.append(' '.join(single))
@@ -429,6 +440,11 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         svg.append(' '.join(triple))
         svg.append('" />\n')
 
+        svg.append(f'</g>\n<g font-size="{font}" font-family="sans-serif" >')
+        for n, atom in self._node.items():
+            if carbon or atom.element != 'C':
+                svg.append(f'<text x="{atom.x - font_shift}" y="{-atom.y + font_shift}" '
+                           f'fill="{color_map[atom.element]}">{atom.element}</text>')
         svg.append('</g>\n</svg>')
         return ''.join(svg)
 
@@ -487,6 +503,9 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         need for cyclic import solving
         """
         return next(x for x in BaseContainer.__subclasses__() if x.__name__ == name)
+
+    def _repr_svg_(self):
+        return self.depict()
 
     def __and__(self, other):
         """
