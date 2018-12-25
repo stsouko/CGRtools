@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableMapping
-from ..periodictable import Element, elements_classes, C
+from ..periodictable import Element, elements_classes, C, cpk
 
 
 class Attribute(MutableMapping):
@@ -78,6 +78,7 @@ class AtomAttribute(Attribute):
     _z_check = _y_check = _x_check
     _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
     _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
+    _multiplicity_dpc = {1: '..', 2: '.', 3: '. .', None: 'n'}
     _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
 
 
@@ -274,6 +275,22 @@ class Atom(AtomAttribute):
             smi.append(']')
 
         return ''.join(smi)
+
+    def depict(self, font=.4, sup_font=.3, color=None):
+        f3 = font / 3
+        svg = [f'<g fill="{color or cpk[self.element]}">'
+               f'<text x="{self.x - f3}" y="{f3 - self.y}" font-size="{font}">{self.element}</text>']
+
+        if self.charge:
+            svg.append(f'<text x="{self.x + f3}" y="{-f3 - self.y}" font-size="{sup_font}">'
+                       f'{self._charge_str[self.charge]}</text>')
+        if self.multiplicity:
+            svg.append(f'<text x="{self.x - f3}" y="{-font / 2 - self.y}" font-size="{sup_font}">'
+                       f'{self._multiplicity_dpc[self.multiplicity]}</text>')
+        if self.isotope != self.common_isotope:
+            svg.append(f'<text x="{self.x - font}" y="{-f3 - self.y}" font-size="{sup_font}">{self.isotope}</text>')
+        svg.append('</g>')
+        return ''.join(svg)
 
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
         weight = []

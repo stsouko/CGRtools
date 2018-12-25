@@ -388,18 +388,16 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
             raise ValueError('invalid limit')
         return [{v: k for k, v in m.items()} for m in islice(i, limit)] or None
 
-    def depict(self, scale=1, double_space=.04, triple_space=.07, font=.4, font_shift=.15, bond_shift=.2,
+    def depict(self, scale=1, double_space=.04, triple_space=.07, font=.4, bond_shift=.2,
                color_map=None, carbon=False):
-        if color_map is None:
-            color_map = cpk
         min_x = min(x.x for x in self._node.values())
         max_x = max(x.x for x in self._node.values())
         min_y = min(x.y for x in self._node.values())
         max_y = max(x.y for x in self._node.values())
-        dy = max_y - min_y + .4
-        dx = max_x - min_x + .4
+        dy = max_y - min_y + .6
+        dx = max_x - min_x + .6
         svg = [f'<svg width="{dx * scale:.4f}cm" height="{dy * scale:.4f}cm" '
-               f'viewBox="{min_x - .2:.4f} {-max_y - .2:.4f} {dx:.4f} {dy:.4f}" '
+               f'viewBox="{min_x - .4:.4f} {-max_y - .2:.4f} {dx:.4f} {dy:.4f}" '
                'xmlns="http://www.w3.org/2000/svg" version="1.1">\n<g fill="none" stroke="black" stroke-width=".03">\n']
 
         single = []
@@ -443,8 +441,7 @@ class BaseContainer(Graph, Morgan, SSSR, ABC):
         svg.append(f'</g>\n<g font-size="{font}" font-family="sans-serif" >')
         for n, atom in self._node.items():
             if carbon or atom.element != 'C':
-                svg.append(f'<text x="{atom.x - font_shift}" y="{-atom.y + font_shift}" '
-                           f'fill="{color_map[atom.element]}">{atom.element}</text>')
+                svg.append(atom.depict())
         svg.append('</g>\n</svg>')
         return ''.join(svg)
 
