@@ -22,9 +22,9 @@ from collections import defaultdict
 
 class Centers:
     def get_centers_list(self, stereo=False):
-        """ get a list of lists of atoms, each of them is a reaction center
-        
-        :param stereo:  
+        """ get a list of lists of atoms of reaction centers
+
+        :param stereo: take into account stereo changes
         """
         center = set()
         adj = defaultdict(set)
