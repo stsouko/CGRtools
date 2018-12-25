@@ -19,11 +19,11 @@
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import StringCGR, CGRCompose
+from ..algorithms import StringCGR, CGRCompose, Centers
 from ..attributes import DynAtom, DynBond
 
 
-class CGRContainer(StringCGR, CGRCompose, BaseContainer):
+class CGRContainer(StringCGR, CGRCompose, Centers, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
