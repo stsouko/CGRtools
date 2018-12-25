@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .aromatics import *
+from .centers import *
 from .compose import *
 from .morgan import *
 from .sssr import *
