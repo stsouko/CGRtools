@@ -460,7 +460,7 @@ class MOLwrite(CGRwrite):
             mol_prop.append(f'M  SED {i:3d} {jv}\n')
 
         return ''.join(chain((f'\n\n\n{len(atoms):3d}{len(bonds):3d}  0  0  0  0            999 V2000\n',),
-                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:>3s} 0{i["charge"]}  0  0  '
+                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:3s} 0{i["charge"]}  0  0  '
                               f'0  0  0  0  0{i["mapping"]:3d}  0  0\n' for i in atoms),
                              ("%3d%3d  %s  %s  0  0  0\n" % i for i in bonds), mol_prop))
 
