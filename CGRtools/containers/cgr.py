@@ -19,38 +19,22 @@
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import StringCGR, CGRCompose, Centers
+from ..algorithms import SMILES_CGR, CGRCompose, Centers
 from ..attributes import DynAtom, DynBond
 
 
-class CGRContainer(StringCGR, CGRCompose, Centers, BaseContainer):
+class CGRContainer(Centers, CGRCompose, SMILES_CGR, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
-
     node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
 
-    def get_center_atoms(self, stereo=False):
-        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
+    def __invert__(self):
         """
-        nodes = set()
-        for n, atom in self._node.items():
-            if stereo:
-                if not atom._reagent != atom._product:
-                    nodes.add(n)
-            elif not atom.stereo == atom.p_stereo:
-                nodes.add(n)
-
-        for n, m, bond in self._bonds():
-            if stereo:
-                if not bond._reagent != bond._product:
-                    nodes.add(n)
-                    nodes.add(m)
-            elif not bond._reagent == bond._product:
-                nodes.add(n)
-                nodes.add(m)
-        return list(nodes)
+        decompose CGR
+        """
+        return self.decompose()
 
     def decompose(self):
         """
@@ -71,12 +55,6 @@ class CGRContainer(StringCGR, CGRCompose, Centers, BaseContainer):
             if bond.p_order:
                 products.add_bond(n, m, bond._product)
         return reagents, products
-
-    def __invert__(self):
-        """
-        decompose CGR
-        """
-        return self.decompose()
 
     def reset_query_marks(self):
         """
@@ -133,8 +111,6 @@ class CGRContainer(StringCGR, CGRCompose, Centers, BaseContainer):
         if isinstance(other, CGRContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr-cgr possible')
-
-    _visible = ()
 
 
 __all__ = ['CGRContainer']

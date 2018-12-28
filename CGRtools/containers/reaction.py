@@ -17,11 +17,10 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableSequence
-from functools import reduce
-from hashlib import md5, sha256
+from functools import reduce, lru_cache
+from hashlib import sha512
 from operator import mul, or_
 from .cgr import CGRContainer
-from .common import BaseContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
 
@@ -91,11 +90,11 @@ class ReactionContainer:
         self.__pickle = None
 
     def __getitem__(self, item):
-        if item == 'reagents':
+        if item in ('reagents', 0):
             return self.__reagents
-        elif item == 'products':
+        elif item in ('products', 1):
             return self.__products
-        elif item == 'reactants':
+        elif item in ('reactants', 2):
             return self.__reactants
         elif item == 'meta':
             return self.__meta
@@ -107,19 +106,6 @@ class ReactionContainer:
 
     def __setstate__(self, state):
         self.__init__(**state)
-
-    def pickle(self):
-        """return json serializable reaction"""
-        return dict(reagents=[x.pickle() for x in self.__reagents], products=[x.pickle() for x in self.__products],
-                    reactants=[x.pickle() for x in self.__reactants], meta=self.meta)
-
-    @classmethod
-    def unpickle(cls, data):
-        """convert json serializable reaction into ReactionContainer object instance"""
-        return cls(reagents=[BaseContainer.unpickle(x) for x in data['reagents']],
-                   products=[BaseContainer.unpickle(x) for x in data['products']],
-                   reactants=[BaseContainer.unpickle(x) for x in data['reactants']],
-                   meta=data['meta'])
 
     @property
     def reagents(self):
@@ -150,48 +136,6 @@ class ReactionContainer:
         return self.__class__(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
                               products=[x.copy() for x in self.__products],
                               reactants=[x.copy() for x in self.__reactants])
-
-    def get_signature_hash(self, **kwargs):
-        """
-        get 48 bytes hash of signature string. see get_signature
-
-        :return: bytes
-        """
-        bs = self.get_signature(**kwargs).encode()
-        return md5(bs).digest() + sha256(bs).digest()
-
-    def get_signature(self, *, flush_cache=False, **kwargs):
-        """
-        return string representation of reaction.
-        CAUTION: if reaction contains CGRs. signature will not be obvious
-
-        :param isotope: set isotope marks
-        :param stereo: set stereo marks
-        :param hybridization: set hybridization mark of atom
-        :param neighbors: set neighbors count mark of atom
-        :param atom: set elements marks
-        :param flush_cache: recalculate signature if True
-        """
-        if self.__signatures and (flush_cache or any(x.get_state() for x in
-                                                     (self.__reagents, self.__reactants, self.__products))):
-            self.__signatures = {}
-        if kwargs.keys() - {'atom', 'isotope', 'stereo', 'hybridization', 'neighbors'}:
-            raise KeyError('only full canonical signature supported')
-
-        k = tuple(sorted(kwargs))
-        if k in self.__signatures:
-            return self.__signatures[k]
-
-        sig = []
-        for ml in (self.__reagents, self.__reactants, self.__products):
-            ms = []
-            for m in sorted(ml, key=lambda x: reduce(mul, x.get_morgan(**kwargs))):
-                mol = m.get_signature(flush_cache=flush_cache, **kwargs)
-                ms.append('{%s}' % mol if isinstance(m, (CGRContainer, QueryCGRContainer)) else mol)
-            sig.append('.'.join(ms))
-
-        self.__signatures[k] = out = '>'.join(sig)
-        return out
 
     def implicify_hydrogens(self):
         """
@@ -249,6 +193,7 @@ class ReactionContainer:
                     m.reset_query_marks()
         self.flush_cache()
 
+    @lru_cache(1)
     def compose(self):
         """
         get CGR of reaction
@@ -277,24 +222,37 @@ class ReactionContainer:
         """
         return self.compose()
 
-    def flush_cache(self):
-        """clear cached signatures and representation strings. use if structures objects in reaction object changed"""
-        self.__pickle = None
-        self.__signatures = {}
+    @lru_cache(1)
+    def depict(self):
+        pass  # todo: depict components
 
+    def _repr_svg_(self):
+        return self.depict()
+
+    @lru_cache(1)
     def __str__(self):
-        return self.get_signature()
+        sig = []
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            ms = []
+            for m in sorted(ml, key=lambda x: reduce(mul, x.atoms_order)):
+                ms.append('{%s}' % m if isinstance(m, (CGRContainer, QueryCGRContainer)) else str(m))
+            sig.append('.'.join(ms))
+        return '>'.join(sig)
 
-    def __repr__(self):
-        if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
-            self.__pickle = '%s.unpickle(%s)' % (type(self).__name__, self.pickle())
-        return self.__pickle
+    @lru_cache(1)
+    def __bytes__(self):
+        return sha512(str(self).encode()).digest()
 
+    @lru_cache(1)
     def __hash__(self):
         return hash(str(self))
 
-    def __bytes__(self):
-        return self.get_signature_hash()
+    def flush_cache(self):
+        self.__str__.cache_clear()
+        self.__bytes__.cache_clear()
+        self.__hash__.cache_clear()
+        self.compose.cache_clear()
+        self.depict.cache_clear()
 
 
 __all__ = ['ReactionContainer']

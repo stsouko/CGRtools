@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from cached_property import cached_property
 from collections import Counter
 from functools import reduce
 from itertools import count
@@ -24,33 +25,24 @@ from operator import mul, itemgetter
 
 
 class Morgan:
-    def _morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False, tries=None):
+    @cached_property
+    def atoms_order(self):
         """
         Morgan like algorithm for graph nodes ordering
 
-        :param atom: differentiate elements and charges
-        :param isotope: differentiate isotopes
-        :param stereo: differentiate stereo atoms and bonds
-        :param hybridization: differentiate hybridization of atoms
-        :param neighbors: differentiate neighbors of atoms. useful for queries structures
-        :param tries: maximum number of iterations for stationary point search
         :return: dict of atom-weight pairs
         """
         if not len(self):  # for empty containers
             return {}
 
-        params = {n: (node.weight(atom, isotope, stereo, hybridization, neighbors),
-                      tuple(sorted(edge.weight(stereo) for edge in self._adj[n].values())))
+        params = {n: (int(node), tuple(sorted(int(edge) for edge in self._adj[n].values())))
                   for n, node in self._node.items()}
         newlevels = {}
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                    for x, y in sorted(params.items(), key=itemgetter(1))}
 
-        if tries is None:
-            tries = len(self) * 4
-        elif tries == 1:
-            return weights
+        tries = len(self) * 4
 
         scaf = {n: tuple(m) for n, m in self._adj.items()}
         numb = len(set(weights.values()))
@@ -89,6 +81,10 @@ class Morgan:
 
         return weights
 
+    def flush_cache(self):
+        del self.__dict__['atoms_order']
+        super().flush_cache()
+
 
 def _eratosthenes():
     """Yields the sequence of prime numbers via the Sieve of Eratosthenes."""
@@ -110,7 +106,7 @@ def _eratosthenes():
             d[x] = p
 
 
-primes = tuple(x for _, x in zip(range(1000), _eratosthenes()))
+primes = {x: n for n, x in zip(range(1000), _eratosthenes())}
 
 
 __all__ = ['Morgan']

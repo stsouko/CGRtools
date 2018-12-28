@@ -19,12 +19,12 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
-from ..algorithms import Aromatize, StringMolecule, CGRCompose, Standardize
+from ..algorithms import Aromatize, SMILES, CGRCompose, Standardize
 from ..attributes import Atom, Bond
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, BaseContainer):
+class MoleculeContainer(Aromatize, CGRCompose, SMILES, Standardize, BaseContainer):
     """
     storage for Molecules
 
@@ -133,8 +133,6 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
         if isinstance(other, (self._get_subclass('CGRContainer'), MoleculeContainer)):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr-cgr possible')
-
-    _visible = ()
 
 
 __all__ = ['MoleculeContainer']

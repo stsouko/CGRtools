@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
+from cached_property import cached_property
 from itertools import combinations
+from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
 
 
 class SSSR:
@@ -27,7 +28,8 @@ class SSSR:
         Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
         http://doi.org/10.1073/pnas.0813040106
     """
-    def get_sssr(self):
+    @cached_property
+    def sssr(self):
         """
         SSSR search.
 
@@ -101,6 +103,10 @@ class SSSR:
                             n_ringidx += 1
                         if n_ringidx == n_sssr:
                             return list(c_sssr.values())
+
+    def flush_cache(self):
+        del self.__dict__['sssr']
+        super().flush_cache()
 
 
 __all__ = ['SSSR']

@@ -17,52 +17,27 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from functools import lru_cache
+from hashlib import sha512
 from itertools import count
 
 
-class BroodMother:
-    __slots__ = ('__count', '__map')
-
-    def __init__(self, start=1, step=1):
-        self.__count = count(start, step)
-        self.__map = {}
-
-    def __next__(self):
-        return Brood(self)
-
-    def __getitem__(self, brood):
-        try:
-            return self.__map[brood]
-        except KeyError:
-            return self.__map.setdefault(brood, next(self.__count))
-
-
-class Brood:
-    __slots__ = '__mother'
-
-    def __init__(self, mother):
-        self.__mother = mother
-
-    def __str__(self):
-        return str(self.__mother[self])
-
-    def __int__(self):
-        return self.__mother[self]
-
-
-class Atom:
-    __slots__ = ('atom', 'connections')
-
-    def __init__(self):
-        self.connections = []
-
-    def __str__(self):
-        if self.connections:
-            return self.atom + ''.join(f'{o}{c}' for o, c in sorted(self.connections, key=lambda x: int(x[1])))
-        return self.atom
-
-
 class StringCommon:
+    @lru_cache(1)
+    def __str__(self):
+        self._stringify()
+
+    @lru_cache(1)
+    def __bytes__(self):
+        sha512(str(self).encode()).digest()
+
+    @lru_cache(1)
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
     def _dfs(self, start, weights, depth_limit):
         """
         modified NX dfs
@@ -93,13 +68,16 @@ class StringCommon:
 
         return visited, edges, disconnected
 
-    @staticmethod
-    def _weights(x):
-        return x
+    def flush_cache(self):
+        self.__str__.cache_clear()
+        self.__bytes__.cache_clear()
+        self.__hash__.cache_clear()
+        super().flush_cache()
 
 
-class StringMolecule(StringCommon):
-    def _stringify_full(self, weights, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
+class SMILES(StringCommon):
+    def _stringify(self):
+        weights = self.atoms_order.__getitem__
         cycles = BroodMother()
         atoms_set = set(self._node)
         smiles = []
@@ -108,32 +86,17 @@ class StringMolecule(StringCommon):
             start = min(atoms_set, key=weights)
             visited, edges, disconnected = self._dfs(start, weights, len(atoms_set))
             atoms_set.difference_update(visited)
-            smiles.append(self.__stringify(start, visited, edges, disconnected, cycles, atom, isotope, stereo,
-                                           hybridization, neighbors))
+            smiles.append(self.__stringify(start, visited, edges, disconnected, cycles))
         return '.'.join(smiles)
 
-    def _stringify_augmented(self, start, depth_limit, weights, atom=True, isotope=True, stereo=False,
-                             hybridization=False, neighbors=False):
-        visited, edges, disconnected = self._dfs(start, weights, depth_limit)
-        return self.__stringify(start, visited, edges, disconnected, BroodMother(), atom, isotope, stereo,
-                                hybridization, neighbors)
-
-    def _stringify_chain(self, start, stop, atom=True, isotope=True, stereo=False,
-                         hybridization=False, neighbors=False):
-        """
-        container specific signature generation
-        """
-        pass
-
-    def __stringify(self, start, visited, edges, disconnected, cycles,
-                    f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors):
+    def __stringify(self, start, visited, edges, disconnected, cycles):
         node = self._node
         adj = self._adj
 
         reverse = defaultdict(list)
         atoms = defaultdict(Atom)
         for parent, children in disconnected.items():
-            atoms[parent].atom = node[parent].stringify(f_atom, f_isotope, f_stereo, f_hybridization, f_neighbors)
+            atoms[parent].atom = str(node[parent])
             for child in children:
                 bond = (adj[parent][child].stringify(f_stereo), next(cycles))
                 atoms[parent].connections.append(bond)
@@ -180,7 +143,7 @@ class StringMolecule(StringCommon):
         return ''.join(str(x) for x in smiles)
 
 
-class StringCGR(StringCommon):
+class SMILES_CGR(StringCommon):
     def _stringify_full(self, weights, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
         cycles = BroodMother()
         atoms_set = set(self._node)
@@ -286,4 +249,46 @@ class StringCGR(StringCommon):
         return ''.join(str(x) for x in smiles), ''.join(str(x) for x in p_smiles)
 
 
-__all__ = ['StringCGR', 'StringMolecule']
+class BroodMother:
+    __slots__ = ('__count', '__map')
+
+    def __init__(self, start=1, step=1):
+        self.__count = count(start, step)
+        self.__map = {}
+
+    def __next__(self):
+        return Brood(self)
+
+    def __getitem__(self, brood):
+        try:
+            return self.__map[brood]
+        except KeyError:
+            return self.__map.setdefault(brood, next(self.__count))
+
+
+class Brood:
+    __slots__ = '__mother'
+
+    def __init__(self, mother):
+        self.__mother = mother
+
+    def __str__(self):
+        return str(self.__mother[self])
+
+    def __int__(self):
+        return self.__mother[self]
+
+
+class Atom:
+    __slots__ = ('atom', 'connections')
+
+    def __init__(self):
+        self.connections = []
+
+    def __str__(self):
+        if self.connections:
+            return self.atom + ''.join(f'{o}{c}' for o, c in sorted(self.connections, key=lambda x: int(x[1])))
+        return self.atom
+
+
+__all__ = ['SMILES_CGR', 'SMILES']

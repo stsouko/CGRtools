@@ -28,7 +28,7 @@ class Aromatize:
 
         :return: number of processed rings
         """
-        rings = [x for x in self.get_sssr() if 4 < len(x) < 7]
+        rings = [x for x in self.sssr if 4 < len(x) < 7]
         if not rings:
             return 0
         total = 0

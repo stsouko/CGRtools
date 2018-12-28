@@ -20,11 +20,10 @@ from networkx.algorithms.isomorphism import GraphMatcher
 from .cgr import CGRContainer
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import StringMolecule, StringCGR
 from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
 
 
-class QueryContainer(StringMolecule, BaseContainer):
+class QueryContainer(BaseContainer):
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = QueryBond
 
@@ -40,11 +39,8 @@ class QueryContainer(StringMolecule, BaseContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
-    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
-        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
-
-class QueryCGRContainer(StringCGR, BaseContainer):
+class QueryCGRContainer(BaseContainer):
     node_attr_dict_factory = DynQueryAtom
     edge_attr_dict_factory = DynQueryBond
 
@@ -58,9 +54,6 @@ class QueryCGRContainer(StringCGR, BaseContainer):
         elif isinstance(other, QueryCGRContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
-
-    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
-        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']

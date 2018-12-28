@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableMapping
-from ..periodictable import Element, elements_classes, C, cpk
+from ..periodictable import Element, elements_classes, C
 
 
 class Attribute(MutableMapping):
@@ -276,22 +276,6 @@ class Atom(AtomAttribute):
 
         return ''.join(smi)
 
-    def depict(self, font=.4, sup_font=.3, color=None):
-        f3 = font / 3
-        svg = [f'<g fill="{color or cpk[self.element]}">'
-               f'<text x="{self.x - f3}" y="{f3 - self.y}" font-size="{font}">{self.element}</text>']
-
-        if self.charge:
-            svg.append(f'<text x="{self.x + f3}" y="{-f3 - self.y}" font-size="{sup_font}">'
-                       f'{self._charge_str[self.charge]}</text>')
-        if self.multiplicity:
-            svg.append(f'<text x="{self.x - f3}" y="{-font / 2 - self.y}" font-size="{sup_font}">'
-                       f'{self._multiplicity_dpc[self.multiplicity]}</text>')
-        if self.isotope != self.common_isotope:
-            svg.append(f'<text x="{self.x - font}" y="{-f3 - self.y}" font-size="{sup_font}">{self.isotope}</text>')
-        svg.append('</g>')
-        return ''.join(svg)
-
     def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
         weight = []
         if atom:
@@ -479,14 +463,10 @@ class Bond(BondAttribute):
         else:
             self._update_kwargs(value, kwargs)
 
-    def stringify(self, stereo=False):
-        if stereo and self.stereo:
-            return self._order_str[self.order] + self._stereo_str[self.stereo]
+    def __str__(self):
         return self._order_str[self.order]
 
-    def weight(self, stereo=False):
-        if stereo:
-            return self.order, self.stereo or 0
+    def __int__(self):
         return self.order
 
     def __eq__(self, other):
@@ -496,12 +476,6 @@ class Bond(BondAttribute):
         if isinstance(other, Bond):
             return self.order == other.order
         return False
-
-    def __ne__(self, other):
-        """
-        != equality checks with stereo
-        """
-        return self == other and self.stereo == other.stereo
 
     @staticmethod
     def _order_check(x):

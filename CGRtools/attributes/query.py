@@ -16,6 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from functools import reduce
+from itertools import combinations, chain
+from operator import xor
 from .molecule import Bond, Atom, AtomAttribute, BondAttribute
 from ..periodictable import Element, elements_classes, elements_numbers
 
@@ -295,29 +298,17 @@ class QueryBond(BondAttribute):
             return order + self._stereo_str[self.stereo]
         return order
 
-    def weight(self, stereo=False):
-        if stereo:
-            return self.order, self.stereo or 0
-        return self.order
+    def __int__(self):
+        return self._order_int[self.order]
 
     def __eq__(self, other):
         """
         == equality checks. if stereo mark is presented in query, stereo also will be compared
         """
-        if isinstance(other, QueryBond):
-            return set(self.order).issuperset(other.order)
-        elif isinstance(other, Bond):
+        if isinstance(other, Bond):
             return other.order in self.order
-        return False
-
-    def __ne__(self, other):
-        """
-        != equality checks with stereo
-        """
-        if self == other:
-            if self.stereo:
-                return self.stereo == other.stereo
-            return True
+        elif isinstance(other, QueryBond):
+            return set(self.order).issuperset(other.order)
         return False
 
     def _order_check(self, x):
@@ -330,6 +321,13 @@ class QueryBond(BondAttribute):
                 return tuple(sorted(x))
             return tuple(x)
         raise ValueError('invalid order')
+
+    # each order activate single bit in integer
+    _order_int = {x: reduce(xor, map({1: 1, 2: 2, 3: 4, 4: 8, 9: 16}.__getitem__, x))
+                  for x in chain(((1,), (2,), (3,), (4,), (9,), (1, 2, 3, 4, 9)),
+                                 combinations((1, 2, 3, 4, 9), 2),
+                                 combinations((1, 2, 3, 4, 9), 3),
+                                 combinations((1, 2, 3, 4, 9), 4))}
 
 
 __all__ = ['QueryAtom', 'QueryBond']

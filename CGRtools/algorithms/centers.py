@@ -29,20 +29,11 @@ class Centers:
         center = set()
         adj = defaultdict(set)
         for n, a in self._node.items():
-            if stereo:
-                if not a._reagent != a._product:
-                    center.add(n)
-            elif not a._reagent == a._product:
+            if a._reagent != a._product or stereo and a.sterep != a.p_stereo:
                 center.add(n)
 
         for n, m, b in self._bonds():
-            if stereo:
-                if not b._reagent != b._product:
-                    adj[n].add(m)
-                    adj[m].add(n)
-                    center.add(n)
-                    center.add(m)
-            elif not b._reagent == b._product:
+            if b._reagent != b._product or stereo and b.sterep != b.p_stereo:
                 adj[n].add(m)
                 adj[m].add(n)
                 center.add(n)
@@ -59,6 +50,21 @@ class Centers:
                 out.append([n])
 
         return out
+
+    def get_center_atoms(self, stereo=False):
+        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
+        """
+        nodes = set()
+        for n, atom in self._node.items():
+            if atom._reagent != atom._product or stereo and atom.stereo != atom.p_stereo:
+                nodes.add(n)
+
+        for n, m, bond in self._bonds():
+            if bond._reagent != bond._product or stereo and bond.stereo != bond.p_stereo:
+                nodes.add(n)
+                nodes.add(m)
+
+        return list(nodes)
 
     @staticmethod
     def __plain_bfs(adj, source):
