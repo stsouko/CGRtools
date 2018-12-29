@@ -16,9 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from cached_property import cached_property
 from itertools import combinations
 from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
+from ..cache import cached_property
 
 
 class SSSR:
@@ -103,10 +103,6 @@ class SSSR:
                             n_ringidx += 1
                         if n_ringidx == n_sssr:
                             return list(c_sssr.values())
-
-    def flush_cache(self):
-        del self.__dict__['sssr']
-        super().flush_cache()
 
 
 __all__ = ['SSSR']

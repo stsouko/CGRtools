@@ -18,7 +18,7 @@
 #
 from collections import defaultdict
 from itertools import permutations, repeat
-from ..attributes import QueryAtom, QueryBond
+from ..attributes import QueryAtom, Bond
 
 
 class Standardize:
@@ -62,9 +62,9 @@ central = {}
 query_patch = defaultdict(list)
 
 # patterns
-b1 = QueryBond()
-b2 = QueryBond()
-b3 = QueryBond()
+b1 = Bond()
+b2 = Bond()
+b3 = Bond()
 b2.order = 2
 b3.order = 3
 

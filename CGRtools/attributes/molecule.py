@@ -45,9 +45,6 @@ class Attribute(MutableMapping):
     def __len__(self):
         return sum(1 for _ in self)
 
-    def __str__(self):
-        return self.stringify(stereo=True)
-
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)
@@ -72,60 +69,32 @@ class Attribute(MutableMapping):
 
 class AtomAttribute(Attribute):
     @staticmethod
+    def _isotope_check(x):
+        if x is None:
+            return
+        elif isinstance(x, int) and x > 0:
+            return x
+        raise ValueError('invalid isotope')
+
+    @staticmethod
+    def _charge_check(x):
+        if isinstance(x, int) and -3 <= x <= 3:
+            return x
+        raise ValueError('invalid charge')
+
+    @staticmethod
+    def _multiplicity_check(x):
+        if x is None:
+            return
+        elif isinstance(x, int) and 1 <= x <= 3:
+            return x
+        raise ValueError('invalid multiplicity')
+
+    @staticmethod
     def _x_check(x):
         return float(x)
 
     _z_check = _y_check = _x_check
-    _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-    _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
-    _multiplicity_dpc = {1: '..', 2: '.', 3: '. .', None: 'n'}
-    _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
-
-
-class BondAttribute(Attribute):
-    __slots__ = ('order', 'stereo')
-
-    def __init_copy__(self, parent):
-        super().__setattr__('_skip_checks', parent._skip_checks)
-        super().__setattr__('order', parent.order)
-        super().__setattr__('stereo', parent.stereo)
-
-    def __setattr__(self, key, value):
-        if not self._skip_checks:
-            value = getattr(self, f'_{key}_check')(value)
-        super().__setattr__(key, value)
-
-    def __getitem__(self, key):
-        if key not in ('order', 'stereo'):
-            raise KeyError('unknown bond attribute')
-        return getattr(self, key)
-
-    def __iter__(self):
-        yield 'order'
-        if self.stereo:
-            yield 'stereo'
-
-    def _update_kwargs(self, value, kwargs):
-        if not isinstance(value, dict):
-            try:
-                value = dict(value)
-            except (TypeError, ValueError):
-                raise TypeError('invalid attrs sequence')
-
-        value.update(kwargs)
-        if value:
-            for k, v in self._check_kwargs(value).items():
-                super().__setattr__(k, v)
-
-    def __getstate__(self):
-        return {'checks': self._skip_checks, 'order': self.order, 'stereo': self.stereo}
-
-    def __setstate__(self, state):
-        super().__setattr__('_skip_checks', state['checks'])
-        super().__setattr__('order', state['order'])
-        super().__setattr__('stereo', state['stereo'])
-
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
 
 class Atom(AtomAttribute):
@@ -183,20 +152,19 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__z', value.z)
             super().__setattr__('_Atom__mapping', value.mapping)
             super().__setattr__('_Atom__stereo', value.stereo)
-            if '_Atom__element' in kwargs:
+            if 'element' in kwargs:
                 super().__setattr__('_atom',
-                                    kwargs['_Atom__element'](charge=kwargs.get('_Atom__charge', self.charge),
-                                                             multiplicity=kwargs.get('_Atom__multiplicity',
-                                                                                     self.multiplicity),
-                                                             isotope=kwargs.get('_Atom__isotope')))
-            elif kwargs.keys() & {'_Atom__isotope', '_Atom__charge', '_Atom__multiplicity'}:
+                                    kwargs['element'](charge=kwargs.get('charge', self.charge),
+                                                      multiplicity=kwargs.get('multiplicity', self.multiplicity),
+                                                      isotope=kwargs.get('isotope')))
+            elif kwargs.keys() & {'isotope', 'charge', 'multiplicity'}:
                 super().__setattr__('_atom',
-                                    type(self._atom)(charge=kwargs.get('_Atom__charge', self.charge),
-                                                     multiplicity=kwargs.get('_Atom__multiplicity', self.multiplicity),
-                                                     isotope=kwargs.get('_Atom__isotope', self.isotope)))
-            for k in ('_Atom__stereo', '_Atom__mapping', '_Atom__x', '_Atom__y', '_Atom__z'):
+                                    type(self._atom)(charge=kwargs.get('charge', self.charge),
+                                                     multiplicity=kwargs.get('multiplicity', self.multiplicity),
+                                                     isotope=kwargs.get('isotope', self.isotope)))
+            for k in ('stereo', 'mapping', 'x', 'y', 'z'):
                 if k in kwargs:
-                    super().__setattr__(k, kwargs[k])
+                    super().__setattr__(f'_Atom__{k}', kwargs[k])
 
         elif isinstance(value, type):
             if not issubclass(value, Element):
@@ -206,14 +174,14 @@ class Atom(AtomAttribute):
             kwargs = self._check_kwargs(kwargs)
             super().__setattr__('_atom', value())
             for k, v in kwargs.items():
-                super().__setattr__(k, v)
+                super().__setattr__(f'_Atom__{k}', v)
         elif isinstance(value, Element):
             if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
                 raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
             super().__setattr__('_atom', value)
             for k, v in kwargs.items():
-                super().__setattr__(k, v)
+                super().__setattr__(f'_Atom__{k}', v)
         else:
             if not isinstance(value, dict):
                 try:
@@ -228,69 +196,24 @@ class Atom(AtomAttribute):
                 raise KeyError('neighbors and hybridization change not allowed')
 
             value = self._check_kwargs(value)
-            if '_Atom__element' in value:
+            if 'element' in value:
                 super().__setattr__('_atom', 
-                                    value['_Atom__element'](charge=value.get('_Atom__charge', self.charge),
-                                                            multiplicity=value.get('_Atom__multiplicity',
-                                                                                   self.multiplicity),
-                                                            isotope=value.get('_Atom__isotope')))
-            elif value.keys() & {'_Atom__isotope', '_Atom__charge', '_Atom__multiplicity'}:
+                                    value['element'](charge=value.get('charge', self.charge),
+                                                     multiplicity=value.get('multiplicity', self.multiplicity),
+                                                     isotope=value.get('isotope')))
+            elif value.keys() & {'isotope', 'charge', 'multiplicity'}:
                 super().__setattr__('_atom',
-                                    type(self._atom)(charge=value.get('_Atom__charge', self.charge),
-                                                     multiplicity=value.get('_Atom__multiplicity', self.multiplicity),
-                                                     isotope=value.get('_Atom__isotope', self.isotope)))
+                                    type(self._atom)(charge=value.get('charge', self.charge),
+                                                     multiplicity=value.get('multiplicity', self.multiplicity),
+                                                     isotope=value.get('isotope', self.isotope)))
 
-            for k in ('_Atom__stereo', '_Atom__mapping', '_Atom__x', '_Atom__y', '_Atom__z'):
+            for k in ('stereo', 'mapping', 'x', 'y', 'z'):
                 if k in value:
-                    super().__setattr__(k, value[k])
+                    super().__setattr__(f'_Atom__{k}', value[k])
 
-    def stringify(self, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
-        smi = []
-
-        if stereo and self.__stereo:
-            smi.append(self._stereo_str[self.__stereo])
-        if hybridization and self.__hybridization:
-            smi.append(self._hybridization_str[self.__hybridization])
-        if neighbors and self.__neighbors is not None:
-            smi.append(str(self.__neighbors))
-        if smi:
-            smi.append(';')
-            smi.insert(0, ';')
-
-        if atom:
-            if self.element not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
-                atom = False
-            smi.insert(0, self.element)
-            if self.charge:
-                smi.append(self._charge_str[self.charge])
-            if self.multiplicity:
-                smi.append(self._multiplicity_str[self.multiplicity])
-            if isotope and self.isotope != self.common_isotope:
-                smi.insert(0, str(self.isotope))
-        else:
-            smi.insert(0, '*')
-
-        if len(smi) != 1 or not atom:
-            smi.insert(0, '[')
-            smi.append(']')
-
-        return ''.join(smi)
-
-    def weight(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False):
-        weight = []
-        if atom:
-            weight.append(self.number)
-            if isotope:
-                weight.append(self.isotope)
-            weight.append(self.charge)
-            weight.append(self.multiplicity or 0)
-        if stereo:
-            weight.append(self.__stereo or 0)
-        if hybridization:
-            weight.append(self.__hybridization or 0)
-        if neighbors:
-            weight.append(self.__neighbors or -1)
-        return tuple(weight)
+    def __int__(self):
+        # 21b: 7b atom 9b isotope 3b charge 2b mult
+        return self.number << 14 | self.isotope << 5 | (self.charge + 3) << 2 | (self.multiplicity or 0)
 
     def __eq__(self, other):
         """
@@ -299,12 +222,6 @@ class Atom(AtomAttribute):
         if isinstance(other, Atom):
             return self._atom == other._atom
         return False
-
-    def __ne__(self, other):
-        """
-        != equality checks with stereo
-        """
-        return self == other and self.stereo == other.stereo
 
     @property
     def x(self):
@@ -337,14 +254,6 @@ class Atom(AtomAttribute):
     @mapping.setter
     def mapping(self, value):
         super().__setattr__('_Atom__mapping', self._mapping_check(value))
-
-    @staticmethod
-    def _mapping_check(x):
-        if x is None:
-            return
-        elif isinstance(x, int) and 0 <= x <= 999:
-            return x
-        raise ValueError('mapping can be in range 0-999')
 
     @property
     def stereo(self):
@@ -397,39 +306,6 @@ class Atom(AtomAttribute):
             if getattr(self, k):
                 yield k
 
-    @staticmethod
-    def _element_check(x):
-        if x != 'A' and x in elements_classes:
-            return elements_classes[x]
-        raise ValueError('invalid atom symbol')
-
-    @staticmethod
-    def _isotope_check(x):
-        if x is None:
-            return
-        elif isinstance(x, int) and x > 0:
-            return x
-        raise ValueError('invalid isotope')
-
-    @staticmethod
-    def _charge_check(x):
-        if isinstance(x, int) and -3 <= x <= 3:
-            return x
-        raise ValueError('invalid charge')
-
-    @staticmethod
-    def _multiplicity_check(x):
-        if x is None:
-            return
-        elif isinstance(x, int) and 1 <= x <= 3:
-            return x
-        raise ValueError('invalid multiplicity')
-
-    def _check_kwargs(self, kwargs):
-        if not self._skip_checks:
-            return {f'_Atom__{k}': getattr(self, f'_{k}_check')(v) for k, v in kwargs.items()}
-        return {f'_Atom__{k}': v for k, v in kwargs.items()}
-
     def __getstate__(self):
         return {'checks': self._skip_checks, 'atom': self._atom, 'x': self.__x, 'y': self.__y, 'z': self.__z,
                 'mapping': self.__mapping, 'stereo': self.__stereo,
@@ -446,42 +322,95 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__hybridization', state['hybridization'])
         super().__setattr__('_Atom__neighbors', state['neighbors'])
 
+    @staticmethod
+    def _element_check(x):
+        if x != 'A' and x in elements_classes:
+            return elements_classes[x]
+        raise ValueError('invalid atom symbol')
 
-class Bond(BondAttribute):
+    @staticmethod
+    def _mapping_check(x):
+        if x is None:
+            return
+        elif isinstance(x, int) and 0 <= x <= 999:
+            return x
+        raise ValueError('mapping can be in range 0-999')
+
+
+class Bond(Attribute):
+    __slots__ = ('order', 'stereo')
+
     def __init__(self, *, skip_checks=False):
-        super(BondAttribute, self).__setattr__('_skip_checks', skip_checks)
-        super(BondAttribute, self).__setattr__('order', 1)
-        super(BondAttribute, self).__setattr__('stereo', None)
+        super().__setattr__('_skip_checks', skip_checks)
+        super().__setattr__('order', 1)
+        super().__setattr__('stereo', None)
+
+    def __init_copy__(self, parent):
+        super().__setattr__('_skip_checks', parent._skip_checks)
+        super().__setattr__('order', parent.order)
+        super().__setattr__('stereo', parent.stereo)
+
+    def __setattr__(self, key, value):
+        if not self._skip_checks:
+            value = getattr(self, f'_{key}_check')(value)
+        super().__setattr__(key, value)
 
     def _update(self, value, kwargs):
         if isinstance(value, Bond):
             kwargs = self._check_kwargs(kwargs)
-            super(BondAttribute, self).__setattr__('order', value.order)
-            super(BondAttribute, self).__setattr__('stereo', value.stereo)
+            super().__setattr__('order', value.order)
+            super().__setattr__('stereo', value.stereo)
             for k, v in kwargs.items():
-                super(BondAttribute, self).__setattr__(k, v)
+                super().__setattr__(k, v)
         else:
             self._update_kwargs(value, kwargs)
 
-    def __str__(self):
-        return self._order_str[self.order]
+    def __getitem__(self, key):
+        if key not in ('order', 'stereo'):
+            raise KeyError('unknown bond attribute')
+        return getattr(self, key)
+
+    def __iter__(self):
+        yield 'order'
+        if self.stereo:
+            yield 'stereo'
 
     def __int__(self):
         return self.order
 
     def __eq__(self, other):
         """
-        == equality checks without stereo
+        equality checks without stereo
         """
         if isinstance(other, Bond):
             return self.order == other.order
         return False
 
+    def __getstate__(self):
+        return {'checks': self._skip_checks, 'order': self.order, 'stereo': self.stereo}
+
+    def __setstate__(self, state):
+        super().__setattr__('_skip_checks', state['checks'])
+        super().__setattr__('order', state['order'])
+        super().__setattr__('stereo', state['stereo'])
+
     @staticmethod
     def _order_check(x):
-        if x in (1, 2, 3, 4, 9):
+        if x in (1, 2, 3, 4, 5):
             return x
         raise ValueError('invalid order')
+
+    def _update_kwargs(self, value, kwargs):
+        if not isinstance(value, dict):
+            try:
+                value = dict(value)
+            except (TypeError, ValueError):
+                raise TypeError('invalid attrs sequence')
+
+        value.update(kwargs)
+        if value:
+            for k, v in self._check_kwargs(value).items():
+                super().__setattr__(k, v)
 
 
 __all__ = ['Atom', 'Bond']

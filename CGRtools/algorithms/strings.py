@@ -17,21 +17,20 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from functools import lru_cache
 from hashlib import sha512
 from itertools import count
+from ..cache import cached_method
 
 
 class StringCommon:
-    @lru_cache(1)
+    @cached_method
     def __str__(self):
         self._stringify()
 
-    @lru_cache(1)
+    @cached_method
     def __bytes__(self):
         sha512(str(self).encode()).digest()
 
-    @lru_cache(1)
     def __hash__(self):
         return hash(str(self))
 
@@ -68,14 +67,41 @@ class StringCommon:
 
         return visited, edges, disconnected
 
-    def flush_cache(self):
-        self.__str__.cache_clear()
-        self.__bytes__.cache_clear()
-        self.__hash__.cache_clear()
-        super().flush_cache()
-
 
 class SMILES(StringCommon):
+
+    def stringify(self, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
+        smi = []
+
+        if stereo and self.__stereo:
+            smi.append(self._stereo_str[self.__stereo])
+        if hybridization and self.__hybridization:
+            smi.append(self._hybridization_str[self.__hybridization])
+        if neighbors and self.__neighbors is not None:
+            smi.append(str(self.__neighbors))
+        if smi:
+            smi.append(';')
+            smi.insert(0, ';')
+
+        if atom:
+            if self.element not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                atom = False
+            smi.insert(0, self.element)
+            if self.charge:
+                smi.append(self._charge_str[self.charge])
+            if self.multiplicity:
+                smi.append(self._multiplicity_str[self.multiplicity])
+            if isotope and self.isotope != self.common_isotope:
+                smi.insert(0, str(self.isotope))
+        else:
+            smi.insert(0, '*')
+
+        if len(smi) != 1 or not atom:
+            smi.insert(0, '[')
+            smi.append(']')
+
+        return ''.join(smi)
+
     def _stringify(self):
         weights = self.atoms_order.__getitem__
         cycles = BroodMother()
@@ -144,6 +170,61 @@ class SMILES(StringCommon):
 
 
 class SMILES_CGR(StringCommon):
+
+    def stringify(self, atom=True, isotope=True, stereo=True, hybridization=True, neighbors=True):
+        smi = []
+        if stereo and self.stereo:
+            smi.append(self._stereo_str[self.stereo])
+        if hybridization:
+            if len(self.hybridization) > 1:
+                smi.append('<%s>' % ''.join(self._hybridization_str[x] for x in self.hybridization))
+            elif self.hybridization:
+                smi.append(self._hybridization_str[self.hybridization[0]])
+        if neighbors:
+            if len(self.neighbors) > 1:
+                smi.append('<%s>' % ''.join(str(x) for x in self.neighbors))
+            elif self.neighbors:
+                smi.append(str(self.neighbors[0]))
+        if smi:
+            smi.append(';')
+            smi.insert(0, ';')
+
+        if atom:
+            if self.element == ('A',):
+                atom = False
+                smi.insert(0, '*')
+            elif len(self.element) > 1:
+                atom = False
+                smi.insert(0, ','.join(self.element))
+            else:
+                if self.element[0] not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+                    atom = False
+                smi.insert(0, self.element[0])
+
+            if len(self.charge) > 1:
+                smi.append('<%s>' % ''.join(self._charge_str[x] for x in self.charge))
+            elif self.charge != (0,):
+                smi.append(self._charge_str[self.charge[0]])
+
+            if len(self.multiplicity) > 1:
+                smi.append('<%s>' % ''.join(self._multiplicity_str[x] for x in self.multiplicity))
+            elif self.multiplicity:
+                smi.append(self._multiplicity_str[self.multiplicity[0]])
+
+            if isotope:
+                if len(self.isotope) > 1:
+                    smi.insert(0, '<%s>' % ','.join(str(x) for x in self.isotope))
+                elif self.isotope:
+                    smi.insert(0, str(self.isotope[0]))
+        else:
+            smi.insert(0, '*')
+
+        if len(smi) != 1 or not atom:
+            smi.insert(0, '[')
+            smi.append(']')
+
+        return ''.join(smi)
+
     def _stringify_full(self, weights, atom=True, isotope=True, stereo=False, hybridization=False, neighbors=False):
         cycles = BroodMother()
         atoms_set = set(self._node)

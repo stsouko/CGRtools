@@ -16,9 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-"""
-implements all internal structures, which represents: molecules, reactions, CGR and over
-"""
 from .cgr import *
 from .molecule import *
 from .query import *

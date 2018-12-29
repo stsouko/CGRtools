@@ -20,12 +20,12 @@ from networkx.algorithms.isomorphism import GraphMatcher
 from .cgr import CGRContainer
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
+from ..attributes import QueryAtom, DynQueryAtom, Bond
 
 
 class QueryContainer(BaseContainer):
     node_attr_dict_factory = QueryAtom
-    edge_attr_dict_factory = QueryBond
+    edge_attr_dict_factory = Bond
 
     def _matcher(self, other):
         """
@@ -42,7 +42,7 @@ class QueryContainer(BaseContainer):
 
 class QueryCGRContainer(BaseContainer):
     node_attr_dict_factory = DynQueryAtom
-    edge_attr_dict_factory = DynQueryBond
+    edge_attr_dict_factory = Bond
 
     def _matcher(self, other):
         """

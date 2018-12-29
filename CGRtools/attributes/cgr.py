@@ -55,9 +55,6 @@ class DynAttribute(MutableMapping):
     def __delitem__(self, key):
         raise TypeError('attribute deletion impossible')
 
-    def __str__(self):
-        return '%s>>%s' % self.stringify(stereo=True)
-
     def __getstate__(self):
         return {'reagent': self._reagent, 'product': self._product}
 
@@ -71,16 +68,8 @@ class DynAttribute(MutableMapping):
         copy.__init_copy__(self._reagent.copy(), self._product.copy())
         return copy
 
-    _stereo_str = {1: '@', -1: '@@'}
-
 
 class DynAtomAttribute(DynAttribute):
-    def stringify(self, *args, **kwargs):
-        return self._reagent.stringify(*args, **kwargs), self._product.stringify(*args, **kwargs)
-
-    def weight(self, *args, **kwargs):
-        return self._reagent.weight(*args, **kwargs), self._product.weight(*args, **kwargs)
-
     def __getattr__(self, key):
         if key.startswith('p_'):
             if key in self._p_static:
@@ -118,54 +107,6 @@ class DynAtomAttribute(DynAttribute):
             else:
                 r[k] = getattr(self._reagent, f'_{k}_check')(v)
         return r, p
-
-    _hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-    _multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
-    _charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
-
-
-class DynBondAttribute(DynAttribute):
-    def stringify(self, stereo=False):
-        if not self.order:
-            return '.', self._product.stringify(stereo=stereo)
-        elif not self.p_order:
-            return self._reagent.stringify(stereo=stereo), '.'
-        return self._reagent.stringify(stereo=stereo), self._product.stringify(stereo=stereo)
-
-    def __getitem__(self, key):
-        if key.startswith('p_'):
-            return self._product[key[2:]]
-        return self._reagent[key]
-
-    def __getattr__(self, key):
-        if key.startswith('p_'):
-            return getattr(self._product, key[2:])
-        return getattr(self._reagent, key)
-
-    def __contains__(self, key):
-        if key.startswith('p_'):
-            return key[2:] in self._product
-        return key in self._reagent
-
-    def __iter__(self):
-        return chain(self._reagent, (f'p_{x}' for x in self._product))
-
-    def _split_check_kwargs(self, kwargs):
-        r, p = {}, {}
-        for k, v in kwargs.items():
-            if k == 'p_order':
-                p['order'] = None if v is None else self._reagent._order_check(v)
-            elif k == 'order':
-                r['order'] = None if v is None else self._reagent._order_check(v)
-            elif k == 'p_stereo':
-                p['stereo'] = self._reagent._stereo_check(v)
-            elif k == 'stereo':
-                r['stereo'] = self._reagent._stereo_check(v)
-            else:
-                raise AttributeError('invalid bond attribute')
-        return r, p
-
-    _order_str = {1: '-', 2: '=', 3: '#', 4: ':', 9: '~', None: '.'}
 
 
 class DynAtom(DynAtomAttribute):
@@ -211,27 +152,22 @@ class DynAtom(DynAtomAttribute):
         self._reagent._update(value, r)
         self._product._update(p_value, p)
 
+    def __int__(self):
+        return int(self._reagent) << 21 | int(self._product)
+
     def __eq__(self, other):
         if isinstance(other, DynAtom):
             return self._reagent == other._reagent and self._product == other._product
         elif isinstance(other, Atom):
-            return self._reagent == other == self._product
+            return self._reagent == other and self._product == other
         return False
-
-    def __ne__(self, other):
-        """
-        != equality checks with stereo
-        """
-        if isinstance(other, DynAtom):
-            return self._reagent != other._reagent and self._product != other._product
-        return self._reagent != self._product != other
 
     _factory = Atom
     _static = {'element', 'isotope', 'mapping'}
     _p_static = {f'p_{x}' for x in _static}
 
 
-class DynBond(DynBondAttribute):
+class DynBond(DynAttribute):
     def __setattr__(self, key, value):
         if key == 'p_order':
             if value is None:
@@ -309,26 +245,49 @@ class DynBond(DynBondAttribute):
         self._reagent._update(r, {})
         self._product._update(p, {})
 
-    def weight(self, stereo=False):
-        if stereo:
-            return self.order or 0, self.p_order or 0, self.stereo or 0, self.p_stereo or 0
-        return self.order or 0, self.p_order or 0
+    def __getattr__(self, key):
+        if key.startswith('p_'):
+            return getattr(self._product, key[2:])
+        return getattr(self._reagent, key)
+
+    def __getitem__(self, key):
+        if key.startswith('p_'):
+            return self._product[key[2:]]
+        return self._reagent[key]
+
+    def __contains__(self, key):
+        if key.startswith('p_'):
+            return key[2:] in self._product
+        return key in self._reagent
+
+    def __iter__(self):
+        return chain(self._reagent, (f'p_{x}' for x in self._product))
+
+    def __int__(self):
+        return (self.order or 0) << 3 | (self.p_order or 0)
 
     def __eq__(self, other):
         """
-        == equality checks without stereo
+        equality checks without stereo
         """
         if isinstance(other, DynBond):
             return self._reagent == other._reagent and self._product == other._product
         return self._reagent == self._product == other
 
-    def __ne__(self, other):
-        """
-        != equality checks with stereo
-        """
-        if isinstance(other, DynBond):
-            return self._reagent != other._reagent and self._product != other._product
-        return self._reagent != self._product != other
+    def _split_check_kwargs(self, kwargs):
+        r, p = {}, {}
+        for k, v in kwargs.items():
+            if k == 'p_order':
+                p['order'] = None if v is None else self._reagent._order_check(v)
+            elif k == 'order':
+                r['order'] = None if v is None else self._reagent._order_check(v)
+            elif k == 'p_stereo':
+                p['stereo'] = self._reagent._stereo_check(v)
+            elif k == 'stereo':
+                r['stereo'] = self._reagent._stereo_check(v)
+            else:
+                raise AttributeError('invalid bond attribute')
+        return r, p
 
     _factory = Bond
 

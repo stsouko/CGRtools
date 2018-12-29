@@ -17,12 +17,13 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections.abc import MutableSequence
-from functools import reduce, lru_cache
+from functools import reduce
 from hashlib import sha512
 from operator import mul, or_
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
+from ..cache import cached_method
 
 
 class MindfulList(MutableSequence):
@@ -67,7 +68,7 @@ class MindfulList(MutableSequence):
 
 class ReactionContainer:
     """reaction storage. contains reagents, products and reactants lists"""
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__signatures', '__pickle')
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__dict__')
 
     def __init__(self, reagents=None, products=None, reactants=None, meta=None):
         """
@@ -86,8 +87,6 @@ class ReactionContainer:
             self.__meta = {}
         else:
             self.__meta = dict(meta)
-        self.__signatures = {}
-        self.__pickle = None
 
     def __getitem__(self, item):
         if item in ('reagents', 0):
@@ -193,7 +192,7 @@ class ReactionContainer:
                     m.reset_query_marks()
         self.flush_cache()
 
-    @lru_cache(1)
+    @cached_method
     def compose(self):
         """
         get CGR of reaction
@@ -222,14 +221,14 @@ class ReactionContainer:
         """
         return self.compose()
 
-    @lru_cache(1)
+    @cached_method
     def depict(self):
         pass  # todo: depict components
 
     def _repr_svg_(self):
         return self.depict()
 
-    @lru_cache(1)
+    @cached_method
     def __str__(self):
         sig = []
         for ml in (self.__reagents, self.__reactants, self.__products):
@@ -239,20 +238,15 @@ class ReactionContainer:
             sig.append('.'.join(ms))
         return '>'.join(sig)
 
-    @lru_cache(1)
+    @cached_method
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    @lru_cache(1)
     def __hash__(self):
         return hash(str(self))
 
     def flush_cache(self):
-        self.__str__.cache_clear()
-        self.__bytes__.cache_clear()
-        self.__hash__.cache_clear()
-        self.compose.cache_clear()
-        self.depict.cache_clear()
+        self.__dict__.clear()
 
 
 __all__ = ['ReactionContainer']

@@ -17,14 +17,15 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC
-from cached_property import cached_property
-from functools import lru_cache
 from networkx import Graph, relabel_nodes
 from ..algorithms import Components, Isomorphism, Morgan, SSSR, SubGraphs
+from ..cache import cached_property, cached_args_method
 from ..periodictable import elements_list
 
 
 class BaseContainer(Graph, Components, Isomorphism, Morgan, SSSR, SubGraphs, ABC):
+    __slots__ = ('graph', '_node', '_adj')
+
     def __dir__(self):
         return [] or super().__dir__()
 
@@ -109,7 +110,7 @@ class BaseContainer(Graph, Components, Isomorphism, Morgan, SSSR, SubGraphs, ABC
         self.remove_edge(n, m)
         self.flush_cache()
 
-    @lru_cache(1000)
+    @cached_args_method
     def environment(self, atom):
         """
         pairs of (bond, atom) connected to atom
@@ -117,17 +118,13 @@ class BaseContainer(Graph, Components, Isomorphism, Morgan, SSSR, SubGraphs, ABC
         :param atom: number
         :return: list
         """
-        return [(bond, self._node[n]) for n, bond in self._adj[atom].items()]
+        return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
 
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
 
     def flush_cache(self):
-        self.environment.cache_clear()
-        del self.__dict__['atoms_numbers']
-        del self.__dict__['atoms_count']
-        del self.__dict__['bonds_count']
-        super().flush_cache()
+        self.__dict__.clear()
 
     def _bonds(self):
         seen = set()
