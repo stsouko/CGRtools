@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
-#  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -162,14 +161,14 @@ query_patch['N+2;3'].extend(_prepare([(b1, cn_1), (b3, n1_)],
 #
 #  C - N = N+  >>  C - N+ # N
 #
-c__ = QueryAtom()
+c = QueryAtom()
 n22 = QueryAtom()
 np1_ = QueryAtom()
-c__.update(element='C')
+c.update(element='C')
 n22.update(element='N', neighbors=2, hybridization=2)
 np1_.update(element='N', charge=1, neighbors=1)
 central['N2;2'] = n22
-query_patch['N2;2'].extend(_prepare([(b2, np1_), (b1, c__)], 
+query_patch['N2;2'].extend(_prepare([(b2, np1_), (b1, c)],
                                     [{'charge': 1, '_hybridization': 3}, 
                                      ({'order': 3}, {'charge': 0, '_hybridization': 3})]))
 
@@ -225,9 +224,7 @@ query_patch['C+2;2'].extend(_prepare([(b2, n122), (b1, a)],
 #       C         C
 #
 c_2 = QueryAtom()
-c = QueryAtom()
 c_2.update(element='C', hybridization=2)
-c.update(element='C')
 query_patch['N3;3'].extend(_prepare([(b2, o), (b2, c_2), (b1, c)],
                                     [{'charge': 1, '_hybridization': 2},
                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
@@ -286,12 +283,130 @@ query_patch['N+2;1'].extend(_prepare([(b1, on), (b1, c)], [{'charge': 0, '_hybri
 #      \\             |
 #       O             O-
 #
-n32 = QueryAtom()
-n32.update(element='N', neighbors=3, hybridization=2)
-central['N3;2'] = n32
-query_patch['N3;2'].extend(_prepare([(b2, o), (b1, c), (b1, a), (b1, a)],
+n42 = QueryAtom()
+n42.update(element='N', neighbors=4, hybridization=2)
+central['N4;2'] = n42
+query_patch['N4;2'].extend(_prepare([(b2, o), (b1, c), (b1, a), (b1, a)],
                                     [{'charge': 1, '_hybridization': 1},
                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+
+
+# 13. Phosphonic
+#
+#      O                O
+#      |                |
+#  C - P+ - O-  >>  C - P = O
+#      |                |
+#      O                O
+#
+pp41 = QueryAtom()
+pp41.update(element='P', charge=1, neighbors=4, hybridization=1)
+central['P+4;1'] = pp41
+query_patch['P+4;1'].extend(_prepare([(b1, on), (b1, c), (b1, o), (b1, o)],
+                                     [{'charge': 0, '_hybridization': 2},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 14. Phosphonium ylide
+#
+#      C                C
+#      |                |
+#  C - P- - C+  >>  C - P = C
+#      |                |
+#      C                C
+#
+pn41 = QueryAtom()
+pn41.update(element='P', charge=-1, neighbors=4, hybridization=1)
+central['P-4;1'] = pn41
+query_patch['P-4;1'].extend(_prepare([(b1, cp_1), (b1, c), (b1, c), (b1, c)],
+                                     [{'charge': 0, '_hybridization': 2},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+# 15. Silicate Selenite
+#
+#        O            O
+#       /            /
+# O- - Si+  >>  O = Si
+#       \            \
+#        O            O
+#
+sesip31 = QueryAtom()
+sesip31.update(element=('Se', 'Si'), charge=1, neighbors=3, hybridization=1)
+central['SeSi+3;1'] = sesip31
+query_patch['SeSi+3;1'].extend(_prepare([(b1, on), (b1, o), (b1, o)],
+                                        [{'charge': 0, '_hybridization': 2},
+                                         ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 16. Sulfine
+#
+#  O- - S+ = C  >>  O = S = C
+#
+sp22 = QueryAtom()
+sp22.update(element='S', charge=1, neighbors=2, hybridization=2)
+central['S+2;2'] = sp22
+query_patch['S+2;2'].extend(_prepare([(b1, on), (b2, c_2)],
+                                     [{'charge': 0, '_hybridization': 3},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 17. Sulfon
+#
+#        C           C
+#       /           /
+# O- - S+  >>  O = S
+#       \           \
+#        C           C
+#
+sp31 = QueryAtom()
+sp31.update(element='S', charge=1, neighbors=3, hybridization=1)
+central['S+3;1'] = sp31
+query_patch['S+3;1'].extend(_prepare([(b1, on), (b1, c), (b1, c)],
+                                     [{'charge': 0, '_hybridization': 2},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 18. Sulfonium ylide
+#
+#  C - S- - C+  >>  C - S = C
+#      |                |
+#      C                C
+#
+sn31 = QueryAtom()
+sn31.update(element='S', charge=-1, neighbors=3, hybridization=1)
+central['S-3;1'] = sn31
+query_patch['S-3;1'].extend(_prepare([(b1, cp_1), (b1, c), (b1, c)],
+                                     [{'charge': 0, '_hybridization': 2},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 19. Sulfoxide
+#
+#      C                C
+#      |                |
+#  O = S+ - O-  >>  O = S = O
+#      |                |
+#      C                C
+#
+sp42 = QueryAtom()
+sp42.update(element='S', charge=1, neighbors=4, hybridization=2)
+central['S+4;2'] = sp42
+query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, o)],
+                                     [{'charge': 0, '_hybridization': 3},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 20. Sulfoxonium ylide
+#
+#      C                C
+#      |                |
+#  C = S+ - O-  >>  C = S = O
+#      |                |
+#      C                C
+#
+query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, c_2)],
+                                     [{'charge': 0, '_hybridization': 3},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
 
 __all__ = ['Standardize']
