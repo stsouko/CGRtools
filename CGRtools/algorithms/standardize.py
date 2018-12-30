@@ -33,22 +33,30 @@ class Standardize:
         self.reset_query_marks()
         seen = set()
         total = 0
-        for k, center in central.items():
-            for n, atom in self._node.items():
-                if n in seen:
+        for n, atom in self._node.items():
+            if n in seen:
+                continue
+            for k, center in central.items():
+                if center != atom:
                     continue
-                if center == atom:
-                    shell = tuple((bond, self._node[m]) for m, bond in self._adj[n].items())
-                    for shell_query, shell_patch, atom_patch in query_patch[k]:
-                        if shell_query == shell:
-                            total += 1
-                            atom.update(atom_patch)
-                            for (b_p, a_p), (b, a) in zip(shell_patch, shell):
-                                b.update(b_p)
-                                a.update(a_p)
-                            seen.add(n)
-                            seen.update(self._adj[n])
-                            break
+                shell = tuple((bond, self._node[m]) for m, bond in self._adj[n].items())
+                for shell_query, shell_patch, atom_patch in query_patch[k]:
+                    if shell_query != shell:
+                        continue
+                    total += 1
+                    for attr_name, attr_value in atom_patch.items():
+                        setattr(atom, attr_name, attr_value)
+                    for (bond_patch, atom_patch), (bond, atom) in zip(shell_patch, shell):
+                        bond.update(bond_patch)
+                        for attr_name, attr_value in atom_patch.items():
+                            setattr(atom, attr_name, attr_value)
+                    seen.add(n)
+                    seen.update(self._adj[n])
+                    break
+                else:
+                    continue
+                break
+
         return total
 
 
@@ -76,12 +84,6 @@ b2.order = 2
 b3.order = 3
 b4.order = 4
 
-# any atom need for full neighbors describing
-a = QueryAtom()
-
-# =O
-o2 = QueryAtom()
-o2.update(element='O', hybridization=2)
 
 # 1. Nitro
 #
@@ -91,10 +93,15 @@ o2.update(element='O', hybridization=2)
 #      \\        \\
 #       O         O
 #
+a = QueryAtom()
+o = QueryAtom()
 n33 = QueryAtom()
+o.update(element='O')
 n33.update(element='N', neighbors=3, hybridization=3)
 central['N3;3'] = n33
-query_patch['N3;3'].extend(_prepare([(b2, o2), (b2, o2), (b1, a)], [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
+query_patch['N3;3'].extend(_prepare([(b2, o), (b2, o), (b1, a)],
+                                    [{'charge': 1, '_hybridization': 2}, 
+                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
 # 2. Aromatic N-Oxide
@@ -103,120 +110,188 @@ query_patch['N3;3'].extend(_prepare([(b2, o2), (b2, o2), (b1, a)], [{'charge': 1
 #      \\             |
 #       O             O-
 #
-n = QueryAtom()
-n.update(element='N', neighbors=3, hybridization=4)
-central['N3;4'] = n
-query_patch['N3;4'].extend(_prepare([(b2, o2), (b4, a), (b4, a)], [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
+n34 = QueryAtom()
+n34.update(element='N', neighbors=3, hybridization=4)
+central['N3;4'] = n34
+query_patch['N3;4'].extend(_prepare([(b2, o), (b4, a), (b4, a)],
+                                    [{'charge': 1}, 
+                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
 # 3. Azide
 #
 #  N- - N+ # N  >>  N = N+ = N-
 #
-n1 = QueryAtom()
-n2 = QueryAtom()
-n3 = QueryAtom()
-n1.update(element='N', charge=-1, neighbors=2, hybridization=1)
-n2.update(element='N', charge=1, neighbors=2, hybridization=3)
-n3.update(element='N', neighbors=1)
-central['N+2;3'] = n2
-query_patch['N+2;3'].extend(_prepare([(b1, n1), (b3, n3)],
-                                     [{}, ({'order': 2}, {'charge': 0}), ({'order': 2}, {'charge': -1})]))
+nn21 = QueryAtom()
+np23 = QueryAtom()
+n1_ = QueryAtom()
+nn21.update(element='N', charge=-1, neighbors=2, hybridization=1)
+np23.update(element='N', charge=1, neighbors=2, hybridization=3)
+n1_.update(element='N', neighbors=1)
+central['N+2;3'] = np23
+query_patch['N+2;3'].extend(_prepare([(b1, nn21), (b3, n1_)],
+                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}), 
+                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 3.1. Azide ChemAxoned
+#
+#  N+ # N = N-  >>  N = N+ = N-
+#
+n23 = QueryAtom()
+nn12 = QueryAtom()
+n23.update(element='N', neighbors=2, hybridization=3)
+nn12.update(element='N', charge=-1, neighbors=1, hybridization=2)
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b3, np23), (b2, nn12)],
+                                    [{'charge': 1}, ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
 
 # 4. Diazo
 #
 #  C- - N+ # N  >>  C = N+ = N-
 #
-c = QueryAtom()
-n1 = n2  # same as in azide
-n2 = QueryAtom()
-c.update(element='C', charge=-1, hybridization=1)
-n2.update(element='N', neighbors=1)
-
-
-central['N+2;3'] = n1
-query_patch['N+2;3'].extend(_prepare([(b1, c), (b3, n2)],
-                                     [{}, ({'order': 2}, {'charge': 0}), ({'order': 2}, {'charge': -1})]))
+cn_1 = QueryAtom()
+cn_1.update(element='C', charge=-1, hybridization=1)
+query_patch['N+2;3'].extend(_prepare([(b1, cn_1), (b3, n1_)],
+                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}), 
+                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
 # 5. Diazonium
 #
 #  C - N = N+  >>  C - N+ # N
 #
-c = QueryAtom()
-n1 = QueryAtom()
-n2 = QueryAtom()
-c.update(element='C')
-n1.update(element='N', neighbors=2, hybridization=2)
-n2.update(element='N', charge=1, neighbors=1)
-central['N2;2'] = n1
-query_patch['N2;2'].extend(_prepare([(b2, n2), (b1, c)], [{'charge': 1}, ({'order': 3}, {'charge': 0})]))
+c__ = QueryAtom()
+n22 = QueryAtom()
+np1_ = QueryAtom()
+c__.update(element='C')
+n22.update(element='N', neighbors=2, hybridization=2)
+np1_.update(element='N', charge=1, neighbors=1)
+central['N2;2'] = n22
+query_patch['N2;2'].extend(_prepare([(b2, np1_), (b1, c__)], 
+                                    [{'charge': 1, '_hybridization': 3}, 
+                                     ({'order': 3}, {'charge': 0, '_hybridization': 3})]))
 
 
 # 6. Iminium
 #
 #  C+ - N  >> C = N+
 #
-c = QueryAtom()
-n = QueryAtom()
-c.update(element='C', charge=1, hybridization=1)
-n.update(element='N', neighbors=3, hybridization=1)
-central['N3;1'] = n
-query_patch['N3;1'].extend(_prepare([(b1, c), (b1, a), (b1, a)], [{'charge': 1}, ({'order': 2}, {'charge': 0})]))
+cp_1 = QueryAtom()
+n31 = QueryAtom()
+cp_1.update(element='C', charge=1, hybridization=1)
+n31.update(element='N', neighbors=3, hybridization=1)
+central['N3;1'] = n31
+query_patch['N3;1'].extend(_prepare([(b1, cp_1), (b1, a), (b1, a)], 
+                                    [{'charge': 1, '_hybridization': 2},
+                                     ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
 
 # 7. Isocyanate
 #
 #  N+ - C- = O  >>  N = C = O
 #
-n = QueryAtom()
-c = QueryAtom()
-n.update(element='N', charge=1, neighbors=(1, 2), hybridization=1)
-c.update(element='C', charge=-1, neighbors=2, hybridization=2)
-central['C-2;2'] = c
-query_patch['C-2;2'].extend(_prepare([(b1, n), (b2, o2)], [{'charge': 0}, ({'order': 2}, {'charge': 0})]))
+np121 = QueryAtom()
+cn22 = QueryAtom()
+np121.update(element='N', charge=1, neighbors=(1, 2), hybridization=1)
+cn22.update(element='C', charge=-1, neighbors=2, hybridization=2)
+central['C-2;2'] = cn22
+query_patch['C-2;2'].extend(_prepare([(b1, np121), (b2, o)],
+                                     [{'charge': 0, '_hybridization': 3},
+                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
 
 # 8. Nitrilium
 #
 #  C+ = N  >>  C # N+
 #
-c = QueryAtom()
-n = QueryAtom()
-c.update(element='C', charge=1, neighbors=2, hybridization=2)
-n.update(element='N', neighbors=(1, 2), hybridization=2)
-central['C+2;2'] = c
-query_patch['C+2;2'].extend(_prepare([(b2, n), (b1, a)], [{'charge': 0}, ({'order': 3}, {'charge': 1})]))
+cp22 = QueryAtom()
+n122 = QueryAtom()
+cp22.update(element='C', charge=1, neighbors=2, hybridization=2)
+n122.update(element='N', neighbors=(1, 2), hybridization=2)
+central['C+2;2'] = cp22
+query_patch['C+2;2'].extend(_prepare([(b2, n122), (b1, a)], 
+                                     [{'charge': 0, '_hybridization': 3},
+                                      ({'order': 3}, {'charge': 1, '_hybridization': 3})]))
 
 
-# 9. Nitrone Nitronate
+# 9. Nitrone
 #
 #      O          O-
 #     //         /
 # C = N  >> C = N+
 #      \         \
-#       A         A
+#       C         C
 #
+c_2 = QueryAtom()
 c = QueryAtom()
-c.update(element='C', hybridization=2)
-query_patch['N3;3'].extend(_prepare([(b2, o2), (b2, c), (b1, a)], [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
+c_2.update(element='C', hybridization=2)
+c.update(element='C')
+query_patch['N3;3'].extend(_prepare([(b2, o), (b2, c_2), (b1, c)],
+                                    [{'charge': 1, '_hybridization': 2},
+                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
-# 10. Nitroso
+# 10. Nitronate
+#
+#      O         O
+#     //        //
+# C = N  >> C - N+
+#      \         \
+#       OH        O-
+#
+o1_ = QueryAtom()
+o1_.update(element='O', neighbors=1)
+query_patch['N3;3'].extend(_prepare([(b2, c_2), (b1, o1_), (b2, o)],
+                                    [{'charge': 1, '_hybridization': 2},
+                                     ({'order': 1}, {'_hybridization': 1}), ({}, {'charge': -1})]))
+
+
+# 10.1 Nitronate ChemAxoned
+#
+#       O-         O-
+#      /          /
+# C = N+  >>  C - N+
+#      \          \\
+#       OH         O
+#
+np32 = QueryAtom()
+np32.update(element='N', charge=1, neighbors=3, hybridization=2)
+on = QueryAtom()
+on.update(element='O', charge=-1)
+central['N+3;2'] = np32
+query_patch['N+3;2'].extend(_prepare([(b2, c_2), (b1, o1_), (b1, on)],
+                                     [{}, ({'order': 1}, {'_hybridization': 1}),
+                                      ({'order': 2}, {'_hybridization': 2})]))
+
+
+# 11. Nitroso
 #
 # C - N+ - O-  >>  C - N = O
-c = QueryAtom()
-n = QueryAtom()
-o = QueryAtom()
-c.update(element='C')
-n.update(element='N', charge=1, neighbors=2, hybridization=1)
-o.update(element='O', charge=-1)
-central['N+2;1'] = n
-query_patch['N+2;1'].extend(_prepare([(b1, o), (b1, c)], [{'charge': 0}, ({'order': 2}, {'charge': 0})]))
+#
+np21 = QueryAtom()
+on = QueryAtom()
+np21.update(element='N', charge=1, neighbors=2, hybridization=1)
+on.update(element='O', charge=-1)
+central['N+2;1'] = np21
+query_patch['N+2;1'].extend(_prepare([(b1, on), (b1, c)], [{'charge': 0, '_hybridization': 2},
+                                                           ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
-
-del b1, b2, b3, b4, a, c, o2, n, n1, n2, n3
+# 12. Tetriary N-oxide
+#
+#      C              C
+#      |              |
+#  A - N - A  >>  A - N+ - A
+#      \\             |
+#       O             O-
+#
+n32 = QueryAtom()
+n32.update(element='N', neighbors=3, hybridization=2)
+central['N3;2'] = n32
+query_patch['N3;2'].extend(_prepare([(b2, o), (b1, c), (b1, a), (b1, a)],
+                                    [{'charge': 1, '_hybridization': 1},
+                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
 __all__ = ['Standardize']
