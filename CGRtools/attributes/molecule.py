@@ -64,8 +64,6 @@ class Attribute(MutableMapping):
             return x
         raise ValueError('stereo can be: None, 1 or -1')
 
-    _stereo_str = {1: '@', -1: '@@'}
-
 
 class AtomAttribute(Attribute):
     @staticmethod

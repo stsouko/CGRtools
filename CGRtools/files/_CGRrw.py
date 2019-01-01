@@ -32,23 +32,6 @@ elements_set.discard('A')
 cgr_keys = dict(extrabond=2, dynbond=2, dynatom=1, atomhyb=1, atomneighbors=1, dynatomhyb=1, dynatomneighbors=1)
 
 
-def _pyramid_volume(n, u, v, w):
-    nx, ny, nz = n
-    ux, uy, uz = u
-    vx, vy, vz = v
-    wx, wy, wz = w
-    ux -= nx
-    uy -= ny
-    uz -= nz
-    vx -= nx
-    vy -= ny
-    vz -= nz
-    wx -= nx
-    wy -= ny
-    wz -= nz
-    return ux * (vy * wz - vz * wy) + uy * (vz * wx - vx * wz) + uz * (vx * wy - vy * wx)
-
-
 class WithMixin:
     def __init__(self, file, mode='r'):
         if mode not in ('r', 'w', 'rb'):
@@ -349,7 +332,7 @@ class CGRread:
             g.add_bond(n_map, m_map, b)
         return g
 
-    __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '9': 9, 'n': None, 's': 9}
+    __bondlabels = {'0': None, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '9': 5, 'n': None, 's': 5}
 
 
 class CGRwrite:
