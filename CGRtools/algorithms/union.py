@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,30 +16,17 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from networkx import connected_components
 
 
-class Components:
+class Union:
     def __or__(self, other):
         """
         G | H is union of graphs
         """
         return self.union(other)
 
-    def connected_components(self):
-        return connected_components(self)
-
-    def split(self, meta=False):
-        """
-        split disconnected structure to connected substructures
-
-        :param meta: copy metadata to each substructure
-        :return: list of substructures
-        """
-        return [self.substructure(c, meta) for c in connected_components(self)]
-
     def union(self, other):
-        if not isinstance(other, Components):
+        if not isinstance(other, Union):
             raise TypeError('BaseContainer subclass expected')
         if self._node.keys() & set(other):
             raise KeyError('mapping of graphs is not disjoint')
@@ -82,4 +69,4 @@ class Components:
         return u
 
 
-__all__ = ['Components']
+__all__ = ['Union']

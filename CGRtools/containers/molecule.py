@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,13 +19,13 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
-from ..algorithms import Aromatize, SMILES, CGRCompose, Standardize
+from ..algorithms import Aromatize, Compose, Morgan, SMILES, SSSR, Standardize
 from ..attributes import Atom, Bond
 from ..cache import cached_args_method
 from ..periodictable import H
 
 
-class MoleculeContainer(Aromatize, CGRCompose, SMILES, Standardize, BaseContainer):
+class MoleculeContainer(Aromatize, Compose, Morgan, SMILES, SSSR, Standardize, BaseContainer):
     """
     storage for Molecules
 

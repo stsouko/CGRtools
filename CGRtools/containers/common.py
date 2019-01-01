@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,13 +17,13 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC
-from networkx import Graph, relabel_nodes
-from ..algorithms import Components, Isomorphism, Morgan, SSSR, SubGraphs
+from networkx import connected_components, Graph, relabel_nodes
+from ..algorithms import Isomorphism, Union
 from ..cache import cached_property, cached_args_method
 from ..periodictable import elements_list
 
 
-class BaseContainer(Graph, Components, Isomorphism, Morgan, SSSR, SubGraphs, ABC):
+class BaseContainer(Graph, Isomorphism, Union, ABC):
     __slots__ = ('graph', '_node', '_adj')
 
     def __dir__(self):
@@ -120,11 +120,70 @@ class BaseContainer(Graph, Components, Isomorphism, Morgan, SSSR, SubGraphs, ABC
         """
         return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
 
+    def substructure(self, atoms, meta=False):
+        """
+        create substructure containing atoms from nbunch list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :return: container with substructure
+        """
+        s = self.subgraph(atoms).copy()
+        if not meta:
+            s.graph.clear()
+        return s
+
+    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False):
+        """
+        get subgraph with atoms and their neighbors
+
+        :param atoms: list of core atoms in graph
+        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
+        etc up to deep or while new nodes available.
+        :param deep: number of bonds between atoms and neighbors.
+        :param meta: copy metadata to each substructure
+        """
+        nodes = [set(atoms)]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in self._adj[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+
+        return [self.substructure(a, meta) for a in nodes] if dante else self.substructure(nodes[-1], meta)
+
+    def connected_components(self):
+        return connected_components(self)
+
+    def split(self, meta=False):
+        """
+        split disconnected structure to connected substructures
+
+        :param meta: copy metadata to each substructure
+        :return: list of substructures
+        """
+        return [self.substructure(c, meta) for c in connected_components(self)]
+
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
 
     def flush_cache(self):
         self.__dict__.clear()
+
+    def __and__(self, other):
+        """
+        substructure of graph
+        """
+        return self.substructure(other)
+
+    def __sub__(self, other):
+        """
+        other nodes excluded substructure of graph
+        :return graph or None
+        """
+        n = self._node.keys() - set(other)
+        if n:
+            return self.substructure(n)
 
     def _bonds(self):
         seen = set()

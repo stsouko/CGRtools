@@ -20,7 +20,7 @@ from collections import defaultdict
 from ..attributes import DynAtom, DynBond, Bond
 
 
-class CGRCompose:
+class Compose:
     def __xor__(self, other):
         """
         G ^ H is CGR generation
@@ -34,7 +34,7 @@ class CGRCompose:
         :param other: Molecule or CGR Container
         :return: CGRContainer
         """
-        if not isinstance(other, CGRCompose):
+        if not isinstance(other, Compose):
             raise TypeError('CGRContainer or MoleculeContainer [sub]class expected')
 
         cgr = self._get_subclass('CGRContainer')
@@ -168,4 +168,33 @@ class CGRCompose:
     __none_bond.order = None
 
 
-__all__ = ['CGRCompose']
+class CGRCompose(Compose):
+    def __invert__(self):
+        """
+        decompose CGR
+        """
+        return self.decompose()
+
+    def decompose(self):
+        """
+        decompose CGR to pair of Molecules, which represents reagents and products state of reaction
+
+        :return: tuple of two molecules
+        """
+        mc = self._get_subclass('MoleculeContainer')
+        reagents = mc()
+        products = mc()
+
+        for n, atom in self._node.items():
+            reagents.add_atom(atom._reagent, n)
+            products.add_atom(atom._product, n)
+
+        for n, m, bond in self._bonds():
+            if bond.order:
+                reagents.add_bond(n, m, bond._reagent)
+            if bond.p_order:
+                products.add_bond(n, m, bond._product)
+        return reagents, products
+
+
+__all__ = ['Compose', 'CGRCompose']
