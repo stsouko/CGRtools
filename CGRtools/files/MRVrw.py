@@ -236,7 +236,7 @@ class MRVread(CGRread, WithMixin):
                         stereo = None
                 else:
                     stereo = None
-                bonds.append((atom_map[a1], atom_map[a2], {'order': order}, stereo))
+                bonds.append((atom_map[a1], atom_map[a2], order))
 
         if 'molecule' in data:
             dm = data['molecule']
@@ -322,7 +322,7 @@ class MRVwrite(CGRwrite, WithMixin):
         return ''.join(chain(('<atomArray>',),
                              (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
                               f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}"'
-                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["elements"]}/>'
+                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}/>'
                               for atom in atoms),
                              ('</atomArray><bondArray>',),
                              (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
@@ -332,18 +332,6 @@ class MRVwrite(CGRwrite, WithMixin):
                               f'fieldData="{v.replace(">", "&gt;").replace("<", "&lt;")}" '
                               f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
                               for n, (i, t, v) in enumerate(cgr, start=1))))
-
-    @staticmethod
-    def _atom_list_map(x, n):
-        if x:
-            return ' mrvQueryProps="L,%s:"' % ','.join(x)
-        return ''
-
-    @staticmethod
-    def _atom_not_list_map(x, n):
-        if x:
-            return ' mrvQueryProps="L!%s:"' % '!'.join(x)
-        return ''
 
     @staticmethod
     def _isotope_map(x, n):

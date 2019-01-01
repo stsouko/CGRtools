@@ -107,7 +107,7 @@ class INCHIread(CGRread, WithMixin):
                     continue
                 order = atom.bond_type[k]
                 if order:
-                    bonds.append((n, m, {'order': order}, None))
+                    bonds.append((n, m, order))
         lib.FreeStructFromINCHI(byref(structure))
         return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
 

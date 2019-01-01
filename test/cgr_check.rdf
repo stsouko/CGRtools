@@ -42,7 +42,7 @@ $MOL
 M  ALS   2  3 T N   O   S   
 M  ALS   3  3 F Cl  Br  I   
 M  ISO  1   6  12
-M  STY  4   1 DAT   2 DAT   3 DAT   4 DAT
+M  STY  3   1 DAT   2 DAT   3 DAT
 M  SAL   1  1   2
 M  SDT   1 atomneighbors                                         
 M  SDD   1   -17.3619   -0.3687    DAU   ALL  0       0  
@@ -57,12 +57,7 @@ M  SAL   3  1   7
 M  SDT   3 dynatom
 M  SDD   3   -15.0449   -2.0542    DAU   ALL  0       0
 M  MRV SDD   3  0
-M  SED   3 c0,1,-1
-M  SAL   4  1   7
-M  SDT   4 isotope
-M  SDD   4   -15.4764   -3.1999    DAU   ALL  0       0
-M  MRV SDD   4  0
-M  SED   4 12,13,14
+M  SED   3 c-1
 M  END
 $MOL
 
@@ -108,5 +103,5 @@ M  SAL   5  1   7
 M  SDT   5 dynatom
 M  SDD   5    -7.5425   -1.8528    DAU   ALL  0       0
 M  MRV SDD   5  0
-M  SED   5 c1,1,0,0,-1
+M  SED   5 c1
 M  END

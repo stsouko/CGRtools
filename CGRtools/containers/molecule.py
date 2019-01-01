@@ -21,6 +21,7 @@ from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
 from ..algorithms import Aromatize, SMILES, CGRCompose, Standardize
 from ..attributes import Atom, Bond
+from ..cache import cached_args_method
 from ..periodictable import H
 
 
@@ -107,12 +108,15 @@ class MoleculeContainer(Aromatize, CGRCompose, SMILES, Standardize, BaseContaine
         self.flush_cache()
         return len(tmp)
 
+    @cached_args_method
     def atom_implicit_h(self, atom):
         return self._node[atom].get_implicit_h([x.order for x in self._adj[atom].values()])
 
+    @cached_args_method
     def atom_explicit_h(self, atom):
         return sum(self._node[x] == 'H' for x in self.neighbors(atom))
 
+    @cached_args_method
     def atom_total_h(self, atom):
         return self.atom_explicit_h(atom) + self.atom_implicit_h(atom)
 

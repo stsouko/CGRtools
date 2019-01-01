@@ -43,7 +43,7 @@ class Centers:
         while center:
             n = center.pop()
             if n in adj:
-                c = set(self.__plain_bfs(adj, n))
+                c = set(plain_bfs(adj, n))
                 out.append(list(c))
                 center.difference_update(c)
             else:
@@ -66,19 +66,19 @@ class Centers:
 
         return list(nodes)
 
-    @staticmethod
-    def __plain_bfs(adj, source):
-        """A fast BFS node generator"""
-        seen = set()
-        nextlevel = {source}
-        while nextlevel:
-            thislevel = nextlevel
-            nextlevel = set()
-            for v in thislevel:
-                if v not in seen:
-                    yield v
-                    seen.add(v)
-                    nextlevel.update(adj[v])
+
+def plain_bfs(adj, source):
+    """modified NX fast BFS node generator"""
+    seen = set()
+    nextlevel = {source}
+    while nextlevel:
+        thislevel = nextlevel
+        nextlevel = set()
+        for v in thislevel:
+            if v not in seen:
+                yield v
+                seen.add(v)
+                nextlevel.update(adj[v])
 
 
 __all__ = ['Centers']

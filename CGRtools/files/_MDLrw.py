@@ -76,7 +76,7 @@ class MOLread:
             except KeyError:
                 warning('unsupported or invalid stereo')
                 stereo = None
-            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, {'order': int(line[6:9])}, stereo))
+            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, int(line[6:9])))
         elif line.startswith('M  END'):
             cgr = []
             for x in self.__cgr.values():
@@ -234,7 +234,7 @@ class EMOLread:
                 break
         else:
             s = None
-        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], {'order': int(t)}, s))
+        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], int(t)))
 
     def __atom_parser(self, line):
         n, a, x, y, z, m, *kvs = line
@@ -441,8 +441,6 @@ class MOLwrite(CGRwrite):
         for atom in atoms:
             if atom['isotope']:
                 mol_prop.append(atom['isotope'])
-            if atom['elements']:
-                mol_prop.append(atom['elements'])
             if atom['multiplicity']:
                 mol_prop.append(atom['multiplicity'])
 
@@ -468,16 +466,6 @@ class MOLwrite(CGRwrite):
     def _isotope_map(x, n):
         if x:
             return f'M  ISO  1 {n:3d} {x:3d}\n'
-
-    @staticmethod
-    def _atom_list_map(x, n):
-        if x:
-            return f'M  ALS {n:3d}{len(x):3d} F {"".join(f"{x:>4s}" for x in x)}\n'
-
-    @staticmethod
-    def _atom_not_list_map(x, n):
-        if x:
-            return f'M  ALS {n:3d}{len(x):3d} T {"".join(f"{x:>4s}" for x in x)}\n'
 
     @staticmethod
     def _multiplicity_map(x, n):
