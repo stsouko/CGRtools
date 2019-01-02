@@ -22,5 +22,6 @@ from .isomorphism import *
 from .morgan import *
 from .sssr import *
 from .standardize import *
+from .stereo import *
 from .strings import *
 from .union import *
