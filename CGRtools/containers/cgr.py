@@ -20,11 +20,11 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from .common import BaseContainer
-from ..algorithms import Morgan, SMILES_CGR, CGRCompose
+from ..algorithms import Morgan, SmilesCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
 
 
-class CGRContainer(CGRCompose, Morgan, SMILES_CGR, BaseContainer):
+class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """

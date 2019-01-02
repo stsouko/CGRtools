@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,10 +20,11 @@ from networkx.algorithms.isomorphism import GraphMatcher
 from .cgr import CGRContainer
 from .common import BaseContainer
 from .molecule import MoleculeContainer
+from ..algorithms import SmilesQuery, SmilesQueryCGR
 from ..attributes import QueryAtom, DynQueryAtom, Bond, DynBond
 
 
-class QueryContainer(BaseContainer):
+class QueryContainer(SmilesQuery, BaseContainer):
     node_attr_dict_factory = QueryAtom
     edge_attr_dict_factory = Bond
 
@@ -40,7 +41,7 @@ class QueryContainer(BaseContainer):
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
 
-class QueryCGRContainer(BaseContainer):
+class QueryCGRContainer(SmilesQueryCGR, BaseContainer):
     node_attr_dict_factory = DynQueryAtom
     edge_attr_dict_factory = DynBond
 
