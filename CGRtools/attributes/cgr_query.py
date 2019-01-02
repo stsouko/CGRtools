@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,6 +19,7 @@
 from .cgr import DynAtom, DynAtomAttribute
 from .molecule import Atom
 from .query import QueryAtom
+from ..cache import cached_property
 from ..periodictable import Element
 
 
@@ -49,6 +50,7 @@ class DynQueryAtom(DynAtomAttribute):
                     raise ValueError('duplicates found')
                 value, self._product[key] = zip(*value)
             self._reagent[key] = value
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, (DynQueryAtom, DynAtom)):
@@ -82,10 +84,10 @@ class DynQueryAtom(DynAtomAttribute):
     def __eq__(self, other):
         if isinstance(other, DynAtom):
             if self.neighbors:
-                if (other.neighbors, other.p_neighbors) not in zip(self.neighbors, self.p_neighbors):
+                if (other.neighbors, other.p_neighbors) not in self.zip_neighbors:
                     return False
             if self.hybridization:
-                if (other.hybridization, other.p_hybridization) not in zip(self.hybridization, self.p_hybridization):
+                if (other.hybridization, other.p_hybridization) not in self.zip_hybridization:
                     return False
             return ((other.element in self.element if self.element else True) and
                     (self.isotope == other.isotope if self.isotope else True) and
@@ -100,13 +102,12 @@ class DynQueryAtom(DynAtomAttribute):
             if self.neighbors:
                 if not other.neighbors:
                     return False
-                elif not set(zip(self.neighbors, self.p_neighbors)).issuperset(zip(other.neighbors, other.p_neighbors)):
+                elif not self.zip_neighbors.issuperset(other.zip_neighbors):
                     return False
             if self.hybridization:
                 if not other.hybridization:
                     return False
-                elif not set(zip(self.hybridization, self.p_hybridization)).issuperset(zip(other.hybridization,
-                                                                                           other.p_hybridization)):
+                elif not self.zip_hybridization.issuperset(other.zip_hybridization):
                     return False
 
             return ((self.isotope == other.isotope if self.isotope else True) and
@@ -115,6 +116,14 @@ class DynQueryAtom(DynAtomAttribute):
         elif isinstance(other, (QueryAtom, Atom)):
             return self._reagent == other and self._product == other
         return False
+
+    @cached_property
+    def zip_neighbors(self):
+        return set(zip(self.neighbors, self.p_neighbors))
+
+    @cached_property
+    def zip_hybridization(self):
+        return set(zip(self.hybridization, self.p_hybridization))
 
     def _split_check_kwargs(self, kwargs):
         r, p = super()._split_check_kwargs(kwargs)

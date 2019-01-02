@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -42,6 +42,7 @@ class DynAttribute(MutableMapping):
             value = kwargs
             kwargs = ()
         self._update(value, kwargs)
+        self.__dict__.clear()
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -74,8 +75,11 @@ class DynAtomAttribute(DynAttribute):
         if key.startswith('p_'):
             if key in self._p_static:
                 raise AttributeError(f'{key} is invalid')
-            return getattr(self._product, key[2:])
-        return getattr(self._reagent, key)
+            value = getattr(self._product, key[2:])
+        else:
+            value = getattr(self._reagent, key)
+        self.__dict__[key] = value
+        return value
 
     def __getitem__(self, key):
         if key.startswith('p_'):
@@ -122,6 +126,7 @@ class DynAtom(DynAtomAttribute):
             self._reagent[key] = value
             if key in self._static:
                 self._product[key] = value
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, DynAtom):
@@ -203,6 +208,7 @@ class DynBond(DynAttribute):
             self._reagent.stereo = value
         else:
             raise AttributeError('invalid bond attribute')
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, (DynBond, Bond)):
@@ -246,9 +252,9 @@ class DynBond(DynAttribute):
         self._product._update(p, {})
 
     def __getattr__(self, key):
-        if key.startswith('p_'):
-            return getattr(self._product, key[2:])
-        return getattr(self._reagent, key)
+        value = getattr(self._product, key[2:]) if key.startswith('p_') else getattr(self._reagent, key)
+        self.__dict__[key] = value
+        return value
 
     def __getitem__(self, key):
         if key.startswith('p_'):
