@@ -34,6 +34,8 @@ class Morgan:
         """
         if not len(self):  # for empty containers
             return {}
+        elif len(self) == 1:  # optimize single atom containers
+            return dict.fromkeys(self._node, 2)
 
         params = {n: (int(node), tuple(sorted(int(edge) for edge in self._adj[n].values())))
                   for n, node in self._node.items()}
@@ -44,7 +46,6 @@ class Morgan:
 
         tries = len(self) * 4
 
-        scaf = {n: tuple(m) for n, m in self._adj.items()}
         numb = len(set(weights.values()))
         stab = 0
 
@@ -54,15 +55,17 @@ class Morgan:
             countprime = iter(primes)
 
             # weights[n] ** 2 NEED for differentiation of molecules like A-B or any other complete graphs.
-            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in scaf.items()}
+            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in self._adj.items()}
 
             weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                        for x, y in sorted(tmp.items(), key=itemgetter(1))}
 
             numb = len(set(weights.values()))
-            if numb == oldnumb:
+            if numb == len(self):  # each atom now unique
+                break
+            elif numb == oldnumb:
                 x = Counter(weights.values())
-                if x[max(x)] > 1:
+                if x[min(x)] > 1:
                     if stab == 3:
                         break
                 elif stab >= 2:
