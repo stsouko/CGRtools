@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@ class BinaryDistribution(Distribution):
         return True
 
 
-version = '3.0.7'
+version = '3.0.8'
 
 
 if platform == 'linux':

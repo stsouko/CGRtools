@@ -30,7 +30,7 @@ order_str = {1: '-', 2: '=', 3: '#', 4: ':', 5: '~', None: '.'}
 stereo_str = {1: '@', -1: '@@'}
 
 
-class StringCommon:
+class HashableSmiles:
     @cached_method
     def __bytes__(self):
         sha512(str(self).encode()).digest()
@@ -41,6 +41,8 @@ class StringCommon:
     def __eq__(self, other):
         return str(self) == str(other)
 
+
+class StringCommon:
     def _flatten(self, weights):
         node = self._node
         adj = self._adj
@@ -137,7 +139,7 @@ class StringCommon:
         return visited, edges, disconnected
 
 
-class Smiles(StringCommon):
+class Smiles(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
         smiles = []
@@ -174,7 +176,7 @@ class Smiles(StringCommon):
         return ''.join(smi)
 
 
-class SmilesCGR(StringCommon):
+class SmilesCGR(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
         smiles = []
