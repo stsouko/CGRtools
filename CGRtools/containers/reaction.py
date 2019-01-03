@@ -233,7 +233,7 @@ class ReactionContainer:
         sig = []
         for ml in (self.__reagents, self.__reactants, self.__products):
             ms = []
-            for m in sorted(ml, key=lambda x: reduce(mul, x.atoms_order)):
+            for m in sorted(ml, key=lambda x: reduce(mul, x.atoms_order) if hasattr(x, 'atoms_order') else 0):
                 ms.append('{%s}' % m if isinstance(m, (CGRContainer, QueryCGRContainer)) else str(m))
             sig.append('.'.join(ms))
         return '>'.join(sig)
