@@ -142,34 +142,54 @@ class StringCommon:
 class Smiles(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
+        return self.format()
+
+    def format(self, neighbors=False, hybridization=False) -> str:
+        """
+        format molecule as SMILES string
+
+        :param neighbors: add neighbors count of atoms. don't forget to call reset query marks before
+        :param hybridization: add hybridizations of atoms
+        """
         smiles = []
         for x in self._flatten(self.atoms_order.__getitem__):
             if isinstance(x, str):
                 smiles.append(x)
             elif isinstance(x, list):
-                smiles.append(self.__format_atom(x[0]))
+                smiles.append(self.__format_atom(x[0], neighbors, hybridization))
                 for b, c in sorted(x[1:], key=lambda e: int(e[1])):
                     smiles.append(order_str[b.order])
                     smiles.append(str(c))
             elif isinstance(x, Atom):
-                smiles.append(self.__format_atom(x))
+                smiles.append(self.__format_atom(x, neighbors, hybridization))
             else:
                 smiles.append(order_str[x.order])
         return ''.join(smiles)
 
     @staticmethod
-    def __format_atom(atom):
+    def __format_atom(atom, neighbors, hybridization):
         if atom.isotope != atom.common_isotope:
             smi = [str(atom.isotope), atom.element]
         else:
             smi = [atom.element]
+
+        if hybridization:
+            smi.append(';')
+            smi.append(hybridization_str[atom.hybridization])
+            if neighbors:
+                smi.append(str(atom.neighbors))
+            smi.append(';')
+        elif neighbors:
+            smi.append(';')
+            smi.append(str(atom.neighbors))
+            smi.append(';')
 
         if atom.charge:
             smi.append(charge_str[atom.charge])
         if atom.multiplicity:
             smi.append(multiplicity_str[atom.multiplicity])
 
-        if len(smi) != 1 or atom.element not in ('C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'):
+        if len(smi) != 1 or atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
             smi.insert(0, '[')
             smi.append(']')
 
@@ -179,6 +199,15 @@ class Smiles(StringCommon, HashableSmiles):
 class SmilesCGR(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
+        return self.format()
+
+    def format(self, neighbors=False, hybridization=False) -> str:
+        """
+        format CGR as SMIRKS string
+
+        :param neighbors: add neighbors count of atoms. don't forget to call reset query marks before
+        :param hybridization: add hybridizations of atoms
+        """
         smiles = []
         p_smiles = []
         for x in self._flatten(self.atoms_order.__getitem__):
@@ -186,7 +215,7 @@ class SmilesCGR(StringCommon, HashableSmiles):
                 smiles.append(x)
                 p_smiles.append(x)
             elif isinstance(x, list):
-                a, p_a = self.__format_atom(x[0])
+                a, p_a = self.__format_atom(x[0], neighbors, hybridization)
                 smiles.append(a)
                 p_smiles.append(p_a)
                 for b, c in sorted(x[1:], key=lambda e: int(e[1])):
@@ -195,7 +224,7 @@ class SmilesCGR(StringCommon, HashableSmiles):
                     p_smiles.append(order_str[b.p_order])
                     p_smiles.append(str(c))
             elif isinstance(x, DynAtom):
-                a, p_a = self.__format_atom(x)
+                a, p_a = self.__format_atom(x, neighbors, hybridization)
                 smiles.append(a)
                 p_smiles.append(p_a)
             else:
@@ -204,13 +233,31 @@ class SmilesCGR(StringCommon, HashableSmiles):
         return f'{"".join(smiles)}>>{"".join(p_smiles)}'
 
     @staticmethod
-    def __format_atom(atom):
+    def __format_atom(atom, neighbors, hybridization):
         if atom.isotope != atom.common_isotope:
             smi = [str(atom.isotope), atom.element]
             p_smi = [str(atom.isotope), atom.element]
         else:
             smi = [atom.element]
             p_smi = [atom.element]
+
+        if hybridization:
+            smi.append(';')
+            smi.append(hybridization_str[atom.hybridization])
+            p_smi.append(';')
+            p_smi.append(hybridization_str[atom.p_hybridization])
+            if neighbors:
+                smi.append(str(atom.neighbors))
+                p_smi.append(str(atom.p_neighbors))
+            smi.append(';')
+            p_smi.append(';')
+        elif neighbors:
+            smi.append(';')
+            p_smi.append(';')
+            smi.append(str(atom.neighbors))
+            p_smi.append(str(atom.p_neighbors))
+            smi.append(';')
+            p_smi.append(';')
 
         if atom.charge:
             smi.append(charge_str[atom.charge])

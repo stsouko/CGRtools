@@ -18,6 +18,7 @@
 #
 from abc import ABC
 from networkx import connected_components, Graph, relabel_nodes
+from networkx.classes.function import frozen
 from ..algorithms import Isomorphism, Union
 from ..cache import cached_property, cached_args_method
 from ..periodictable import elements_list
@@ -120,28 +121,35 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         """
         return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
 
-    def substructure(self, atoms, meta=False):
+    def substructure(self, atoms, meta=False, as_view=True):
         """
         create substructure containing atoms from nbunch list
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
-        :return: container with substructure
+        :param as_view : If True, the returned graph-view provides a read-only view
+        of the original structure scaffold without actually copying any data.
         """
-        s = self.subgraph(atoms).copy()
+        s = self.subgraph(atoms)
+        if as_view:
+            s.add_atom = s.add_bond = frozen  # more informative exception
+            return s
+        s = s.copy()
         if not meta:
             s.graph.clear()
         return s
 
-    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False):
+    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False, as_view=True):
         """
-        get subgraph with atoms and their neighbors
+        create substructure containing atoms and their neighbors
 
         :param atoms: list of core atoms in graph
         :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
         etc up to deep or while new nodes available.
         :param deep: number of bonds between atoms and neighbors.
         :param meta: copy metadata to each substructure
+        :param as_view : If True, the returned graph-view provides a read-only view
+        of the original graph without actually copying any data.
         """
         nodes = [set(atoms)]
         for i in range(deep):
@@ -149,8 +157,10 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
             if n in nodes:
                 break
             nodes.append(n)
-
-        return [self.substructure(a, meta) for a in nodes] if dante else self.substructure(nodes[-1], meta)
+        if dante:
+            return [self.substructure(a, meta, as_view) for a in nodes]
+        else:
+            return self.substructure(nodes[-1], meta, as_view)
 
     def connected_components(self):
         return connected_components(self)
@@ -162,7 +172,7 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         :param meta: copy metadata to each substructure
         :return: list of substructures
         """
-        return [self.substructure(c, meta) for c in connected_components(self)]
+        return [self.substructure(c, meta, False) for c in connected_components(self)]
 
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
