@@ -18,6 +18,7 @@
 #
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
+from networkx.classes.function import frozen
 from .common import BaseContainer
 from ..algorithms import Aromatize, Compose, Morgan, Smiles, SSSR, Standardize
 from ..attributes import Atom, Bond
@@ -107,6 +108,21 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, SSSR, Standardize, B
 
         self.flush_cache()
         return len(tmp)
+
+    def substructure(self, atoms, meta=False, as_view=True):
+        """
+        create substructure containing atoms from nbunch list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_view : If True, the returned graph-view provides a read-only view
+        of the original structure scaffold without actually copying any data.
+        """
+        s = super().substructure(atoms, meta, as_view)
+        if as_view:
+            s.check_valence = s.explicify_hydrogens = s.implicify_hydrogens = s.reset_query_marks = frozen
+            s.standardize = s.aromatize = frozen
+        return s
 
     @cached_args_method
     def atom_implicit_h(self, atom):

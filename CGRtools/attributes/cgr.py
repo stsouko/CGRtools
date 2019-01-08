@@ -42,7 +42,6 @@ class DynAttribute(MutableMapping):
             value = kwargs
             kwargs = ()
         self._update(value, kwargs)
-        self.__dict__.clear()
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -138,7 +137,7 @@ class DynAtom(DynAtomAttribute):
             p_value = value
         elif isinstance(value, type):
             if not issubclass(value, Element):
-                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+                raise ValueError('only CGRtools.periodictable.Element subclasses allowed')
             r, p = self._split_check_kwargs(kwargs)
             p_value = value
         else:
@@ -156,6 +155,7 @@ class DynAtom(DynAtomAttribute):
 
         self._reagent._update(value, r)
         self._product._update(p_value, p)
+        self.__dict__.clear()
 
     def __int__(self):
         return int(self._reagent) << 21 | int(self._product)
@@ -250,6 +250,7 @@ class DynBond(DynAttribute):
 
         self._reagent._update(r, {})
         self._product._update(p, {})
+        self.__dict__.clear()
 
     def __getattr__(self, key):
         value = getattr(self._product, key[2:]) if key.startswith('p_') else getattr(self._reagent, key)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .molecule import Atom, AtomAttribute
+from ..cache import cached_property
 from ..periodictable import Element, elements_classes
 
 
@@ -37,6 +38,7 @@ class QueryAtom(AtomAttribute):
         if not self._skip_checks:
             value = getattr(self, f'_{key}_check')(value)
         self._atom[key] = value
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, QueryAtom):
@@ -45,7 +47,7 @@ class QueryAtom(AtomAttribute):
             self._atom.update(kwargs)
         elif isinstance(value, Atom):
             kwargs = self._check_kwargs(kwargs)
-            self._atom.update(element=frozenset((value.element,)), charge=value.charge, stereo=value.stereo,
+            self._atom.update(element=(value.element,), charge=value.charge, stereo=value.stereo,
                               multiplicity=value.multiplicity,
                               isotope=value.isotope if value.isotope != value.common_isotope else None,
                               neighbors=(value.neighbors,) if value.neighbors else (),
@@ -54,18 +56,18 @@ class QueryAtom(AtomAttribute):
             self._atom.update(kwargs)
         elif isinstance(value, type):
             if not issubclass(value, Element):
-                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+                raise ValueError('only CGRtools.periodictable.Element subclasses allowed')
             if not {'charge', 'multiplicity', 'isotope', 'element'}.isdisjoint(kwargs):
                 raise KeyError('charge, multiplicity, isotope and element override not allowed')
             kwargs = self._check_kwargs(kwargs)
-            self._atom.update(element=frozenset((value.symbol,)) if value.symbol != 'A' else None,
+            self._atom.update(element=(value.symbol,) if value.symbol != 'A' else None,
                               charge=0, multiplicity=None, isotope=None)
             self._atom.update(kwargs)
         elif isinstance(value, Element):
             if not {'charge', 'multiplicity', 'isotope', 'element'}.isdisjoint(kwargs):
                 raise KeyError('charge, multiplicity, isotope and element override not allowed')
             kwargs = self._check_kwargs(kwargs)
-            self._atom.update(element=frozenset((value.symbol,)) if value.symbol != 'A' else None,
+            self._atom.update(element=(value.symbol,) if value.symbol != 'A' else None,
                               charge=value.charge, multiplicity=value.multiplicity,
                               isotope=value.isotope if value.isotope != value.common_isotope else None)
             self._atom.update(kwargs)
@@ -82,11 +84,12 @@ class QueryAtom(AtomAttribute):
 
             value = self._check_kwargs(value)
             self._atom.update(value)
+        self.__dict__.clear()
 
     def __eq__(self, other):
         if isinstance(other, Atom):
             return (self.charge == other.charge and
-                    (other.element in self.element if self.element else True) and
+                    (other.element in self.element_set if self.element else True) and
                     (self.isotope == other.isotope if self.isotope else True) and
                     (self.multiplicity == other.multiplicity if self.multiplicity else True) and
                     (other.neighbors in self.neighbors if self.neighbors else True) and
@@ -95,7 +98,7 @@ class QueryAtom(AtomAttribute):
             if self.element:
                 if not other.element:
                     return False
-                elif not self.element.issuperset(other.element):
+                elif not self.element_set.issuperset(other.element_set):
                     return False
             if self.neighbors:
                 if not other.neighbors:
@@ -120,26 +123,31 @@ class QueryAtom(AtomAttribute):
         return self._atom[key]
 
     def __getattr__(self, key):
-        if key == '__dict__':
-            raise AttributeError
         try:
-            return self._atom[key]
+            value = self.__dict__[key] = self._atom[key]
         except KeyError as e:
             raise AttributeError from e
+        return value
 
     def __iter__(self):
         return iter(self._atom)
 
+    @cached_property
+    def element_set(self):
+        return set(self.element)
+
     @staticmethod
     def _element_check(x):
-        if isinstance(x, str):
+        if x is None:
+            return
+        elif isinstance(x, str):
             if x == 'A':
                 return
             elif x in elements_classes:
-                return frozenset((x,))
+                return x,
         else:
-            y = frozenset(x)
-            if y == {'A'}:
+            y = tuple(x)
+            if y == ('A',):
                 return
             elif y and all(x != 'A' and x in elements_classes for x in y):
                 return y

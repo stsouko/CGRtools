@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -138,6 +138,7 @@ class Atom(AtomAttribute):
             super().__setattr__(f'_Atom__{key}', value)
         else:
             super().__setattr__(key, value)
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, Atom):
@@ -166,7 +167,7 @@ class Atom(AtomAttribute):
 
         elif isinstance(value, type):
             if not issubclass(value, Element):
-                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+                raise ValueError('only CGRtools.periodictable.Element subclasses allowed')
             if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
                 raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
@@ -208,6 +209,7 @@ class Atom(AtomAttribute):
             for k in ('stereo', 'mapping', 'x', 'y', 'z'):
                 if k in value:
                     super().__setattr__(f'_Atom__{k}', value[k])
+        self.__dict__.clear()
 
     def __int__(self):
         # 21b: 7b atom 9b isotope 3b charge 2b mult
@@ -282,11 +284,11 @@ class Atom(AtomAttribute):
         raise KeyError('unknown atom attribute')
 
     def __getattr__(self, key):
-        if key == '__dict__':
-            raise AttributeError()
-        elif key == 'element':
-            return self._atom.symbol
-        return getattr(self._atom, key)
+        if key == 'element':
+            value = self.__dict__['element'] = self._atom.symbol
+        else:
+            value = self.__dict__[key] = getattr(self._atom, key)
+        return value
 
     def __iter__(self):
         yield 'element'

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -26,13 +26,11 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 
 class CGRreactor:
     def __init__(self, template, delete_atoms=False):
-        pattern, absolute_atom, absolute_bond, conditional_atom, conditional_bond, is_cgr, to_delete = \
-            self.__prepare_template(template)
+        pattern, atom_attrs, bond_adj, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
         self.__pattern = pattern
-        self.__absolute_atom = absolute_atom
-        self.__absolute_bond = absolute_bond
-        self.__conditional_atom = conditional_atom
-        self.__conditional_bond = conditional_bond
+        self.__atom_attrs = atom_attrs
+        self.__bond_adj = bond_adj
+        self.__conditional_element = conditional_element
         self.__is_cgr = is_cgr
         self.__to_delete = delete_atoms and to_delete or set()
         self.__meta = template.meta.copy()
@@ -83,133 +81,56 @@ class CGRreactor:
         to_delete = set(reagents).difference(products)
 
         absolute_atom = defaultdict(dict)
-        conditional_atom = defaultdict(dict)
+        conditional_element = {}
 
         for n in set(products).difference(reagents):
             # if unique atoms in patch has variable properties exception is raised
-            atom = products._node[n]
-            if len(atom.element) > 1 or atom.element == ('A',) or any(len(atom[x]) > 1 for x in
-                                                                      ('charge', 'multiplicity', 'isotope')):
+            atom = products.atom(n)
+            if atom.element is None or len(atom.element) > 1:
                 raise ValueError('new atoms in patch should be static')
             elif atom.neighbors or atom.hybridization:
                 warning('neighbors and hybridization for new atoms unusable')
-            absolute_atom[n].update(element=atom.element[0], charge=atom.charge[0],
-                                    isotope=atom.isotope and atom.isotope[0] or None,
-                                    multiplicity=atom.multiplicity and atom.multiplicity[0] or None,
+            absolute_atom[n].update(element=atom.element[0], charge=atom.charge,
+                                    isotope=atom.isotope, multiplicity=atom.multiplicity,
                                     x=atom.x, y=atom.y, z=atom.z, stereo=atom.stereo)
             if is_cgr:
-                absolute_atom[n].update(p_charge=atom.p_charge[0],
-                                        p_multiplicity=atom.p_multiplicity and atom.p_multiplicity[0] or None,
+                absolute_atom[n].update(p_charge=atom.p_charge, p_multiplicity=atom.p_multiplicity,
                                         p_x=atom.p_x, p_y=atom.p_y, p_z=atom.p_z, p_stereo=atom.p_stereo)
 
         for n in set(products).intersection(reagents):
-            r_atom = reagents._node[n]
-            atom = products._node[n]
+            r_atom = reagents.atom(n)
+            atom = products.atom(n)
 
-            absolute_atom[n]['stereo'] = atom.stereo
-            if is_cgr:
-                absolute_atom[n]['p_stereo'] = atom.p_stereo
-
-            if atom.element != ('A',):
+            if atom.element:
                 if len(r_atom.element) == 1:
                     absolute_atom[n]['element'] = atom.element[0]
                 elif len(r_atom.element) != len(atom.element):
                     raise ValueError('element mapping invalid. possible A>A, E>A, A>E, [E]>A, [E]>[E]')
                 else:
-                    conditional_atom[n]['element'] = dict(zip(r_atom.element, atom.element))
-            if len(atom.isotope) == 1:
-                absolute_atom[n]['isotope'] = atom.isotope[0]
-            elif len(r_atom.isotope) != len(atom.isotope) != 0:
-                raise ValueError(f'isotope mapping invalid. possible n>1, n>n, n>0')
-            elif atom.isotope:  # mapped replace
-                conditional_atom[n]['isotope'] = dict(zip(r_atom.isotope, atom.isotope))
+                    conditional_element[n] = dict(zip(r_atom.element, atom.element))
+            if atom.isotope:
+                absolute_atom[n]['isotope'] = atom.isotope
 
-            if len(atom.charge) == 1:  # replace for fixed value
-                absolute_atom[n]['charge'] = atom.charge[0]
-                if is_cgr:
-                    absolute_atom[n]['p_charge'] = atom.p_charge[0]
-            elif len(r_atom.charge) != len(atom.charge):
-                raise ValueError(f'charge mapping invalid. possible n>1, n>n')
-            else:
-                if is_cgr:
-                    conditional_atom[n]['charge'] = dict(zip(zip(r_atom.charge, r_atom.p_charge),
-                                                         zip(atom.charge, atom.p_charge)))
-                else:
-                    conditional_atom[n]['charge'] = dict(zip(r_atom.charge, atom.charge))
-
-            if len(atom.multiplicity) == 1:  # replace for fixed value
-                absolute_atom[n]['multiplicity'] = atom.multiplicity[0]
-                if is_cgr:
-                    absolute_atom[n]['p_multiplicity'] = atom.p_multiplicity[0]
-            elif len(r_atom.multiplicity) != len(atom.multiplicity) != 0:
-                raise ValueError(f'multiplicity mapping invalid. possible n>1, n>n, n>0')
-            elif atom.multiplicity:  # mapped replace
-                if is_cgr:
-                    conditional_atom[n]['multiplicity'] = dict(zip(zip(r_atom.multiplicity, r_atom.p_multiplicity),
-                                                              zip(atom.multiplicity, atom.p_multiplicity)))
-                else:
-                    conditional_atom[n]['multiplicity'] = dict(zip(r_atom.multiplicity, atom.multiplicity))
-            # save found state if empty atom[multiplicity or charge]
+            absolute_atom[n]['charge'] = atom.charge
+            absolute_atom[n]['stereo'] = atom.stereo
+            if is_cgr:
+                absolute_atom[n]['p_charge'] = atom.p_charge
+                absolute_atom[n]['p_stereo'] = atom.p_stereo
+                if atom.multiplicity or atom.p_multiplicity:
+                    absolute_atom[n]['multiplicity'] = atom.multiplicity
+                    absolute_atom[n]['p_multiplicity'] = atom.p_multiplicity
+            elif atom.multiplicity:  # replace for fixed value
+                absolute_atom[n]['multiplicity'] = atom.multiplicity
 
         absolute_bond = defaultdict(dict)
-        conditional_bond = defaultdict(dict)
-
         for n, m, bond in products._bonds():
-            if n not in reagents or m not in reagents or n not in reagents._adj[m]:
-                if is_cgr:
-                    if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
-                        # not sequential are more common
-                        absolute_bond[n][m] = absolute_bond[m][n] = \
-                            {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
-                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                    else:
-                        raise ValueError('new bonds in patch should be static')
-                elif len(bond.order) == 1:
-                    absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
-                else:
-                    raise ValueError('new bonds in patch should be static')
+            if is_cgr:
+                absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order, 'p_order': bond.p_order,
+                                                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
             else:
-                r_bond = reagents._adj[n][m]
-                if is_cgr:
-                    if bond.order and len(bond.order) == 1 or bond.p_order and len(bond.p_order) == 1:
-                        absolute_bond[n][m] = absolute_bond[m][n] = \
-                            {'order': bond.order and bond.order[0], 'p_order': bond.p_order and bond.p_order[0],
-                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                    elif not bond.order:
-                        if not r_bond.p_order:
-                            raise ValueError('None bond not mappable')
-                        elif len(bond.p_order) != len(r_bond.p_order):
-                            raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                        conditional_bond[n][m] = conditional_bond[m][n] = \
-                            {'order': dict(zip(zip(repeat(None), r_bond.p_order),
-                                               zip(repeat(None), bond.p_order))),
-                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                    elif not bond.p_order:
-                        if not r_bond.order:
-                            raise ValueError('None bond not mappable')
-                        elif len(bond.order) != len(r_bond.order):
-                            raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                        conditional_bond[n][m] = conditional_bond[m][n] = \
-                            {'order': dict(zip(zip(r_bond.order, repeat(None)),
-                                               zip(bond.order, repeat(None)))),
-                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                    elif len(bond.order) != len(r_bond.order):
-                        raise ValueError('bond order mapping invalid. possible n>n, n>1')
-                    else:
-                        conditional_bond[n][m] = conditional_bond[m][n] = \
-                            {'order': dict(zip(zip(r_bond.order, r_bond.p_order),
-                                               zip(bond.order, bond.p_order))),
-                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
-                elif len(bond.order) == 1:
-                    absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order[0], 'stereo': bond.stereo}
-                elif len(bond.order) != len(r_bond.order):
-                    raise ValueError(f'bond order mapping invalid. possible n>n, n>1')
-                else:
-                    conditional_bond[n][m] = conditional_bond[m][n] = \
-                        {'order': dict(zip(r_bond.order, bond.order)), 'stereo': bond.stereo}
+                absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order, 'stereo': bond.stereo}
 
-        return reagents, dict(absolute_atom), dict(absolute_bond), dict(conditional_atom), dict(conditional_bond), \
-            is_cgr, to_delete
+        return reagents, dict(absolute_atom), dict(absolute_bond), conditional_element, is_cgr, to_delete
 
     def __patcher(self, structure, mapping):
         new = type(structure)()
@@ -218,24 +139,16 @@ class CGRreactor:
         atoms = {}
         new_atoms = {}
 
-        for n, atom in self.__absolute_atom.items():
+        for n, atom in self.__atom_attrs.items():
             if n in mapping:
                 n = mapping[n]
-                atoms[n] = {**structure._node[n], **atom}
+                atoms[n] = {**structure.atom(n), **atom}
             else:
                 new_atoms[n] = atom
-        for n, atom in self.__conditional_atom.items():
+        for n, element in self.__conditional_element.items():
             n = mapping[n]
             attr = atoms.setdefault(n, {})
-            r_atom = structure._node[n]
-            for k, replace in atom.items():
-                if k in ('element', 'isotope'):
-                    attr[k] = replace[r_atom[k]]
-                elif self.__is_cgr:
-                    p_k = f'p_{k}'
-                    attr[k], attr[p_k] = replace[(r_atom[k], r_atom[p_k])]
-                else:
-                    attr[k] = replace[r_atom[k]]
+            attr['element'] = element[structure.atom(n).element]
         for n, atom in atoms.items():
             new.add_atom(atom, n)
         for n in structure._node.keys() - new._node.keys() - to_delete:  # add unmatched atoms
@@ -243,40 +156,26 @@ class CGRreactor:
         for n, atom in new_atoms.items():
             mapping[n] = new.add_atom(atom)
 
-        seen_a = set()
-        for n, m_bond in self.__absolute_bond.items():
+        seen = set()
+        for n, m_bond in self.__bond_adj.items():
             n = mapping[n]
-            seen_a.add(n)
+            seen.add(n)
             for m, bond in m_bond.items():
                 m = mapping[m]
-                if m in seen_a:
+                if m in seen:
                     continue
                 new.add_bond(n, m, bond)
-        seen_c = set()
-        for n, m_bond in self.__conditional_bond.items():
-            n = mapping[n]
-            seen_c.add(n)
-            for m, bond in m_bond.items():
-                m = mapping[m]
-                if m in seen_c:
-                    continue
-                r_bond = structure._adj[n][m]
-                if self.__is_cgr:
-                    order, p_order = bond['order'][(r_bond['order'], r_bond['p_order'])]
-                    new.add_bond(n, m, {'order': order, 'p_order': p_order, 'stereo': bond['stereo']})
-                else:
-                    new.add_bond(n, m, {'order': bond['order'][r_bond['order']],
-                                        'stereo': bond['stereo']})
-        seen_matched = seen_a | seen_c
+
         for n, m_bond in structure._adj.items():
             if n in to_delete:
                 continue
             to_delete.add(n)
             for m, bond in m_bond.items():
-                if m in to_delete or n in seen_matched and m in seen_matched:
+                if m in to_delete or n in seen and m in seen:
                     continue
                 new.add_bond(n, m, bond)
 
+        # todo: calculate stereo mark based on new atom order
         return new
 
 

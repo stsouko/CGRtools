@@ -20,7 +20,7 @@ from collections import defaultdict
 from hashlib import sha512
 from itertools import count
 from ..attributes import Atom, DynAtom, QueryAtom, DynQueryAtom
-from ..cache import cached_method
+from ..cache import cached_method, cached_args_method
 
 
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
@@ -142,15 +142,31 @@ class StringCommon:
 class Smiles(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
-        return self.format()
+        return format(self)
 
-    def format(self, neighbors=False, hybridization=False) -> str:
+    @cached_args_method
+    def __format__(self, format_spec):
         """
         format molecule as SMILES string
 
-        :param neighbors: add neighbors count of atoms. don't forget to call reset query marks before
-        :param hybridization: add hybridizations of atoms
+        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
+        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
         """
+        if not format_spec:
+            neighbors = False
+            hybridization = False
+        elif format_spec == 'n':
+            neighbors = True
+            hybridization = False
+        elif format_spec == 'h':
+            neighbors = False
+            hybridization = True
+        elif format_spec in ('hn', 'nh'):
+            neighbors = True
+            hybridization = True
+        else:
+            raise ValueError('invalid format_spec')
+
         smiles = []
         for x in self._flatten(self.atoms_order.__getitem__):
             if isinstance(x, str):
@@ -199,15 +215,31 @@ class Smiles(StringCommon, HashableSmiles):
 class SmilesCGR(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
-        return self.format()
+        return format(self)
 
-    def format(self, neighbors=False, hybridization=False) -> str:
+    @cached_args_method
+    def __format__(self, format_spec):
         """
         format CGR as SMIRKS string
 
-        :param neighbors: add neighbors count of atoms. don't forget to call reset query marks before
-        :param hybridization: add hybridizations of atoms
+        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
+        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
         """
+        if not format_spec:
+            neighbors = False
+            hybridization = False
+        elif format_spec == 'n':
+            neighbors = True
+            hybridization = False
+        elif format_spec == 'h':
+            neighbors = False
+            hybridization = True
+        elif format_spec in ('hn', 'nh'):
+            neighbors = True
+            hybridization = True
+        else:
+            raise ValueError('invalid format_spec')
+
         smiles = []
         p_smiles = []
         for x in self._flatten(self.atoms_order.__getitem__):

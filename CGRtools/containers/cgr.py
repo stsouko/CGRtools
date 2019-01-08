@@ -19,6 +19,7 @@
 #
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
+from networkx.classes.function import frozen
 from .common import BaseContainer
 from ..algorithms import Morgan, SmilesCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
@@ -123,6 +124,20 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
             atom._product._neighbors = p_neighbors
             atom._product._hybridization = p_hybridization
         self.flush_cache()
+
+    def substructure(self, atoms, meta=False, as_view=True):
+        """
+        create substructure containing atoms from nbunch list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_view : If True, the returned graph-view provides a read-only view
+        of the original structure scaffold without actually copying any data.
+        """
+        s = super().substructure(atoms, meta, as_view)
+        if as_view:
+            s.reset_query_marks = frozen
+        return s
 
     def _matcher(self, other):
         """

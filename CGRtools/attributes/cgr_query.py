@@ -62,7 +62,7 @@ class DynQueryAtom(DynAtomAttribute):
             p_value = value
         elif isinstance(value, type):
             if not issubclass(value, Element):
-                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+                raise ValueError('only CGRtools.periodictable.Element subclasses allowed')
             r, p = self._split_check_kwargs(kwargs)
             p_value = value
         else:
@@ -80,6 +80,7 @@ class DynQueryAtom(DynAtomAttribute):
 
         self._reagent._update(value, r)
         self._product._update(p_value, p)
+        self.__dict__.clear()
 
     def __eq__(self, other):
         if isinstance(other, DynAtom):
@@ -89,7 +90,7 @@ class DynQueryAtom(DynAtomAttribute):
             if self.hybridization:
                 if (other.hybridization, other.p_hybridization) not in self.zip_hybridization:
                     return False
-            return ((other.element in self.element if self.element else True) and
+            return ((other.element in self.element_set if self.element else True) and
                     (self.isotope == other.isotope if self.isotope else True) and
                     self.charge == other.charge and self.p_charge == other.p_charge and
                     self.multiplicity == other.multiplicity and self.p_multiplicity == other.p_multiplicity)
@@ -97,7 +98,7 @@ class DynQueryAtom(DynAtomAttribute):
             if self.element:
                 if not other.element:
                     return False
-                elif not self.element.issuperset(other.element):
+                elif not self.element_set.issuperset(other.element_set):
                     return False
             if self.neighbors:
                 if not other.neighbors:
@@ -142,7 +143,7 @@ class DynQueryAtom(DynAtomAttribute):
 
     _factory = QueryAtom
     _static = {'element', 'isotope'}
-    _p_static = {'p_element', 'p_isotope'}
+    _p_static = {'p_element', 'p_isotope', 'p_element_set'}
 
 
 __all__ = ['DynQueryAtom']
