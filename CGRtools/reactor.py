@@ -18,7 +18,6 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import repeat
 from logging import warning
 from operator import or_
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer

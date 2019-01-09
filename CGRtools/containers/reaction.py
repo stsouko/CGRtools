@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -58,9 +58,6 @@ class MindfulList(MutableSequence):
     def __setitem__(self, key, value):
         self.__check = True
         self.__data[key] = value
-
-    def __repr__(self):
-        return '%s([%s])' % (self.__class__.__name__, ', '.join(repr(x) for x in self.__data))
 
     def __str__(self):
         return '[%s]' % ', '.join(str(x) for x in self.__data)
@@ -177,6 +174,22 @@ class ReactionContainer:
             for m in ml:
                 if hasattr(m, 'aromatize'):
                     if m.aromatize():
+                        total += 1
+        if total:
+            self.flush_cache()
+        return total
+
+    def standardize(self):
+        """
+        standardize functional groups and convert structures to aromatic form. works only for Molecules
+
+        :return: number of processed molecules
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if hasattr(m, 'standardize'):
+                    if m.standardize():
                         total += 1
         if total:
             self.flush_cache()
