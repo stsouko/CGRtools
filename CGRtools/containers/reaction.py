@@ -258,6 +258,9 @@ class ReactionContainer:
     def __hash__(self):
         return hash(str(self))
 
+    def __eq__(self, other):
+        return str(self) == str(other)
+
     def flush_cache(self):
         self.__dict__.clear()
 
