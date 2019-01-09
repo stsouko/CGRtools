@@ -73,9 +73,9 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, SSSR, Standardize, B
         explicit = defaultdict(list)
         c = 0
         for n, atom in self._node.items():
-            if atom == 'H':
+            if atom.element == 'H':
                 m = next(self.neighbors(n))
-                if self._node[m] != 'H':
+                if self._node[m].element != 'H':
                     explicit[m].append(n)
 
         for n, h in explicit.items():
@@ -100,7 +100,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, SSSR, Standardize, B
         """
         tmp = []
         for n, atom in self._node.items():
-            if atom != 'H':
+            if atom.element != 'H':
                 for _ in range(atom.get_implicit_h([x.order for x in self._adj[n].values()])):
                     tmp.append(n)
         for n in tmp:
@@ -142,8 +142,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, SSSR, Standardize, B
 
         :return: list of invalid atoms
         """
-        return [f'atom {x} has invalid valence' for x, atom in self._node.items()
-                if not atom.check_valence(self.environment(x))]
+        return [x for x, atom in self._node.items() if not atom.check_valence(self.environment(x))]
 
     def _matcher(self, other):
         """
