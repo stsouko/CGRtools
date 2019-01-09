@@ -18,11 +18,11 @@
 #
 from collections.abc import MutableSequence
 from functools import reduce
-from hashlib import sha512
 from operator import mul, or_
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
+from ..algorithms import HashableSmiles
 from ..cache import cached_method
 
 
@@ -63,9 +63,15 @@ class MindfulList(MutableSequence):
         return '[%s]' % ', '.join(str(x) for x in self.__data)
 
 
-class ReactionContainer:
-    """reaction storage. contains reagents, products and reactants lists"""
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__dict__')
+class ReactionContainer(HashableSmiles):
+    """
+    reaction storage. contains reagents, products and reactants lists.
+
+    reaction storages hashable and comparable. based on reaction unique signature (SMIRKS).
+    for reactions with query containers hash and comparison may give errors due to non-uniqueness.
+    query containers itself not support hashing and comparison.
+    """
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta')
 
     def __init__(self, reagents=None, products=None, reactants=None, meta=None):
         """
@@ -243,6 +249,9 @@ class ReactionContainer:
 
     @cached_method
     def __str__(self):
+        """
+        SMIRKS of reaction. query containers in reaction {surrounded by curly braces}
+        """
         sig = []
         for ml in (self.__reagents, self.__reactants, self.__products):
             ms = []
@@ -250,16 +259,6 @@ class ReactionContainer:
                 ms.append('{%s}' % m if isinstance(m, (CGRContainer, QueryCGRContainer)) else str(m))
             sig.append('.'.join(ms))
         return '>'.join(sig)
-
-    @cached_method
-    def __bytes__(self):
-        return sha512(str(self).encode()).digest()
-
-    def __hash__(self):
-        return hash(str(self))
-
-    def __eq__(self, other):
-        return str(self) == str(other)
 
     def flush_cache(self):
         self.__dict__.clear()

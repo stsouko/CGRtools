@@ -33,7 +33,7 @@ stereo_str = {1: '@', -1: '@@'}
 class HashableSmiles:
     @cached_method
     def __bytes__(self):
-        sha512(str(self).encode()).digest()
+        return sha512(str(self).encode()).digest()
 
     def __hash__(self):
         return hash(str(self))
@@ -514,4 +514,4 @@ class Brood:
         return self.__mother[self]
 
 
-__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR']
+__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR', 'HashableSmiles']

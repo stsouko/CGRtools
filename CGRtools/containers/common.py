@@ -31,7 +31,12 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         return [] or super().__dir__()
 
     def __getstate__(self):
-        return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
+        return {'graph': self.graph, 'node': self._node, 'adj': self._adj}
+
+    def __setstate__(self, state):
+        self.graph = state['graph']
+        self._node = state['node']
+        self._adj = state['adj']
 
     def atom(self, n):
         return self._node[n]
