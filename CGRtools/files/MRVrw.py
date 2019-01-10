@@ -282,7 +282,7 @@ class MRVwrite(CGRwrite, WithMixin):
             m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
             for k, v in data.meta.items():
-                if '\n' in v:
+                if isinstance(v, str) and '\n' in v:
                     v = f'<![CDATA[{v}]]>'
                 self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList>')
@@ -311,9 +311,9 @@ class MRVwrite(CGRwrite, WithMixin):
             self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
                              '<propertyList>')
             for k, v in data.meta.items():
-                if '\n' in v:
+                if isinstance(v, str) and '\n' in v:
                     v = f'<![CDATA[{v}]]>'
-                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
+                self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList></reaction>')
         self._file.write('</MChemicalStruct></MDocument>')
 
