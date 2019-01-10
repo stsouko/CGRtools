@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -167,7 +167,7 @@ class MRVread(CGRread, WithMixin):
                               'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
                               'charge': int(atom.get('@formalCharge', 0)),
                               'multiplicity': self.__radical_map[atom['@radical']] if '@radical' in atom else None,
-                              'map': int(atom.get('@mrvMap', 0)),
+                              'mapping': int(atom.get('@mrvMap', 0)),
                               'x': float(atom['@x3'] if '@x3' in atom else atom['@x2']),
                               'y': float(atom['@y3'] if '@y3' in atom else atom['@y2']),
                               'z': float(atom['@z3'] if '@z3' in atom else 0.)})
