@@ -71,7 +71,7 @@ class ReactionContainer(HashableSmiles):
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta')
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '_arrow')
 
     def __init__(self, reagents=None, products=None, reactants=None, meta=None):
         """
@@ -90,6 +90,7 @@ class ReactionContainer(HashableSmiles):
             self.__meta = {}
         else:
             self.__meta = dict(meta)
+        self._arrow = None
 
     def __getitem__(self, item):
         if item in ('reagents', 0):
@@ -240,12 +241,39 @@ class ReactionContainer(HashableSmiles):
         """
         return self.compose()
 
-    @cached_method
-    def depict(self):
-        pass  # todo: depict components
+    def fix_positions(self):
+        """
+        fix coordinates of molecules in reaction
+        """
+        shift_x = 0
+        for m in self.__reagents:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x += max_x + 1
+        arrow_min = shift_x
 
-    def _repr_svg_(self):
-        return self.depict()
+        if self.__reactants:
+            for m in self.__reactants:
+                max_x, max_y = self.__fix_positions(m, shift_x, 1.5)
+                shift_x += max_x + 1
+        else:
+            shift_x += 3
+        arrow_max = shift_x - 1
+
+        for m in self.__products:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x += max_x + 1
+
+        self._arrow = (arrow_min, arrow_max)
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x, shift_y):
+        min_x = min(atom.x for atom in molecule._node.values()) - shift_x
+        max_x = max(atom.x for atom in molecule._node.values()) - min_x
+        min_y = min(atom.y for atom in molecule._node.values()) - shift_y
+        for atom in molecule._node.values():
+            atom.x = atom.x - min_x
+            atom.y = atom.y - min_y
+        return max_x
 
     @cached_method
     def __str__(self):
