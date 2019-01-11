@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -336,11 +336,10 @@ class CGRread:
 
 
 class CGRwrite:
-    def __init__(self, xyz=False, fix_position=True):
+    def __init__(self, xyz=False):
         self.__xyz = xyz
-        self._fix_position = fix_position
 
-    def _convert_structure(self, g, shift=0):
+    def _convert_structure(self, g):
         if isinstance(g, CGRContainer):
             format_atom = self.__format_dyn_atom
             format_bond = self.__format_dyn_bond
@@ -352,29 +351,14 @@ class CGRwrite:
         else:
             raise TypeError('queries is read-only')
 
-        list_x, list_y = zip(*((x.x, x.y) for x in g._node.values()))
-        min_x, max_x = min(list_x), max(list_x)
-        y_shift = -(max(list_y) + min(list_y)) / 2
-        data = {'y_shift': y_shift}
-        x_shift = shift - min_x
-        if self._fix_position:
-            data.update(max_x=max_x + x_shift, min_x=shift)
-        else:
-            data.update(max_x=max_x, min_x=min_x)
-
         cgr_data, atoms, bonds = [], [], []
         renum = {}
         for n, (i, atom) in enumerate(g._node.items(), start=1):
             renum[i] = n
             cgr, symbol, isotope, charge, multiplicity = format_atom(atom, n)
             cgr_data.extend(cgr)
-
-            x, y = atom.x, atom.y
-            if self._fix_position:
-                x += x_shift
-                y += y_shift
             atoms.append({'mapping': i, 'symbol': symbol, 'isotope': isotope, 'charge': charge,
-                          'multiplicity': multiplicity, 'x': x, 'y': y, 'z': atom.z, 'id': n})
+                          'multiplicity': multiplicity, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'id': n})
 
         if stereo_map:  # wedge stereo
             for n, m, bond in g._bonds():
@@ -398,8 +382,7 @@ class CGRwrite:
                 cgr_data.extend(cgr)
                 bonds.append((n_map, m_map, order, self._stereo_map(None)))
 
-        data['structure'] = (atoms, bonds, cgr_data)
-        return data
+        return atoms, bonds, cgr_data
 
     def __format_atom(self, atom, n):
         isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)

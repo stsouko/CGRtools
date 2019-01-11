@@ -282,36 +282,32 @@ class MRVwrite(CGRwrite, WithMixin):
             m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
             for k, v in data.meta.items():
-                if isinstance(v, str) and '\n' in v:
+                if isinstance(v, str):
                     v = f'<![CDATA[{v}]]>'
                 self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList>')
-            self._file.write(self.__format_mol(*m['structure']))
+            self._file.write(self.__format_mol(*m))
             self._file.write('</molecule>')
         else:
+            if not data._arrow:
+                data.fix_positions()
+
             c = count(1)
-            s = x = 0
-            rl = len(data.reagents)
             self._file.write('<reaction>')
-            for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
+            for i, j in ((data.reagents, 'reactantList'), (data.products, 'productList'),
+                         (data.reactants, 'agentList')):
                 self._file.write(f'<{j}>')
-                for n, m in zip(c, data[i]):
-                    m = self._convert_structure(m, s)
-                    if self._fix_position:
-                        s = m['max_x'] + (3 if n == rl else 1)
-                    if n == rl:  # get last reagent right atom position
-                        x = m['max_x']
-                    elif not rl and n == 1:
-                        x = m['min_x'] - 3
-                    self._file.write('<molecule>')
-                    self._file.write(self.__format_mol(*m['structure']))
+                for n, m in zip(c, i):
+                    m = self._convert_structure(m)
+                    self._file.write(f'<molecule molID="m{n}">')
+                    self._file.write(self.__format_mol(*m))
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
 
-            self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
-                             '<propertyList>')
+            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0]:.4f}" y1="1" x2="{data._arrow[1]:.4f}" '
+                             f'y2="1"/><propertyList>')
             for k, v in data.meta.items():
-                if isinstance(v, str) and '\n' in v:
+                if isinstance(v, str):
                     v = f'<![CDATA[{v}]]>'
                 self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList></reaction>')
