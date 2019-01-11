@@ -22,7 +22,7 @@ from operator import mul, or_
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
-from ..algorithms import HashableSmiles
+from ..algorithms import HashableSmiles, DepictReaction
 from ..cache import cached_method
 
 
@@ -63,7 +63,7 @@ class MindfulList(MutableSequence):
         return '[%s]' % ', '.join(str(x) for x in self.__data)
 
 
-class ReactionContainer(HashableSmiles):
+class ReactionContainer(DepictReaction, HashableSmiles):
     """
     reaction storage. contains reagents, products and reactants lists.
 

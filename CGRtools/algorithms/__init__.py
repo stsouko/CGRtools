@@ -18,6 +18,7 @@
 #
 from .aromatics import *
 from .compose import *
+from .depict import *
 from .isomorphism import *
 from .morgan import *
 from .sssr import *
