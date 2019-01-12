@@ -122,7 +122,7 @@ class CGRreactor:
                 absolute_atom[n]['multiplicity'] = atom.multiplicity
 
         absolute_bond = defaultdict(dict)
-        for n, m, bond in products._bonds():
+        for n, m, bond in products.bonds():
             if is_cgr:
                 absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order, 'p_order': bond.p_order,
                                                              'stereo': bond.stereo, 'p_stereo': bond.p_stereo}

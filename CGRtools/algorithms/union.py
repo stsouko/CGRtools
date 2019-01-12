@@ -62,9 +62,9 @@ class Union:
         for n, a in other._node.items():
             u.add_atom(a, n)
 
-        for n, m, b in self._bonds():
+        for n, m, b in self.bonds():
             u.add_bond(n, m, b)
-        for n, m, b in other._bonds():
+        for n, m, b in other.bonds():
             u.add_bond(n, m, b)
         return u
 

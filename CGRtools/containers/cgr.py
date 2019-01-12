@@ -43,7 +43,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
             if atom._reagent != atom._product or stereo and atom.sterep != atom.p_stereo:
                 center.add(n)
 
-        for n, m, bond in self._bonds():
+        for n, m, bond in self.bonds():
             if bond.order != bond.p_order or stereo and bond.sterep != bond.p_stereo:
                 adj[n].add(m)
                 adj[m].add(n)
@@ -70,7 +70,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
             if atom._reagent != atom._product or stereo and atom.stereo != atom.p_stereo:
                 nodes.add(n)
 
-        for n, m, bond in self._bonds():
+        for n, m, bond in self.bonds():
             if bond.order != bond.p_order or stereo and bond.stereo != bond.p_stereo:
                 nodes.add(n)
                 nodes.add(m)
@@ -80,7 +80,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
     def get_center_bonds(self, stereo=False):
         """ get list of bonds of reaction center (atoms with dynamic orders or stereo).
         """
-        return [(n, m) for n, m, bond in self._bonds()
+        return [(n, m) for n, m, bond in self.bonds()
                 if bond.order != bond.p_order or stereo and bond.stereo != bond.p_stereo]
 
     def reset_query_marks(self):

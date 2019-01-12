@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -189,7 +189,7 @@ class CGRCompose(Compose):
             reagents.add_atom(atom._reagent, n)
             products.add_atom(atom._product, n)
 
-        for n, m, bond in self._bonds():
+        for n, m, bond in self.bonds():
             if bond.order:
                 reagents.add_bond(n, m, bond._reagent)
             if bond.p_order:

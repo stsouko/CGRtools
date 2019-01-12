@@ -45,7 +45,7 @@ class Depict:
             svg.append('  </g>')
 
         svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
-        for n, m, bond in self._bonds():
+        for n, m, bond in self.bonds():
             na, ma = self._node[n], self._node[m]
             nx, ny, mx, my = na.x, na.y, ma.x, ma.y
 

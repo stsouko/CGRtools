@@ -200,7 +200,10 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         if n:
             return self.substructure(n)
 
-    def _bonds(self):
+    def bonds(self):
+        """
+        iterate other all bonds
+        """
         seen = set()
         for n, m_bond in self._adj.items():
             seen.add(n)

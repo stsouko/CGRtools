@@ -28,7 +28,7 @@ class BinaryDistribution(Distribution):
         return True
 
 
-version = '3.0.9'
+version = '3.0.10'
 
 
 if platform == 'linux':

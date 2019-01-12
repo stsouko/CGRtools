@@ -361,7 +361,7 @@ class CGRwrite:
                           'multiplicity': multiplicity, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'id': n})
 
         if stereo_map:  # wedge stereo
-            for n, m, bond in g._bonds():
+            for n, m, bond in g.bonds():
                 stereo = stereo_map.get((n, m))
                 if stereo:
                     n_map, m_map = renum[n], renum[m]
@@ -376,7 +376,7 @@ class CGRwrite:
                 cgr_data.extend(cgr)
                 bonds.append((n_map, m_map, order, self._stereo_map(stereo)))
         else:
-            for n, m, bond in g._bonds():
+            for n, m, bond in g.bonds():
                 n_map, m_map = renum[n], renum[m]
                 cgr, order = format_bond(bond, n_map, m_map)
                 cgr_data.extend(cgr)
