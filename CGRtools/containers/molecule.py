@@ -153,5 +153,34 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr-cgr possible')
 
+    def __setstate__(self, state):
+        if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
+            node = {}
+            for n, atom in state['_node'].items():
+                a = node[n] = Atom()
+                a.element = atom['element']
+                a.mapping = atom['map']
+                a.x = atom['s_x']
+                a.y = atom['s_y']
+                a.z = atom['s_z']
+                if atom['s_charge']:
+                    a.charge = atom['s_charge']
+                if 's_radical' in atom:
+                    a.multiplicity = atom['s_radical']
+                if 'isotope' in atom:
+                    a.isotope = atom['isotope']
+
+            adj = defaultdict(dict)
+            seen = set()
+            for n, m_bond in state['_adj'].items():
+                seen.add(n)
+                for m, bond in m_bond.items():
+                    if m not in seen:
+                        b = adj[n][m] = adj[m][n] = Bond()
+                        b.order = bond['s_bond'] if bond['s_bond'] != 9 else 5
+
+            state = {'graph': state['_BaseContainer__meta'], 'node': node, 'adj': dict(adj)}
+        super().__setstate__(state)
+
 
 __all__ = ['MoleculeContainer']
