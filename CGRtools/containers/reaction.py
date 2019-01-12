@@ -241,6 +241,17 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         """
         return self.compose()
 
+    def calculate2d(self, force=True):
+        """
+        recalculate 2d coordinates. currently rings can be calculated badly.
+
+        :param force: ignore existing coordinates of atoms
+        """
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                m.calculate2d(force)
+        self.fix_positions()
+
     def fix_positions(self):
         """
         fix coordinates of molecules in reaction
@@ -263,6 +274,7 @@ class ReactionContainer(DepictReaction, HashableSmiles):
             max_x = self.__fix_positions(m, shift_x, 0)
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
+        self.flush_cache()
 
     @staticmethod
     def __fix_positions(molecule, shift_x, shift_y):

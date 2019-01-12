@@ -19,12 +19,12 @@
 from abc import ABC
 from networkx import connected_components, Graph, relabel_nodes
 from networkx.classes.function import frozen
-from ..algorithms import Isomorphism, SSSR, Union
+from ..algorithms import Calculate2D, Isomorphism, SSSR, Union
 from ..cache import cached_property, cached_args_method
 from ..periodictable import elements_list
 
 
-class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
+class BaseContainer(Graph, Calculate2D, Isomorphism, SSSR, Union, ABC):
     __slots__ = ('graph', '_node', '_adj')
 
     def __dir__(self):

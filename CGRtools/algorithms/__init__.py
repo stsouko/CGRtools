@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from .aromatics import *
+from .calculate2d import *
 from .compose import *
 from .depict import *
 from .isomorphism import *
