@@ -178,8 +178,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
                     if m not in seen:
                         b = adj[n][m] = adj[m][n] = Bond()
                         b.order = bond['s_bond'] if bond['s_bond'] != 9 else 5
-
-            state = {'graph': state['_BaseContainer__meta'], 'node': node, 'adj': dict(adj)}
+            state = {'meta': state['_BaseContainer__meta'], 'node': node, 'adj': dict(adj)}
         super().__setstate__(state)
 
 

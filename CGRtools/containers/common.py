@@ -31,10 +31,12 @@ class BaseContainer(Graph, Calculate2D, Isomorphism, SSSR, Union, ABC):
         return [] or super().__dir__()
 
     def __getstate__(self):
-        return {'graph': self.graph, 'node': self._node, 'adj': self._adj}
+        return {'meta': self.graph, 'node': self._node, 'adj': self._adj}
 
     def __setstate__(self, state):
-        self.graph = state['graph']
+        if 'graph' in state:  # 3.0.10 compatibility.
+            state['meta'] = state['graph']
+        self.graph = state['meta']
         self._node = state['node']
         self._adj = state['adj']
 
