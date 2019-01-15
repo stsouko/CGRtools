@@ -19,7 +19,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import count
-from io import StringIO, BytesIO, TextIOWrapper
+from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
 from logging import warning
 from pathlib import Path
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
@@ -45,16 +45,13 @@ class WithMixin:
         elif isinstance(file, Path):
             self._file = file.open(mode)
             self.__is_buffer = False
-        elif isinstance(file, StringIO) and mode in 'rw':
+        elif isinstance(file, (TextIOWrapper, StringIO)) and mode in ('r', 'w'):
             self._file = file
-        elif isinstance(file, TextIOWrapper) and mode == 'r':
-            self._file = file
-        elif isinstance(file, BytesIO) and mode == 'rb':
-            self._file = file
-        elif hasattr(file, 'read') and file.mode == mode:  # check if file is open(filename, mode)
+        elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)) and mode == 'rb':
             self._file = file
         else:
-            raise TypeError('invalid file')
+            raise TypeError('invalid file. '
+                            'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
         self.__write = mode == 'w'
 
     def close(self, force=False):
