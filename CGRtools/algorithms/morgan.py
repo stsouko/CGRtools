@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -35,10 +35,10 @@ class Morgan:
         if not len(self):  # for empty containers
             return {}
         elif len(self) == 1:  # optimize single atom containers
-            return dict.fromkeys(self._node, 2)
+            return dict.fromkeys(self, 2)
 
         params = {n: (int(node), tuple(sorted(int(edge) for edge in self._adj[n].values())))
-                  for n, node in self._node.items()}
+                  for n, node in self.atoms()}
         newlevels = {}
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))

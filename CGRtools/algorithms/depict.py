@@ -36,7 +36,7 @@ class Depict:
         radius = {}
         sup_font = .75 * font
         up_font = -.5 * font
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             tmp, radius[n] = self._render_atom(atom, colors[atom.element], font, sup_font, up_font,
                                                carbon or not bool(self._adj[n]))
             svg.extend(tmp)

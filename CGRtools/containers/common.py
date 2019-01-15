@@ -202,6 +202,12 @@ class BaseContainer(Graph, Calculate2D, Isomorphism, SSSR, Union, ABC):
         if n:
             return self.substructure(n)
 
+    def atoms(self):
+        """
+        iterate over all atoms
+        """
+        return iter(self._node.items())
+
     def bonds(self):
         """
         iterate other all bonds

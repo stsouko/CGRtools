@@ -32,7 +32,7 @@ class Standardize:
         self.reset_query_marks()
         seen = set()
         total = 0
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if n in seen:
                 continue
             for k, center in central.items():

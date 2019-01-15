@@ -39,7 +39,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         """
         center = set()
         adj = defaultdict(set)
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if atom._reagent != atom._product or stereo and atom.sterep != atom.p_stereo:
                 center.add(n)
 
@@ -66,7 +66,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
         """
         nodes = set()
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if atom._reagent != atom._product or stereo and atom.stereo != atom.p_stereo:
                 nodes.add(n)
 
@@ -87,7 +87,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         """
         set or reset hyb and neighbors marks to atoms.
         """
-        for i, atom in self._node.items():
+        for i, atom in self.atoms():
             neighbors = 0
             hybridization = 1
             p_neighbors = 0

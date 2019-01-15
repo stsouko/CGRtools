@@ -39,7 +39,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
         """
         set or reset hyb and neighbors marks to atoms.
         """
-        for i, atom in self._node.items():
+        for i, atom in self.atoms():
             neighbors = 0
             hybridization = 1
             # hybridization 1- sp3; 2- sp2; 3- sp1; 4- aromatic
@@ -72,7 +72,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
         """
         explicit = defaultdict(list)
         c = 0
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if atom.element == 'H':
                 m = next(self.neighbors(n))
                 if self._node[m].element != 'H':
@@ -99,7 +99,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
         :return: number of added atoms
         """
         tmp = []
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if atom.element != 'H':
                 for _ in range(atom.get_implicit_h([x.order for x in self._adj[n].values()])):
                     tmp.append(n)
@@ -142,7 +142,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
 
         :return: list of invalid atoms
         """
-        return [x for x, atom in self._node.items() if not atom.check_valence(self.environment(x))]
+        return [x for x, atom in self.atoms() if not atom.check_valence(self.environment(x))]
 
     def _matcher(self, other):
         """

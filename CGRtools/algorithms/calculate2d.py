@@ -70,7 +70,7 @@ class Calculate2D:
         if force:
             pos = None
         else:
-            pos = {n: (atom.x or uniform(0, .01), atom.y or uniform(0, .01)) for n, atom in self._node.items()}
+            pos = {n: (atom.x or uniform(0, .01), atom.y or uniform(0, .01)) for n, atom in self.atoms()}
 
         for n, xy in kamada_kawai_layout(self, dist=dict(dist), pos=pos, scale=scale).items():
             atom = self._node[n]

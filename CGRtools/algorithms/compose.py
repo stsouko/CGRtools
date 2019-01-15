@@ -185,7 +185,7 @@ class CGRCompose(Compose):
         reagents = mc()
         products = mc()
 
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             reagents.add_atom(atom._reagent, n)
             products.add_atom(atom._product, n)
 
