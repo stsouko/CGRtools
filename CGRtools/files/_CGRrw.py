@@ -283,8 +283,6 @@ class CGRread:
                     prepared_bonds.append((n, m, {'order': bond, 'p_order': bond}))
 
             if is_query:
-                for atom in atoms:
-                    del atom['mapping']
                 for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
                         atoms[k]['p_hybridization'] = v['hybridization']
@@ -296,8 +294,6 @@ class CGRread:
         elif is_query:
             for k, v in atom_data.items():
                 atoms[k].update(v)
-            for atom in atoms:
-                del atom['mapping']
             if bond_data:
                 for n, m, bond in bonds:
                     if n in bond_data and m in bond_data[n]:
@@ -312,6 +308,7 @@ class CGRread:
                 prepared_bonds.append((n, m, {'order': bond}))
             g = MoleculeContainer()
 
+        parsed_mapping = [x.pop('mapping') for x in atoms]
         for n, atom in enumerate(atoms):
             element = atom['element']
             if element == 'D':
@@ -323,6 +320,10 @@ class CGRread:
             elif element == '*':
                 atom['element'] = 'A'
             g.add_atom(atom, mapping[n])
+
+        if not is_query and not is_cgr:
+            for n, m in enumerate(parsed_mapping):
+                g.atom(mapping[n])._parsed_mapping = m
 
         for n, m, b in prepared_bonds:
             n_map, m_map = mapping[n], mapping[m]

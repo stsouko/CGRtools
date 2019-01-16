@@ -168,8 +168,8 @@ class DynAtom(DynAtomAttribute):
         return False
 
     _factory = Atom
-    _static = {'element', 'isotope', 'mapping'}
-    _p_static = {f'p_{x}' for x in _static}
+    _static = {'element', 'isotope'}
+    _p_static = {'p_element', 'p_isotope'}
 
 
 class DynBond(DynAttribute):
