@@ -62,18 +62,12 @@ class DynAttribute(MutableMapping):
         super().__setattr__('_reagent', state['reagent'])
         super().__setattr__('_product', state['product'])
 
-    def copy(self):
-        cls = type(self)
-        copy = cls.__new__(cls)
-        copy.__init_copy__(self._reagent.copy(), self._product.copy())
-        return copy
-
 
 class DynAtomAttribute(DynAttribute):
     def __getattr__(self, key):
-        if key.startswith('p_'):
-            if key in self._p_static:
-                raise AttributeError(f'{key} is invalid')
+        if key in self._p_static:
+            raise AttributeError(f'{key} is invalid')
+        elif key.startswith('p_'):
             value = getattr(self._product, key[2:])
         else:
             value = getattr(self._reagent, key)
@@ -81,9 +75,9 @@ class DynAtomAttribute(DynAttribute):
         return value
 
     def __getitem__(self, key):
-        if key.startswith('p_'):
-            if key in self._p_static:
-                raise KeyError(f'{key} is invalid')
+        if key in self._p_static:
+            raise KeyError(f'{key} is invalid')
+        elif key.startswith('p_'):
             return self._product[key[2:]]
         return self._reagent[key]
 
@@ -110,6 +104,12 @@ class DynAtomAttribute(DynAttribute):
             else:
                 r[k] = getattr(self._reagent, f'_{k}_check')(v)
         return r, p
+
+    def copy(self):
+        cls = type(self)
+        copy = cls.__new__(cls)
+        copy.__init_copy__(self._reagent.copy(), self._product.copy())
+        return copy
 
 
 class DynAtom(DynAtomAttribute):
@@ -180,32 +180,34 @@ class DynBond(DynAttribute):
                     raise ValueError('empty bond not allowed')
                 elif self.p_stereo:
                     raise ValueError('stereo bond not nullable')
+                if self._product is not None:
+                    super().__setattr__('_product', None)
             else:
-                value = self._reagent._order_check(value)
-            self._product.order = value
+                value = self._order_check(value)
+                if self._product is None:
+                    super().__setattr__('_product', self._factory(skip_checks=True))
+                self._product.order = value
         elif key == 'order':
             if value is None:
                 if not self.p_order:
                     raise ValueError('empty bond not allowed')
                 elif self.stereo:
                     raise ValueError('stereo bond not nullable')
+                if self._reagent is not None:
+                    super().__setattr__('_reagent', None)
             else:
-                value = self._reagent._order_check(value)
-            self._reagent.order = value
+                value = self._order_check(value)
+                if self._reagent is None:
+                    super().__setattr__('_reagent', self._factory(skip_checks=True))
+                self._reagent.order = value
         elif key == 'p_stereo':
-            if value is None:
-                if not self.p_order:
-                    raise ValueError('null-bond stereo impossible')
-            else:
-                value = self._reagent._stereo_check(value)
-            self._product.stereo = value
+            if not self.p_order:
+                raise ValueError('null-bond stereo impossible')
+            self._product.stereo = self._stereo_check(value)
         elif key == 'stereo':
-            if value is None:
-                if not self.order:
-                    raise ValueError('null-bond stereo impossible')
-            else:
-                value = self._reagent._stereo_check(value)
-            self._reagent.stereo = value
+            if not self.order:
+                raise ValueError('null-bond stereo impossible')
+            self._reagent.stereo = self._stereo_check(value)
         else:
             raise AttributeError('invalid bond attribute')
         self.__dict__.clear()
@@ -221,10 +223,16 @@ class DynBond(DynAttribute):
                     r = {'stereo': value.stereo, 'order': value.order, **r}
                     p = {'stereo': value.stereo, 'order': value.order, **p}
 
-                if not (r['order'] or p['order']):
-                    raise ValueError('empty bond not allowed')
-                if r['stereo'] and not r['order'] or p['stereo'] and not p['order']:
-                    raise ValueError('stereo bond not nullable')
+                if r['order'] is None:
+                    if p['order'] is None:
+                        raise ValueError('empty bond not allowed')
+                    if r['stereo']:
+                        raise ValueError('stereo bond not nullable')
+                    r = None
+                elif p['order'] is None:
+                    if p['stereo']:
+                        raise ValueError('stereo bond not nullable')
+                    p = None
             elif isinstance(value, DynBond):
                 r, p = value._reagent, value._product
             else:
@@ -241,34 +249,74 @@ class DynBond(DynAttribute):
                 return  # ad-hoc for add_edges_from method
 
             r, p = self._split_check_kwargs(value)
-            if not ((r.get('order', True) or p.get('order') or self.p_order) and
-                    (p.get('order', True) or r.get('order') or self.order)):
-                raise ValueError('empty bond not allowed')
-            if r.get('stereo') and (not r.get('order', True) or not self.order) or \
-                    p.get('stereo') and (not p.get('order', True) or not self.p_order):
-                raise ValueError('stereo bond not nullable')
+            if r.get('order', True) is None:
+                if p.get('order', True) is None:
+                    raise ValueError('empty bond not allowed')
+                if r.get('stereo'):
+                    raise ValueError('stereo bond not nullable')
+                r = None
+            elif p.get('order', True) is None:
+                if p.get('stereo'):
+                    raise ValueError('stereo bond not nullable')
+                p = None
 
-        self._reagent._update(r, {})
-        self._product._update(p, {})
+        if r is not None:
+            if self._reagent is None:
+                super().__setattr__('_reagent', self._factory(skip_checks=True))
+            self._reagent._update(r, {})
+        elif self._reagent is not None:
+            super().__setattr__('_reagent', None)
+
+        if p is not None:
+            if self._product is None:
+                super().__setattr__('_product', self._factory(skip_checks=True))
+            self._product._update(p, {})
+        elif self._product is not None:
+            super().__setattr__('_product', None)
         self.__dict__.clear()
 
     def __getattr__(self, key):
-        value = getattr(self._product, key[2:]) if key.startswith('p_') else getattr(self._reagent, key)
-        self.__dict__[key] = value
+        if key.startswith('p_'):
+            if self._product is None:
+                if key[2:] not in self._reagent:
+                    raise AttributeError
+                self.__dict__[key] = None
+                return
+            self.__dict__[key] = value = getattr(self._product, key[2:])
+            return value
+        elif self._reagent is None:
+            if key not in self._product:
+                raise AttributeError
+            self.__dict__[key] = None
+            return
+        self.__dict__[key] = value = getattr(self._reagent, key)
         return value
 
     def __getitem__(self, key):
         if key.startswith('p_'):
+            if self._product is None:
+                if key[2:] not in self._reagent:
+                    raise KeyError
+                return
             return self._product[key[2:]]
+        elif self._reagent is None:
+            if key not in self._product:
+                raise KeyError
+            return
         return self._reagent[key]
 
     def __contains__(self, key):
         if key.startswith('p_'):
-            return key[2:] in self._product
-        return key in self._reagent
+            key = key[2:]
+        if self._product is None:
+            return key in self._reagent
+        return key in self._product
 
     def __iter__(self):
-        return chain(self._reagent, (f'p_{x}' for x in self._product))
+        if self._reagent is not None:
+            yield from self._reagent
+        if self._product is not None:
+            yield from (f'p_{x}' for x in self._product)
 
     def __int__(self):
         return (self.order or 0) << 3 | (self.p_order or 0)
@@ -285,18 +333,27 @@ class DynBond(DynAttribute):
         r, p = {}, {}
         for k, v in kwargs.items():
             if k == 'p_order':
-                p['order'] = None if v is None else self._reagent._order_check(v)
+                p['order'] = None if v is None else self._order_check(v)
             elif k == 'order':
-                r['order'] = None if v is None else self._reagent._order_check(v)
+                r['order'] = None if v is None else self._order_check(v)
             elif k == 'p_stereo':
-                p['stereo'] = self._reagent._stereo_check(v)
+                p['stereo'] = self._stereo_check(v)
             elif k == 'stereo':
-                r['stereo'] = self._reagent._stereo_check(v)
+                r['stereo'] = self._stereo_check(v)
             else:
                 raise AttributeError('invalid bond attribute')
         return r, p
 
+    def copy(self):
+        cls = type(self)
+        copy = cls.__new__(cls)
+        copy.__init_copy__(self._reagent.copy() if self._reagent is not None else None,
+                           self._product.copy() if self._product is not None else None)
+        return copy
+
     _factory = Bond
+    _order_check = staticmethod(Bond._order_check)
+    _stereo_check = staticmethod(Bond._stereo_check)
 
 
 __all__ = ['DynAtom', 'DynBond']

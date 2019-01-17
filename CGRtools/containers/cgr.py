@@ -23,6 +23,7 @@ from networkx.classes.function import frozen
 from .common import BaseContainer
 from ..algorithms import Morgan, SmilesCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
+from ..cache import cached_property
 
 
 class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
@@ -32,19 +33,18 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
     node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
 
-    def get_centers_list(self, stereo=False):
+    @cached_property
+    def centers_list(self):
         """ get a list of lists of atoms of reaction centers
-
-        :param stereo: take into account stereo changes
         """
         center = set()
         adj = defaultdict(set)
         for n, atom in self.atoms():
-            if atom._reagent != atom._product or stereo and atom.sterep != atom.p_stereo:
+            if atom._reagent != atom._product:
                 center.add(n)
 
         for n, m, bond in self.bonds():
-            if bond.order != bond.p_order or stereo and bond.sterep != bond.p_stereo:
+            if bond._reagent != bond._product:
                 adj[n].add(m)
                 adj[m].add(n)
                 center.add(n)
@@ -62,26 +62,27 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
 
         return out
 
-    def get_center_atoms(self, stereo=False):
-        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
+    @cached_property
+    def center_atoms(self):
+        """ get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
         """
         nodes = set()
         for n, atom in self.atoms():
-            if atom._reagent != atom._product or stereo and atom.stereo != atom.p_stereo:
+            if atom._reagent != atom._product:
                 nodes.add(n)
 
         for n, m, bond in self.bonds():
-            if bond.order != bond.p_order or stereo and bond.stereo != bond.p_stereo:
+            if bond._reagent != bond._product:
                 nodes.add(n)
                 nodes.add(m)
 
         return list(nodes)
 
-    def get_center_bonds(self, stereo=False):
-        """ get list of bonds of reaction center (atoms with dynamic orders or stereo).
+    @cached_property
+    def center_bonds(self):
+        """ get list of bonds of reaction center (bonds with dynamic orders).
         """
-        return [(n, m) for n, m, bond in self.bonds()
-                if bond.order != bond.p_order or stereo and bond.stereo != bond.p_stereo]
+        return [(n, m) for n, m, bond in self.bonds() if bond._reagent != bond._product]
 
     def reset_query_marks(self):
         """
