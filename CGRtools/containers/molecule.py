@@ -130,7 +130,7 @@ class MoleculeContainer(Aromatize, Compose, Morgan, Smiles, Standardize, DepictM
 
     @cached_args_method
     def atom_explicit_h(self, atom):
-        return sum(self._node[x] == 'H' for x in self.neighbors(atom))
+        return sum(self._node[x].element == 'H' for x in self.neighbors(atom))
 
     @cached_args_method
     def atom_total_h(self, atom):
