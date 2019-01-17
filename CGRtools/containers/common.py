@@ -169,8 +169,9 @@ class BaseContainer(Graph, Calculate2D, Isomorphism, SSSR, Union, ABC):
         else:
             return self.substructure(nodes[-1], meta, as_view)
 
+    @cached_property
     def connected_components(self):
-        return connected_components(self)
+        return [list(x) for x in connected_components(self)]
 
     def split(self, meta=False):
         """

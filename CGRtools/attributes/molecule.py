@@ -115,7 +115,7 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__x', parent.x)
         super().__setattr__('_Atom__y', parent.y)
         super().__setattr__('_Atom__z', parent.z)
-        super().__setattr__('_Atom__mapping', parent.mapping)
+        super().__setattr__('_Atom__mapping', parent.parsed_mapping)
         super().__setattr__('_Atom__stereo', parent.stereo)
         super().__setattr__('_Atom__hybridization', None)
         super().__setattr__('_Atom__neighbors', None)
