@@ -130,6 +130,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
             atom._reagent._hybridization = hybridization
             atom._product._neighbors = p_neighbors
             atom._product._hybridization = p_hybridization
+            atom.__dict__.clear()  # flush cache
         self.flush_cache()
 
     def substructure(self, atoms, meta=False, as_view=True):
