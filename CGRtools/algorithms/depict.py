@@ -97,7 +97,7 @@ class DepictMolecule(Depict):
     @staticmethod
     def _render_atom(atom, color, font, sup_font, up_font, carbon):
         svg = []
-        if atom.element != 'C' or carbon or atom.charge or atom.multiplicity:
+        if atom.element != 'C' or carbon or atom.charge or atom.multiplicity or atom.isotope != atom.common_isotope:
             x_shift = -shifts[atom.element] * font
             y_shift = .35 * font
             radius = -1.5 * x_shift
