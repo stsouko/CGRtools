@@ -25,10 +25,10 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 
 class CGRreactor:
     def __init__(self, template, delete_atoms=False):
-        pattern, atom_attrs, bond_adj, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
+        pattern, atom_attrs, bond_attrs, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
         self.__pattern = pattern
         self.__atom_attrs = atom_attrs
-        self.__bond_adj = bond_adj
+        self.__bond_attrs = bond_attrs
         self.__conditional_element = conditional_element
         self.__is_cgr = is_cgr
         self.__to_delete = delete_atoms and to_delete or set()
@@ -121,15 +121,15 @@ class CGRreactor:
             elif atom.multiplicity:  # replace for fixed value
                 absolute_atom[n]['multiplicity'] = atom.multiplicity
 
-        absolute_bond = defaultdict(dict)
+        bonds = []
         for n, m, bond in products.bonds():
             if is_cgr:
-                absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order, 'p_order': bond.p_order,
-                                                             'stereo': bond.stereo, 'p_stereo': bond.p_stereo}
+                bonds.append((n, m, {'order': bond.order, 'p_order': bond.p_order,
+                                     'stereo': bond.stereo, 'p_stereo': bond.p_stereo}))
             else:
-                absolute_bond[n][m] = absolute_bond[m][n] = {'order': bond.order, 'stereo': bond.stereo}
+                bonds.append((n, m, {'order': bond.order, 'stereo': bond.stereo}))
 
-        return reagents, dict(absolute_atom), dict(absolute_bond), conditional_element, is_cgr, to_delete
+        return reagents, dict(absolute_atom), bonds, conditional_element, is_cgr, to_delete
 
     def __patcher(self, structure, mapping):
         new = type(structure)()
@@ -146,31 +146,26 @@ class CGRreactor:
                 new_atoms[n] = atom
         for n, element in self.__conditional_element.items():
             n = mapping[n]
-            attr = atoms.setdefault(n, {})
-            attr['element'] = element[structure.atom(n).element]
+            atoms[n]['element'] = element[structure.atom(n).element]
         for n, atom in atoms.items():
             new.add_atom(atom, n)
-        for n in structure._node.keys() - new._node.keys() - to_delete:  # add unmatched atoms
-            new.add_atom(structure._node[n], n)
+        for n, atom in structure.atoms():  # add unmatched atoms
+            if n not in atoms and n not in to_delete:
+                new.add_atom(atom, n)
         for n, atom in new_atoms.items():
             mapping[n] = new.add_atom(atom)
 
-        seen = set()
-        for n, m_bond in self.__bond_adj.items():
+        for n, m, bond in self.__bond_attrs:  # add patch bonds
             n = mapping[n]
-            seen.add(n)
-            for m, bond in m_bond.items():
-                m = mapping[m]
-                if m in seen:
-                    continue
-                new.add_bond(n, m, bond)
+            m = mapping[m]
+            new.add_bond(n, m, bond)
 
         for n, m_bond in structure._adj.items():
-            if n in to_delete:
+            if n in to_delete:  # atoms for removing
                 continue
             to_delete.add(n)
             for m, bond in m_bond.items():
-                if m in to_delete or n in seen and m in seen:
+                if m in to_delete or n in atoms and m in atoms:
                     continue
                 new.add_bond(n, m, bond)
 

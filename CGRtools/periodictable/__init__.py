@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -343,7 +343,7 @@ def get_element(symbol, number):
     return ElementClass
 
 
-radical_map = {1: 2, 2: 1, 3: 2, None: 0}
+radical_map = {1: 0, 2: 1, 3: 2, None: 0}
 radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
 common_isotopes = dict(zip(elements, isotopes))
 atomic_masses = dict(zip(elements, weights))
