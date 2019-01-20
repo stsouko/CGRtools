@@ -7,7 +7,7 @@ INSTALL
 
 Current DEV version:
 
-    pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
 
 or stable
 

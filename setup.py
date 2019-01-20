@@ -44,7 +44,7 @@ setup(
     version=version,
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.attributes', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.files.dll', 'CGRtools.periodictable'],
-    url='https://github.com/stsouko/CGRtools',
+    url='https://github.com/cimm-kzn/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='stsouko@live.ru',
