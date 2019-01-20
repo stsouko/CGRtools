@@ -5,6 +5,10 @@ parent = abspath('..')
 if parent not in path:
     path.insert(0, parent)
 
+author = 'Dr. Ramil Nugmanov'
+copyright = '2014-2019, Dr. Ramil Nugmanov <stsouko@live.ru>'
+version = '3.0'
+project = 'CGRtools'
 
 needs_sphinx = '1.6'
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'sphinx.ext.coverage']
@@ -21,7 +25,7 @@ todo_include_todos = False
 autoclass_content = 'both'
 
 html_theme = 'alabaster'
-html_theme_options = {'github_user': 'stsouko', 'github_repo': 'CGRtools', 'show_related': True}
+html_theme_options = {'github_user': 'cimm-kzn', 'github_repo': 'CGRtools', 'show_related': True}
 html_static_path = ['_static']
 html_show_copyright = True
 html_show_sourcelink = False
