@@ -66,7 +66,7 @@ class Isomorphism:
         get self to other substructure mapping
 
         :param limit: number of matches. if 0 return iterator for all possible; if 1 return dict or None;
-        if > 1 return list of dicts
+            if > 1 return list of dicts
         """
         i = self._matcher(other).subgraph_isomorphisms_iter()
         if limit == 1:

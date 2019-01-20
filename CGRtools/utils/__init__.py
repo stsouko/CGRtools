@@ -16,6 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+"""
+Utils for data transformation
+"""
 from importlib.util import find_spec
 
 __all__ = []

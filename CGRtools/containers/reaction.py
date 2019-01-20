@@ -18,7 +18,7 @@
 #
 from collections.abc import MutableSequence
 from functools import reduce
-from operator import mul, or_
+from operator import or_
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
@@ -293,11 +293,33 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         """
         sig = []
         for ml in (self.__reagents, self.__reactants, self.__products):
-            ms = []
-            for m in sorted(ml, key=lambda x: reduce(mul, x.atoms_order) if hasattr(x, 'atoms_order') else 0):
-                ms.append('{%s}' % m if isinstance(m, (CGRContainer, QueryCGRContainer)) else str(m))
-            sig.append('.'.join(ms))
+            sig.append(self.__get_smiles(ml) if ml else '')
         return '>'.join(sig)
+
+    @staticmethod
+    def __get_smiles(molecules):
+        smiles = []
+        union = MoleculeContainer()  # need for whole atoms ordering
+        queries = []
+        atoms = {}
+        for m in molecules:
+            if isinstance(m, (MoleculeContainer, CGRContainer)):
+                union._node.update(m._node)
+                union._adj.update(m._adj)
+                atoms.update(dict.fromkeys(m, m))
+            elif isinstance(m, QueryCGRContainer):  # queries added as is without ordering
+                queries.append('{%s}' % m)
+            else:
+                queries.append(str(m))
+
+        order_atoms = set(atoms)
+        order = union.atoms_order  # whole atoms order
+        while order_atoms:
+            next_molecule = atoms[min(order_atoms, key=order.__getitem__)]  # get molecule with smallest atom
+            order_atoms.difference_update(next_molecule)
+            smiles.append('{%s}' % next_molecule if isinstance(next_molecule, CGRContainer) else str(next_molecule))
+        smiles.extend(queries)  # queries always in the end of list
+        return '.'.join(smiles)
 
     def flush_cache(self):
         self.__dict__.clear()

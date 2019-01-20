@@ -27,6 +27,12 @@ from ..periodictable import elements_list
 class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
     __slots__ = ('graph', '_node', '_adj')
 
+    def __init__(self, *args, **kwargs):
+        """
+        Empty data object initialization or conversion from another object type
+        """
+        super().__init__(*args, **kwargs)
+
     def __dir__(self):
         return [] or super().__dir__()
 
@@ -134,8 +140,8 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
-        :param as_view : If True, the returned graph-view provides a read-only view
-        of the original structure scaffold without actually copying any data.
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original structure scaffold without actually copying any data.
         """
         s = self.subgraph(atoms)
         if as_view:
@@ -152,11 +158,11 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
 
         :param atoms: list of core atoms in graph
         :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
-        etc up to deep or while new nodes available.
-        :param deep: number of bonds between atoms and neighbors.
+            etc up to deep or while new nodes available
+        :param deep: number of bonds between atoms and neighbors
         :param meta: copy metadata to each substructure
-        :param as_view : If True, the returned graph-view provides a read-only view
-        of the original graph without actually copying any data.
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original graph without actually copying any data
         """
         nodes = [set(atoms)]
         for i in range(deep):

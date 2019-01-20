@@ -166,9 +166,11 @@ class Smiles(StringCommon, HashableSmiles):
             hybridization = True
         else:
             raise ValueError('invalid format_spec')
+        return self._format_string(self.atoms_order.__getitem__, neighbors, hybridization)
 
+    def _format_string(self, order, neighbors, hybridization):
         smiles = []
-        for x in self._flatten(self.atoms_order.__getitem__):
+        for x in self._flatten(order):
             if isinstance(x, str):
                 smiles.append(x)
             elif isinstance(x, list):
@@ -239,10 +241,12 @@ class SmilesCGR(StringCommon, HashableSmiles):
             hybridization = True
         else:
             raise ValueError('invalid format_spec')
+        return self._format_string(self.atoms_order.__getitem__, neighbors, hybridization)
 
+    def _format_string(self, order, neighbors, hybridization):
         smiles = []
         p_smiles = []
-        for x in self._flatten(self.atoms_order.__getitem__):
+        for x in self._flatten(order):
             if isinstance(x, str):
                 smiles.append(x)
                 p_smiles.append(x)

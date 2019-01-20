@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 """
-contains periodic table of elements classes
+Contains periodic table of elements classes
 """
 from operator import ge, le, gt, lt
 from .data import *
@@ -368,4 +368,4 @@ elements_classes['A'] = get_element('A', 0)
 del elements
 
 locals().update(PeriodicMeta.classes)
-__all__ = ['Element'] + list(PeriodicMeta.classes)
+__all__ = list(PeriodicMeta.classes)

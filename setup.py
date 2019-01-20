@@ -28,7 +28,7 @@ class BinaryDistribution(Distribution):
         return True
 
 
-version = '3.0.12'
+version = '3.0.13'
 
 
 if platform == 'linux':
@@ -50,7 +50,7 @@ setup(
     author_email='stsouko@live.ru',
     python_requires='>=3.6.1',
     install_requires=['networkx>=2.3rc1.dev,<2.4', 'lxml>=4.1.1,<4.3'],
-    extras_require={'smiles': ['coho>=0.3,<0.4']},
+    extras_require={'smiles': ['coho>=0.4,<0.5']},
     dependency_links=['git+https://github.com/networkx/networkx.git@master#egg=networkx-2.3rc1.dev'],
     package_data={'CGRtools.files.dll': INCHI},
     zip_safe=False,
@@ -72,7 +72,6 @@ setup(
                                       'version': ('setup.py', version), 'source_dir': ('setup.py', 'doc'),
                                       'build_dir':  ('setup.py', 'build/doc'),
                                       'all_files': ('setup.py', True),
-                                      'copyright': ('setup.py', 'Dr. Ramil Nugmanov <stsouko@live.ru>')},
-                     'easy_install': {'allow_hosts': ('setup.py', 'github.com, pypi.python.org')}},
+                                      'copyright': ('setup.py', 'Dr. Ramil Nugmanov <stsouko@live.ru>')}},
     distclass=BinaryDistribution
 )

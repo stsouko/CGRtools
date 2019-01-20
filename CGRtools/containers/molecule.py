@@ -115,8 +115,8 @@ class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standar
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
-        :param as_view : If True, the returned graph-view provides a read-only view
-        of the original structure scaffold without actually copying any data.
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original structure scaffold without actually copying any data.
         """
         s = super().substructure(atoms, meta, as_view)
         if as_view:
@@ -146,6 +146,8 @@ class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standar
 
     def _matcher(self, other):
         """
+        return VF2 GraphMatcher
+
         MoleculeContainer < MoleculeContainer
         MoleculeContainer < CGRContainer
         """
