@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -143,15 +143,12 @@ class RDFwrite(MOLwrite, WithMixin):
             self._file.write(self._format_mol(*m['structure']))
             self._file.write('M  END\n')
         else:
-            self._file.write(f'$RFMT\n$RXN\n\n\n\n{len(data.reagents):3d}{len(data.products):3d}\n')
-            s = 0
-            rl = len(data.reagents)
-            for n, m in enumerate(chain(data.reagents, data.products), start=1):
-                m = self._convert_structure(m, s)
-                if self._fix_position:
-                    s = m['max_x'] + (3 if n == rl else 1)
+            self._file.write('$RFMT\n$RXN\n\n\n\n'
+                             f'{len(data.reagents):3d}{len(data.products):3d}{len(data.reactants):3d}\n')
+            for m in chain(data.reagents, data.products, data.reactants):
+                m = self._convert_structure(m)
                 self._file.write('$MOL\n')
-                self._file.write(self._format_mol(*m['structure']))
+                self._file.write(self._format_mol(*m))
                 self._file.write('M  END\n')
 
         for k, v in data.meta.items():

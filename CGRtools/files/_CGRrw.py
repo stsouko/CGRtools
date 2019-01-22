@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import count
-from io import StringIO, BytesIO, TextIOWrapper
+from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
 from logging import warning
 from pathlib import Path
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
@@ -45,16 +45,13 @@ class WithMixin:
         elif isinstance(file, Path):
             self._file = file.open(mode)
             self.__is_buffer = False
-        elif isinstance(file, StringIO) and mode in 'rw':
+        elif isinstance(file, (TextIOWrapper, StringIO)) and mode in ('r', 'w'):
             self._file = file
-        elif isinstance(file, TextIOWrapper) and mode == 'r':
-            self._file = file
-        elif isinstance(file, BytesIO) and mode == 'rb':
-            self._file = file
-        elif hasattr(file, 'read') and file.mode == mode:  # check if file is open(filename, mode)
+        elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)) and mode == 'rb':
             self._file = file
         else:
-            raise TypeError('invalid file')
+            raise TypeError('invalid file. '
+                            'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
         self.__write = mode == 'w'
 
     def close(self, force=False):
@@ -286,8 +283,6 @@ class CGRread:
                     prepared_bonds.append((n, m, {'order': bond, 'p_order': bond}))
 
             if is_query:
-                for atom in atoms:
-                    del atom['mapping']
                 for k, v in atom_data.items():
                     if 'hybridization' in v and 'p_hybridization' not in v:
                         atoms[k]['p_hybridization'] = v['hybridization']
@@ -299,8 +294,6 @@ class CGRread:
         elif is_query:
             for k, v in atom_data.items():
                 atoms[k].update(v)
-            for atom in atoms:
-                del atom['mapping']
             if bond_data:
                 for n, m, bond in bonds:
                     if n in bond_data and m in bond_data[n]:
@@ -315,6 +308,7 @@ class CGRread:
                 prepared_bonds.append((n, m, {'order': bond}))
             g = MoleculeContainer()
 
+        parsed_mapping = [x.pop('mapping') for x in atoms]
         for n, atom in enumerate(atoms):
             element = atom['element']
             if element == 'D':
@@ -327,6 +321,10 @@ class CGRread:
                 atom['element'] = 'A'
             g.add_atom(atom, mapping[n])
 
+        if not is_query and not is_cgr:
+            for n, m in enumerate(parsed_mapping):
+                g.atom(mapping[n])._parsed_mapping = m
+
         for n, m, b in prepared_bonds:
             n_map, m_map = mapping[n], mapping[m]
             g.add_bond(n_map, m_map, b)
@@ -336,11 +334,10 @@ class CGRread:
 
 
 class CGRwrite:
-    def __init__(self, xyz=False, fix_position=True):
+    def __init__(self, xyz=False):
         self.__xyz = xyz
-        self._fix_position = fix_position
 
-    def _convert_structure(self, g, shift=0):
+    def _convert_structure(self, g):
         if isinstance(g, CGRContainer):
             format_atom = self.__format_dyn_atom
             format_bond = self.__format_dyn_bond
@@ -352,32 +349,17 @@ class CGRwrite:
         else:
             raise TypeError('queries is read-only')
 
-        list_x, list_y = zip(*((x.x, x.y) for x in g._node.values()))
-        min_x, max_x = min(list_x), max(list_x)
-        y_shift = -(max(list_y) + min(list_y)) / 2
-        data = {'y_shift': y_shift}
-        x_shift = shift - min_x
-        if self._fix_position:
-            data.update(max_x=max_x + x_shift, min_x=shift)
-        else:
-            data.update(max_x=max_x, min_x=min_x)
-
         cgr_data, atoms, bonds = [], [], []
         renum = {}
         for n, (i, atom) in enumerate(g._node.items(), start=1):
             renum[i] = n
             cgr, symbol, isotope, charge, multiplicity = format_atom(atom, n)
             cgr_data.extend(cgr)
-
-            x, y = atom.x, atom.y
-            if self._fix_position:
-                x += x_shift
-                y += y_shift
             atoms.append({'mapping': i, 'symbol': symbol, 'isotope': isotope, 'charge': charge,
-                          'multiplicity': multiplicity, 'x': x, 'y': y, 'z': atom.z, 'id': n})
+                          'multiplicity': multiplicity, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'id': n})
 
         if stereo_map:  # wedge stereo
-            for n, m, bond in g._bonds():
+            for n, m, bond in g.bonds():
                 stereo = stereo_map.get((n, m))
                 if stereo:
                     n_map, m_map = renum[n], renum[m]
@@ -392,14 +374,13 @@ class CGRwrite:
                 cgr_data.extend(cgr)
                 bonds.append((n_map, m_map, order, self._stereo_map(stereo)))
         else:
-            for n, m, bond in g._bonds():
+            for n, m, bond in g.bonds():
                 n_map, m_map = renum[n], renum[m]
                 cgr, order = format_bond(bond, n_map, m_map)
                 cgr_data.extend(cgr)
                 bonds.append((n_map, m_map, order, self._stereo_map(None)))
 
-        data['structure'] = (atoms, bonds, cgr_data)
-        return data
+        return atoms, bonds, cgr_data
 
     def __format_atom(self, atom, n):
         isotope = self._isotope_map(atom.isotope if atom.isotope != atom.common_isotope else None, n)

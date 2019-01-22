@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,7 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+"""
+Data classes
+"""
 from .cgr import *
 from .molecule import *
 from .query import *
 from .reaction import *
+
+
+__all__ = [x for x in locals() if x.endswith('Container')]

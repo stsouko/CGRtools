@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,11 +18,11 @@
 #
 from collections.abc import MutableSequence
 from functools import reduce
-from hashlib import sha512
-from operator import mul, or_
+from operator import or_
 from .cgr import CGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
+from ..algorithms import HashableSmiles, DepictReaction
 from ..cache import cached_method
 
 
@@ -59,16 +59,19 @@ class MindfulList(MutableSequence):
         self.__check = True
         self.__data[key] = value
 
-    def __repr__(self):
-        return '%s([%s])' % (self.__class__.__name__, ', '.join(repr(x) for x in self.__data))
-
     def __str__(self):
         return '[%s]' % ', '.join(str(x) for x in self.__data)
 
 
-class ReactionContainer:
-    """reaction storage. contains reagents, products and reactants lists"""
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__dict__')
+class ReactionContainer(DepictReaction, HashableSmiles):
+    """
+    reaction storage. contains reagents, products and reactants lists.
+
+    reaction storages hashable and comparable. based on reaction unique signature (SMIRKS).
+    for reactions with query containers hash and comparison may give errors due to non-uniqueness.
+    query containers itself not support hashing and comparison.
+    """
+    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '_arrow')
 
     def __init__(self, reagents=None, products=None, reactants=None, meta=None):
         """
@@ -87,6 +90,7 @@ class ReactionContainer:
             self.__meta = {}
         else:
             self.__meta = dict(meta)
+        self._arrow = None
 
     def __getitem__(self, item):
         if item in ('reagents', 0):
@@ -182,6 +186,22 @@ class ReactionContainer:
             self.flush_cache()
         return total
 
+    def standardize(self):
+        """
+        standardize functional groups and convert structures to aromatic form. works only for Molecules
+
+        :return: number of processed molecules
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if hasattr(m, 'standardize'):
+                    if m.standardize():
+                        total += 1
+        if total:
+            self.flush_cache()
+        return total
+
     def reset_query_marks(self):
         """
         set or reset hyb and neighbors marks to atoms.
@@ -221,29 +241,85 @@ class ReactionContainer:
         """
         return self.compose()
 
-    @cached_method
-    def depict(self):
-        pass  # todo: depict components
+    def calculate2d(self, force=True):
+        """
+        recalculate 2d coordinates. currently rings can be calculated badly.
 
-    def _repr_svg_(self):
-        return self.depict()
+        :param force: ignore existing coordinates of atoms
+        """
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                m.calculate2d(force)
+        self.fix_positions()
+
+    def fix_positions(self):
+        """
+        fix coordinates of molecules in reaction
+        """
+        shift_x = 0
+        for m in self.__reagents:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x = max_x + 1
+        arrow_min = shift_x
+
+        if self.__reactants:
+            for m in self.__reactants:
+                max_x = self.__fix_positions(m, shift_x, 1.5)
+                shift_x = max_x + 1
+        else:
+            shift_x += 3
+        arrow_max = shift_x - 1
+
+        for m in self.__products:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x = max_x + 1
+        self._arrow = (arrow_min, arrow_max)
+        self.flush_cache()
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x, shift_y):
+        min_x = min(atom.x for atom in molecule._node.values()) - shift_x
+        max_x = max(atom.x for atom in molecule._node.values()) - min_x
+        min_y = min(atom.y for atom in molecule._node.values()) - shift_y
+        for atom in molecule._node.values():
+            atom.x = atom.x - min_x
+            atom.y = atom.y - min_y
+        return max_x
 
     @cached_method
     def __str__(self):
+        """
+        SMIRKS of reaction. query containers in reaction {surrounded by curly braces}
+        """
         sig = []
         for ml in (self.__reagents, self.__reactants, self.__products):
-            ms = []
-            for m in sorted(ml, key=lambda x: reduce(mul, x.atoms_order)):
-                ms.append('{%s}' % m if isinstance(m, (CGRContainer, QueryCGRContainer)) else str(m))
-            sig.append('.'.join(ms))
+            sig.append(self.__get_smiles(ml) if ml else '')
         return '>'.join(sig)
 
-    @cached_method
-    def __bytes__(self):
-        return sha512(str(self).encode()).digest()
+    @staticmethod
+    def __get_smiles(molecules):
+        smiles = []
+        union = MoleculeContainer()  # need for whole atoms ordering
+        queries = []
+        atoms = {}
+        for m in molecules:
+            if isinstance(m, (MoleculeContainer, CGRContainer)):
+                union._node.update(m._node)
+                union._adj.update(m._adj)
+                atoms.update(dict.fromkeys(m, m))
+            elif isinstance(m, QueryCGRContainer):  # queries added as is without ordering
+                queries.append('{%s}' % m)
+            else:
+                queries.append(str(m))
 
-    def __hash__(self):
-        return hash(str(self))
+        order_atoms = set(atoms)
+        order = union.atoms_order  # whole atoms order
+        while order_atoms:
+            next_molecule = atoms[min(order_atoms, key=order.__getitem__)]  # get molecule with smallest atom
+            order_atoms.difference_update(next_molecule)
+            smiles.append('{%s}' % next_molecule if isinstance(next_molecule, CGRContainer) else str(next_molecule))
+        smiles.extend(queries)  # queries always in the end of list
+        return '.'.join(smiles)
 
     def flush_cache(self):
         self.__dict__.clear()

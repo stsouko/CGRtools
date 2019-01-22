@@ -19,31 +19,32 @@
 #
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
+from networkx.classes.function import frozen
 from .common import BaseContainer
-from ..algorithms import Morgan, SMILES_CGR, CGRCompose
+from ..algorithms import Morgan, SmilesCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
+from ..cache import cached_property
 
 
-class CGRContainer(CGRCompose, Morgan, SMILES_CGR, BaseContainer):
+class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """
     node_attr_dict_factory = DynAtom
     edge_attr_dict_factory = DynBond
 
-    def get_centers_list(self, stereo=False):
+    @cached_property
+    def centers_list(self):
         """ get a list of lists of atoms of reaction centers
-
-        :param stereo: take into account stereo changes
         """
         center = set()
         adj = defaultdict(set)
-        for n, a in self._node.items():
-            if a._reagent != a._product or stereo and a.sterep != a.p_stereo:
+        for n, atom in self.atoms():
+            if atom._reagent != atom._product:
                 center.add(n)
 
-        for n, m, b in self._bonds():
-            if b._reagent != b._product or stereo and b.sterep != b.p_stereo:
+        for n, m, bond in self.bonds():
+            if bond._reagent != bond._product:
                 adj[n].add(m)
                 adj[m].add(n)
                 center.add(n)
@@ -61,26 +62,33 @@ class CGRContainer(CGRCompose, Morgan, SMILES_CGR, BaseContainer):
 
         return out
 
-    def get_center_atoms(self, stereo=False):
-        """ get list of atoms of reaction center (atoms with dynamic: bonds, stereo, charges, radicals).
+    @cached_property
+    def center_atoms(self):
+        """ get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
         """
         nodes = set()
-        for n, atom in self._node.items():
-            if atom._reagent != atom._product or stereo and atom.stereo != atom.p_stereo:
+        for n, atom in self.atoms():
+            if atom._reagent != atom._product:
                 nodes.add(n)
 
-        for n, m, bond in self._bonds():
-            if bond._reagent != bond._product or stereo and bond.stereo != bond.p_stereo:
+        for n, m, bond in self.bonds():
+            if bond._reagent != bond._product:
                 nodes.add(n)
                 nodes.add(m)
 
         return list(nodes)
 
+    @cached_property
+    def center_bonds(self):
+        """ get list of bonds of reaction center (bonds with dynamic orders).
+        """
+        return [(n, m) for n, m, bond in self.bonds() if bond._reagent != bond._product]
+
     def reset_query_marks(self):
         """
         set or reset hyb and neighbors marks to atoms.
         """
-        for i, atom in self._node.items():
+        for i, atom in self.atoms():
             neighbors = 0
             hybridization = 1
             p_neighbors = 0
@@ -122,7 +130,22 @@ class CGRContainer(CGRCompose, Morgan, SMILES_CGR, BaseContainer):
             atom._reagent._hybridization = hybridization
             atom._product._neighbors = p_neighbors
             atom._product._hybridization = p_hybridization
+            atom.__dict__.clear()  # flush cache
         self.flush_cache()
+
+    def substructure(self, atoms, meta=False, as_view=True):
+        """
+        create substructure containing atoms from nbunch list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original structure scaffold without actually copying any data
+        """
+        s = super().substructure(atoms, meta, as_view)
+        if as_view:
+            s.reset_query_marks = frozen
+        return s
 
     def _matcher(self, other):
         """

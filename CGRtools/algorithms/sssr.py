@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -35,7 +35,7 @@ class SSSR:
 
         :return: list of lists of rings nodes
         """
-        n_sssr = self.size() - len(self) + number_connected_components(self)
+        n_sssr = self.bonds_count - len(self) + number_connected_components(self)
         if not n_sssr:
             return []
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 """
-contains periodic table of elements classes
+Contains periodic table of elements classes
 """
 from operator import ge, le, gt, lt
 from .data import *
@@ -343,7 +343,7 @@ def get_element(symbol, number):
     return ElementClass
 
 
-radical_map = {1: 2, 2: 1, 3: 2, None: 0}
+radical_map = {1: 0, 2: 1, 3: 2, None: 0}
 radical_unmap = {None: None, 0: None, 1: 2, 2: 3}
 common_isotopes = dict(zip(elements, isotopes))
 atomic_masses = dict(zip(elements, weights))
@@ -368,4 +368,4 @@ elements_classes['A'] = get_element('A', 0)
 del elements
 
 locals().update(PeriodicMeta.classes)
-__all__ = ['Element'] + list(PeriodicMeta.classes)
+__all__ = list(PeriodicMeta.classes)

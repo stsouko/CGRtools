@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,14 +16,15 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .aromatics import *
-from .calculate2d import *
-from .compose import *
-from .depict import *
-from .isomorphism import *
-from .morgan import *
-from .sssr import *
-from .standardize import *
-from .stereo import *
-from .strings import *
-from .union import *
+"""
+Utils for data transformation
+"""
+from importlib.util import find_spec
+
+__all__ = []
+
+
+if find_spec('rdkit'):
+    from . import rdkit
+    from .rdkit import *
+    __all__.extend(rdkit.__all__)

@@ -57,14 +57,14 @@ class Union:
         else:
             u = type(self)()
 
-        for n, a in self._node.items():
+        for n, a in self.atoms():
             u.add_atom(a, n)
-        for n, a in other._node.items():
+        for n, a in other.atoms():
             u.add_atom(a, n)
 
-        for n, m, b in self._bonds():
+        for n, m, b in self.bonds():
             u.add_bond(n, m, b)
-        for n, m, b in other._bonds():
+        for n, m, b in other.bonds():
             u.add_bond(n, m, b)
         return u
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -115,7 +115,7 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__x', parent.x)
         super().__setattr__('_Atom__y', parent.y)
         super().__setattr__('_Atom__z', parent.z)
-        super().__setattr__('_Atom__mapping', parent.mapping)
+        super().__setattr__('_Atom__mapping', parent.parsed_mapping)
         super().__setattr__('_Atom__stereo', parent.stereo)
         super().__setattr__('_Atom__hybridization', None)
         super().__setattr__('_Atom__neighbors', None)
@@ -134,10 +134,13 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__neighbors', value)
         elif key == '_hybridization':
             super().__setattr__('_Atom__hybridization', value)
+        elif key == '_parsed_mapping':
+            super().__setattr__('_Atom__mapping', value)
         elif self._skip_checks:
             super().__setattr__(f'_Atom__{key}', value)
         else:
             super().__setattr__(key, value)
+        self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, Atom):
@@ -148,7 +151,7 @@ class Atom(AtomAttribute):
             super().__setattr__('_Atom__x', value.x)
             super().__setattr__('_Atom__y', value.y)
             super().__setattr__('_Atom__z', value.z)
-            super().__setattr__('_Atom__mapping', value.mapping)
+            super().__setattr__('_Atom__mapping', value.parsed_mapping)
             super().__setattr__('_Atom__stereo', value.stereo)
             if 'element' in kwargs:
                 super().__setattr__('_atom',
@@ -160,13 +163,13 @@ class Atom(AtomAttribute):
                                     type(self._atom)(charge=kwargs.get('charge', self.charge),
                                                      multiplicity=kwargs.get('multiplicity', self.multiplicity),
                                                      isotope=kwargs.get('isotope', self.isotope)))
-            for k in ('stereo', 'mapping', 'x', 'y', 'z'):
+            for k in ('stereo', 'x', 'y', 'z'):
                 if k in kwargs:
                     super().__setattr__(f'_Atom__{k}', kwargs[k])
 
         elif isinstance(value, type):
             if not issubclass(value, Element):
-                ValueError('only CGRtools.periodictable.Element subclasses allowed')
+                raise ValueError('only CGRtools.periodictable.Element subclasses allowed')
             if not {'element', 'isotope', 'charge', 'multiplicity'}.isdisjoint(kwargs):
                 raise KeyError('element override not allowed')
             kwargs = self._check_kwargs(kwargs)
@@ -190,8 +193,8 @@ class Atom(AtomAttribute):
             value.update(kwargs)
             if not value:  # ad-hoc for add_nodes_from method
                 return
-            if not {'neighbors', 'hybridization'}.isdisjoint(kwargs):
-                raise KeyError('neighbors and hybridization change not allowed')
+            if not {'neighbors', 'hybridization', 'parsed_mapping'}.isdisjoint(kwargs):
+                raise KeyError('neighbors hybridization and parsed_mapping change not allowed')
 
             value = self._check_kwargs(value)
             if 'element' in value:
@@ -205,9 +208,10 @@ class Atom(AtomAttribute):
                                                      multiplicity=value.get('multiplicity', self.multiplicity),
                                                      isotope=value.get('isotope', self.isotope)))
 
-            for k in ('stereo', 'mapping', 'x', 'y', 'z'):
+            for k in ('stereo', 'x', 'y', 'z'):
                 if k in value:
                     super().__setattr__(f'_Atom__{k}', value[k])
+        self.__dict__.clear()
 
     def __int__(self):
         # 21b: 7b atom 9b isotope 3b charge 2b mult
@@ -246,14 +250,6 @@ class Atom(AtomAttribute):
         super().__setattr__('_Atom__z', self._z_check(value))
 
     @property
-    def mapping(self):
-        return self.__mapping
-
-    @mapping.setter
-    def mapping(self, value):
-        super().__setattr__('_Atom__mapping', self._mapping_check(value))
-
-    @property
     def stereo(self):
         return self.__stereo
 
@@ -269,6 +265,10 @@ class Atom(AtomAttribute):
     def hybridization(self):
         return self.__hybridization
 
+    @property
+    def parsed_mapping(self):
+        return self.__mapping
+
     def __getitem__(self, key):
         """
         dict like access to atom's attrs
@@ -277,16 +277,16 @@ class Atom(AtomAttribute):
             return self._atom.symbol
         elif key in ('isotope', 'charge', 'multiplicity'):
             return getattr(self._atom, key)
-        elif key in ('stereo', 'mapping', 'x', 'y', 'z', 'neighbors', 'hybridization'):
+        elif key in ('stereo', 'x', 'y', 'z'):
             return getattr(self, key)
         raise KeyError('unknown atom attribute')
 
     def __getattr__(self, key):
-        if key == '__dict__':
-            raise AttributeError()
-        elif key == 'element':
-            return self._atom.symbol
-        return getattr(self._atom, key)
+        if key == 'element':
+            value = self.__dict__['element'] = self._atom.symbol
+        else:
+            value = self.__dict__[key] = getattr(self._atom, key)
+        return value
 
     def __iter__(self):
         yield 'element'
@@ -296,8 +296,6 @@ class Atom(AtomAttribute):
             yield 'charge'
         if self.multiplicity:
             yield 'multiplicity'
-        if self.mapping is not None:
-            yield 'mapping'
         if self.stereo is not None:
             yield 'stereo'
         for k in ('x', 'y', 'z'):
@@ -325,14 +323,6 @@ class Atom(AtomAttribute):
         if x != 'A' and x in elements_classes:
             return elements_classes[x]
         raise ValueError('invalid atom symbol')
-
-    @staticmethod
-    def _mapping_check(x):
-        if x is None:
-            return
-        elif isinstance(x, int) and 0 <= x <= 999:
-            return x
-        raise ValueError('mapping can be in range 0-999')
 
 
 class Bond(Attribute):

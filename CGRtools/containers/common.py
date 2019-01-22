@@ -18,19 +18,33 @@
 #
 from abc import ABC
 from networkx import connected_components, Graph, relabel_nodes
-from ..algorithms import Isomorphism, Union
+from networkx.classes.function import frozen
+from ..algorithms import Isomorphism, SSSR, Union
 from ..cache import cached_property, cached_args_method
 from ..periodictable import elements_list
 
 
-class BaseContainer(Graph, Isomorphism, Union, ABC):
+class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
     __slots__ = ('graph', '_node', '_adj')
+
+    def __init__(self, *args, **kwargs):
+        """
+        Empty data object initialization or conversion from another object type
+        """
+        super().__init__(*args, **kwargs)
 
     def __dir__(self):
         return [] or super().__dir__()
 
     def __getstate__(self):
-        return {'graph': self.graph, '_node': self._node, '_adj': self._adj}
+        return {'meta': self.graph, 'node': self._node, 'adj': self._adj}
+
+    def __setstate__(self, state):
+        if 'graph' in state:  # 3.0.10 compatibility.
+            state['meta'] = state['graph']
+        self.graph = state['meta']
+        self._node = state['node']
+        self._adj = state['adj']
 
     def atom(self, n):
         return self._node[n]
@@ -48,7 +62,7 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
 
     @cached_property
     def atoms_count(self):
-        return self.order()
+        return len(self)
 
     @cached_property
     def bonds_count(self):
@@ -120,28 +134,35 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         """
         return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
 
-    def substructure(self, atoms, meta=False):
+    def substructure(self, atoms, meta=False, as_view=True):
         """
         create substructure containing atoms from nbunch list
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
-        :return: container with substructure
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original structure scaffold without actually copying any data.
         """
-        s = self.subgraph(atoms).copy()
+        s = self.subgraph(atoms)
+        if as_view:
+            s.add_atom = s.add_bond = s.delete_atom = s.delete_bond = frozen  # more informative exception
+            return s
+        s = s.copy()
         if not meta:
             s.graph.clear()
         return s
 
-    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False):
+    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False, as_view=True):
         """
-        get subgraph with atoms and their neighbors
+        create substructure containing atoms and their neighbors
 
         :param atoms: list of core atoms in graph
         :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
-        etc up to deep or while new nodes available.
-        :param deep: number of bonds between atoms and neighbors.
+            etc up to deep or while new nodes available
+        :param deep: number of bonds between atoms and neighbors
         :param meta: copy metadata to each substructure
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original graph without actually copying any data
         """
         nodes = [set(atoms)]
         for i in range(deep):
@@ -149,11 +170,14 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
             if n in nodes:
                 break
             nodes.append(n)
+        if dante:
+            return [self.substructure(a, meta, as_view) for a in nodes]
+        else:
+            return self.substructure(nodes[-1], meta, as_view)
 
-        return [self.substructure(a, meta) for a in nodes] if dante else self.substructure(nodes[-1], meta)
-
+    @cached_property
     def connected_components(self):
-        return connected_components(self)
+        return [list(x) for x in connected_components(self)]
 
     def split(self, meta=False):
         """
@@ -162,7 +186,7 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         :param meta: copy metadata to each substructure
         :return: list of substructures
         """
-        return [self.substructure(c, meta) for c in connected_components(self)]
+        return [self.substructure(c, meta, False) for c in connected_components(self)]
 
     def remap(self, mapping, copy=False):
         return relabel_nodes(self, mapping, copy)
@@ -185,7 +209,16 @@ class BaseContainer(Graph, Isomorphism, Union, ABC):
         if n:
             return self.substructure(n)
 
-    def _bonds(self):
+    def atoms(self):
+        """
+        iterate over all atoms
+        """
+        return iter(self._node.items())
+
+    def bonds(self):
+        """
+        iterate other all bonds
+        """
         seen = set()
         for n, m_bond in self._adj.items():
             seen.add(n)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from ..attributes import DynAtom, DynBond, Bond
+from ..attributes import DynAtom, DynBond
 
 
 class Compose:
@@ -61,38 +61,40 @@ class Compose:
                 h.add_atom(self._node[n], n)
                 for m, bond in self._adj[n].items():
                     if m not in atoms:
-                        if m in common:
-                            r_skin[n].append(m)
+                        if m in common:  # bond to common atoms is broken bond
                             r_bond = bond._reagent
+                            if r_bond is None:  # skip None>None
+                                continue
+                            r_skin[n].append(m)
                             bond = DynBond.__new__(DynBond)
-                            bond.__init_copy__(r_bond, self.__none_bond)
+                            bond.__init_copy__(r_bond, None)
                         bonds.append((n, m, bond))
             for n in common:
                 r_atoms[n] = self._node[n]._reagent
                 for m, bond in self._adj[n].items():
                     if m not in r_atoms and m in common:
-                        tmp = [bond._reagent, self.__none_bond]
+                        tmp = [bond._reagent, None]
                         common_adj[n][m] = common_adj[m][n] = tmp
                         common_bonds.append((n, m, tmp))
         else:
             for n in unique_reagent:
-                atom = DynAtom.__new__(DynAtom)
+                atom = DynAtom.__new__(DynAtom)  # add unique atom into CGR
                 atom.__init_copy__(self._node[n], self._node[n])
                 h.add_atom(atom, n)
-                for m, r_bond in self._adj[n].items():
-                    if m not in atoms:
+                for m, r_bond in self._adj[n].items():  # unique atom neighbors
+                    if m not in atoms:  # bond not analyzed yet
                         bond = DynBond.__new__(DynBond)
-                        if m in common:
+                        if m in common:  # bond to common atoms
                             r_skin[n].append(m)
-                            bond.__init_copy__(r_bond, self.__none_bond)
-                        else:
+                            bond.__init_copy__(r_bond, None)
+                        else:  # bond static
                             bond.__init_copy__(r_bond, r_bond)
                         bonds.append((n, m, bond))
             for n in common:
                 r_atoms[n] = self._node[n]
                 for m, bond in self._adj[n].items():
-                    if m not in r_atoms and m in common:
-                        tmp = [bond, self.__none_bond]
+                    if m not in r_atoms and m in common:  # analyze only common atoms bonds
+                        tmp = [bond, None]  # reagent state only
                         common_adj[n][m] = common_adj[m][n] = tmp
                         common_bonds.append((n, m, tmp))
 
@@ -103,11 +105,13 @@ class Compose:
                 h.add_atom(other._node[n], n)
                 for m, bond in other._adj[n].items():
                     if m not in atoms:
-                        if m in common:
-                            p_skin[n].append(m)
+                        if m in common:  # bond to common atoms is new bond
                             p_bond = bond._product
+                            if p_bond is None:  # skip None>None
+                                continue
+                            p_skin[n].append(m)
                             bond = DynBond.__new__(DynBond)
-                            bond.__init_copy__(self.__none_bond, p_bond)
+                            bond.__init_copy__(None, p_bond)
                         bonds.append((n, m, bond))
             for n in common:
                 p_atoms[n] = other._node[n]._product
@@ -115,10 +119,13 @@ class Compose:
                 for m, bond in other._adj[n].items():
                     if m in n_bonds:
                         n_bonds[m][1] = bond._product
-                    elif m not in p_atoms and m in common:
-                        tmp = [self.__none_bond, bond._product]
-                        n_bonds[m] = common_adj[m][n] = tmp
-                        common_bonds.append((n, m, tmp))
+                    elif m not in p_atoms and m in common:  # new bond of reaction
+                        p_bond = bond._product
+                        if p_bond is None:  # skip None>None
+                            continue
+                        bond = DynBond.__new__(DynBond)
+                        bond.__init_copy__(None, p_bond)
+                        bonds.append((n, m, bond))
         else:
             for n in unique_product:
                 atom = DynAtom.__new__(DynAtom)
@@ -129,22 +136,22 @@ class Compose:
                         bond = DynBond.__new__(DynBond)
                         if m in common:
                             p_skin[n].append(m)
-                            bond.__init_copy__(self.__none_bond, p_bond)
+                            bond.__init_copy__(None, p_bond)
                         else:
                             bond.__init_copy__(p_bond, p_bond)
                         bonds.append((n, m, bond))
             for n in common:
                 p_atoms[n] = other._node[n]
                 n_bonds = common_adj[n]
-                for m, bond in other._adj[n].items():
-                    if m in n_bonds:
-                        n_bonds[m][1] = bond
-                    elif m not in p_atoms and m in common:
-                        tmp = [self.__none_bond, bond]
-                        n_bonds[m] = common_adj[m][n] = tmp
-                        common_bonds.append((n, m, tmp))
+                for m, p_bond in other._adj[n].items():
+                    if m in n_bonds:  # set product state of changed bond
+                        n_bonds[m][1] = p_bond
+                    elif m not in p_atoms and m in common:  # new bond of reaction
+                        bond = DynBond.__new__(DynBond)
+                        bond.__init_copy__(None, p_bond)
+                        bonds.append((n, m, bond))
 
-        for n, r_atom in r_atoms.items():
+        for n, r_atom in r_atoms.items():  # prepare common DynAtom's
             p_atom = p_atoms[n]
             if r_atom.element != p_atom.element or r_atom.isotope != p_atom.isotope:
                 raise ValueError('atom-to-atom mapping invalid')
@@ -153,7 +160,7 @@ class Compose:
             h.add_atom(atom, n)
 
         for n, m, (r_bond, p_bond) in common_bonds:
-            if r_bond.order is p_bond.order is None:
+            if r_bond is p_bond is None:  # skip None>None
                 continue
             bond = DynBond.__new__(DynBond)
             bond.__init_copy__(r_bond, p_bond)
@@ -163,9 +170,6 @@ class Compose:
             h.add_bond(n, m, bond)
 
         return h
-
-    __none_bond = Bond(skip_checks=True)
-    __none_bond.order = None
 
 
 class CGRCompose(Compose):
@@ -185,14 +189,14 @@ class CGRCompose(Compose):
         reagents = mc()
         products = mc()
 
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             reagents.add_atom(atom._reagent, n)
             products.add_atom(atom._product, n)
 
-        for n, m, bond in self._bonds():
-            if bond.order:
+        for n, m, bond in self.bonds():
+            if bond._reagent is not None:
                 reagents.add_bond(n, m, bond._reagent)
-            if bond.p_order:
+            if bond._product is not None:
                 products.add_bond(n, m, bond._product)
         return reagents, products
 

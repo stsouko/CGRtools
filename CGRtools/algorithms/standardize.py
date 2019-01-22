@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -32,7 +33,7 @@ class Standardize:
         self.reset_query_marks()
         seen = set()
         total = 0
-        for n, atom in self._node.items():
+        for n, atom in self.atoms():
             if n in seen:
                 continue
             for k, center in central.items():
@@ -55,7 +56,8 @@ class Standardize:
                 else:
                     continue
                 break
-
+        if total:
+            self.flush_cache()
         return total
 
 

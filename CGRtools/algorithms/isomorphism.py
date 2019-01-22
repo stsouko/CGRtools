@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,12 +22,16 @@ from itertools import islice
 
 class Isomorphism:
     def __lt__(self, other):
+        if len(self) >= len(other):
+            return False
         return self.is_substructure(other)
 
     def __le__(self, other):
         return self.is_equal(other) if len(self) == len(other) else self.is_substructure(other)
 
     def __gt__(self, other):
+        if len(self) <= len(other):
+            return False
         return other.is_substructure(self)
 
     def __ge__(self, other):
@@ -62,7 +66,7 @@ class Isomorphism:
         get self to other substructure mapping
 
         :param limit: number of matches. if 0 return iterator for all possible; if 1 return dict or None;
-        if > 1 return list of dicts
+            if > 1 return list of dicts
         """
         i = self._matcher(other).subgraph_isomorphisms_iter()
         if limit == 1:

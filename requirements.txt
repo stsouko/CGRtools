@@ -1,0 +1,3 @@
+git+https://github.com/networkx/networkx.git@master#egg=networkx
+lxml>=4.1.1,<4.3
+coho[smiles]>=0.4,<0.5

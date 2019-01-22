@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -107,7 +107,7 @@ class SDFwrite(MOLwrite, WithMixin):
 
     def write(self, data):
         m = self._convert_structure(data)
-        self._file.write(self._format_mol(*m['structure']))
+        self._file.write(self._format_mol(*m))
         self._file.write('M  END\n')
 
         for k, v in data.meta.items():
