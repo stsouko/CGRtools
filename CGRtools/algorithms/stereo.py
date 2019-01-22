@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from ..cache import cached_property
 
 
 def _pyramid_volume(n, u, v, w):
@@ -37,17 +38,19 @@ def _pyramid_volume(n, u, v, w):
 
 
 class Stereo:
-    def chiral(self):
+    @cached_property
+    def chiral_atoms(self):
         """
         list of tuples of chiral atom and their neighbors
         """
-        weights = self.atoms_order
-        chiral = []
+        chiral = list(self.__tetrahedron())
+        return chiral
 
+    def __allenes(self):
         # detect allenes and cis/trans double bonds.
         adj = defaultdict(set)  # carbon double bonds adjacency matrix
-        for n, m, bond in self._bonds():
-            if bond.order == 2 and self._node[n].element == self._node[m].element == 'C':
+        for n, m, bond in self.bonds():
+            if bond.order == 2 and self.atom(n).element == self.atom(m).element == 'C':
                 adj[n].add(m)
                 adj[m].add(n)
 
@@ -91,6 +94,25 @@ class Stereo:
 
             if self.atom_implicit_h(n) + len(m_bond) == 4:
                 chiral.append((n, *m_bond))
+        return chiral
+
+    def __tetrahedron(self):
+        # tetrahedral should be single bonded and contain zero or one H
+        weights = self.atoms_order
+        chiral = {}
+        for n, m_bond in self._adj.items():
+            if len(m_bond) < 3:
+                continue
+            if not all(x.order == 1 for x in m_bond.values()):
+                continue
+            # chiral atom all times contain unique neighbors
+            if len(m_bond) != len({weights[x] for x in m_bond}):
+                continue
+            if self.atom_total_h(n) > 1:  # more then one H impossible
+                continue
+            if self.atom_implicit_h(n) + len(m_bond) != 4:
+                continue
+            chiral[n] = tuple(m_bond)  # neighbors order
         return chiral
 
 

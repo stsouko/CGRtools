@@ -20,13 +20,14 @@ from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from networkx.classes.function import frozen
 from .common import BaseContainer
-from ..algorithms import Aromatize, Calculate2D, Compose, DepictMolecule, Morgan, Smiles, Standardize
+from ..algorithms import Aromatize, Calculate2D, Compose, DepictMolecule, Morgan, Smiles, Standardize, Stereo
 from ..attributes import Atom, Bond
 from ..cache import cached_args_method
 from ..periodictable import H
 
 
-class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standardize, DepictMolecule, BaseContainer):
+class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standardize, Stereo, DepictMolecule,
+                        BaseContainer):
     """
     storage for Molecules
 
