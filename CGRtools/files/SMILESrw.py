@@ -21,6 +21,7 @@ from logging import warning
 from re import split
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread
+from ..periodictable import elements_list
 
 
 class SMILESread(CGRread, WithMixin):
@@ -110,10 +111,11 @@ class SMILESread(CGRread, WithMixin):
 
     def __parse_smiles(self, smiles):
         self.__parser.parse(smiles)
-        return {'atoms': [{'element': a['symbol'].capitalize(), 'charge': a['charge'], 'mapping': a['aclass'] or 0,
-                           'x': 0., 'y': 0., 'z': 0., 'isotope': a['isotope'], 'multiplicity': None}
+        return {'atoms': [{'element': elements_list[a['atomic_number'] - 1], 'charge': a['charge'],
+                           'mapping': a['atom_class'] or 0, 'x': 0., 'y': 0., 'z': 0., 'isotope': a['isotope'],
+                           'multiplicity': None}
                           for a in self.__parser.atoms], 'extra': [], 'cgr': [],
-                'bonds': [(b['a0'], b['a1'], self.__bond_map[b['order']]) for b in self.__parser.bonds]}
+                'bonds': [(b['atom0'], b['atom1'], self.__bond_map[b['order']]) for b in self.__parser.bonds]}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
 
