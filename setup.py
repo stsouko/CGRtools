@@ -46,6 +46,8 @@ setup(
     author='Dr. Ramil Nugmanov',
     author_email='stsouko@live.ru',
     python_requires='>=3.6.1',
+    install_requires=['networkx>=2.3rc1,<2.4', 'lxml>=4.1.1,<4.3'],
+    extras_require={'smiles': ['coho>=0.4,<0.5']},
     package_data={'CGRtools.files.dll': INCHI},
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').open().read(),
