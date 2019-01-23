@@ -43,9 +43,10 @@ class Morgan:
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                    for x, y in sorted(params.items(), key=itemgetter(1))}
+        return self._morgan(weights)
 
+    def _morgan(self, weights):
         tries = len(self) * 4
-
         numb = len(set(weights.values()))
         stab = 0
 

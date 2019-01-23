@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from .morgan import primes
 from ..cache import cached_property
 
 
@@ -41,27 +42,32 @@ class Stereo:
     @cached_property
     def chiral_atoms(self):
         """
-        list of tuples of chiral atom and their neighbors
+        dict of chiral atoms valued with ordered neighbors
         """
-        chiral = list(self.__tetrahedron())
+        chiral = self.__tetrahedron()
         return chiral
 
     def __allenes(self):
         # detect allenes and cis/trans double bonds.
-        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        adj = defaultdict(list)  # carbon double bonds adjacency matrix
         for n, m, bond in self.bonds():
             if bond.order == 2 and self.atom(n).element == self.atom(m).element == 'C':
-                adj[n].add(m)
-                adj[m].add(n)
+                adj[n].append(m)
+                adj[m].append(n)
 
-        terminals = set(x for x, y in adj.items() if len(y) == 1)
+        terminals = {x for x, y in adj.items() if len(y) == 1}
         cis_trans = []
         allene = []
 
         while terminals:
             n = terminals.pop()
-            path = list(plain_bfs(adj, n))
-            terminals.difference_update(path)
+            m = adj[n][0]  # terminal atom has 1 neighbor always
+            path = [n, m]
+            while m not in terminals:
+                n, m = m, next(x for x in adj[m] if x != n)
+                path.append(m)
+            terminals.discard(m)
+            print(path)
             lp = len(path)
             if lp == 2:
                 # ignore double bonds in small rings
@@ -96,23 +102,44 @@ class Stereo:
                 chiral.append((n, *m_bond))
         return chiral
 
-    def __tetrahedron(self):
+    @cached_property
+    def __potentially_tetrahedron(self):
         # tetrahedral should be single bonded and contain zero or one H
-        weights = self.atoms_order
-        chiral = {}
+        chiral = []
         for n, m_bond in self._adj.items():
             if len(m_bond) < 3:
                 continue
             if not all(x.order == 1 for x in m_bond.values()):
                 continue
-            # chiral atom all times contain unique neighbors
-            if len(m_bond) != len({weights[x] for x in m_bond}):
-                continue
             if self.atom_total_h(n) > 1:  # more then one H impossible
                 continue
             if self.atom_implicit_h(n) + len(m_bond) != 4:
                 continue
-            chiral[n] = tuple(m_bond)  # neighbors order
+            chiral.append(n)
+        return chiral
+
+    def __tetrahedron(self):
+        chiral = {}
+        weights = self.atoms_order
+        for n in self.__potentially_tetrahedron:
+            m_bond = self._adj[n]
+            # chiral atom all times contain unique neighbors
+            if len(m_bond) == len({weights[x] for x in m_bond}):
+                chiral[n] = tuple(m_bond)  # neighbors order
+        """
+        if chiral:  # generate new weights
+            weights = weights.copy()
+            countprime = iter(list(primes)[len(self):])
+            for n in chiral:
+                weights[n] = next(countprime)
+            weights = self._morgan(weights)
+            for n in self.__potentially_tetrahedron:
+                if n in chiral:
+                    continue
+                m_bond = self._adj[n]
+                if len(m_bond) == len({weights[x] for x in m_bond}):
+                    chiral[n] = tuple(m_bond)  # neighbors order
+        """
         return chiral
 
 
