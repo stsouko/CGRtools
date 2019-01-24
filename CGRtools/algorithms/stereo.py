@@ -44,10 +44,12 @@ class Stereo:
         """
         dict of chiral atoms valued with ordered neighbors
         """
-        chiral = self.__tetrahedron()
-        return chiral
+        print(self.__potentially_alkene)
+        print(self.__potentially_tetrahedron)
+        return
 
-    def __allenes(self):
+    @cached_property
+    def __potentially_alkene(self):
         # detect allenes and cis/trans double bonds.
         adj = defaultdict(list)  # carbon double bonds adjacency matrix
         for n, m, bond in self.bonds():
@@ -59,6 +61,14 @@ class Stereo:
         cis_trans = []
         allene = []
 
+        # structure of allene:
+        # (first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom, central atom,
+        #  second enter or None, second exit or None)
+
+        # structure of cis_trans:
+        # ( first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom,
+        # first central atom, second central atom, second enter or None, second exit or None)
+
         while terminals:
             n = terminals.pop()
             m = adj[n][0]  # terminal atom has 1 neighbor always
@@ -67,45 +77,30 @@ class Stereo:
                 n, m = m, next(x for x in adj[m] if x != n)
                 path.append(m)
             terminals.discard(m)
-            print(path)
+
+            n, m = path[0], path[-1]
+            if self.atom_total_h(n) == 2 or self.atom_total_h(m) == 2:
+                continue  # ignore terminal alkenes
+            nn = (x for x in self._adj[n] if x != path[1])
+            mn = (x for x in self._adj[m] if x != path[-2])
+
             lp = len(path)
             if lp == 2:
                 # ignore double bonds in small rings
                 sp = set(path)
-                for ring in self.sssr:
-                    if not sp.issubset(ring) or len(ring) > 7:
-                        cis_trans.append(path)
-            elif lp == 3:  # simple allene
-                allene.append(path)
+                if not any(True for ring in self.sssr if sp.issubset(ring) and len(ring) <= 7):
+                    cis_trans.append((next(nn), n, m, next(mn), n, m, next(nn, None), next(mn, None)))
             elif lp % 2:
-                allene.append(path[::lp // 2])
+                allene.append((next(nn), n, m, next(mn), path[lp // 2], next(nn, None), next(mn, None)))
             else:
-                cis_trans.append(path[::lp - 1])
-
-        # detect chiral allenes
-        for x, n, y in allene:
-            if len(self._adj[x]) > 1 and len(self._adj[y]) > 1:  # fast test
-                []
-
-        # tetrahedral should be single bonded and contain zero or one H
-        for n, m_bond in self._adj.items():
-            if n in adj:  # fast filter
-                continue
-            if not all(x.order == 1 for x in m_bond.values()):
-                continue
-            if len({weights[x] for x in m_bond}) != len(m_bond):  # chiral atom all times contain unique neighbors
-                continue
-            if self.atom_total_h(n) > 1:  # more then one H impossible
-                continue
-
-            if self.atom_implicit_h(n) + len(m_bond) == 4:
-                chiral.append((n, *m_bond))
-        return chiral
+                cis_trans.append((next(nn), n, m, next(mn), path[lp // 2 - 1], path[lp // 2],
+                                  next(nn, None), next(mn, None)))
+        return cis_trans, allene
 
     @cached_property
     def __potentially_tetrahedron(self):
         # tetrahedral should be single bonded and contain zero or one H
-        chiral = []
+        chiral = {}
         for n, m_bond in self._adj.items():
             if len(m_bond) < 3:
                 continue
@@ -115,7 +110,7 @@ class Stereo:
                 continue
             if self.atom_implicit_h(n) + len(m_bond) != 4:
                 continue
-            chiral.append(n)
+            chiral[n] = tuple(m_bond)
         return chiral
 
     def __tetrahedron(self):
