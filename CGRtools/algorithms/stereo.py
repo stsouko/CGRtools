@@ -167,6 +167,18 @@ class Stereo:
 
         return atropos
 
+    @cached_property
+    def __potentially_plane(self):
+        if not self.sssr:
+            return []
+        elif len(set(self.atom_order.values())) == len(self):
+            return []
+        not_aromatic = [ring for ring in self.sssr if any(self._adj[n][m].order != 4 for n, m in zip(ring, ring[1:]))]
+        if not not_aromatic:
+            return []
+
+
+
     def __tetrahedron(self):
         chiral = {}
         weights = self.atoms_order
