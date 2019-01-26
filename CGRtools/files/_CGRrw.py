@@ -81,9 +81,9 @@ class CGRread:
         self._ignore = ignore
 
     def _convert_reaction(self, reaction):
-        if not (reaction['reagents'] or reaction['products'] or reaction['reactants']):
+        if not (reaction['reactants'] or reaction['products'] or reaction['reagents']):
             raise ValueError('empty reaction')
-        maps = {'reagents': [], 'products': [], 'reactants': []}
+        maps = {'reactants': [], 'products': [], 'reagents': []}
         for i, tmp in maps.items():
             for molecule in reaction[i]:
                 used = set()
@@ -98,8 +98,8 @@ class CGRread:
                             used.add(m)
                     tmp.append(m)
 
-        length = count(max(max(maps['products'], default=0), max(maps['reagents'], default=0),
-                           max(maps['reactants'], default=0)) + 1)
+        length = count(max(max(maps['products'], default=0), max(maps['reactants'], default=0),
+                           max(maps['reagents'], default=0)) + 1)
 
         ''' map unmapped atoms.
         '''
@@ -119,19 +119,20 @@ class CGRread:
                     remap.append(m)
                     used.add(m)
 
-        if maps['reactants']:
-            tmp = (set(maps['reagents']) | set(maps['products'])) & set(maps['reactants'])
+        if maps['reagents']:
+            tmp = (set(maps['reactants']) | set(maps['products'])) & set(maps['reagents'])
             if tmp:
+                e = f'reagents has map intersection with reactants or products: {tmp}'
                 if not self._ignore:
-                    raise MappingError(f'reactants has map intersection with reagents or products: {tmp}')
-                warning(f'reactants has map intersection with reagents or products: {tmp}')
-                maps['reactants'] = [x if x not in tmp else next(length) for x in maps['reactants']]
+                    raise MappingError(e)
+                warning(e)
+                maps['reagents'] = [x if x not in tmp else next(length) for x in maps['reagents']]
 
         ''' find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
         '''
         if self.__remap:
-            lose = sorted(set(range(1, next(length))) - set(maps['reagents']) - set(maps['products']) -
-                          set(maps['reactants']), reverse=True)
+            lose = sorted(set(range(1, next(length))) - set(maps['reactants']) - set(maps['products']) -
+                          set(maps['reagents']), reverse=True)
             if lose:
                 for i, tmp in maps.items():
                     if not tmp:

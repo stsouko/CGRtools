@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -301,9 +301,9 @@ class EMOLread:
 
 class RXNread:
     def __init__(self, line, ignore=False):
-        self.__reagents_count = int(line[:3])
-        self.__products_count = int(line[3:6]) + self.__reagents_count
-        self.__reactants_count = int(line[6:].rstrip() or 0) + self.__products_count
+        self.__reactants_count = int(line[:3])
+        self.__products_count = int(line[3:6]) + self.__reactants_count
+        self.__reagents_count = int(line[6:].rstrip() or 0) + self.__products_count
         self.__molecules = []
         self.__ignore = ignore
 
@@ -313,7 +313,7 @@ class RXNread:
                 self.__im = 4
                 self.__molecules.append(self.__parser.getvalue())
                 self.__parser = None
-                if len(self.__molecules) == self.__reactants_count:
+                if len(self.__molecules) == self.__reagents_count:
                     self.__rend = True
                     return True
         elif self.__empty_skip:
@@ -336,22 +336,22 @@ class RXNread:
                 if not self.__ignore:
                     raise
                 self.__empty_skip = True
-                if len(self.__molecules) < self.__reagents_count:
-                    self.__reagents_count -= 1
-                    self.__products_count -= 1
+                if len(self.__molecules) < self.__reactants_count:
                     self.__reactants_count -= 1
+                    self.__products_count -= 1
+                    self.__reagents_count -= 1
                 elif len(self.__molecules) < self.__products_count:
                     self.__products_count -= 1
-                    self.__reactants_count -= 1
-                elif len(self.__molecules) < self.__reactants_count:
-                    self.__reactants_count -= 1
+                    self.__reagents_count -= 1
+                elif len(self.__molecules) < self.__reagents_count:
+                    self.__reagents_count -= 1
                 warning('empty molecule ignored')
 
     def getvalue(self):
         if self.__rend:
-            return {'reagents': self.__molecules[:self.__reagents_count],
-                    'products': self.__molecules[self.__reagents_count:self.__products_count],
-                    'reactants': self.__molecules[self.__products_count:self.__reactants_count]}
+            return {'reactants': self.__molecules[:self.__reactants_count],
+                    'products': self.__molecules[self.__reactants_count:self.__products_count],
+                    'reagents': self.__molecules[self.__products_count:self.__reagents_count]}
         raise ValueError('reaction not complete')
 
     __parser = None
@@ -362,13 +362,13 @@ class RXNread:
 class ERXNread:
     def __init__(self, line, ignore=False):
         tmp = line[13:].split()
-        self.__reagents_count = int(tmp[0])
+        self.__reactants_count = int(tmp[0])
         self.__products_count = int(tmp[1])
-        self.__reactants_count = int(tmp[2]) if len(tmp) == 3 else 0
+        self.__reagents_count = int(tmp[2]) if len(tmp) == 3 else 0
 
-        self.__reagents = []
-        self.__products = []
         self.__reactants = []
+        self.__products = []
+        self.__reagents = []
         self.__ignore = ignore
 
     def __call__(self, line):
@@ -395,11 +395,11 @@ class ERXNread:
                     if self.__in_mol:
                         self.__parser = EMOLread()
                     if self.__parser_group == 'REACTANT':
-                        self.__reagents.append(x)
+                        self.__reactants.append(x)
                     elif self.__parser_group == 'PRODUCT':
                         self.__products.append(x)
                     elif self.__parser_group == 'AGENT':
-                        self.__reactants.append(x)
+                        self.__reagents.append(x)
         elif self.__rend:
             raise SyntaxError('invalid usage')
         elif lineu.startswith('M  V30 END'):
@@ -408,11 +408,11 @@ class ERXNread:
         elif lineu.startswith('M  V30 BEGIN'):
             x = lineu[13:].strip()
             if x == 'REACTANT':
-                self.__in_mol = self.__reagents_count
+                self.__in_mol = self.__reactants_count
             elif x == 'PRODUCT':
                 self.__in_mol = self.__products_count
             elif x == 'AGENT':
-                self.__in_mol = self.__reactants_count
+                self.__in_mol = self.__reagents_count
             else:
                 raise ValueError('invalid RXN CTAB')
             self.__parser_group = x
@@ -426,7 +426,7 @@ class ERXNread:
 
     def getvalue(self):
         if self.__rend:
-            return {'reagents': self.__reagents, 'products': self.__products, 'reactants': self.__reactants}
+            return {'reactants': self.__reactants, 'products': self.__products, 'reagents': self.__reagents}
         raise ValueError('reaction not complete')
 
     __parser_group = __parser = None

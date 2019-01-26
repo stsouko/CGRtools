@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -29,19 +29,19 @@ class CGRpreparer:
         :param cgr_type: control condensation procedure:
 
             * 0 - CGR
-            * 1 - reagents only
+            * 1 - reactants only
             * 2 - products only
-            * 101-199 - reagent 1,2 or later
+            * 101-199 - reactant 1,2 or later
             * 201+ - product 1,2… (e.g. 202 - second product)
-            * -101/-199 or -201/-299 - exclude reagent or product
+            * -101/-199 or -201/-299 - exclude reactant or product
 
-            comma-separated list of selected or excluded reagents/products also supported:
+            comma-separated list of selected or excluded reactants/products also supported:
 
-            * 101,102 - only first and second molecules of reagents
-            * -101,[-]103 <second [-] no sense> - exclude 1st and 3rd molecules of reagents
+            * 101,102 - only first and second molecules of reactants
+            * -101,[-]103 <second [-] no sense> - exclude 1st and 3rd molecules of reactants
 
-            also supported CGR on parts of reagents or/and products molecules. e.g. 101,102,-201 - CGR on only first and
-            second reagents molecules with all products molecules excluding first
+            also supported CGR on parts of reactants or/and products molecules. e.g. 101,102,-201 - CGR on only first and
+            second reactants molecules with all products molecules excluding first
         """
         self.__cgr_type_code = cgr_type
         self.__cgr_type, self.__needed = self.__get_cgr_type(cgr_type)
@@ -70,32 +70,32 @@ class CGRpreparer:
         if needed[0] == 0:
             t = 0  # CGR
         elif needed[0] == 1:
-            t = 1  # all reagents
+            t = 1  # all reactants
         elif needed[0] == 2:
             t = 2  # all products
         elif not any(True for x in needed if -200 < x < -100) and not any(True for x in needed if -300 < x < -200) and \
                 any(True for x in needed if 100 < x < 200) and any(True for x in needed if 200 < x < 300):
-            t = 7  # CGR on included parts of reagents and products
+            t = 7  # CGR on included parts of reactants and products
         elif any(True for x in needed if -200 < x < -100) and any(True for x in needed if -300 < x < -200):
-            t = 8  # CGR on excluded parts of reagents and products
+            t = 8  # CGR on excluded parts of reactants and products
         elif any(True for x in needed if -200 < x < -100) and not any(True for x in needed if -300 < x < -200) and \
                 any(True for x in needed if 200 < x < 300):
-            t = 9  # CGR on excluded part of reagents and included part of products
+            t = 9  # CGR on excluded part of reactants and included part of products
         elif not any(True for x in needed if -200 < x < -100) and any(True for x in needed if -300 < x < -200) and \
                 any(True for x in needed if 100 < x < 200):
-            t = 10  # CGR on excluded part of products and included part of reagents
+            t = 10  # CGR on excluded part of products and included part of reactants
         elif 100 < needed[0] < 200:
-            t = 3  # only included part of reagents
+            t = 3  # only included part of reactants
         elif 200 < needed[0] < 300:
             t = 4  # only included part of products
         elif -200 < needed[0] < -100:
-            t = 5  # only excluded part of reagents
+            t = 5  # only excluded part of reactants
         elif -300 < needed[0] < -200:
             t = 6  # only excluded part of products
         else:
             t = 0
 
-        ind = dict(reagents=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
+        ind = dict(reactants=sorted([abs(x) - 101 for x in needed if 100 < abs(x) < 200], reverse=True),
                    products=sorted([abs(x) - 201 for x in needed if 200 < abs(x) < 300], reverse=True)) \
             if t > 2 else None
 
@@ -103,34 +103,34 @@ class CGRpreparer:
 
     def __condense(self, data):
         if self.__cgr_type == 0:
-            reagents = self.__unite(data.reagents)
+            reactants = self.__unite(data.reactants)
             products = self.__unite(data.products)
         elif self.__cgr_type == 7:
-            reagents = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
+            reactants = self.__unite(self.__include(data.reactants, self.__needed['reactants']))
             products = self.__unite(self.__include(data.products, self.__needed['products']))
         elif self.__cgr_type == 8:
-            reagents = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+            reactants = self.__unite(self.__exclude(data.reactants, self.__needed['reactants']))
             products = self.__unite(self.__exclude(data.products, self.__needed['products']))
         elif self.__cgr_type == 9:
-            reagents = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+            reactants = self.__unite(self.__exclude(data.reactants, self.__needed['reactants']))
             products = self.__unite(self.__include(data.products, self.__needed['products']))
         else:  # 10
-            reagents = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
+            reactants = self.__unite(self.__include(data.reactants, self.__needed['reactants']))
             products = self.__unite(self.__exclude(data.products, self.__needed['products']))
 
-        return reagents ^ products
+        return reactants ^ products
 
     def __separate(self, data):
         if self.__cgr_type == 1:
-            g = self.__unite(data.reagents)
+            g = self.__unite(data.reactants)
         elif self.__cgr_type == 2:
             g = self.__unite(data.products)
         elif self.__cgr_type == 3:
-            g = self.__unite(self.__include(data.reagents, self.__needed['reagents']))
+            g = self.__unite(self.__include(data.reactants, self.__needed['reactants']))
         elif self.__cgr_type == 4:
             g = self.__unite(self.__include(data.products, self.__needed['products']))
         elif self.__cgr_type == 5:
-            g = self.__unite(self.__exclude(data.reagents, self.__needed['reagents']))
+            g = self.__unite(self.__exclude(data.reactants, self.__needed['reactants']))
         else:  # 6
             g = self.__unite(self.__exclude(data.products, self.__needed['products']))
         return g

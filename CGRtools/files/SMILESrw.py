@@ -62,32 +62,32 @@ class SMILESread(CGRread, WithMixin):
                     warning(f'invalid metadata entry: {x}')
 
             if '>' in smi:
-                record = dict(reagents=[], reactants=[], products=[], meta=meta)
+                record = dict(reactants=[], reagents=[], products=[], meta=meta)
                 try:
-                    reagents, reactants, products = smi.split('>')
+                    reactants, reagents, products = smi.split('>')
                 except ValueError:
                     warning('invalid SMIRKS')
                     continue
 
                 try:
-                    if reagents:
-                        for x in reagents.split('.'):
-                            if not x and self._ignore:
-                                warning('empty molecule ignored')
-                            else:
-                                record['reagents'].append(self.__parse_smiles(x))
-                    if products:
-                        for x in products.split('.'):
-                            if not x and self._ignore:
-                                warning('empty molecule ignored')
-                            else:
-                                record['products'].append(self.__parse_smiles(x))
                     if reactants:
                         for x in reactants.split('.'):
                             if not x and self._ignore:
                                 warning('empty molecule ignored')
                             else:
                                 record['reactants'].append(self.__parse_smiles(x))
+                    if products:
+                        for x in products.split('.'):
+                            if not x and self._ignore:
+                                warning('empty molecule ignored')
+                            else:
+                                record['products'].append(self.__parse_smiles(x))
+                    if reagents:
+                        for x in reagents.split('.'):
+                            if not x and self._ignore:
+                                warning('empty molecule ignored')
+                            else:
+                                record['reagents'].append(self.__parse_smiles(x))
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
                     continue

@@ -61,28 +61,28 @@ class CGRreactor:
 
     @staticmethod
     def __prepare_template(template):
-        if not template.reagents or not template.products:
+        if not template.reactants or not template.products:
             raise ValueError('empty template')
-        reagents = reduce(or_, template.reagents, QueryContainer())
+        reactants = reduce(or_, template.reactants, QueryContainer())
         products = reduce(or_, template.products, QueryContainer())
 
-        if isinstance(reagents, QueryCGRContainer):
+        if isinstance(reactants, QueryCGRContainer):
             if isinstance(products, QueryContainer):
                 products = QueryCGRContainer(products)
             is_cgr = True
         elif isinstance(products, QueryCGRContainer):
-            if isinstance(reagents, QueryContainer):
-                reagents = QueryCGRContainer(reagents)
+            if isinstance(reactants, QueryContainer):
+                reactants = QueryCGRContainer(reactants)
             is_cgr = True
         else:
             is_cgr = False
 
-        to_delete = set(reagents).difference(products)
+        to_delete = set(reactants).difference(products)
 
         absolute_atom = defaultdict(dict)
         conditional_element = {}
 
-        for n in set(products).difference(reagents):
+        for n in set(products).difference(reactants):
             # if unique atoms in patch has variable properties exception is raised
             atom = products.atom(n)
             if atom.element is None or len(atom.element) > 1:
@@ -96,8 +96,8 @@ class CGRreactor:
                 absolute_atom[n].update(p_charge=atom.p_charge, p_multiplicity=atom.p_multiplicity,
                                         p_x=atom.p_x, p_y=atom.p_y, p_z=atom.p_z, p_stereo=atom.p_stereo)
 
-        for n in set(products).intersection(reagents):
-            r_atom = reagents.atom(n)
+        for n in set(products).intersection(reactants):
+            r_atom = reactants.atom(n)
             atom = products.atom(n)
 
             if atom.element:
@@ -129,7 +129,7 @@ class CGRreactor:
             else:
                 bonds.append((n, m, {'order': bond.order, 'stereo': bond.stereo}))
 
-        return reagents, dict(absolute_atom), bonds, conditional_element, is_cgr, to_delete
+        return reactants, dict(absolute_atom), bonds, conditional_element, is_cgr, to_delete
 
     def __patcher(self, structure, mapping):
         new = type(structure)()

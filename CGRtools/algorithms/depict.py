@@ -161,7 +161,7 @@ class DepictReaction:
                'stroke="black" stroke-width=".04" marker-end="url(#arrow)" />']
 
         r_max_x = r_max_y = 0
-        for ml in (self.reagents, self.reactants, self.products):
+        for ml in (self.reactants, self.reagents, self.products):
             for m in ml:
                 tmp, max_x, max_y = m.depict(carbon, colors, font, double_space, triple_space,
                                              aromatic_space, dashes, True)

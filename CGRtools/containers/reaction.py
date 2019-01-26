@@ -65,27 +65,27 @@ class MindfulList(MutableSequence):
 
 class ReactionContainer(DepictReaction, HashableSmiles):
     """
-    reaction storage. contains reagents, products and reactants lists.
+    reaction storage. contains reactants, products and reagents lists.
 
     reaction storages hashable and comparable. based on reaction unique signature (SMIRKS).
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '_arrow')
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow')
 
-    def __init__(self, reagents=None, products=None, reactants=None, meta=None):
+    def __init__(self, reactants=None, products=None, reagents=None, meta=None):
         """
         new empty or filled reaction object creation
 
-        :param reagents: list of MoleculeContainers [or other Structure Containers] in left side of reaction
-        :param products: right side of reaction. see reagents
-        :param reactants: middle side of reaction: solvents, catalysts, etc. see reagents
+        :param reactants: list of MoleculeContainers [or other Structure Containers] in left side of reaction
+        :param products: right side of reaction. see reactants
+        :param reagents: middle side of reaction: solvents, catalysts, etc. see reactants
         :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
 
         """
-        self.__reagents = MindfulList(reagents)
-        self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
+        self.__products = MindfulList(products)
+        self.__reagents = MindfulList(reagents)
         if meta is None:
             self.__meta = {}
         else:
@@ -93,22 +93,29 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         self._arrow = None
 
     def __getitem__(self, item):
-        if item in ('reagents', 0):
-            return self.__reagents
+        if item in ('reactants', 0):
+            return self.__reactants
         elif item in ('products', 1):
             return self.__products
-        elif item in ('reactants', 2):
-            return self.__reactants
+        elif item in ('reagents', 2):
+            return self.__reagents
         elif item == 'meta':
             return self.__meta
         raise AttributeError('invalid attribute')
 
     def __getstate__(self):
-        return dict(reagents=list(self.__reagents), products=list(self.__products), reactants=list(self.__reactants),
+        return dict(reactants=list(self.__reactants), products=list(self.__products), reagents=list(self.__reagents),
                     meta=self.meta)
 
     def __setstate__(self, state):
+        if next(iter(state)) == 'reagents':  # 3.0 compatibility
+            state['reagents'], state['reactants'] = state['reactants'], state['reagents']
         self.__init__(**state)
+
+    @property
+    def reactants(self):
+        """reactants list. see products"""
+        return self.__reactants
 
     @property
     def reagents(self):
@@ -121,11 +128,6 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         return self.__products
 
     @property
-    def reactants(self):
-        """reactants list. see products"""
-        return self.__reactants
-
-    @property
     def meta(self):
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
@@ -136,9 +138,9 @@ class ReactionContainer(DepictReaction, HashableSmiles):
 
         :return: ReactionContainer
         """
-        return self.__class__(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
-                              products=[x.copy() for x in self.__products],
-                              reactants=[x.copy() for x in self.__reactants])
+        return type(self)(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
+                          products=[x.copy() for x in self.__products],
+                          reactants=[x.copy() for x in self.__reactants])
 
     def implicify_hydrogens(self):
         """
@@ -217,7 +219,7 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         """
         get CGR of reaction
 
-        reactants will be presented as unchanged molecules
+        reagents will be presented as unchanged molecules
         :return: CGRContainer
         """
         rr = self.__reagents + self.__reactants
@@ -257,13 +259,13 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         fix coordinates of molecules in reaction
         """
         shift_x = 0
-        for m in self.__reagents:
+        for m in self.__reactants:
             max_x = self.__fix_positions(m, shift_x, 0)
             shift_x = max_x + 1
         arrow_min = shift_x
 
-        if self.__reactants:
-            for m in self.__reactants:
+        if self.__reagents:
+            for m in self.__reagents:
                 max_x = self.__fix_positions(m, shift_x, 1.5)
                 shift_x = max_x + 1
         else:
@@ -292,7 +294,7 @@ class ReactionContainer(DepictReaction, HashableSmiles):
         SMIRKS of reaction. query containers in reaction {surrounded by curly braces}
         """
         sig = []
-        for ml in (self.__reagents, self.__reactants, self.__products):
+        for ml in (self.__reactants, self.__reagents, self.__products):
             sig.append(self.__get_smiles(ml) if ml else '')
         return '>'.join(sig)
 

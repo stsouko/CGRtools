@@ -45,7 +45,7 @@ class Compose:
                 return cgr() | self | other
             return self | other
 
-        unique_reagent = self._node.keys() - common
+        unique_reactant = self._node.keys() - common
         unique_product = other._node.keys() - common
 
         h = cgr()
@@ -57,12 +57,12 @@ class Compose:
         r_atoms = {}
         r_skin = defaultdict(list)
         if isinstance(self, cgr):
-            for n in unique_reagent:
+            for n in unique_reactant:
                 h.add_atom(self._node[n], n)
                 for m, bond in self._adj[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
-                            r_bond = bond._reagent
+                            r_bond = bond._reactant
                             if r_bond is None:  # skip None>None
                                 continue
                             r_skin[n].append(m)
@@ -70,14 +70,14 @@ class Compose:
                             bond.__init_copy__(r_bond, None)
                         bonds.append((n, m, bond))
             for n in common:
-                r_atoms[n] = self._node[n]._reagent
+                r_atoms[n] = self._node[n]._reactant
                 for m, bond in self._adj[n].items():
                     if m not in r_atoms and m in common:
-                        tmp = [bond._reagent, None]
+                        tmp = [bond._reactant, None]
                         common_adj[n][m] = common_adj[m][n] = tmp
                         common_bonds.append((n, m, tmp))
         else:
-            for n in unique_reagent:
+            for n in unique_reactant:
                 atom = DynAtom.__new__(DynAtom)  # add unique atom into CGR
                 atom.__init_copy__(self._node[n], self._node[n])
                 h.add_atom(atom, n)
@@ -94,7 +94,7 @@ class Compose:
                 r_atoms[n] = self._node[n]
                 for m, bond in self._adj[n].items():
                     if m not in r_atoms and m in common:  # analyze only common atoms bonds
-                        tmp = [bond, None]  # reagent state only
+                        tmp = [bond, None]  # reactant state only
                         common_adj[n][m] = common_adj[m][n] = tmp
                         common_bonds.append((n, m, tmp))
 
@@ -181,24 +181,24 @@ class CGRCompose(Compose):
 
     def decompose(self):
         """
-        decompose CGR to pair of Molecules, which represents reagents and products state of reaction
+        decompose CGR to pair of Molecules, which represents reactants and products state of reaction
 
         :return: tuple of two molecules
         """
         mc = self._get_subclass('MoleculeContainer')
-        reagents = mc()
+        reactants = mc()
         products = mc()
 
         for n, atom in self.atoms():
-            reagents.add_atom(atom._reagent, n)
+            reactants.add_atom(atom._reactant, n)
             products.add_atom(atom._product, n)
 
         for n, m, bond in self.bonds():
-            if bond._reagent is not None:
-                reagents.add_bond(n, m, bond._reagent)
+            if bond._reactant is not None:
+                reactants.add_bond(n, m, bond._reactant)
             if bond._product is not None:
                 products.add_bond(n, m, bond._product)
-        return reagents, products
+        return reactants, products
 
 
 __all__ = ['Compose', 'CGRCompose']
