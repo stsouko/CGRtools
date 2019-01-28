@@ -7,7 +7,7 @@ if parent not in path:
 
 author = 'Dr. Ramil Nugmanov'
 copyright = '2014-2019, Dr. Ramil Nugmanov <stsouko@live.ru>'
-version = '3.0'
+version = '3.1'
 project = 'CGRtools'
 
 needs_sphinx = '1.6'

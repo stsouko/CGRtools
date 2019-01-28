@@ -40,11 +40,11 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         center = set()
         adj = defaultdict(set)
         for n, atom in self.atoms():
-            if atom._reagent != atom._product:
+            if atom._reactant != atom._product:
                 center.add(n)
 
         for n, m, bond in self.bonds():
-            if bond._reagent != bond._product:
+            if bond._reactant != bond._product:
                 adj[n].add(m)
                 adj[m].add(n)
                 center.add(n)
@@ -68,11 +68,11 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         """
         nodes = set()
         for n, atom in self.atoms():
-            if atom._reagent != atom._product:
+            if atom._reactant != atom._product:
                 nodes.add(n)
 
         for n, m, bond in self.bonds():
-            if bond._reagent != bond._product:
+            if bond._reactant != bond._product:
                 nodes.add(n)
                 nodes.add(m)
 
@@ -82,7 +82,7 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
     def center_bonds(self):
         """ get list of bonds of reaction center (bonds with dynamic orders).
         """
-        return [(n, m) for n, m, bond in self.bonds() if bond._reagent != bond._product]
+        return [(n, m) for n, m, bond in self.bonds() if bond._reactant != bond._product]
 
     def reset_query_marks(self):
         """
@@ -126,8 +126,8 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
                             else:
                                 p_hybridization = 2
 
-            atom._reagent._neighbors = neighbors
-            atom._reagent._hybridization = hybridization
+            atom._reactant._neighbors = neighbors
+            atom._reactant._hybridization = hybridization
             atom._product._neighbors = p_neighbors
             atom._product._hybridization = p_hybridization
             atom.__dict__.clear()  # flush cache

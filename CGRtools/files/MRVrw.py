@@ -119,8 +119,8 @@ class MRVread(CGRread, WithMixin):
                 warning('invalid MDocument')
 
     def __parse_reaction(self, data):
-        reaction = dict(reagents=[], products=[], reactants=[])
-        for tag, group in (('reactantList', 'reagents'), ('productList', 'products'), ('agentList', 'reactants')):
+        reaction = dict(reactants=[], products=[], reagents=[])
+        for tag, group in (('reactantList', 'reactants'), ('productList', 'products'), ('agentList', 'reagents')):
             if tag in data and 'molecule' in data[tag]:
                 molecule = data[tag]['molecule']
                 if isinstance(molecule, dict):
@@ -294,8 +294,8 @@ class MRVwrite(CGRwrite, WithMixin):
 
             c = count(1)
             self._file.write('<reaction>')
-            for i, j in ((data.reagents, 'reactantList'), (data.products, 'productList'),
-                         (data.reactants, 'agentList')):
+            for i, j in ((data.reactants, 'reactantList'), (data.products, 'productList'),
+                         (data.reagents, 'agentList')):
                 self._file.write(f'<{j}>')
                 for n, m in zip(c, i):
                     m = self._convert_structure(m)
