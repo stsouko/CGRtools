@@ -18,25 +18,83 @@
 #
 from collections import defaultdict
 from itertools import combinations, product
-from .morgan import primes
 from ..cache import cached_property
 
 
-def _pyramid_volume(n, u, v, w):
+def _pyramid_sign(n, u, v, w):
     nx, ny, nz = n
     ux, uy, uz = u
     vx, vy, vz = v
     wx, wy, wz = w
-    ux -= nx
-    uy -= ny
-    uz -= nz
-    vx -= nx
-    vy -= ny
-    vz -= nz
-    wx -= nx
-    wy -= ny
-    wz -= nz
-    return ux * (vy * wz - vz * wy) + uy * (vz * wx - vx * wz) + uz * (vx * wy - vy * wx)
+
+    q1x = ux - nx
+    q1y = uy - ny
+    q1z = uz - nz
+    q2x = vx - nx
+    q2y = vy - ny
+    q2z = vz - nz
+    q3x = wx - nx
+    q3y = wy - ny
+    q3z = wz - nz
+
+    vol = q1x * (q2y * q3z - q2z * q3y) + q1y * (q2z * q3x - q2x * q3z) + q1z * (q2x * q3y - q2y * q3x)
+    if vol > 0:
+        return 1
+    elif vol < 0:
+        return -1
+    return
+
+
+def _dihedral_sign(n, u, v, w):
+    nx, ny, nz = n
+    ux, uy, uz = u
+    vx, vy, vz = v
+    wx, wy, wz = w
+
+    q1x = ux - nx
+    q1y = uy - ny
+    q1z = uz - nz
+    q2x = vx - ux
+    q2y = vy - uy
+    q2z = vz - uz
+    q3x = wx - vx
+    q3y = wy - vy
+    q3z = wz - vz
+
+    # cross vectors
+    q1q2x = q1y * q2z - q1z * q2y
+    q1q2y = q1z * q2x - q1x * q2z
+    q1q2z = q1x * q2y - q1y * q2x
+    q2q3x = q2y * q3z - q2z * q3y
+    q2q3y = q2z * q3x - q2x * q3z
+    q2q3z = q2x * q3y - q2y * q3x
+
+    # angle calculation
+    # len_q1q2 = sqrt(q1q2x ** 2 + q1q2y ** 2 + q1q2z ** 2)
+    # n1x = q1q2x / len_q1q2
+    # n1y = q1q2y / len_q1q2
+    # n1z = q1q2z / len_q1q2
+    # len_q2q3 = sqrt(q2q3x ** 2 + q2q3y ** 2 + q2q3z ** 2)
+    # u1x = q2q3x / len_q2q3
+    # u1y = q2q3y / len_q2q3
+    # u1z = q2q3z / len_q2q3
+    # len_q2 = sqrt(q2x ** 2 + q2y ** 2 + q2z ** 2)
+    # u3x = q2x / len_q2
+    # u3y = q2y / len_q2
+    # u3z = q2z / len_q2
+    # u2x = u3y * u1z - u3z * u1y
+    # u2y = u3z * u1x - u3x * u1z
+    # u2z = u3x * u1y - u3y * u1x
+    # cos_theta = n1x * u1x + n1y * u1y + n1z * u1z
+    # sin_theta = n1x * u2x + n1y * u2y + n1z * u2z
+    # return -atan2(sin_theta, cos_theta)
+
+    dot = q1q2x * q2q3x + q1q2y * q2q3y + q1q2z * q2q3z
+    if dot > 0:
+        return 1
+    elif dot < 0:
+        return -1
+    return
 
 
 class Stereo:
