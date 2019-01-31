@@ -42,7 +42,7 @@ def _pyramid_sign(n, u, v, w):
         return 1
     elif vol < 0:
         return -1
-    return
+    return 0
 
 
 def _dihedral_sign(n, u, v, w):
@@ -94,7 +94,7 @@ def _dihedral_sign(n, u, v, w):
         return 1
     elif dot < 0:
         return -1
-    return
+    return 0
 
 
 class Stereo:
@@ -103,9 +103,55 @@ class Stereo:
         """
         dict of chiral atoms valued with ordered neighbors
         """
-        print(self.__potentially_alkene)
-        print(self.__potentially_tetrahedron)
-        print(self.__potentially_atropisomer)
+        atoms = {}
+        bonds = {}
+        order = self.atoms_order
+
+        chance_tetrahedron = {}
+        for a, n in self.__potentially_tetrahedron.items():
+            # chiral atom all times contain unique neighbors
+            if len(n) == len({order[x] for x in n}):
+                atoms[a] = n
+            else:
+                chance_tetrahedron[a] = n
+
+        cis_trans, allene = self.__potentially_alkene
+        # k         n
+        #  \       /
+        #   l==a==m
+        #  /       \
+        # i         j
+        chance_allene = []
+        for k, l, m, n, a, i, j in allene:
+            if i and order[i] == order[k] or j and order[j] == order[n]:
+                chance_allene.append((k, l, m, n, a, i, j))
+            else:
+                atoms[a] = (k, l, m, n)
+        # k            n
+        #  \          /
+        #   l==a==b==m
+        #  /          \
+        # i            j
+        chance_cis_trans = []
+        for k, l, m, n, a, b, i, j in cis_trans:
+            if i and order[i] == order[k] or j and order[j] == order[n]:
+                chance_cis_trans.append((k, l, m, n, a, b, i, j))
+            else:
+                bonds[(a, b)] = (k, l, m, n)
+
+        #    ___
+        #   |   |
+        #   k   i
+        #  / \ / \
+        # x   l   y
+        #     |
+        # v   m   w
+        #  \ / \ /
+        #   n   j
+        #   |___|
+        #
+        for k, l, m, n, i, j, x, y, v, w in self.__potentially_atropisomer:
+            pass
         return
 
     @cached_property
@@ -222,20 +268,30 @@ class Stereo:
             elif nr2n is nr2m:
                 continue
             atropos.append((r1n, n, m, r2n, r1m, r2m, nr1n, nr1m, nr2n, nr2m))
-
         return atropos
 
     @cached_property
     def __potentially_plane(self):
-        if not self.sssr:
+        if not self.sssr:  # no rings
             return []
-        elif len(set(self.atom_order.values())) == len(self):
+
+        order = self.atoms_order
+        if len(set(order.values())) == len(self):  # not symmetric
             return []
+
         not_aromatic = [ring for ring in self.sssr if any(self._adj[n][m].order != 4 for n, m in zip(ring, ring[1:]))]
         if not not_aromatic:
             return []
 
-
+        target = []
+        tetrahedron = self.__potentially_tetrahedron
+        for ring in not_aromatic:
+            sring = set(ring)
+            if sring.isdisjoint(tetrahedron):
+                continue  # hasn't candidates
+            for x in sring.intersection(tetrahedron):
+                if len(self._adj[x]) != len({order[x] for x in self._adj[x]}):
+                    target.append(x)
 
     def __tetrahedron(self):
         chiral = {}
