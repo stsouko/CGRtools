@@ -23,14 +23,14 @@ from ..periodictable import Element
 
 
 class DynAttribute(MutableMapping):
-    __slots__ = ('_reagent', '_product')
+    __slots__ = ('_reactant', '_product')
 
     def __init__(self):
-        super().__setattr__('_reagent', self._factory(skip_checks=True))
+        super().__setattr__('_reactant', self._factory(skip_checks=True))
         super().__setattr__('_product', self._factory(skip_checks=True))
 
-    def __init_copy__(self, reagent, product):
-        super().__setattr__('_reagent', reagent)
+    def __init_copy__(self, reactant, product):
+        super().__setattr__('_reactant', reactant)
         super().__setattr__('_product', product)
 
     def update(self, *args, **kwargs):
@@ -56,10 +56,10 @@ class DynAttribute(MutableMapping):
         raise TypeError('attribute deletion impossible')
 
     def __getstate__(self):
-        return {'reagent': self._reagent, 'product': self._product}
+        return {'reactant': self._reactant, 'product': self._product}
 
     def __setstate__(self, state):
-        super().__setattr__('_reagent', state['reagent'])
+        super().__setattr__('_reactant', state['reactant'])
         super().__setattr__('_product', state['product'])
 
 
@@ -70,7 +70,7 @@ class DynAtomAttribute(DynAttribute):
         elif key.startswith('p_'):
             value = getattr(self._product, key[2:])
         else:
-            value = getattr(self._reagent, key)
+            value = getattr(self._reactant, key)
         self.__dict__[key] = value
         return value
 
@@ -79,17 +79,17 @@ class DynAtomAttribute(DynAttribute):
             raise KeyError(f'{key} is invalid')
         elif key.startswith('p_'):
             return self._product[key[2:]]
-        return self._reagent[key]
+        return self._reactant[key]
 
     def __contains__(self, key):
         if key in self._p_static:
             return False
         if key.startswith('p_'):
             return key[2:] in self._product
-        return key in self._reagent
+        return key in self._reactant
 
     def __iter__(self):
-        return chain(self._reagent, (f'p_{x}' for x in self._product if x not in self._static))
+        return chain(self._reactant, (f'p_{x}' for x in self._product if x not in self._static))
 
     def _split_check_kwargs(self, kwargs):
         r, p = {}, {}
@@ -97,18 +97,18 @@ class DynAtomAttribute(DynAttribute):
             if k in self._p_static:
                 raise KeyError(f'{k} is invalid')
             elif k in self._static:
-                r[k] = p[k] = getattr(self._reagent, f'_{k}_check')(v)
+                r[k] = p[k] = getattr(self._reactant, f'_{k}_check')(v)
             elif k.startswith('p_'):
                 k = k[2:]
-                p[k] = getattr(self._reagent, f'_{k}_check')(v)
+                p[k] = getattr(self._reactant, f'_{k}_check')(v)
             else:
-                r[k] = getattr(self._reagent, f'_{k}_check')(v)
+                r[k] = getattr(self._reactant, f'_{k}_check')(v)
         return r, p
 
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)
-        copy.__init_copy__(self._reagent.copy(), self._product.copy())
+        copy.__init_copy__(self._reactant.copy(), self._product.copy())
         return copy
 
 
@@ -118,11 +118,11 @@ class DynAtom(DynAtomAttribute):
             raise AttributeError(f'{key} is invalid')
         elif key.startswith('p_'):
             key = key[2:]
-            value = getattr(self._reagent, f'_{key}_check')(value)
+            value = getattr(self._reactant, f'_{key}_check')(value)
             self._product[key] = value
         else:
-            value = getattr(self._reagent, f'_{key}_check')(value)
-            self._reagent[key] = value
+            value = getattr(self._reactant, f'_{key}_check')(value)
+            self._reactant[key] = value
             if key in self._static:
                 self._product[key] = value
         self.__dict__.clear()
@@ -131,7 +131,7 @@ class DynAtom(DynAtomAttribute):
         if isinstance(value, DynAtom):
             r, p = self._split_check_kwargs(kwargs)
             p_value = value._product
-            value = value._reagent
+            value = value._reactant
         elif isinstance(value, (Atom, Element)):
             r, p = self._split_check_kwargs(kwargs)
             p_value = value
@@ -153,18 +153,18 @@ class DynAtom(DynAtomAttribute):
             value, p_value = self._split_check_kwargs(value)
             r = p = {}
 
-        self._reagent._update(value, r)
+        self._reactant._update(value, r)
         self._product._update(p_value, p)
         self.__dict__.clear()
 
     def __int__(self):
-        return int(self._reagent) << 21 | int(self._product)
+        return int(self._reactant) << 21 | int(self._product)
 
     def __eq__(self, other):
         if isinstance(other, DynAtom):
-            return self._reagent == other._reagent and self._product == other._product
+            return self._reactant == other._reactant and self._product == other._product
         elif isinstance(other, Atom):
-            return self._reagent == other and self._product == other
+            return self._reactant == other and self._product == other
         return False
 
     _factory = Atom
@@ -193,13 +193,13 @@ class DynBond(DynAttribute):
                     raise ValueError('empty bond not allowed')
                 elif self.stereo:
                     raise ValueError('stereo bond not nullable')
-                if self._reagent is not None:
-                    super().__setattr__('_reagent', None)
+                if self._reactant is not None:
+                    super().__setattr__('_reactant', None)
             else:
                 value = self._order_check(value)
-                if self._reagent is None:
-                    super().__setattr__('_reagent', self._factory(skip_checks=True))
-                self._reagent.order = value
+                if self._reactant is None:
+                    super().__setattr__('_reactant', self._factory(skip_checks=True))
+                self._reactant.order = value
         elif key == 'p_stereo':
             if not self.p_order:
                 raise ValueError('null-bond stereo impossible')
@@ -207,7 +207,7 @@ class DynBond(DynAttribute):
         elif key == 'stereo':
             if not self.order:
                 raise ValueError('null-bond stereo impossible')
-            self._reagent.stereo = self._stereo_check(value)
+            self._reactant.stereo = self._stereo_check(value)
         else:
             raise AttributeError('invalid bond attribute')
         self.__dict__.clear()
@@ -234,7 +234,7 @@ class DynBond(DynAttribute):
                         raise ValueError('stereo bond not nullable')
                     p = None
             elif isinstance(value, DynBond):
-                r, p = value._reagent, value._product
+                r, p = value._reactant, value._product
             else:
                 r = p = value
         else:
@@ -261,11 +261,11 @@ class DynBond(DynAttribute):
                 p = None
 
         if r is not None:
-            if self._reagent is None:
-                super().__setattr__('_reagent', self._factory(skip_checks=True))
-            self._reagent._update(r, {})
-        elif self._reagent is not None:
-            super().__setattr__('_reagent', None)
+            if self._reactant is None:
+                super().__setattr__('_reactant', self._factory(skip_checks=True))
+            self._reactant._update(r, {})
+        elif self._reactant is not None:
+            super().__setattr__('_reactant', None)
 
         if p is not None:
             if self._product is None:
@@ -278,43 +278,43 @@ class DynBond(DynAttribute):
     def __getattr__(self, key):
         if key.startswith('p_'):
             if self._product is None:
-                if key[2:] not in self._reagent:
+                if key[2:] not in self._reactant:
                     raise AttributeError
                 self.__dict__[key] = None
                 return
             self.__dict__[key] = value = getattr(self._product, key[2:])
             return value
-        elif self._reagent is None:
+        elif self._reactant is None:
             if key not in self._product:
                 raise AttributeError
             self.__dict__[key] = None
             return
-        self.__dict__[key] = value = getattr(self._reagent, key)
+        self.__dict__[key] = value = getattr(self._reactant, key)
         return value
 
     def __getitem__(self, key):
         if key.startswith('p_'):
             if self._product is None:
-                if key[2:] not in self._reagent:
+                if key[2:] not in self._reactant:
                     raise KeyError
                 return
             return self._product[key[2:]]
-        elif self._reagent is None:
+        elif self._reactant is None:
             if key not in self._product:
                 raise KeyError
             return
-        return self._reagent[key]
+        return self._reactant[key]
 
     def __contains__(self, key):
         if key.startswith('p_'):
             key = key[2:]
         if self._product is None:
-            return key in self._reagent
+            return key in self._reactant
         return key in self._product
 
     def __iter__(self):
-        if self._reagent is not None:
-            yield from self._reagent
+        if self._reactant is not None:
+            yield from self._reactant
         if self._product is not None:
             yield from (f'p_{x}' for x in self._product)
 
@@ -326,8 +326,8 @@ class DynBond(DynAttribute):
         equality checks without stereo
         """
         if isinstance(other, DynBond):
-            return self._reagent == other._reagent and self._product == other._product
-        return self._reagent == self._product == other
+            return self._reactant == other._reactant and self._product == other._product
+        return self._reactant == self._product == other
 
     def _split_check_kwargs(self, kwargs):
         r, p = {}, {}
@@ -347,7 +347,7 @@ class DynBond(DynAttribute):
     def copy(self):
         cls = type(self)
         copy = cls.__new__(cls)
-        copy.__init_copy__(self._reagent.copy() if self._reagent is not None else None,
+        copy.__init_copy__(self._reactant.copy() if self._reactant is not None else None,
                            self._product.copy() if self._product is not None else None)
         return copy
 

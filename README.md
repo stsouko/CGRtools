@@ -13,6 +13,12 @@ or stable
 
     pip install CGRTools
 
+NOTE:  
+Currently networkx in PyPI is 2.2. 
+Update networkx to master version (2.3 dev)
+
+    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
+
 COPYRIGHT
 =========
 

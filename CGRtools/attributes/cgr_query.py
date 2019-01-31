@@ -29,34 +29,34 @@ class DynQueryAtom(DynAtomAttribute):
             raise AttributeError(f'{key} is invalid')
         elif key.startswith('p_'):
             key = key[2:]
-            value = getattr(self._reagent, f'_{key}_check')(value)
+            value = getattr(self._reactant, f'_{key}_check')(value)
             if key in ('neighbors', 'hybridization'):
                 if len(value) != len(self[key]):
-                    raise ValueError(f'{key} lists in reagent and product should be equal size')
+                    raise ValueError(f'{key} lists in reactant and product should be equal size')
                 value = sorted(zip(self[key], value))
                 if len(value) != len(set(value)):
                     raise ValueError('duplicates found')
-                self._reagent[key], value = zip(*value)
+                self._reactant[key], value = zip(*value)
             self._product[key] = value
         else:
-            value = getattr(self._reagent, f'_{key}_check')(value)
+            value = getattr(self._reactant, f'_{key}_check')(value)
             if key in self._static:
                 self._product[key] = value
             elif key in ('neighbors', 'hybridization'):
                 if len(value) != len(self._product[key]):
-                    raise ValueError(f'{key} lists in reagent and product should be equal size')
+                    raise ValueError(f'{key} lists in reactant and product should be equal size')
                 value = sorted(zip(value, self._product[key]))
                 if len(value) != len(set(value)):
                     raise ValueError('duplicates found')
                 value, self._product[key] = zip(*value)
-            self._reagent[key] = value
+            self._reactant[key] = value
         self.__dict__.clear()
 
     def _update(self, value, kwargs):
         if isinstance(value, (DynQueryAtom, DynAtom)):
             r, p = self._split_check_kwargs(kwargs)
             p_value = value._product
-            value = value._reagent
+            value = value._reactant
         elif isinstance(value, (QueryAtom, Atom, Element)):
             r, p = self._split_check_kwargs(kwargs)
             p_value = value
@@ -78,7 +78,7 @@ class DynQueryAtom(DynAtomAttribute):
             value, p_value = self._split_check_kwargs(value)
             r = p = {}
 
-        self._reagent._update(value, r)
+        self._reactant._update(value, r)
         self._product._update(p_value, p)
         self.__dict__.clear()
 
@@ -115,7 +115,7 @@ class DynQueryAtom(DynAtomAttribute):
                     self.charge == other.charge and self.p_charge == other.p_charge and
                     self.multiplicity == other.multiplicity and self.p_multiplicity == other.p_multiplicity)
         elif isinstance(other, (QueryAtom, Atom)):
-            return self._reagent == other and self._product == other
+            return self._reactant == other and self._product == other
         return False
 
     @cached_property
@@ -133,7 +133,7 @@ class DynQueryAtom(DynAtomAttribute):
                 if k not in p:
                     raise ValueError(f'{k} attribute should be presented with p_{k}')
                 elif len(r[k]) != len(p[k]):
-                    raise ValueError(f'{k} lists in reagent and product should be equal size')
+                    raise ValueError(f'{k} lists in reactant and product should be equal size')
                 value = sorted(zip(r[k], p[k]))
                 if value:
                     if len(value) != len(set(value)):

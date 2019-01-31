@@ -144,8 +144,8 @@ class RDFwrite(MOLwrite, WithMixin):
             self._file.write('M  END\n')
         else:
             self._file.write('$RFMT\n$RXN\n\n\n\n'
-                             f'{len(data.reagents):3d}{len(data.products):3d}{len(data.reactants):3d}\n')
-            for m in chain(data.reagents, data.products, data.reactants):
+                             f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
+            for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)
                 self._file.write('$MOL\n')
                 self._file.write(self._format_mol(*m))
