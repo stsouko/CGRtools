@@ -138,7 +138,7 @@ class CGRread:
                     if not tmp:
                         continue
                     for j in lose:
-                        maps[i] = [x if x < j else x - 1 for x in tmp]
+                        maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
         ''' end
         '''
         rc = ReactionContainer(meta=reaction['meta'])
