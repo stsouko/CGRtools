@@ -153,7 +153,7 @@ class StringCommon:
         return visited, edges, disconnected
 
 
-class CGR_to_Smiles(StringCommon, HashableSmiles):
+class SmilesCGR(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
         return format(self)
@@ -291,7 +291,7 @@ class Smiles(StringCommon, HashableSmiles):
         return ''.join(smi)
 
 
-class SmilesCGR(StringCommon, HashableSmiles):
+class SmirksCGR(StringCommon, HashableSmiles):
     @cached_method
     def __str__(self):
         return format(self)
@@ -396,111 +396,6 @@ class SmilesCGR(StringCommon, HashableSmiles):
 
         return ''.join(smi), ''.join(p_smi)
 
-
-class SmilesCGR(StringCommon, HashableSmiles):
-    @cached_method
-    def __str__(self):
-        return format(self)
-
-    @cached_args_method
-    def __format__(self, format_spec):
-        """
-        format CGR as SMIRKS string
-
-        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
-        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
-        """
-        if not format_spec:
-            neighbors = False
-            hybridization = False
-        elif format_spec == 'n':
-            neighbors = True
-            hybridization = False
-        elif format_spec == 'h':
-            neighbors = False
-            hybridization = True
-        elif format_spec in ('hn', 'nh'):
-            neighbors = True
-            hybridization = True
-        else:
-            raise ValueError('invalid format_spec')
-        return self._format_string(self.atoms_order.__getitem__, neighbors, hybridization)
-
-    def _format_string(self, order, neighbors, hybridization):
-        smiles = []
-        p_smiles = []
-        for x in self._flatten(order):
-            if isinstance(x, str):
-                smiles.append(x)
-                p_smiles.append(x)
-            elif isinstance(x, list):
-                a, p_a = self.__format_atom(x[0], neighbors, hybridization)
-                smiles.append(a)
-                p_smiles.append(p_a)
-                for b, c in sorted(x[1:], key=lambda e: int(e[1])):
-                    smiles.append(order_str[b.order])
-                    smiles.append(str(c))
-                    p_smiles.append(order_str[b.p_order])
-                    p_smiles.append(str(c))
-            elif isinstance(x, DynAtom):
-                a, p_a = self.__format_atom(x, neighbors, hybridization)
-                smiles.append(a)
-                p_smiles.append(p_a)
-            else:
-                smiles.append(order_str[x.order])
-                p_smiles.append(order_str[x.p_order])
-        return f'{"".join(smiles)}>>{"".join(p_smiles)}'
-
-    @staticmethod
-    def __format_atom(atom, neighbors, hybridization):
-        if atom.isotope != atom.common_isotope:
-            smi = [str(atom.isotope), atom.element]
-            p_smi = [str(atom.isotope), atom.element]
-        else:
-            smi = [atom.element]
-            p_smi = [atom.element]
-
-        if hybridization:
-            smi.append(';')
-            smi.append(hybridization_str[atom.hybridization])
-            p_smi.append(';')
-            p_smi.append(hybridization_str[atom.p_hybridization])
-            if neighbors:
-                smi.append(str(atom.neighbors))
-                p_smi.append(str(atom.p_neighbors))
-            smi.append(';')
-            p_smi.append(';')
-        elif neighbors:
-            smi.append(';')
-            p_smi.append(';')
-            smi.append(str(atom.neighbors))
-            p_smi.append(str(atom.p_neighbors))
-            smi.append(';')
-            p_smi.append(';')
-
-        if atom.charge:
-            smi.append(charge_str[atom.charge])
-        if atom.p_charge:
-            p_smi.append(charge_str[atom.p_charge])
-        if atom.multiplicity:
-            smi.append(multiplicity_str[atom.multiplicity])
-        if atom.p_multiplicity:
-            p_smi.append(multiplicity_str[atom.p_multiplicity])
-
-        if atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
-            smi.insert(0, '[')
-            smi.append(']')
-            p_smi.insert(0, '[')
-            p_smi.append(']')
-        else:
-            if len(smi) != 1:
-                smi.insert(0, '[')
-                smi.append(']')
-            if len(p_smi) != 1:
-                p_smi.insert(0, '[')
-                p_smi.append(']')
-
-        return ''.join(smi), ''.join(p_smi)
 
 class SmilesQuery(StringCommon):
     @cached_method
@@ -700,4 +595,4 @@ class Brood:
         return self.__mother[self]
 
 
-__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR', 'HashableSmiles','CGR_to_Smiles']
+__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR', 'HashableSmiles','SmirksCGR']
