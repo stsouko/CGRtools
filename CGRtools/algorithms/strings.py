@@ -153,10 +153,9 @@ class CGR_to_Smiles(StringCommon, HashableSmiles):
         return format(self)
 
     @cached_args_method
-    def __format__(self):
+    def __format__(self, format_spec):
         """
         format CGR as single molecule SMILES string
-
         """
         return self._format_string(self.atoms_order.__getitem__)
 
