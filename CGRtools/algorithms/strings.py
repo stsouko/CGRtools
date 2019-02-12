@@ -35,8 +35,14 @@ dyn_order_str = {1: "[.>-]",  2: "[.>=]", 3: "[.>#]", 4: "[.>:]", 5: "[.>~]",
                  31: "[#>-]", 32: "[#>=]", 34: "[#>:]", 35: "[#>~]",
                  41: "[:>-]", 42: "[:>=]", 43: "[:>#]", 45: "[:>~]",
                  51: "[~>-]", 52: "[~>=]", 53: "[~>#]", 54: "[~>:]"}
-dyn_charge_str = {-3: "[c-3]", -2: "[c-2]", -1: "[c-1]",
-                  3: "[c+3]", 2: "[c+2]", 1: "[c+1]"}
+dyn_charge_str = {(-3,-2): "-3>-2", (-3,-1): "-3>-", (-3,0): "-3>0", (-3,1): "-3>+", (-3,2): "-3>+2", (-3,3): "-3>3",
+                  (-2,-3): "-2>-3", (-2,-1): "-2>-", (-2,0): "-2>0", (-2,1): "-2>+", (-2,2): "-2>+2", (-2,3): "-2>+3",
+                  (-1,-3): "->-3",(-1,-2): "->-2", (-1,0): "->0", (-1,1): "->+", (-1,2): "->+2",(-1,3): "->+3",
+                  (0,-3): "0>-3",(0,-2): "0>-2", (0,-1): "0>-", (0,1): "0>+", (0,2): "0>+2",(0,3): "0>+3",
+                  (1,-3): "+>-3",(1,-2): "+>-2", (1,-1): "+>-", (1,0): "+>0", (1,2): "+>+2",(1,3): "+>+3",
+                  (2,-3): "+2>-3",(2,-2): "+2>-2", (2,-1): "+2>-",(2,0): "+2>0", (2,1): "+2>+", (2,3): "+2>+3",
+                  (3,-3): "+3>-3",(3,-2): "+3>-2", (3,-1): "+3>-",(3,0): "+3>0", (3,1): "+3>+", (3,2): "+3>+2"
+                  }
 
 class HashableSmiles:
     @cached_method
@@ -180,9 +186,9 @@ class CGR_to_Smiles(StringCommon, HashableSmiles):
     @staticmethod
     def __format_bond(bond):
         if bond.order != bond.p_order:
-            if bond.order == None:
+            if not bond.order:
                 smi = dyn_order_str[bond.p_order]
-            elif bond.p_order == None:
+            elif not bond.p_order:
                 smi = dyn_order_str[bond.order * 10]
             else:
                 smi = dyn_order_str[bond.order * 10+bond.p_order]
@@ -199,7 +205,7 @@ class CGR_to_Smiles(StringCommon, HashableSmiles):
 
         if atom.charge:
             if atom.charge != atom.p_charge:
-                smi.append(dyn_charge_str[atom.charge-atom.p_charge])
+                smi.append(dyn_charge_str[(atom.charge,atom.p_charge)])
         if atom.multiplicity:
             smi.append(multiplicity_str[atom.multiplicity])
 
