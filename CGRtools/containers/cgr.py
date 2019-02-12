@@ -21,12 +21,12 @@ from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from networkx.classes.function import frozen
 from .common import BaseContainer
-from ..algorithms import Morgan, SmilesCGR, CGRCompose
+from ..algorithms import Morgan, CGR_to_Smiles, CGRCompose
 from ..attributes import DynAtom, DynBond
 from ..cache import cached_property
 
 
-class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
+class CGRContainer(CGRCompose, Morgan, CGR_to_Smiles, BaseContainer):
     """
     storage for CGRs. has similar to molecules behavior
     """

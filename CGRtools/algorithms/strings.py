@@ -153,27 +153,11 @@ class CGR_to_Smiles(StringCommon, HashableSmiles):
         return format(self)
 
     @cached_args_method
-    def __format__(self, format_spec):
+    def __format__(self):
         """
         format CGR as single molecule SMILES string
 
-        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
-        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
         """
-        if not format_spec:
-            neighbors = False
-            hybridization = False
-        elif format_spec == 'n':
-            neighbors = True
-            hybridization = False
-        elif format_spec == 'h':
-            neighbors = False
-            hybridization = True
-        elif format_spec in ('hn', 'nh'):
-            neighbors = True
-            hybridization = True
-        else:
-            raise ValueError('invalid format_spec')
         return self._format_string(self.atoms_order.__getitem__)
 
     def _format_string(self, order):
