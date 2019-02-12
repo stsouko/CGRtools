@@ -19,7 +19,7 @@
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count
-from ..attributes import Atom, DynAtom, QueryAtom, DynQueryAtom
+from ..attributes import Atom, DynAtom, QueryAtom, DynQueryAtom,DynBond
 from ..cache import cached_method, cached_args_method
 
 
@@ -28,7 +28,15 @@ multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
 charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
 order_str = {1: '-', 2: '=', 3: '#', 4: ':', 5: '~', None: '.'}
 stereo_str = {1: '@', -1: '@@'}
-
+dyn_order_str = {1: "[.>-]",  2: "[.>=]", 3: "[.>#]", 4: "[.>:]", 5: "[.>~]",
+                 10: "[->.]",  20: "[=>.]", 30: "[#>.]", 40: "[:>.]", 50: "[~>.]",
+                 12: "[->=]", 13: "[->#]", 14: "[->:]", 15: "[->~]",
+                 21: "[=>-]", 23: "[=>#]", 24: "[=>:]", 25: "[=>~]",
+                 31: "[#>-]", 32: "[#>=]", 34: "[#>:]", 35: "[#>~]",
+                 41: "[:>-]", 42: "[:>=]", 43: "[:>#]", 45: "[:>~]",
+                 51: "[~>-]", 52: "[~>=]", 53: "[~>#]", 54: "[~>:]"}
+dyn_charge_str = {-3: "[c-3]", -2: "[c-2]", -1: "[c-1]",
+                  3: "[c+3]", 2: "[c+2]", 1: "[c+1]"}
 
 class HashableSmiles:
     @cached_method
@@ -137,6 +145,86 @@ class StringCommon:
                     disconnected[parent].append(child)
 
         return visited, edges, disconnected
+
+
+class CGR_to_Smiles(StringCommon, HashableSmiles):
+    @cached_method
+    def __str__(self):
+        return format(self)
+
+    @cached_args_method
+    def __format__(self, format_spec):
+        """
+        format CGR as single molecule SMILES string
+
+        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
+        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
+        """
+        if not format_spec:
+            neighbors = False
+            hybridization = False
+        elif format_spec == 'n':
+            neighbors = True
+            hybridization = False
+        elif format_spec == 'h':
+            neighbors = False
+            hybridization = True
+        elif format_spec in ('hn', 'nh'):
+            neighbors = True
+            hybridization = True
+        else:
+            raise ValueError('invalid format_spec')
+        return self._format_string(self.atoms_order.__getitem__)
+
+    def _format_string(self, order):
+        smiles = []
+        for x in self._flatten(order):
+            if isinstance(x, str):
+                smiles.append(x)
+            elif isinstance(x, list):
+                a = self.__format_atom(x[0])
+                smiles.append(a)
+            elif isinstance(x, DynAtom):
+                a = self.__format_atom(x)
+                smiles.append(a)
+            elif isinstance(x, DynBond):
+                a = self.__format_bond(x)
+                smiles.append(a)
+            else:
+                smiles.append(order_str[x.order])
+        return f'{"".join(smiles)}'
+
+    @staticmethod
+    def __format_bond(bond):
+        if bond.order != bond.p_order:
+            if bond.order == None:
+                smi = dyn_order_str[bond.p_order]
+            elif bond.p_order == None:
+                smi = dyn_order_str[bond.order * 10]
+            else:
+                smi = dyn_order_str[bond.order * 10+bond.p_order]
+        else:
+            smi = order_str[bond.order]
+        return smi
+
+    @staticmethod
+    def __format_atom(atom):
+        if atom.isotope != atom.common_isotope:
+            smi = [str(atom.isotope), atom.element]
+        else:
+            smi = [atom.element]
+
+        if atom.charge:
+            if atom.charge != atom.p_charge:
+                smi.append(dyn_charge_str[atom.charge-atom.p_charge])
+        if atom.multiplicity:
+            smi.append(multiplicity_str[atom.multiplicity])
+
+        if len(smi) != 1 or atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
+            smi.insert(0, '[')
+            smi.append(']')
+
+        return ''.join(smi)
 
 
 class Smiles(StringCommon, HashableSmiles):
@@ -319,6 +407,111 @@ class SmilesCGR(StringCommon, HashableSmiles):
 
         return ''.join(smi), ''.join(p_smi)
 
+
+class SmilesCGR(StringCommon, HashableSmiles):
+    @cached_method
+    def __str__(self):
+        return format(self)
+
+    @cached_args_method
+    def __format__(self, format_spec):
+        """
+        format CGR as SMIRKS string
+
+        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
+        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
+        """
+        if not format_spec:
+            neighbors = False
+            hybridization = False
+        elif format_spec == 'n':
+            neighbors = True
+            hybridization = False
+        elif format_spec == 'h':
+            neighbors = False
+            hybridization = True
+        elif format_spec in ('hn', 'nh'):
+            neighbors = True
+            hybridization = True
+        else:
+            raise ValueError('invalid format_spec')
+        return self._format_string(self.atoms_order.__getitem__, neighbors, hybridization)
+
+    def _format_string(self, order, neighbors, hybridization):
+        smiles = []
+        p_smiles = []
+        for x in self._flatten(order):
+            if isinstance(x, str):
+                smiles.append(x)
+                p_smiles.append(x)
+            elif isinstance(x, list):
+                a, p_a = self.__format_atom(x[0], neighbors, hybridization)
+                smiles.append(a)
+                p_smiles.append(p_a)
+                for b, c in sorted(x[1:], key=lambda e: int(e[1])):
+                    smiles.append(order_str[b.order])
+                    smiles.append(str(c))
+                    p_smiles.append(order_str[b.p_order])
+                    p_smiles.append(str(c))
+            elif isinstance(x, DynAtom):
+                a, p_a = self.__format_atom(x, neighbors, hybridization)
+                smiles.append(a)
+                p_smiles.append(p_a)
+            else:
+                smiles.append(order_str[x.order])
+                p_smiles.append(order_str[x.p_order])
+        return f'{"".join(smiles)}>>{"".join(p_smiles)}'
+
+    @staticmethod
+    def __format_atom(atom, neighbors, hybridization):
+        if atom.isotope != atom.common_isotope:
+            smi = [str(atom.isotope), atom.element]
+            p_smi = [str(atom.isotope), atom.element]
+        else:
+            smi = [atom.element]
+            p_smi = [atom.element]
+
+        if hybridization:
+            smi.append(';')
+            smi.append(hybridization_str[atom.hybridization])
+            p_smi.append(';')
+            p_smi.append(hybridization_str[atom.p_hybridization])
+            if neighbors:
+                smi.append(str(atom.neighbors))
+                p_smi.append(str(atom.p_neighbors))
+            smi.append(';')
+            p_smi.append(';')
+        elif neighbors:
+            smi.append(';')
+            p_smi.append(';')
+            smi.append(str(atom.neighbors))
+            p_smi.append(str(atom.p_neighbors))
+            smi.append(';')
+            p_smi.append(';')
+
+        if atom.charge:
+            smi.append(charge_str[atom.charge])
+        if atom.p_charge:
+            p_smi.append(charge_str[atom.p_charge])
+        if atom.multiplicity:
+            smi.append(multiplicity_str[atom.multiplicity])
+        if atom.p_multiplicity:
+            p_smi.append(multiplicity_str[atom.p_multiplicity])
+
+        if atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
+            smi.insert(0, '[')
+            smi.append(']')
+            p_smi.insert(0, '[')
+            p_smi.append(']')
+        else:
+            if len(smi) != 1:
+                smi.insert(0, '[')
+                smi.append(']')
+            if len(p_smi) != 1:
+                p_smi.insert(0, '[')
+                p_smi.append(']')
+
+        return ''.join(smi), ''.join(p_smi)
 
 class SmilesQuery(StringCommon):
     @cached_method
@@ -518,4 +711,4 @@ class Brood:
         return self.__mother[self]
 
 
-__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR', 'HashableSmiles']
+__all__ = ['Smiles', 'SmilesCGR', 'SmilesQuery', 'SmilesQueryCGR', 'HashableSmiles','CGR_to_Smiles']
