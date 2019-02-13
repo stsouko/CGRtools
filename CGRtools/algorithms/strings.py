@@ -28,13 +28,13 @@ multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
 charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
 order_str = {1: '-', 2: '=', 3: '#', 4: ':', 5: '~', None: '.'}
 stereo_str = {1: '@', -1: '@@'}
-dyn_order_str = {1: "[.>-]",  2: "[.>=]", 3: "[.>#]", 4: "[.>:]", 5: "[.>~]",
-                 10: "[->.]",  20: "[=>.]", 30: "[#>.]", 40: "[:>.]", 50: "[~>.]",
-                 12: "[->=]", 13: "[->#]", 14: "[->:]", 15: "[->~]",
-                 21: "[=>-]", 23: "[=>#]", 24: "[=>:]", 25: "[=>~]",
-                 31: "[#>-]", 32: "[#>=]", 34: "[#>:]", 35: "[#>~]",
-                 41: "[:>-]", 42: "[:>=]", 43: "[:>#]", 45: "[:>~]",
-                 51: "[~>-]", 52: "[~>=]", 53: "[~>#]", 54: "[~>:]"}
+dyn_order_str = {                 (0, 1): "[.>-]", (0, 2): "[.>=]", (0, 3): "[.>#]", (0, 4): "[.>:]", (0, 5): "[.>~]",
+                 (1, 0): "[->.]",                  (1, 2): "[->=]", (1, 3): "[->#]", (1, 4): "[->:]", (1, 5): "[->~]",
+                 (2, 0): "[=>.]", (2, 1): "[=>-]",                  (2, 3): "[=>#]", (2, 4): "[=>:]", (2, 5): "[=>~]",
+                 (3, 0): "[#>.]", (3, 1): "[#>-]", (3, 2): "[#>=]",                  (3, 4): "[#>:]", (3, 5): "[#>~]",
+                 (4, 0): "[:>.]", (4, 1): "[:>-]", (4, 2): "[:>=]", (4, 3): "[:>#]",                  (4, 5): "[:>~]",
+                 (5, 0): "[~>.]", (5, 1): "[~>-]", (5, 2): "[~>=]", (5, 3): "[~>#]", (5, 4): "[~>:]"
+                  }
 dyn_charge_str = {(-3,-2): "-3>-2", (-3,-1): "-3>-", (-3,0): "-3>0", (-3,1): "-3>+", (-3,2): "-3>+2", (-3,3): "-3>3",
                   (-2,-3): "-2>-3", (-2,-1): "-2>-", (-2,0): "-2>0", (-2,1): "-2>+", (-2,2): "-2>+2", (-2,3): "-2>+3",
                   (-1,-3): "->-3",(-1,-2): "->-2", (-1,0): "->0", (-1,1): "->+", (-1,2): "->+2",(-1,3): "->+3",
@@ -238,9 +238,8 @@ class SmilesCGR(StringCommon, HashableSmiles):
         """
         format CGR as SMIRKS string
 
-        :param format_spec:
-        if 's' in fromat_spec only representation of CGR as smiles will be shown. No hybridization and neighbors count
-        will be used. High priority option.
+        :param format_spec: if 's' in fromat_spec only representation of CGR as smiles will be shown.
+        No hybridization and neighbors count will be used. High priority option.
         if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
         if == 'h' add hybridization of atoms. if 'nh' or 'hn' add both.
         """
@@ -354,17 +353,17 @@ class SmilesCGR(StringCommon, HashableSmiles):
                 smiles.append(a)
             else:
                 smiles.append(order_str[x.order])
-        return f'{"".join(smiles)}'
+        return "".join(smiles)
 
     @staticmethod
     def __format_bond_cgr(bond):
         if bond.order != bond.p_order:
             if not bond.order:
-                smi = dyn_order_str[bond.p_order]
+                smi = dyn_order_str[(0, bond.p_order)]
             elif not bond.p_order:
-                smi = dyn_order_str[bond.order * 10]
+                smi = dyn_order_str[(bond.order, 0)]
             else:
-                smi = dyn_order_str[bond.order * 10+bond.p_order]
+                smi = dyn_order_str[(bond.order, bond.p_order)]
         else:
             smi = order_str[bond.order]
         return smi
