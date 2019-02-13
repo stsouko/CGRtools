@@ -42,13 +42,16 @@ class CGRreactor:
         if limit == 1:
             if mapping:
                 return self.__patcher(structure, mapping)
-        elif limit > 1:
-            if mapping:
-                return [self.__patcher(structure, m) for m in mapping]
-        elif skip_intersection:
-            return self.__skip(structure, mapping)
         else:
-            return (self.__patcher(structure, m) for m in mapping)
+            if skip_intersection:
+                g = self.__skip(structure, mapping)
+            else:
+                g = (self.__patcher(structure, m) for m in mapping)
+
+            if limit > 1:
+                return list(g)
+            else:
+                return g
 
     def __skip(self, structure, mapping):
         found = set()
