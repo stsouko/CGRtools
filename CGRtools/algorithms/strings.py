@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
-#  Copyright 2017-2019 Timur Gimadiev <timur.gimadiev@gmail.com>
+#  Copyright 2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -53,7 +53,7 @@ dyn_charge_str = {(-3, -3): "-3", (-3, -2): "-3>-2", (-3, -1): "-3>-", (-3, 0): 
 dyn_multiplicity_str = {(1, 1): "*", (1, 2): "*>*2", (1, 3): "*>*3", (1, None): "*>n",
                         (2, 1): "*2>*", (2, 2): "*2", (2, 3): "*2>*3", (2, None): "*2>n",
                         (3, 1): "*3>*", (3, 2): "*3>*2", (3, 3): "*3", (3, None): "*3>n",
-                        (None, 1): "n>1", (None, 2): "n>2", (None, 3): "n>3", (None, None): "n"}
+                        (None, 1): "n>1", (None, 2): "n>2", (None, 3): "n>3", (None, None): ""}
 
 
 class HashableSmiles:
@@ -371,10 +371,8 @@ class SmilesCGR(StringCommon, HashableSmiles):
             smi = [str(atom.isotope), atom.element]
         else:
             smi = [atom.element]
-        if atom.charge:
-            smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
-        if atom.multiplicity:
-            smi.append(dyn_multiplicity_str[(atom.multiplicity, atom.p_multiplicity)])
+        smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
+        smi.append(dyn_multiplicity_str[(atom.multiplicity, atom.p_multiplicity)])
         if len(smi) != 1 or atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
             smi.insert(0, '[')
             smi.append(']')
