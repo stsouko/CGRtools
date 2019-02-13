@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -28,7 +29,7 @@ multiplicity_str = {1: '*', 2: '*2', 3: '*3', None: 'n'}
 charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3'}
 order_str = {1: '-', 2: '=', 3: '#', 4: ':', 5: '~', None: '.'}
 stereo_str = {1: '@', -1: '@@'}
-dyn_order_str = {(None, None): ".", (None, 1): "[.>-]", (None, 2): "[.>=]", (None, 3): "[.>#]", (None, 4): "[.>:]",
+dyn_order_str = {(None, 1): "[.>-]", (None, 2): "[.>=]", (None, 3): "[.>#]", (None, 4): "[.>:]",
                  (None, 5): "[.>~]",
                  (1, None): "[->.]", (1, 1): "", (1, 2): "[->=]", (1, 3): "[->#]", (1, 4): "[->:]", (1, 5): "[->~]",
                  (2, None): "[=>.]", (2, 1): "[=>-]", (2, 2): "=", (2, 3): "[=>#]", (2, 4): "[=>:]", (2, 5): "[=>~]",
@@ -39,11 +40,16 @@ dyn_charge_str = {(-3, -2): "-3>-2", (-3, -1): "-3>-", (-3, 0): "-3>0", (-3, 1):
                   (-3, 3): "-3>3",
                   (-2, -3): "-2>-3", (-2, -1): "-2>-", (-2, 0): "-2>0", (-2, 1): "-2>+", (-2, 2): "-2>+2",
                   (-2, 3): "-2>+3",
-                  (-1, -3): "->-3", (-1, -2): "->-2", (-1, 0): "->0", (-1, 1): "->+", (-1, 2): "->+2", (-1, 3): "->+3",
+                  (-1, -3): "->-3", (-1, -2): "->-2", (-1,-1): "-", (-1, 0): "->0", (-1, 1): "->+", (-1, 2): "->+2",
+                  (-1, 3): "->+3",
                   (0, -3): "0>-3", (0, -2): "0>-2", (0, -1): "0>-", (0, 1): "0>+", (0, 2): "0>+2", (0, 3): "0>+3",
                   (1, -3): "+>-3", (1, -2): "+>-2", (1, -1): "+>-", (1, 0): "+>0", (1, 2): "+>+2", (1, 3): "+>+3",
                   (2, -3): "+2>-3", (2, -2): "+2>-2", (2, -1): "+2>-", (2, 0): "+2>0", (2, 1): "+2>+", (2, 3): "+2>+3",
                   (3, -3): "+3>-3", (3, -2): "+3>-2", (3, -1): "+3>-", (3, 0): "+3>0", (3, 1): "+3>+", (3, 2): "+3>+2"}
+dyn_multiplicity_str = {(1, 1): "*", (1, 2): "*>*2", (1, 3): "*>*3", (1, None): "*>n",
+                        (2, 1): "*2>*", (2, 2): "*2", (2, 3): "*2>*3", (2, None): "*2>n",
+                        (3, 1): "*3>*", (3, 2): "*3>*2", (3, 3): "*3", (3, None): "*3>n",
+                        (None, 1): "n>1", (None, 2): "n>2", (None, 3): "n>3", (None, None): "n"}
 
 
 class HashableSmiles:
@@ -346,8 +352,8 @@ class SmilesCGR(StringCommon, HashableSmiles):
                 smiles.append(x)
             elif isinstance(x, list):
                 a = self.__format_atom_cgr(x[0])
+                smiles.append(a)
                 for b, c in sorted(x[1:], key=lambda e: int(e[1])):
-                    smiles.append(a)
                     smiles.append(dyn_order_str[(b.order, b.p_order)])
                     smiles.append(str(c))
 
@@ -370,10 +376,9 @@ class SmilesCGR(StringCommon, HashableSmiles):
             smi = [atom.element]
 
         if atom.charge:
-            if atom.charge != atom.p_charge:
-                smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
+            smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
         if atom.multiplicity:
-            smi.append(multiplicity_str[atom.multiplicity])
+            smi.append(dyn_multiplicity_str[(atom.multiplicity, atom.p_multiplicity)])
 
         if len(smi) != 1 or atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
             smi.insert(0, '[')
