@@ -238,17 +238,17 @@ class SmilesCGR(StringCommon, HashableSmiles):
         """
         format CGR as SMIRKS string
 
-        :param format_spec: if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
-        if == 'h' add hybridizations of atoms. if 'nh' or 'hn' add both.
+        :param format_spec:
+        if 's' in fromat_spec only representation of CGR as smiles will be shown. No hybridization and neighbors count
+        will be used. High priority option.
+        if == 'n' add neighbors count of atoms. don't forget to call reset query marks before.
+        if == 'h' add hybridization of atoms. if 'nh' or 'hn' add both.
         """
         if format_spec and 's' in format_spec:
             return self._format_string_cgr(self.atoms_order.__getitem__)
-
         if not format_spec:
             neighbors = False
             hybridization = False
-            smirks = True
-            smiles = False
         elif format_spec == 'n':
             neighbors = True
             hybridization = False
@@ -378,7 +378,7 @@ class SmilesCGR(StringCommon, HashableSmiles):
 
         if atom.charge:
             if atom.charge != atom.p_charge:
-                smi.append(dyn_charge_str[(atom.charge,atom.p_charge)])
+                smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
         if atom.multiplicity:
             smi.append(multiplicity_str[atom.multiplicity])
 
