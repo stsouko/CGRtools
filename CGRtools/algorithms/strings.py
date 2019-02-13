@@ -371,12 +371,13 @@ class SmilesCGR(StringCommon, HashableSmiles):
             smi = [str(atom.isotope), atom.element]
         else:
             smi = [atom.element]
-        smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
-        smi.append(dyn_multiplicity_str[(atom.multiplicity, atom.p_multiplicity)])
+        if atom.charge or atom.p_charge:
+            smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
+        if atom.multiplicity or atom.p_multiplicity:
+            smi.append(dyn_multiplicity_str[(atom.multiplicity, atom.p_multiplicity)])
         if len(smi) != 1 or atom.element not in {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}:
             smi.insert(0, '[')
             smi.append(']')
-
         return ''.join(smi)
 
 
