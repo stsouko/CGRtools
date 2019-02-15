@@ -18,6 +18,7 @@
 #
 from collections import defaultdict
 from functools import reduce
+from itertools import chain, count
 from logging import warning
 from operator import or_
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer
@@ -26,7 +27,7 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 class CGRreactor:
     def __init__(self, template, delete_atoms=False):
         pattern, atom_attrs, bond_attrs, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
-        self.__pattern = pattern
+        self._pattern = pattern
         self.__atom_attrs = atom_attrs
         self.__bond_attrs = bond_attrs
         self.__conditional_element = conditional_element
@@ -38,29 +39,20 @@ class CGRreactor:
         if not isinstance(structure, (MoleculeContainer, CGRContainer)):
             raise TypeError('only Molecules and CGRs possible')
 
-        mapping = self.__pattern.get_substructure_mapping(structure, limit)
+        mapping = self._pattern.get_substructure_mapping(structure, limit)
         if limit == 1:
             if mapping:
-                return self.__patcher(structure, mapping)
+                return self.patcher(structure, mapping)
         else:
             if skip_intersection:
-                g = self.__skip(structure, mapping)
+                g = (self.patcher(structure, m) for m in skip(mapping))
             else:
-                g = (self.__patcher(structure, m) for m in mapping)
+                g = (self.patcher(structure, m) for m in mapping)
 
             if limit > 1:
                 return list(g)
             else:
                 return g
-
-    def __skip(self, structure, mapping):
-        found = set()
-        for m in mapping:
-            matched_atoms = set(m.values())
-            if found.intersection(matched_atoms):
-                continue
-            found.update(matched_atoms)
-            yield self.__patcher(structure, m)
 
     @staticmethod
     def __prepare_template(template):
@@ -134,7 +126,7 @@ class CGRreactor:
 
         return reactants, dict(absolute_atom), bonds, conditional_element, is_cgr, to_delete
 
-    def __patcher(self, structure, mapping):
+    def patcher(self, structure, mapping):
         new = type(structure)()
         new.meta.update(self.__meta)
         to_delete = {mapping[x] for x in self.__to_delete}
@@ -176,4 +168,87 @@ class CGRreactor:
         return new
 
 
-__all__ = ['CGRreactor']
+class Reactor:
+    def __init__(self, template, delete_atoms=False):
+        reactants, products = template.reactants, template.products
+        self.__complete = False
+        self.__single = False
+        if len(reactants) == 1:
+            if len(products) > products:
+                self.__complete = True
+            self.__single = True
+        else:
+            if len(products) != len(reactants) and len(reactants) > 2:  # 2 -> 3 or 3 -> 2
+                raise ValueError('wtf?')
+            elif len(products) == len(reactants):
+                self.__complete = True
+        self.reactor = CGRreactor(template, delete_atoms)
+
+    def __call__(self, structures, limit=0, skip_intersection=True):
+        if any(not isinstance(structure, MoleculeContainer) for structure in structures):
+            raise TypeError('only Molecules possible')
+        if self.__single:
+            patch = self.reactor(structures[0])
+            if self.__complete:
+                return patch.split()
+            return [patch]
+        else:
+            structures = self._remap(structures)
+            all_maps = []
+            for structure in structures:
+                map_ = self.reactor._pattern.get_substructure_mapping(structure, limit)
+                if map_:
+                    if isinstance(map_, dict):
+                        all_maps.append(map_)
+                    else:
+                        all_maps.extend([*map_])
+            mapping = {k: v for d in all_maps for k, v in d.items()}
+            structure = reduce(or_, structures, QueryContainer())
+            if mapping:
+                if limit == 1:
+                    patch = self.reactor.patcher(structure, mapping)
+                    if self.__complete:
+                        return patch.split()
+                    return [patch]
+                else:
+                    if skip_intersection:
+                        gm = skip(mapping)
+                        g = (self.reactor.patcher(structure, m) for m in gm)
+                        if self.__complete:
+                            g = (self.reactor.patcher(structure, m).split() for m in gm)
+                    else:
+                        g = (self.reactor.patcher(structure, m) for m in mapping)
+                        if self.__complete:
+                            g = (self.reactor.patcher(structure, m).split() for m in mapping)
+                    if limit > 1:
+                        return list(g)
+                    else:
+                        return g
+
+    @staticmethod
+    def _remap(structures):
+        checked = [structures[0]]
+        for structure in structures:
+            if structure in checked:
+                continue
+            checked_atoms = set(chain.from_iterable(i.atoms_numbers for i in checked))
+            intersection = set(structure.atoms_numbers).intersection(checked_atoms)
+            if intersection:
+                mapping = {k: v for k, v in zip(intersection, count(max(checked_atoms) + 1))}
+                structure.remap(mapping)
+            checked.append(structure)
+        return checked
+
+
+def skip(mapping):
+    """
+
+    :param mapping: generator
+    :return: filtered generator
+    """
+    # todo: filter generator
+    pass
+
+
+__all__ = ['CGRreactor', 'Reactor']
+
