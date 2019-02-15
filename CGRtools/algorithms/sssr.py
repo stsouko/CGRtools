@@ -34,8 +34,6 @@ class SSSR:
         if len(adj) < 3:
             return []
 
-        n_sssr = self.bonds_count - len(self) + 1
-
         atoms = {x for x, y in adj.items() if len(y)}  # ignore isolated atoms
         terminals = {x for x, y in adj.items() if len(y) == 1}
         if terminals:
@@ -50,6 +48,7 @@ class SSSR:
         if not atoms:
             return []
 
+        n_sssr = self.bonds_count - len(self) + 1
         terminated = {}
         tail = atoms.pop()
         next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
@@ -108,6 +107,9 @@ class SSSR:
                 n_sssr += 1
                 tail = atoms.pop()
                 next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
+
+        if not n_sssr:
+            return []
 
         pid1 = {}
         pid2 = {}
