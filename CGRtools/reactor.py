@@ -178,7 +178,7 @@ class Reactor:
                 self.__complete = True
             self.__single = True
         else:
-            if len(products) != len(reactants) and len(reactants) > 2:  # 2 -> 3 or 3 -> 2
+            if all([len(reactants) >= 2, len(products) != len(reactants), len(products) != 1]):  # 2 -> 3 or 3 -> 2
                 raise ValueError('wtf?')
             elif len(products) == len(reactants):
                 self.__complete = True
