@@ -18,7 +18,7 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count
+from itertools import chain, count, permutations
 from logging import warning
 from operator import or_
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer
@@ -27,7 +27,7 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 class CGRreactor:
     def __init__(self, template, delete_atoms=False):
         pattern, atom_attrs, bond_attrs, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
-        self._pattern = pattern
+        self.__pattern = pattern
         self.__atom_attrs = atom_attrs
         self.__bond_attrs = bond_attrs
         self.__conditional_element = conditional_element
@@ -39,7 +39,7 @@ class CGRreactor:
         if not isinstance(structure, (MoleculeContainer, CGRContainer)):
             raise TypeError('only Molecules and CGRs possible')
 
-        mapping = self._pattern.get_substructure_mapping(structure, limit)
+        mapping = self.__pattern.get_substructure_mapping(structure, limit)
         if limit == 1:
             if mapping:
                 return self.patcher(structure, mapping)
@@ -173,63 +173,76 @@ class Reactor:
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
-        self.__complete = False
+        if any(not isinstance(structure, (MoleculeContainer, QueryContainer)) for structure in (*reactants, *products)):
+            raise TypeError('only Molecules and Queries possible')
+        self.__split = False
         self.__single = False
         if len(reactants) == 1:
             if len(products) > 1:
-                self.__complete = True
+                self.__split = True
             self.__single = True
-        else:
-            if len(reactants) == len(products):
-                self.__complete = True
-            elif len(reactants) != 1:
-                raise ValueError('Only reactions with '
-                                 'ONE to ONE, '
-                                 'ONE to MANY, '
-                                 'MANY to ONE and '
-                                 'MANY to MANY (EQUAL) molecules allowed')
+        elif len(reactants) == len(products):
+            self.__split = True
+        elif len(products) != 1:
+            raise ValueError('Only reactions with '
+                             'ONE to ONE, '
+                             'ONE to MANY, '
+                             'MANY to ONE and '
+                             'MANY to MANY (EQUAL) molecules allowed')
         self.reactor = CGRreactor(template, delete_atoms)
+        self.__patterns = [QueryContainer(r) for r in reactants]
 
     def __call__(self, structures, limit=0, skip_intersection=True):
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only Molecules possible')
         if self.__single:
             patch = self.reactor(structures[0])
-            if self.__complete:
+            if self.__split:
                 return patch.split()
             return [patch]
         else:
             structures = self.__remap(structures)
-            all_maps = []
-            for structure in structures:
-                map_ = self.reactor._pattern.get_substructure_mapping(structure, limit)
-                if map_:
-                    if isinstance(map_, dict):
-                        all_maps.append(map_)
-                    else:
-                        all_maps.extend([*map_])
-            mapping = {k: v for d in all_maps for k, v in d.items()}
-            structure = reduce(or_, structures, QueryContainer())
-            if mapping:
-                if limit == 1:
-                    patch = self.reactor.patcher(structure, mapping)
-                    if self.__complete:
+            mapping = self.get_mapping(structures)
+            structure = reduce(or_, structures, MoleculeContainer())
+            if limit == 1:
+                if mapping:
+                    patch = self.reactor.patcher(structure, next(mapping))
+                    if self.__split:
                         return patch.split()
                     return [patch]
+            else:
+                if skip_intersection:
+                    gm = skip(mapping)
+                    g = (self.reactor.patcher(structure, m) for m in gm)
+                    if self.__split:
+                        g = (self.reactor.patcher(structure, m).split() for m in gm)
                 else:
-                    if skip_intersection:
-                        gm = skip(mapping)
-                        g = (self.reactor.patcher(structure, m) for m in gm)
-                        if self.__complete:
-                            g = (self.reactor.patcher(structure, m).split() for m in gm)
-                    else:
-                        g = (self.reactor.patcher(structure, m) for m in mapping)
-                        if self.__complete:
-                            g = (self.reactor.patcher(structure, m).split() for m in mapping)
-                    if limit > 1:
-                        return list(g)
-                    else:
-                        return g
+                    g = (self.reactor.patcher(structure, m) for m in mapping)
+                    if self.__split:
+                        g = (self.reactor.patcher(structure, m).split() for m in mapping)
+                if limit > 1:
+                    return list(g)
+                else:
+                    return g
+
+    def get_mapping(self, structures):
+        """
+        match each pattern to each molecule.
+        if all patterns matches with all molecules return all possible mapping.
+
+        :param structures: disjoint molecules
+        :return: mapping generator
+        """
+        for combo in [dict(zip(self.__patterns, x)) for x in permutations(structures, len(self.__patterns))]:
+            mapping = []
+            for p in self.__patterns:
+                m = p.get_substructure_mapping(combo[p], limit=1)
+                if m:
+                    mapping.append(m)
+                else:
+                    break
+            else:
+                yield {k: v for d in mapping for k, v in d.items()}
 
     @staticmethod
     def __remap(structures):
