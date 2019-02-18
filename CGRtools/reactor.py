@@ -171,17 +171,23 @@ class CGRreactor:
 class Reactor:
     def __init__(self, template, delete_atoms=False):
         reactants, products = template.reactants, template.products
+        if not reactants or not products:
+            raise ValueError('empty template')
         self.__complete = False
         self.__single = False
         if len(reactants) == 1:
-            if len(products) > products:
+            if len(products) > 1:
                 self.__complete = True
             self.__single = True
         else:
-            if all([len(reactants) >= 2, len(products) != len(reactants), len(products) != 1]):  # 2 -> 3 or 3 -> 2
-                raise ValueError('wtf?')
-            elif len(products) == len(reactants):
+            if len(reactants) == len(products):
                 self.__complete = True
+            elif len(reactants) != 1:
+                raise ValueError('Only reactions with '
+                                 'ONE to ONE, '
+                                 'ONE to MANY, '
+                                 'MANY to ONE and '
+                                 'MANY to MANY (EQUAL) molecules allowed')
         self.reactor = CGRreactor(template, delete_atoms)
 
     def __call__(self, structures, limit=0, skip_intersection=True):
@@ -193,7 +199,7 @@ class Reactor:
                 return patch.split()
             return [patch]
         else:
-            structures = self._remap(structures)
+            structures = self.__remap(structures)
             all_maps = []
             for structure in structures:
                 map_ = self.reactor._pattern.get_substructure_mapping(structure, limit)
@@ -226,7 +232,7 @@ class Reactor:
                         return g
 
     @staticmethod
-    def _remap(structures):
+    def __remap(structures):
         checked = [structures[0]]
         for structure in structures:
             if structure in checked:
@@ -242,12 +248,16 @@ class Reactor:
 
 def skip(mapping):
     """
-
     :param mapping: generator
     :return: filtered generator
     """
-    # todo: filter generator
-    pass
+    found = set()
+    for m in mapping:
+        matched_atoms = set(m.values())
+        if found.intersection(matched_atoms):
+            continue
+        found.update(matched_atoms)
+        yield m
 
 
 __all__ = ['CGRreactor', 'Reactor']
