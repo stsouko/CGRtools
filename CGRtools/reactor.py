@@ -228,21 +228,21 @@ class Reactor:
     def get_mapping(self, structures):
         """
         match each pattern to each molecule.
-        if all patterns matches with all molecules return all possible mapping.
+        if all patterns matches with all molecules return generator of all possible mapping.
 
         :param structures: disjoint molecules
         :return: mapping generator
         """
-        for combo in [dict(zip(self.__patterns, x)) for x in permutations(structures, len(self.__patterns))]:
-            mapping = []
-            for p in self.__patterns:
-                m = p.get_substructure_mapping(combo[p], limit=1)
+        for combo in [zip(self.__patterns, x) for x in permutations(structures, len(self.__patterns))]:
+            mapping = {}
+            for p, m in combo:
+                m = p.get_substructure_mapping(m, limit=1)
                 if m:
-                    mapping.append(m)
+                    mapping.update(m)
                 else:
                     break
             else:
-                yield {k: v for d in mapping for k, v in d.items()}
+                yield mapping
 
     @staticmethod
     def __remap(structures):
@@ -274,4 +274,3 @@ def skip(mapping):
 
 
 __all__ = ['CGRreactor', 'Reactor']
-
