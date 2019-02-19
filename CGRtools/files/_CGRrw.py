@@ -138,7 +138,7 @@ class CGRread:
                     if not tmp:
                         continue
                     for j in lose:
-                        maps[i] = [x if x < j else x - 1 for x in tmp]
+                        maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
         ''' end
         '''
         rc = ReactionContainer(meta=reaction['meta'])
@@ -295,14 +295,13 @@ class CGRread:
         elif is_query:
             for k, v in atom_data.items():
                 atoms[k].update(v)
-            if bond_data:
-                for n, m, bond in bonds:
-                    if n in bond_data and m in bond_data[n]:
-                        if bond != 8:
-                            raise ValueError('invalid CGR spec')
-                        prepared_bonds.append((n, m, bond_data[n][m]))
-                    else:
-                        prepared_bonds.append((n, m, {'order': bond}))
+            for n, m, bond in bonds:
+                if n in bond_data and m in bond_data[n]:
+                    if bond != 8:
+                        raise ValueError('invalid CGR spec')
+                    prepared_bonds.append((n, m, bond_data[n][m]))
+                else:
+                    prepared_bonds.append((n, m, {'order': bond}))
             g = QueryContainer()
         else:
             for n, m, bond in bonds:

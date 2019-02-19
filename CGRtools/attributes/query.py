@@ -50,7 +50,7 @@ class QueryAtom(AtomAttribute):
             self._atom.update(element=(value.element,), charge=value.charge, stereo=value.stereo,
                               multiplicity=value.multiplicity,
                               isotope=value.isotope if value.isotope != value.common_isotope else None,
-                              neighbors=(value.neighbors,) if value.neighbors else (),
+                              neighbors=(value.neighbors,) if value.neighbors is not None else (),
                               hybridization=(value.hybridization,) if value.hybridization else (),
                               x=value.x, y=value.y, z=value.z)
             self._atom.update(kwargs)
