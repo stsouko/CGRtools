@@ -193,6 +193,7 @@ class Reactor:
         self.__patterns = [QueryContainer(r) for r in reactants]
 
     def __call__(self, structures, limit=0, skip_intersection=True):
+        # todo: return reactions with correct mapping as in pattern
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only Molecules possible')
         if self.__single:
