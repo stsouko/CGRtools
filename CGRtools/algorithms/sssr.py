@@ -16,8 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import combinations, product
-from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
 from ..cache import cached_property
 
 
