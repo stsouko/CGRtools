@@ -34,7 +34,7 @@ class SSSR:
         if len(adj) < 3:
             return []
 
-        atoms = {x for x, y in adj.items() if len(y)}  # ignore isolated atoms
+        atoms = {x for x, y in adj.items() if y}  # ignore isolated atoms
         terminals = {x for x, y in adj.items() if len(y) == 1}
         if terminals:
             bubble = terminals
@@ -48,7 +48,7 @@ class SSSR:
         if not atoms:
             return []
 
-        n_sssr = self.bonds_count - len(self) + 1
+        n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
         terminated = {}
         tail = atoms.pop()
         next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
