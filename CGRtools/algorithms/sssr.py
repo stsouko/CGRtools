@@ -69,8 +69,8 @@ class SSSR:
                         if n in next_stack:
                             next_stack[n].extend(next_broom)
                         else:
-                            next_broom.extend(stack[n])
-                            terminated[n] = next_stack[n] = next_broom
+                            stack[n].extend(next_broom)  # not visited
+                            terminated[n] = stack[n]
                     elif n in next_stack:  # even rings
                         next_stack[n].extend(next_broom)
                         if n not in terminated:
@@ -89,8 +89,8 @@ class SSSR:
                             if n in next_stack:
                                 next_stack[n].extend(next_broom)
                             else:
-                                next_broom.extend(stack[n])
-                                terminated[n] = next_stack[n] = next_broom
+                                stack[n].extend(next_broom)  # not visited
+                                terminated[n] = stack[n]
                         elif n in next_stack:  # even rings
                             next_stack[n].extend(next_broom)
                             if n not in terminated:
@@ -145,29 +145,30 @@ class SSSR:
 
             c_set.append((c_num, p1ij, p2ij))
 
-        n_ringidx, c_sssr = 0, {}
+        c_sssr = {}
         for c_num, p1ij, p2ij in sorted(c_set):
-            if c_num % 2:
+            if c_num % 2:  # odd rings
                 c1 = p1ij[0]
                 c11 = c1[1]
+                c12 = c1[-2]
                 for c2 in p2ij:
-                    if c11 != c2[1]:
-                        c = c1 + c2[-2:0:-1]
-                        ck = tuple(sorted(c))
-                        if ck not in c_sssr:
-                            c_sssr[ck] = c
-                            n_ringidx += 1
-                        if n_ringidx == n_sssr:
+                    if c11 == c2[1] or c12 == c2[-2]:
+                        continue
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        if len(c_sssr) == n_sssr:
                             return list(c_sssr.values())
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
-                    if c1[1] != c2[1]:
-                        c = c1 + c2[-2:0:-1]
-                        ck = tuple(sorted(c))
-                        if ck not in c_sssr:
-                            c_sssr[ck] = c
-                            n_ringidx += 1
-                        if n_ringidx == n_sssr:
+                    if c1[1] == c2[1] or c1[-2] == c2[-2]:
+                        continue
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        if len(c_sssr) == n_sssr:
                             return list(c_sssr.values())
 
 
