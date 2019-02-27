@@ -18,10 +18,10 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count, permutations
+from itertools import chain, count, permutations, product
 from logging import warning
 from operator import or_
-from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer
+from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
 
 
 class CGRreactor:
@@ -234,23 +234,23 @@ class Reactor:
         :param structures: disjoint molecules
         :return: mapping generator
         """
-        for combo in [zip(self.__patterns, x) for x in permutations(structures, len(self.__patterns))]:
+        combos_map = []
+        for c in [zip(self.__patterns, x) for x in permutations(structures, len(self.__patterns))]:
+            combos_map.append([p.get_substructure_mapping(m, limit=0) for p, m in c])
+        for combo in product(*combos_map):
             mapping = {}
-            for p, m in combo:
-                m = p.get_substructure_mapping(m, limit=1)
-                if m:
-                    mapping.update(m)
-                else:
+            for m in combo:
+                try:
+                    mapping.update(next(m))
+                except StopIteration:
                     break
             else:
                 yield mapping
 
     @staticmethod
     def __remap(structures):
-        checked = [structures[0]]
+        checked = []
         for structure in structures:
-            if structure in checked:
-                continue
             checked_atoms = set(chain.from_iterable(i.atoms_numbers for i in checked))
             intersection = set(structure.atoms_numbers).intersection(checked_atoms)
             if intersection:
