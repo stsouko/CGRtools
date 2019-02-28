@@ -193,14 +193,13 @@ class Reactor:
         self.__patterns = [QueryContainer(r) for r in reactants]
 
     def __call__(self, structures, limit=0, skip_intersection=True):
-        # todo: return reactions with correct mapping as in pattern
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only Molecules possible')
         if self.__single:
             patch = self.reactor(structures[0])
             if self.__split:
-                return patch.split()
-            return [patch]
+                return ReactionContainer(reactants=structures[0], products=patch.split())
+            return ReactionContainer(reactants=structures[0], products=patch)
         else:
             structures = self.__remap(structures)
             mapping = self.get_mapping(structures)
@@ -209,22 +208,24 @@ class Reactor:
                 if mapping:
                     patch = self.reactor.patcher(structure, next(mapping))
                     if self.__split:
-                        return patch.split()
-                    return [patch]
+                        return ReactionContainer(reactants=structures, products=patch.split())
+                    return ReactionContainer(reactants=structures, products=patch)
             else:
                 if skip_intersection:
                     gm = skip(mapping)
                     g = (self.reactor.patcher(structure, m) for m in gm)
-                    if self.__split:
-                        g = (self.reactor.patcher(structure, m).split() for m in gm)
                 else:
                     g = (self.reactor.patcher(structure, m) for m in mapping)
-                    if self.__split:
-                        g = (self.reactor.patcher(structure, m).split() for m in mapping)
-                if limit > 1:
-                    return list(g)
+
+                if self.__split:
+                    r = (ReactionContainer(reactants=structures, products=p) for p in (m.split() for m in g))
                 else:
-                    return g
+                    r = (ReactionContainer(reactants=structures, products=[p]) for p in g)
+
+                if limit > 1:
+                    return list(r)
+                else:
+                    return r
 
     def get_mapping(self, structures):
         """
@@ -234,17 +235,12 @@ class Reactor:
         :param structures: disjoint molecules
         :return: mapping generator
         """
-        combos_map = []
-        for c in [zip(self.__patterns, x) for x in permutations(structures, len(self.__patterns))]:
-            combos_map.append([p.get_substructure_mapping(m, limit=0) for p, m in c])
-        for combo in product(*combos_map):
+        for c in permutations(structures, len(self.__patterns)):
             mapping = {}
-            for m in combo:
-                try:
-                    mapping.update(next(m))
-                except StopIteration:
-                    break
-            else:
+            for m in product(*(x.get_substructure_mapping(y, limit=0) for x, y in zip(self.__patterns, c))):
+                for i in m:
+                    mapping.update(i)
+            if mapping:
                 yield mapping
 
     @staticmethod
