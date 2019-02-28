@@ -204,7 +204,7 @@ class Reactor:
         else:
             structures = self.__remap(structures)
             mapping = self.__get_mapping(structures)
-            structure = reduce(or_, structures, MoleculeContainer())
+            structure = reduce(or_, structures)
             if limit == 1:
                 mapping = next(mapping, None)
                 if mapping:
@@ -214,10 +214,8 @@ class Reactor:
                     return ReactionContainer(reactants=structures, products=[patch])
             else:
                 if skip_intersection:
-                    gm = skip(mapping)
-                    g = (self.__reactor.patcher(structure, m) for m in gm)
-                else:
-                    g = (self.__reactor.patcher(structure, m) for m in mapping)
+                    mapping = skip(mapping)
+                g = (self.__reactor.patcher(structure, m) for m in mapping)
 
                 if self.__split:
                     r = (ReactionContainer(reactants=structures, products=p.split()) for p in g)
