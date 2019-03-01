@@ -18,9 +18,10 @@
 #
 from collections import defaultdict
 from functools import reduce
+from itertools import chain, count, islice, permutations, product
 from logging import warning
 from operator import or_
-from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer
+from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
 
 
 class CGRreactor:
@@ -41,26 +42,17 @@ class CGRreactor:
         mapping = self.__pattern.get_substructure_mapping(structure, limit)
         if limit == 1:
             if mapping:
-                return self.__patcher(structure, mapping)
+                return self.patcher(structure, mapping)
         else:
             if skip_intersection:
-                g = self.__skip(structure, mapping)
+                g = (self.patcher(structure, m) for m in skip(mapping))
             else:
-                g = (self.__patcher(structure, m) for m in mapping)
+                g = (self.patcher(structure, m) for m in mapping)
 
             if limit > 1:
                 return list(g)
             else:
                 return g
-
-    def __skip(self, structure, mapping):
-        found = set()
-        for m in mapping:
-            matched_atoms = set(m.values())
-            if found.intersection(matched_atoms):
-                continue
-            found.update(matched_atoms)
-            yield self.__patcher(structure, m)
 
     @staticmethod
     def __prepare_template(template):
@@ -134,7 +126,7 @@ class CGRreactor:
 
         return reactants, dict(absolute_atom), bonds, conditional_element, is_cgr, to_delete
 
-    def __patcher(self, structure, mapping):
+    def patcher(self, structure, mapping):
         new = type(structure)()
         new.meta.update(self.__meta)
         to_delete = {mapping[x] for x in self.__to_delete}
@@ -176,4 +168,107 @@ class CGRreactor:
         return new
 
 
-__all__ = ['CGRreactor']
+class Reactor:
+    def __init__(self, template, delete_atoms=False):
+        reactants, products = template.reactants, template.products
+        if not reactants or not products:
+            raise ValueError('empty template')
+        if any(not isinstance(structure, (MoleculeContainer, QueryContainer))
+               for structure in chain(reactants, products)):
+            raise TypeError('only Molecules and Queries possible')
+        self.__split = False
+        self.__single = False
+        if len(reactants) == 1:
+            if len(products) > 1:
+                self.__split = True
+            self.__single = True
+        elif len(reactants) == len(products):
+            self.__split = True
+        elif len(products) != 1:
+            raise ValueError('Only reactions with '
+                             'ONE to ONE, '
+                             'ONE to MANY, '
+                             'MANY to ONE and '
+                             'MANY to MANY (EQUAL) molecules allowed')
+        self.__reactor = CGRreactor(template, delete_atoms)
+        self.__patterns = [QueryContainer(r) for r in reactants]
+
+    def __call__(self, structures, limit=0, skip_intersection=True):
+        if any(not isinstance(structure, MoleculeContainer) for structure in structures):
+            raise TypeError('only list of Molecules possible')
+        if self.__single:
+            patch = self.__reactor(structures[0])
+            if self.__split:
+                return ReactionContainer(reactants=structures, products=patch.split())
+            return ReactionContainer(reactants=structures, products=[patch])
+        else:
+            structures = self.__remap(structures)
+            mapping = self.__get_mapping(structures)
+            structure = reduce(or_, structures)
+            if limit == 1:
+                mapping = next(mapping, None)
+                if mapping:
+                    patch = self.__reactor.patcher(structure, mapping)
+                    if self.__split:
+                        return ReactionContainer(reactants=structures, products=patch.split())
+                    return ReactionContainer(reactants=structures, products=[patch])
+            else:
+                if skip_intersection:
+                    mapping = skip(mapping)
+                g = (self.__reactor.patcher(structure, m) for m in mapping)
+
+                if self.__split:
+                    r = (ReactionContainer(reactants=structures, products=p.split()) for p in g)
+                else:
+                    r = (ReactionContainer(reactants=structures, products=[p]) for p in g)
+
+                if limit > 1:
+                    return list(islice(r, limit))
+                else:
+                    return r
+
+    def __get_mapping(self, structures):
+        """
+        match each pattern to each molecule.
+        if all patterns matches with all molecules return generator of all possible mapping.
+
+        :param structures: disjoint molecules
+        :return: mapping generator
+        """
+        for c in permutations(structures, len(self.__patterns)):
+            for m in product(*(x.get_substructure_mapping(y, limit=0) for x, y in zip(self.__patterns, c))):
+                mapping = {}
+                for i in m:
+                    mapping.update(i)
+                if mapping:
+                    yield mapping
+
+    @staticmethod
+    def __remap(structures):
+        checked = []
+        checked_atoms = set()
+        for structure in structures:
+            intersection = set(structure.atoms_numbers).intersection(checked_atoms)
+            if intersection:
+                mapping = {k: v for k, v in zip(intersection, count(max(checked_atoms) + 1))}
+                structure = structure.remap(mapping, copy=True)
+            checked_atoms.update(structure.atoms_numbers)
+            checked.append(structure)
+        return checked
+
+
+def skip(mapping):
+    """
+    :param mapping: generator
+    :return: filtered generator
+    """
+    found = set()
+    for m in mapping:
+        matched_atoms = set(m.values())
+        if found.intersection(matched_atoms):
+            continue
+        found.update(matched_atoms)
+        yield m
+
+
+__all__ = ['CGRreactor', 'Reactor']
