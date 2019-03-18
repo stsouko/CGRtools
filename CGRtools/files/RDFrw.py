@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from bisect import bisect_left
 from collections import defaultdict
 from itertools import chain
 from logging import warning
@@ -27,13 +28,22 @@ from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
 
 
+def _index(a,  x):
+    """Locate the leftmost value exactly equal to x"""
+    i = bisect_left(a,  x)
+    if i != len(a) and a[i] == x:
+        return i
+    raise ValueError
+
+
 class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
-        self.shifts = [int(x.split(':')[0])
-                       for x in check_output(f"grep -bE \$[RM]FMT {file.name}".split()).decode().split()]
+        if not self._is_buffer:
+            self._shifts = [int(x.split(':', 1)[0])
+                           for x in check_output(["grep",  "-bE",  "\$[RM]FMT",  file.name]).decode().split()]
 
     def read(self):
         return list(self.__data)
@@ -42,14 +52,14 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        return len(self.shifts)
+        return len(self._shifts)
 
     def __next__(self):
         return next(self.__data)
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            start, stop, step = item.indices(self.shifts)
+            start, stop, step = item.indices(self._shifts)
             if start >= stop:
                 return []
 
@@ -58,31 +68,33 @@ class RDFread(CGRread, WithMixin):
                 raise IndexError('list index out of range')
             if item < 0:
                 item += self.__len__()
-            self._file.seek(self.shifts[item])
+            self._file.seek(self._shifts[item])
             return next(self.__reader())
         else:
             raise TypeError('indices must be integers or slices')
 
     def seek(self, offset):
-        if 0 <= offset < self.__len__():
-            self._file.seek(self.shifts[offset])
+        if 0 <= offset < len(self._shifts):
+            self._file.seek(self._shifts[offset])
         else:
             raise IndexError('invalid offset')
+
+    def tell(self):
+        return _index(self._shifts, self._file.tell())
 
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if not self.is_buffer:
-            if self._file.tell() == 0:
-                if next(self._file).startswith('$RXN'):  # parse RXN file
-                    is_reaction = True
-                    ir = 3
-                    meta = defaultdict(list)
-                else:
-                    next(self._file)  # skip header
-                    ir = 0
-                    is_reaction = meta = None
+        if self._file.tell() == 0 and not self._is_buffer:
+            ir = 0
+            is_reaction = meta = None
+        else:
+            if next(self._file).startswith('$RXN'):  # parse RXN file
+                is_reaction = True
+                ir = 3
+                meta = defaultdict(list)
             else:
+                next(self._file)  # skip header
                 ir = 0
                 is_reaction = meta = None
 
