@@ -19,6 +19,7 @@
 from collections import defaultdict
 from itertools import chain
 from logging import warning
+from subprocess import check_output
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
@@ -31,6 +32,8 @@ class RDFread(CGRread, WithMixin):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+        self.shifts = [int(x.split(':')[0])
+                       for x in check_output(f"grep -bE \$[RM]FMT {file.name}".split()).decode().split()]
 
     def read(self):
         return list(self.__data)
@@ -38,20 +41,50 @@ class RDFread(CGRread, WithMixin):
     def __iter__(self):
         return self.__data
 
+    def __len__(self):
+        return len(self.shifts)
+
     def __next__(self):
         return next(self.__data)
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            start, stop, step = item.indices(self.shifts)
+            if start >= stop:
+                return []
+
+        elif isinstance(item, int):
+            if item >= self.__len__() or item < -self.__len__():
+                raise IndexError('list index out of range')
+            if item < 0:
+                item += self.__len__()
+            self._file.seek(self.shifts[item])
+            return next(self.__reader())
+        else:
+            raise TypeError('indices must be integers or slices')
+
+    def seek(self, offset):
+        if 0 <= offset < self.__len__():
+            self._file.seek(self.shifts[offset])
+        else:
+            raise IndexError('invalid offset')
 
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if next(self._file).startswith('$RXN'):  # parse RXN file
-            is_reaction = True
-            ir = 3
-            meta = defaultdict(list)
-        else:
-            next(self._file)  # skip header
-            ir = 0
-            is_reaction = meta = None
+        if not self.is_buffer:
+            if self._file.tell() == 0:
+                if next(self._file).startswith('$RXN'):  # parse RXN file
+                    is_reaction = True
+                    ir = 3
+                    meta = defaultdict(list)
+                else:
+                    next(self._file)  # skip header
+                    ir = 0
+                    is_reaction = meta = None
+            else:
+                ir = 0
+                is_reaction = meta = None
 
         for line in self._file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):

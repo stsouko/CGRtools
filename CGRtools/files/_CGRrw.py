@@ -41,10 +41,10 @@ class WithMixin:
 
         if isinstance(file, str):
             self._file = open(file, mode)
-            self.__is_buffer = False
+            self.is_buffer = False
         elif isinstance(file, Path):
             self._file = file.open(mode)
-            self.__is_buffer = False
+            self.is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)) and mode in ('r', 'w'):
             self._file = file
         elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)) and mode == 'rb':
@@ -59,7 +59,7 @@ class WithMixin:
             self.write = self.__write_adhoc
             self.__write = False
 
-        if not self.__is_buffer or force:
+        if not self.is_buffer or force:
             self._file.close()
 
     def __enter__(self):
@@ -72,7 +72,7 @@ class WithMixin:
     def __write_adhoc(_):
         raise ValueError('I/O operation on closed writer')
 
-    __is_buffer = True
+    is_buffer = True
 
 
 class CGRread:
