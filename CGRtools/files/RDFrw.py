@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from bisect import bisect_left
+from bisect import bisect_right
 from collections import defaultdict
+from os.path import getsize
 from itertools import chain
 from logging import warning
 from subprocess import check_output
@@ -28,22 +29,21 @@ from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
 
 
-def _index(a,  x):
-    """Locate the leftmost value exactly equal to x"""
-    i = bisect_left(a,  x)
-    if i != len(a) and a[i] == x:
-        return i
-    raise ValueError
-
-
 class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+        if next(self.__data).startswith('$RXN'):
+            yield True
+        elif next(self.__data).startswith('$DATM'):
+            yield False
+        else:
+            raise Exception('Not valid file')
         if not self._is_buffer:
+            self._size = getsize(self._file.name)
             self._shifts = [int(x.split(':', 1)[0])
-                           for x in check_output(["grep",  "-bE",  "\$[RM]FMT",  file.name]).decode().split()]
+                            for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
 
     def read(self):
         return list(self.__data)
@@ -52,35 +52,29 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        return len(self._shifts)
+        if self._is_buffer:
+            return len(self._shifts)
+        else:
+            raise NotImplementedError
 
     def __next__(self):
         return next(self.__data)
 
     def __getitem__(self, item):
-        if isinstance(item, slice):
-            start, stop, step = item.indices(self._shifts)
-            if start >= stop:
-                return []
-
-        elif isinstance(item, int):
-            if item >= self.__len__() or item < -self.__len__():
-                raise IndexError('list index out of range')
-            if item < 0:
-                item += self.__len__()
-            self._file.seek(self._shifts[item])
-            return next(self.__reader())
-        else:
-            raise TypeError('indices must be integers or slices')
+        pass
 
     def seek(self, offset):
         if 0 <= offset < len(self._shifts):
             self._file.seek(self._shifts[offset])
+            self.__data.send(self._shifts[offset])
         else:
             raise IndexError('invalid offset')
 
     def tell(self):
-        return _index(self._shifts, self._file.tell())
+        i = bisect_right(self._shifts, self._file.tell())
+        if i != len(self._shifts) and self._shifts[i] == self._file.tell():
+            return i
+        raise ValueError
 
     def __reader(self):
         record = parser = mkey = None
@@ -114,7 +108,10 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if seek:
+                            yield
+                            continue
                     except Exception:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
@@ -127,7 +124,10 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if seek:
+                            yield
+                            continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                     record = None
