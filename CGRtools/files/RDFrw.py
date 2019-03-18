@@ -34,13 +34,8 @@ class RDFread(CGRread, WithMixin):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
-        if next(self.__data).startswith('$RXN'):
-            yield True
-        elif next(self.__data).startswith('$DATM'):
-            yield False
-        else:
-            raise Exception('Not valid file')
-        if not self._is_buffer:
+        self._first = next(self.__data)
+        if not self._is_buffer and self._first:
             self._size = getsize(self._file.name)
             self._shifts = [int(x.split(':', 1)[0])
                             for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
@@ -52,8 +47,11 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        if self._is_buffer:
-            return len(self._shifts)
+        if not self._is_buffer:
+            if self._first:
+                return len(self._shifts)
+            else:
+                raise Exception
         else:
             raise NotImplementedError
 
@@ -79,18 +77,21 @@ class RDFread(CGRread, WithMixin):
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if self._file.tell() == 0 and not self._is_buffer:
+        if not self._file.tell() and not self._is_buffer:
             ir = 0
             is_reaction = meta = None
         else:
-            if next(self._file).startswith('$RXN'):  # parse RXN file
+            if self._first.startswith('$RXN'):
                 is_reaction = True
                 ir = 3
                 meta = defaultdict(list)
-            else:
-                next(self._file)  # skip header
+                yield False
+            elif next(self.__data).startswith('$DATM'):  # skip header
                 ir = 0
                 is_reaction = meta = None
+                yield True
+            else:
+                raise Exception('Not valid file')
 
         for line in self._file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
