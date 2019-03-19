@@ -26,9 +26,10 @@ from ..periodictable import elements_list
 
 class SMILESread(CGRread, WithMixin):
     """
-    accept file wich consist smiles/smirks per lines
-
-    line should be start with smiles/smirks string and
+    SMILES separated per lines files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in text mode file, string path to file,
+    pathlib.Path object or another buffered reader object.
+    line should be start with SMILES string and
     optionally continues with space/tab separated list of key:value [or key=value] data.
     for reactions . [dot] in bonds should be used only for molecules separation.
 
@@ -42,6 +43,11 @@ class SMILESread(CGRread, WithMixin):
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules or reactions
+        """
         return list(self.__data)
 
     def __iter__(self):

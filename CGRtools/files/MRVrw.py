@@ -67,12 +67,22 @@ def xml_dict(parent_element, stop_list=None):
 
 
 class MRVread(CGRread, WithMixin):
+    """
+    ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in binary mode file, string path to file,
+    pathlib.Path object or another binary buffered reader object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules or reactions
+        """
         return list(self.__data)
 
     def __iter__(self):
@@ -260,17 +270,30 @@ class MRVread(CGRread, WithMixin):
 
 
 class MRVwrite(CGRwrite, WithMixin):
+    """
+    ChemAxon MRV files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
 
     def close(self, *args, **kwargs):
+        """
+        write close tag of MRV file and close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
         if not self.__finalized:
             self._file.write('</cml>')
             self.__finalized = True
         super().close(*args, **kwargs)
 
     def write(self, data):
+        """
+        write single molecule or reaction into file
+        """
         self._file.write('<cml>')
         self.__write(data)
         self.write = self.__write
