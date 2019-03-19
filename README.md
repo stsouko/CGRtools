@@ -1,23 +1,165 @@
 CGRTools
 =========
-CGR based reactions manipulations.
+Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
+Basic opertions:
+   - Read /write /convert formats MDL .RDF and .SDF, SMILES, .MRV
+   - Standardize reactions and valid structures checker.
+   - Produce CGRs.
+   - Perfrom subgraph search.
+   - Build /correct molecules and reactions.
+   - Produce template based reactions.
+    
 INSTALL
 =======
 
-Current DEV version:
+**Linux**
+===============
 
-    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
+- Install python3.7 and git
 
-or stable
 
-    pip install CGRTools
+    sudo apt install python3.7
+    sudo apt install python3.7-dev
+    sudo apt install git
+    
+    
+- Install virtualenv.
 
-NOTE:  
-Currently networkx in PyPI is 2.2. 
-Update networkx to master version (2.3 dev)
+
+    sudo apt install virtualenv
+
+- Create new environment and activate it.
+
+
+    virtualenv -p python3.7 venv
+    . venv/bin/activate
+    
+- Install networkx library (Currently DEV version, due to special 
+parts of code that was contributed to networkx and will appear in next release)
+
 
     pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
+
+    
+- Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
+bugs fixing is going on)
+
+ 
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
+**stable version will be available through PyPI (The same as DEV for now)**
+ 
+    pip install CGRTools
+    
+- Jupyter integration:
+
+
+    pip install jupyter
+    jupyter notebook
+    
+- Download tutorial
+
+   <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
+
+- Open .ipynb file in jupyter browser
+
+**Mac**
+=========
+- Install python3.7 and git using [brew](<https://brew.sh>)
+
+
+    brew install git
+    brew install python3
+    
+    
+- Install virtualenv.
+
+
+    pip install virtualenv
+
+- Create new environment and activate it.
+
+
+    virtualenv -p python3.7 venv
+    . venv/bin/activate
+    
+- Install networkx library (Currently DEV version, due to special 
+parts of code that was contributed to networkx and will appear in next release)
+
+
+    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
+
+    
+- Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
+bugs fixing is going on)
+
+ 
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
+**stable version will be available through PyPI (The same as DEV for now)**
+ 
+    pip install CGRTools
+    
+- Jupyter integration:
+
+
+    pip install jupyter
+    jupyter notebook
+    
+- Download tutorial
+
+   <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
+
+- Open .ipynb file in jupyter browser
+
+**Windows**
+=========
+
+- Install python3.7 and git using [Chocolately](<https://chocolatey.org/>)
+
+
+    choco install git
+    choco install python3
+    
+    
+- Install virtualenv.
+
+
+    pip install virtualenv
+
+- Create new environment and activate it.
+
+
+    virtualenv venv
+    venv\Scripts\activate
+    
+- Install networkx library (Currently DEV version, due to special 
+parts of code that was contributed to networkx and will appear in next release)
+
+
+    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
+
+    
+- Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
+bugs fixing is going on)
+
+ 
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
+**stable version will be available through PyPI (The same as DEV for now)**
+ 
+    pip install CGRTools
+    
+- Jupyter integration:
+
+
+    pip install jupyter
+    jupyter notebook
+    
+- Download tutorial
+
+   <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
+
+- Open .ipynb file in jupyter browser
+
 
 COPYRIGHT
 =========
@@ -29,5 +171,6 @@ COPYRIGHT
 CONTRIBUTORS
 ============
 
+* Timur Gimadiev <timur.gimadiev@gmail.com>
 * Ravil Mukhametgaleev <sonic-mc@mail.ru>
 * Tagir Akhmetshin <tagirshin@gmail.com>
