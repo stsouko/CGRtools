@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from bisect import bisect_right
+from bisect import bisect_right, bisect_left
 from collections import defaultdict
 from os.path import getsize
 from itertools import chain
@@ -24,9 +24,9 @@ from logging import warning
 from subprocess import check_output
 from time import strftime
 from traceback import format_exc
-from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
-from ..containers.common import BaseContainer
+from _CGRrw import WithMixin, CGRread, CGRwrite
+from _MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
+from CGRtools.containers.common import BaseContainer
 
 
 class RDFread(CGRread, WithMixin):
@@ -64,34 +64,41 @@ class RDFread(CGRread, WithMixin):
     def seek(self, offset):
         if 0 <= offset < len(self._shifts):
             self._file.seek(self._shifts[offset])
-            self.__data.send(self._shifts[offset])
+            # self.__data.send(self._shifts[offset])
         else:
             raise IndexError('invalid offset')
 
     def tell(self):
-        i = bisect_right(self._shifts, self._file.tell())
-        if i != len(self._shifts) and self._shifts[i] == self._file.tell():
+        t = self._file.tell()
+        i = bisect_left(self._shifts, t)
+        print(self._shifts, 'tell =', t)
+        print(i)
+        if i != len(self._shifts) and self._shifts[i] == t:
             return i
         raise ValueError
 
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if not self._file.tell() and not self._is_buffer:
+        # if not self._file.tell() and not self._is_buffer:
+        #     print('tut')
+        #     ir = 0
+        #     is_reaction = meta = None
+        # else:
+        print('f', self._file)
+        if next(self._file).startswith('$RXN'):
+            print('r')
+            is_reaction = True
+            ir = 3
+            meta = defaultdict(list)
+            yield False
+        elif next(self._file).startswith('$DATM'):  # skip header
+            print('rdf')
             ir = 0
             is_reaction = meta = None
+            yield True
         else:
-            if self._first.startswith('$RXN'):
-                is_reaction = True
-                ir = 3
-                meta = defaultdict(list)
-                yield False
-            elif next(self.__data).startswith('$DATM'):  # skip header
-                ir = 0
-                is_reaction = meta = None
-                yield True
-            else:
-                raise Exception('Not valid file')
+            raise Exception('Not valid file')
 
         for line in self._file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
@@ -106,6 +113,7 @@ class RDFread(CGRread, WithMixin):
                     parser = None
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
             elif line.startswith('$RFMT'):
+                print('rfmt')
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
@@ -155,6 +163,7 @@ class RDFread(CGRread, WithMixin):
                         else:
                             parser = RXNread(line, self._ignore)
                     else:
+                        print(line)
                         if 'V2000' in line:
                             parser = MOLread(line)
                         elif 'V3000' in line:
@@ -168,8 +177,17 @@ class RDFread(CGRread, WithMixin):
             record['meta'] = prepare_meta(meta)
             try:
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                if self.tell() == self._size:
+                    self.__data = self.__reader()
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+
+
+cgr = RDFread('example.rdf')
+cgr.seek(2)
+for x in cgr:
+    print(x)
+    print(cgr.tell())
 
 
 class RDFwrite(MOLwrite, WithMixin):
