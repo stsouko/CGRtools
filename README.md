@@ -144,6 +144,7 @@ bugs fixing is going on)
 
  
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
+    
 **stable version will be available through PyPI (The same as DEV for now)**
  
     pip install CGRTools
