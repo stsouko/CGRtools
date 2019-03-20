@@ -13,15 +13,13 @@ Basic opertions:
 INSTALL
 =======
 
-**Linux**
+**Linux Debian based**
 ===============
 
 - Install python3.7 and git
 
 
-    sudo apt install python3.7
-    sudo apt install python3.7-dev
-    sudo apt install git
+    sudo apt install python3.7 python3.7-dev git python3-virtualenv
     
     
 - Install virtualenv.
@@ -35,33 +33,6 @@ INSTALL
     virtualenv -p python3.7 venv
     . venv/bin/activate
     
-- Install networkx library (Currently DEV version, due to special 
-parts of code that was contributed to networkx and will appear in next release)
-
-
-    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
-
-    
-- Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
-bugs fixing is going on)
-
- 
-    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
-**stable version will be available through PyPI (The same as DEV for now)**
- 
-    pip install CGRTools
-    
-- Jupyter integration:
-
-
-    pip install jupyter
-    jupyter notebook
-    
-- Download tutorial
-
-   <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
-
-- Open .ipynb file in jupyter browser
 
 **Mac**
 =========
@@ -83,33 +54,6 @@ bugs fixing is going on)
     virtualenv -p python3.7 venv
     . venv/bin/activate
     
-- Install networkx library (Currently DEV version, due to special 
-parts of code that was contributed to networkx and will appear in next release)
-
-
-    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
-
-    
-- Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
-bugs fixing is going on)
-
- 
-    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools   
-**stable version will be available through PyPI (The same as DEV for now)**
- 
-    pip install CGRTools
-    
-- Jupyter integration:
-
-
-    pip install jupyter
-    jupyter notebook
-    
-- Download tutorial
-
-   <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
-
-- Open .ipynb file in jupyter browser
 
 **Windows**
 =========
@@ -131,8 +75,10 @@ bugs fixing is going on)
 
     virtualenv venv
     venv\Scripts\activate
-    
-- Install networkx library (Currently DEV version, due to special 
+
+**General part**
+================
+- Into activated environment install networkx library (Currently DEV version, due to special 
 parts of code that was contributed to networkx and will appear in next release)
 
 
@@ -160,6 +106,8 @@ bugs fixing is going on)
 
 - Open .ipynb file in jupyter browser
 
+
+If you stiil have questions, please contact main developer [Ramil Nugmanov](<stsouko@live.ru>)
 
 COPYRIGHT
 =========
