@@ -21,7 +21,7 @@ INSTALL
 * Install python3.7 and git
 
 
-    sudo apt install python3.7 python3.7-dev git python3-virtualenv
+`sudo apt install python3.7 python3.7-dev git python3-virtualenv`
     
     
 * Install virtualenv.
@@ -114,7 +114,7 @@ bugs fixing is going on)
 - Open .ipynb file in jupyter browser
 
 
-If you stiil have questions, please contact main developer [Ramil Nugmanov](<stsouko@live.ru>)
+If you stiil have questions, please contact main developer [Ramil Nugmanov](stsouko@live.ru)
 
 COPYRIGHT
 =========
