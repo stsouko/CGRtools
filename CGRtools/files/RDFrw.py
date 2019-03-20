@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from bisect import bisect_right, bisect_left
+from bisect import bisect_left
 from collections import defaultdict
 from os.path import getsize
 from itertools import chain
@@ -25,23 +25,24 @@ from subprocess import check_output
 from sys import platform
 from time import strftime
 from traceback import format_exc
-from _CGRrw import WithMixin, CGRread, CGRwrite
-from _MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
-from CGRtools.containers.common import BaseContainer
+from ._CGRrw import WithMixin, CGRread, CGRwrite
+from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
+from ..containers.common import BaseContainer
 
 
 class RDFread(CGRread, WithMixin):
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+        self.__file = self._file
         self._first = next(self.__data)
-        if platform == 'linux':
-            self.__gen = True
-        if not self._is_buffer and self._first and self.__gen:
-            self._size = getsize(self._file.name)
-            self._shifts = [int(x.split(':', 1)[0])
-                            for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
+        if not platform == 'win32' and indexable:
+            self.__file = iter(self._file.readline, '')
+            if not self._is_buffer and self._first:
+                self._size = getsize(self._file.name)
+                self._shifts = [int(x.split(':', 1)[0])
+                                for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
 
     def read(self):
         return list(self.__data)
@@ -50,13 +51,12 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        if not self._is_buffer:
-            if self._first and self.__gen:
+        if not platform == 'win32' or not self._is_buffer:
+            if self._first:
                 return len(self._shifts)
             else:
                 raise Exception
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
     def __next__(self):
         return next(self.__data)
@@ -67,7 +67,6 @@ class RDFread(CGRread, WithMixin):
     def seek(self, offset):
         if 0 <= offset < len(self._shifts):
             self._file.seek(self._shifts[offset])
-            # self.__data.send(self._shifts[offset])
         else:
             raise IndexError('invalid offset')
 
@@ -82,12 +81,12 @@ class RDFread(CGRread, WithMixin):
         record = parser = mkey = None
         failed = False
         if not self._is_buffer:
-            if next(self._file).startswith('$RXN'):
+            if next(self.__file).startswith('$RXN'):
                 is_reaction = True
                 ir = 3
                 meta = defaultdict(list)
                 yield False
-            elif next(self._file).startswith('$DATM'):  # skip header
+            elif next(self.__file).startswith('$DATM'):  # skip header
                 ir = 0
                 is_reaction = meta = None
                 yield True
@@ -97,7 +96,7 @@ class RDFread(CGRread, WithMixin):
             ir = 0
             is_reaction = meta = None
 
-        for line in self._file:
+        for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
                 continue
             elif parser:
@@ -174,17 +173,6 @@ class RDFread(CGRread, WithMixin):
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
-    __gen = False
-
-
-cgr = RDFread('example.rdf')
-# print('1', next(cgr))
-# print('2', next(cgr))
-# print('t2', cgr.tell())
-cgr.seek(4)
-print('3', next(cgr))
-print('len', len(cgr))
-print('t3', cgr.tell())
 
 
 class RDFwrite(MOLwrite, WithMixin):
