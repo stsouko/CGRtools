@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from collections import defaultdict
 from os.path import getsize
 from itertools import chain
@@ -26,6 +26,7 @@ from sys import platform
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
+from ..exceptions import InvalidFileType
 from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
 
@@ -50,7 +51,6 @@ class RDFread(CGRread, WithMixin):
         else:
             self.__file = self._file
             next(self.__data)
-            self.__shifts = None
 
     def read(self):
         """
@@ -70,7 +70,7 @@ class RDFread(CGRread, WithMixin):
                 return 0
             else:
                 return _len - 1
-        raise NotImplementedError
+        raise NotImplementedError(self.__error)
 
     def __next__(self):
         return next(self.__data)
@@ -85,7 +85,7 @@ class RDFread(CGRread, WithMixin):
             else:
                 raise IndexError('invalid offset')
         else:
-            raise NotImplementedError
+            raise NotImplementedError(self.__error)
 
     def tell(self):
         if self.__shifts:
@@ -96,13 +96,13 @@ class RDFread(CGRread, WithMixin):
                 return len(self.__shifts) - 1
             else:
                 return bisect_left(self.__shifts, t) - 1
-        raise NotImplementedError
+        raise NotImplementedError(self.__error)
 
     def __reader(self):
         record = parser = mkey = None
         failed = False
 
-        if next(self.__file).startswith('$RXN'):  # skip header
+        if next(self.__file).startswith('$RXN'):  # parse RXN file
             is_reaction = True
             ir = 3
             meta = defaultdict(list)
@@ -114,7 +114,7 @@ class RDFread(CGRread, WithMixin):
             if not self._is_buffer:
                 yield True
         else:
-            raise Exception('Not valid file')
+            raise InvalidFileType
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
@@ -193,6 +193,9 @@ class RDFread(CGRread, WithMixin):
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+
+    __shifts = None
+    __error = 'Indexable supported in unix-like o.s. and for files stored on disk'
 
 
 class RDFwrite(MOLwrite, WithMixin):
