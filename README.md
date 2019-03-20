@@ -88,20 +88,20 @@ parts of code that was contributed to networkx and will appear in next release)
     ```
     pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
     ```
-     
-* Install CGRtools library DEV version (Currently DEV version and stable version is the same as 
+    
+* **stable version will be available through PyPI (The same as DEV for now)**
+
+    ```
+    pip install CGRTools
+    ```    
+    
+* Install CGRtools library DEV version for features that are not well tested (Currently DEV version and stable version is the same as 
 bugs fixing is going on)
 
     ```
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
     ```
 
-- **stable version will be available through PyPI (The same as DEV for now)**
-
-    ```
-    pip install CGRTools
-    ```    
-    
 * Jupyter integration:
 
     ```
