@@ -35,15 +35,16 @@ class RDFread(CGRread, WithMixin):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
-        self.__file = self._file
 
         if indexable and platform != 'win32':
             self.__file = iter(self._file.readline, '')
             self._first = next(self.__data)
             if not self._is_buffer and self._first:
-                self._size = getsize(self._file.name)
                 self._shifts = [int(x.split(':', 1)[0])
                                 for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
+                self._shifts.append(getsize(self._file.name))
+        else:
+            self.__file = self._file
 
     def read(self):
         return list(self.__data)
@@ -52,7 +53,7 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        if not platform == 'win32' or not self._is_buffer:
+        if platform != 'win32' or not self._is_buffer:
             if self._first:
                 return len(self._shifts)
             else:
