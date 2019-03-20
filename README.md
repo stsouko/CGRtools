@@ -26,7 +26,8 @@ INSTALL
     
 * Install virtualenv.
 
-   sudo apt install virtualenv
+
+    sudo apt install virtualenv
 
 
 - Create new environment and activate it.
