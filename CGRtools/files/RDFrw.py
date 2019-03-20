@@ -65,11 +65,7 @@ class RDFread(CGRread, WithMixin):
 
     def __len__(self):
         if self.__shifts:
-            _len = len(self.__shifts)
-            if _len == 1:
-                return 0
-            else:
-                return _len - 1
+            return len(self.__shifts) - 1
         raise NotImplementedError(self.__error)
 
     def __next__(self):
@@ -81,17 +77,21 @@ class RDFread(CGRread, WithMixin):
     def seek(self, offset):
         if self.__shifts:
             if 0 <= offset < len(self.__shifts):
-                t = self._file.tell()
-                _t = self.__shifts[offset]
-                if _t == t:
-                    pass
-                elif t == self.__shifts[-1]:
-                    self.__data = self.__reader()
-                    self.__file = iter(self._file.readline, '')
-                    self._file.seek(0)
-                    next(self.__data)
-                else:
-                    self._file.seek(_t)
+                current_pos = self._file.tell()
+                new_pos = self.__shifts[offset]
+                if current_pos != new_pos:
+                    if current_pos == self.__shifts[-1]:
+                        self.__data = self.__reader()
+                        self.__file = iter(self._file.readline, '')
+                        self._file.seek(0)
+                        next(self.__data)
+                        if self.__shifts[0] != new_pos:
+                            self._file.seek(new_pos)
+                    elif 0 < current_pos < len(self.__shifts):
+                        self.__data.send(new_pos)
+                        self._file.seek(new_pos)
+                    else:
+                        self._file.seek(new_pos)
             else:
                 raise IndexError('invalid offset')
         else:
