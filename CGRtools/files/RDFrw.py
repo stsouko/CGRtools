@@ -36,9 +36,10 @@ class RDFread(CGRread, WithMixin):
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
         self.__file = self._file
-        self._first = next(self.__data)
-        if not platform == 'win32' and indexable:
+
+        if indexable and platform != 'win32':
             self.__file = iter(self._file.readline, '')
+            self._first = next(self.__data)
             if not self._is_buffer and self._first:
                 self._size = getsize(self._file.name)
                 self._shifts = [int(x.split(':', 1)[0])
