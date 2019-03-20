@@ -38,13 +38,13 @@ class RDFread(CGRread, WithMixin):
 
         if indexable and platform != 'win32':
             self.__file = iter(self._file.readline, '')
-            self._first = next(self.__data)
-            if not self._is_buffer and self._first:
-                self._shifts = [int(x.split(':', 1)[0])
-                                for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
-                self._shifts.append(getsize(self._file.name))
+            if not self._is_buffer and next(self.__data):
+                self.__shifts = [int(x.split(':', 1)[0])
+                                 for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
+                self.__shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
+            self.__shifts = None
 
     def read(self):
         return list(self.__data)
@@ -53,11 +53,12 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        if platform != 'win32' or not self._is_buffer:
-            if self._first:
-                return len(self._shifts)
+        if self.__shifts is not None:
+            _len = len(self.__shifts)
+            if _len == 1:
+                return 0
             else:
-                raise Exception
+                return _len - 1
         raise NotImplementedError
 
     def __next__(self):
@@ -67,19 +68,24 @@ class RDFread(CGRread, WithMixin):
         pass
 
     def seek(self, offset):
-        if 0 <= offset < len(self._shifts):
-            self._file.seek(self._shifts[offset])
+        if self.__shifts is not None:
+            if 0 <= offset < len(self.__shifts):
+                self._file.seek(self.__shifts[offset])
+            else:
+                raise IndexError('invalid offset')
         else:
-            raise IndexError('invalid offset')
+            raise NotImplementedError
 
     def tell(self):
-        t = self._file.tell()
-        if t <= self._shifts[0]:
-            return 0
-        elif t == self._shifts[-1]:
-            return len(self._shifts) - 1
-        else:
-            return bisect_left(self._shifts, t) - 1
+        if self.__shifts is not None:
+            t = self._file.tell()
+            if t == self.__shifts[0]:
+                return 0
+            elif t == self.__shifts[-1]:
+                return len(self.__shifts) - 1
+            else:
+                return bisect_left(self.__shifts, t) - 1
+        raise NotImplementedError
 
     def __reader(self):
         record = parser = mkey = None
