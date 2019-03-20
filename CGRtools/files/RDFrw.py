@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from os.path import getsize
 from itertools import chain
@@ -74,10 +74,12 @@ class RDFread(CGRread, WithMixin):
 
     def tell(self):
         t = self._file.tell()
-        if t == 0:
+        if t <= self._shifts[0]:
             return 0
+        elif t == self._shifts[-1]:
+            return len(self._shifts) - 1
         else:
-            return bisect_left(self._shifts, t)
+            return bisect_left(self._shifts, t) - 1
 
     def __reader(self):
         record = parser = mkey = None
