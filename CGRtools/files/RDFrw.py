@@ -44,6 +44,7 @@ class RDFread(CGRread, WithMixin):
                 self.__shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
+            next(self.__data)
             self.__shifts = None
 
     def read(self):
@@ -53,7 +54,7 @@ class RDFread(CGRread, WithMixin):
         return self.__data
 
     def __len__(self):
-        if self.__shifts is not None:
+        if self.__shifts:
             _len = len(self.__shifts)
             if _len == 1:
                 return 0
@@ -68,7 +69,7 @@ class RDFread(CGRread, WithMixin):
         pass
 
     def seek(self, offset):
-        if self.__shifts is not None:
+        if self.__shifts:
             if 0 <= offset < len(self.__shifts):
                 self._file.seek(self.__shifts[offset])
             else:
@@ -77,7 +78,7 @@ class RDFread(CGRread, WithMixin):
             raise NotImplementedError
 
     def tell(self):
-        if self.__shifts is not None:
+        if self.__shifts:
             t = self._file.tell()
             if t == self.__shifts[0]:
                 return 0
@@ -90,21 +91,20 @@ class RDFread(CGRread, WithMixin):
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if not self._is_buffer:
-            if next(self.__file).startswith('$RXN'):
-                is_reaction = True
-                ir = 3
-                meta = defaultdict(list)
+
+        if next(self.__file).startswith('$RXN'):  # skip header
+            is_reaction = True
+            ir = 3
+            meta = defaultdict(list)
+            if not self._is_buffer:  # opened file is RXN or RDF
                 yield False
-            elif next(self.__file).startswith('$DATM'):  # skip header
-                ir = 0
-                is_reaction = meta = None
-                yield True
-            else:
-                raise Exception('Not valid file')
-        else:
+        elif next(self.__file).startswith('$DATM'):  # skip header
             ir = 0
             is_reaction = meta = None
+            if not self._is_buffer:
+                yield True
+        else:
+            raise Exception('Not valid file')
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
