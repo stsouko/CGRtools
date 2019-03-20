@@ -24,12 +24,22 @@ from ._MDLrw import MOLwrite, MOLread, EMOLread, prepare_meta
 
 
 class SDFread(CGRread, WithMixin):
+    """
+    MDL SDF files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in text mode file, string path to file,
+    pathlib.Path object or another buffered reader object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules
+        """
         return list(self.__data)
 
     def __iter__(self):
@@ -101,11 +111,19 @@ class SDFread(CGRread, WithMixin):
 
 
 class SDFwrite(MOLwrite, WithMixin):
+    """
+    MDL SDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
 
     def write(self, data):
+        """
+        write single molecule into file
+        """
         m = self._convert_structure(data)
         self._file.write(self._format_mol(*m))
         self._file.write('M  END\n')
