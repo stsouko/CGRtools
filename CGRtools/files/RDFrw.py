@@ -27,12 +27,22 @@ from ..containers.common import BaseContainer
 
 
 class RDFread(CGRread, WithMixin):
+    """
+    MDL RDF files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in text mode file, string path to file,
+    pathlib.Path object or another buffered reader object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules or reactions
+        """
         return list(self.__data)
 
     def __iter__(self):
@@ -127,11 +137,19 @@ class RDFread(CGRread, WithMixin):
 
 
 class RDFwrite(MOLwrite, WithMixin):
+    """
+    MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
 
     def write(self, data):
+        """
+        write single molecule or reaction into file
+        """
         self._file.write(strftime('$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n'))
         self.__write(data)
         self.write = self.__write

@@ -1,7 +1,7 @@
-CGRtools\.containers package
+CGRtools\.attributes package
 ============================
 
-.. automodule:: CGRtools.containers
+.. automodule:: CGRtools.attributes
     :members:
     :undoc-members:
     :show-inheritance:
