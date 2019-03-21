@@ -111,24 +111,12 @@ class RDFread(CGRread, WithMixin):
 
     def __getitem__(self, item):
         _len = len(self.__shifts)
-        current_pos = self._file.tell()
 
         if isinstance(item, int):
             if item >= _len or item < -_len:
-                raise IndexError('list index out of range')
-            if item < 0:
-                item += _len
-            else:
-                item += 1
-            if current_pos == self.__shifts[-1]:
-                self.__data = self.__reader()
-                self.__file = iter(self._file.readline, '')
-                self._file.seek(0)
-                next(self.__data)
+                raise IndexError('List index out of range')
             self._file.seek(self.__shifts[item])
-            react = next(self.__data)
-            self._file.seek(current_pos)
-            return [react]
+            return next(self.__data)
 
         elif isinstance(item, slice):
             start, stop, step = item.indices(_len)
@@ -145,7 +133,7 @@ class RDFread(CGRread, WithMixin):
             return req
 
         else:
-            raise TypeError('indices must be integers or slices')
+            raise TypeError('Indices must be integers or slices')
 
     def seek(self, offset):
         if self.__shifts:
