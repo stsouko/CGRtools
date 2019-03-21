@@ -67,7 +67,7 @@ class RDFread(CGRread, WithMixin):
     def __len__(self):
         if self.__shifts:
             return len(self.__shifts) - 1
-        raise self.__error
+        raise self.__implement_error
 
     def __next__(self):
         return next(self.__data)
@@ -94,7 +94,7 @@ class RDFread(CGRread, WithMixin):
             else:
                 raise IndexError('invalid offset')
         else:
-            raise self.__error
+            raise self.__implement_error
 
     def tell(self):
         if self.__shifts:
@@ -107,7 +107,7 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t)
             else:
                 return bisect_left(self.__shifts, t) - 1
-        raise self.__error
+        raise self.__implement_error
 
     def __getitem__(self, item):
         if self.__shifts:
@@ -117,9 +117,14 @@ class RDFread(CGRread, WithMixin):
             if isinstance(item, int):
                 if item >= _len or item < -_len:
                     raise IndexError('List index out of range')
-                self.seek(self.__shifts[item])
-                reaction = next(self)
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                reaction = next(self, None)
+                t = self.tell()
                 self.seek(_current_pos)
+                if None or t - item != 1:
+                    raise self.__index_error
                 return reaction
 
             elif isinstance(item, slice):
@@ -127,12 +132,15 @@ class RDFread(CGRread, WithMixin):
                 req = []
                 if start >= stop:
                     return req
-                self.seek(self.__shifts[start])
+                number = stop - start
+                if item < 0:
+                    item += _len
+                self.seek(start)
 
-                while True:
+                for _ in range(number):
                     req.append(next(self))
-                    if self.tell() >= self.__shifts[stop]:
-                        break
+                    if self.tell() > start + number:
+                        raise self.__index_error
                 if step > 1:
                     return req[::step]
                 self.seek(_current_pos)
@@ -140,7 +148,7 @@ class RDFread(CGRread, WithMixin):
 
             else:
                 raise TypeError('Indices must be integers or slices')
-        raise self.__error
+        raise self.__implement_error
 
     def __reader(self):
         record = parser = mkey = None
@@ -241,8 +249,9 @@ class RDFread(CGRread, WithMixin):
                 warning(f'record consist errors:\n{format_exc()}')
 
     __shifts = None
-    __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     __already_seeked = False
+    __index_error = IndexError('With the requested element will contain errors')
 
 
 class RDFwrite(MOLwrite, WithMixin):
