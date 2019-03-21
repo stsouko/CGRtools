@@ -42,11 +42,11 @@ class RDFread(CGRread, WithMixin):
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
 
-        if indexable and platform != 'win32':
+        if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
-            if not self._is_buffer and next(self.__data):
+            if next(self.__data):
                 self.__shifts = [int(x.split(':', 1)[0])
-                                 for x in check_output(["grep", "-bE", "\$[RM]FMT", self._file.name]).decode().split()]
+                                 for x in check_output(["grep", "-bE", "^\$[RM]FMT", self._file.name]).decode().split()]
                 self.__shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
@@ -66,7 +66,7 @@ class RDFread(CGRread, WithMixin):
     def __len__(self):
         if self.__shifts:
             return len(self.__shifts) - 1
-        raise NotImplementedError(self.__error)
+        raise self.__error
 
     def __next__(self):
         return next(self.__data)
@@ -76,7 +76,7 @@ class RDFread(CGRread, WithMixin):
 
     def seek(self, offset):
         if self.__shifts:
-            if 0 <= offset < len(self.__shifts):
+            if 0 <= offset < len(self.__shifts) - 1:
                 current_pos = self._file.tell()
                 new_pos = self.__shifts[offset]
                 if current_pos != new_pos:
@@ -85,17 +85,17 @@ class RDFread(CGRread, WithMixin):
                         self.__file = iter(self._file.readline, '')
                         self._file.seek(0)
                         next(self.__data)
-                        if self.__shifts[0] != new_pos:
+                        if self.__shifts[0] < new_pos:
                             self._file.seek(new_pos)
                     elif 0 < current_pos < len(self.__shifts):
-                        self.__data.send(new_pos)
+                        self.__data.send(True)
                         self._file.seek(new_pos)
                     else:
                         self._file.seek(new_pos)
             else:
                 raise IndexError('invalid offset')
         else:
-            raise NotImplementedError(self.__error)
+            raise self.__error
 
     def tell(self):
         if self.__shifts:
@@ -104,9 +104,11 @@ class RDFread(CGRread, WithMixin):
                 return 0
             elif t == self.__shifts[-1]:
                 return len(self.__shifts) - 1
+            elif t in self.__shifts:
+                return bisect_left(self.__shifts, t)
             else:
                 return bisect_left(self.__shifts, t) - 1
-        raise NotImplementedError(self.__error)
+        raise self.__error
 
     def __reader(self):
         record = parser = mkey = None
@@ -116,13 +118,11 @@ class RDFread(CGRread, WithMixin):
             is_reaction = True
             ir = 3
             meta = defaultdict(list)
-            if not self._is_buffer:  # opened file is RXN or RDF
-                yield False
+            yield False
         elif next(self.__file).startswith('$DATM'):  # skip header
             ir = 0
             is_reaction = meta = None
-            if not self._is_buffer:
-                yield True
+            yield True
         else:
             raise InvalidFileType
 
@@ -205,7 +205,7 @@ class RDFread(CGRread, WithMixin):
                 warning(f'record consist errors:\n{format_exc()}')
 
     __shifts = None
-    __error = 'Indexable supported in unix-like o.s. and for files stored on disk'
+    __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
 
 
 class RDFwrite(MOLwrite, WithMixin):
