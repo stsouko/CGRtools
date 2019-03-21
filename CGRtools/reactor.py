@@ -42,11 +42,13 @@ class CGRreactor:
     >> reactor = CGRreactor(template, delete_atoms=True)
 
     CGRreactor calling transforms reactants to products and
-    returns generator of all possible products if limit=0
-    else limited to number list of products:
+    returns generator of all possible products if limit=0,
+    one product if limit=1, else limited to number list of products:
 
     >> products = reactor(structure, limit=0)  # generator
-    >> product = reactor(structure, limit=1)  # list with 1 product
+    >> product = reactor(structure, limit=1)   # one product
+    >> products = reactor(structure, limit=5)  # list with 5 products
+
 
     """
     def __init__(self, template, delete_atoms=False):
@@ -204,7 +206,7 @@ class Reactor:
     transformation template (CGRtools ReactionContainer).
     -----------------------------------------------------
     input: transformation template, list of reactants
-    output: list or generator of reactions
+    output: reaction or list or generator of reactions
     -----------------------------------------------------
     reactor allows only this reaction transformations:
          ONE to ONE   # 1 -> 1
@@ -218,10 +220,12 @@ class Reactor:
 
     reactor calling transforms reactants to products and
     returns generator of reaction transformations with all
-    possible products if limit=0 else limited to number list of reactions:
+    possible products if limit=0, one reaction if limit=1,
+    else limited to number list of reactions:
 
     >> reactions = reactor(structure, limit=0)  # generator
-    >> reaction = reactor(structure, limit=1)  # list with 1 reaction
+    >> reaction = reactor(structure, limit=1)   # one reaction
+    >> reactions = reactor(structure, limit=5)  # list with 5 reactions
 
     """
     def __init__(self, template, delete_atoms=False):
