@@ -109,6 +109,32 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t) - 1
         raise self.__error
 
+    def __getitem__(self, item):
+        _len = len(self.__shifts)
+
+        if isinstance(item, int):
+            if item >= _len or item < -_len:
+                raise IndexError('List index out of range')
+            self._file.seek(self.__shifts[item])
+            return next(self.__data)
+
+        elif isinstance(item, slice):
+            start, stop, step = item.indices(_len)
+            req = []
+            if start >= stop:
+                return req
+            self._file.seek(self.__shifts[start])
+            while True:
+                req.append(next(self.__data))
+                if self._file.tell() > self.__shifts[stop]:
+                    break
+            if step > 1:
+                return req[::step]
+            return req
+
+        else:
+            raise TypeError('Indices must be integers or slices')
+
     def __reader(self):
         record = parser = mkey = None
         failed = False
