@@ -20,7 +20,7 @@
 from collections import defaultdict
 from functools import reduce
 from itertools import chain, count, islice, permutations, product
-from logging import warning
+from logging import warning, basicConfig, info, INFO
 from operator import or_
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
 
@@ -199,6 +199,9 @@ class CGRreactor:
         return new
 
 
+basicConfig(level=INFO)
+
+
 class Reactor:
     """
     CGR based reactor for molecules/queries.
@@ -317,6 +320,8 @@ class Reactor:
             if intersection:
                 mapping = {k: v for k, v in zip(intersection, count(max(checked_atoms) + 1))}
                 structure = structure.remap(mapping, copy=True)
+                info("some atoms in input structures had the same numbers.\n"
+                     f"atoms {list(mapping.keys())} were remapped to {list(mapping.values())}")
             checked_atoms.update(structure.atoms_numbers)
             checked.append(structure)
         return checked
