@@ -20,7 +20,7 @@
 from collections import defaultdict
 from functools import reduce
 from itertools import chain, count, islice, permutations, product
-from logging import warning, basicConfig, info, INFO
+from logging import warning, info
 from operator import or_
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
 
@@ -197,9 +197,6 @@ class CGRreactor:
 
         # todo: calculate stereo mark based on new atom order
         return new
-
-
-basicConfig(level=INFO)
 
 
 class Reactor:
