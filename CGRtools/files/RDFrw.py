@@ -110,26 +110,31 @@ class RDFread(CGRread, WithMixin):
         raise self.__error
 
     def __getitem__(self, item):
-        _len = len(self.__shifts)
+        _len = len(self.__shifts) - 1
+        _current_pos = self.tell()
 
         if isinstance(item, int):
             if item >= _len or item < -_len:
                 raise IndexError('List index out of range')
-            self._file.seek(self.__shifts[item])
-            return next(self.__data)
+            self.seek(self.__shifts[item])
+            reaction = next(self)
+            self.seek(_current_pos)
+            return reaction
 
         elif isinstance(item, slice):
             start, stop, step = item.indices(_len)
             req = []
             if start >= stop:
                 return req
-            self._file.seek(self.__shifts[start])
+            self.seek(self.__shifts[start])
+
             while True:
-                req.append(next(self.__data))
-                if self._file.tell() > self.__shifts[stop]:
+                req.append(next(self))
+                if self.tell() >= self.__shifts[stop]:
                     break
             if step > 1:
                 return req[::step]
+            self.seek(_current_pos)
             return req
 
         else:
