@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018-2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -45,8 +46,8 @@ class RDFread(CGRread, WithMixin):
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
             if next(self.__data):
-                self.__shifts = [int(x.split(':', 1)[0])
-                                 for x in check_output(["grep", "-bE", "^\$[RM]FMT", self._file.name]).decode().split()]
+                self.__shifts = [int(x.split(':', 1)[0]) for x in
+                                 check_output(["grep", "-boE", "^\$[RM]FMT", self._file.name]).decode().split()]
                 self.__shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
@@ -71,26 +72,24 @@ class RDFread(CGRread, WithMixin):
     def __next__(self):
         return next(self.__data)
 
-    def __getitem__(self, item):
-        pass
-
     def seek(self, offset):
         if self.__shifts:
-            if 0 <= offset < len(self.__shifts) - 1:
+            if 0 <= offset < len(self.__shifts):
                 current_pos = self._file.tell()
                 new_pos = self.__shifts[offset]
                 if current_pos != new_pos:
-                    if current_pos == self.__shifts[-1]:
+                    if current_pos == self.__shifts[-1]:  # reached the end of the file
                         self.__data = self.__reader()
                         self.__file = iter(self._file.readline, '')
                         self._file.seek(0)
                         next(self.__data)
-                        if self.__shifts[0] < new_pos:
+                        if offset:  # move not to the beginning of the file
                             self._file.seek(new_pos)
-                    elif 0 < current_pos < len(self.__shifts):
-                        self.__data.send(True)
-                        self._file.seek(new_pos)
                     else:
+                        if not self.__already_seeked:
+                            if self.__shifts[0] < current_pos:  # in the middle of the file
+                                self.__data.send(True)
+                            self.__already_seeked = True
                         self._file.seek(new_pos)
             else:
                 raise IndexError('invalid offset')
@@ -145,10 +144,12 @@ class RDFread(CGRread, WithMixin):
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                         if seek:
                             yield
+                            self.__already_seeked = False
                             continue
                     except Exception:
                         warning(f'record consist errors:\n{format_exc()}')
-                    record = None
+                    finally:
+                        record = None
                 is_reaction = True
                 ir = 4
                 failed = False
@@ -161,10 +162,12 @@ class RDFread(CGRread, WithMixin):
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                         if seek:
                             yield
+                            self.__already_seeked = False
                             continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    record = None
+                    finally:
+                        record = None
                 ir = 3
                 failed = is_reaction = False
                 mkey = None
@@ -206,6 +209,7 @@ class RDFread(CGRread, WithMixin):
 
     __shifts = None
     __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    __already_seeked = False
 
 
 class RDFwrite(MOLwrite, WithMixin):
