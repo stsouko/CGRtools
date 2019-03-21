@@ -25,7 +25,35 @@ from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CG
 
 
 class CGRreactor:
+    """
+    CGR based editor for CGRs and molecules.
+    generates transformation from input CGR/molecule
+    using template (CGRtools ReactionContainer)
+    -----------------------------------------------------
+    input: transformation template, CGR/molecule to edit
+    output: edited CGR/molecule
+    -----------------------------------------------------
+    template should contain one reactant and one product:
+    CGRreactor allows only 1 -> 1 transformation
+
+    CGRreactor init prepares the reactor container:
+
+    >> reactor = CGRreactor(template, delete_atoms=True)
+
+    CGRreactor calling transforms reactants to products and
+    returns generator of all possible products if limit=0
+    else limited to number list of products:
+
+    >> products = reactor(structure, limit=0)
+    >> product = reactor(structure, limit=1)
+
+    """
     def __init__(self, template, delete_atoms=False):
+        """
+        :param template: CGRtools ReactionContainer
+        :param delete_atoms: if True atoms exists in reactant but
+                            not exists in product will be removed
+        """
         pattern, atom_attrs, bond_attrs, conditional_element, is_cgr, to_delete = self.__prepare_template(template)
         self.__pattern = pattern
         self.__atom_attrs = atom_attrs
@@ -50,7 +78,7 @@ class CGRreactor:
                 g = (self.patcher(structure, m) for m in mapping)
 
             if limit > 1:
-                return list(g)
+                return islice(g, limit)
             else:
                 return g
 
@@ -169,7 +197,38 @@ class CGRreactor:
 
 
 class Reactor:
+    """
+    CGR based reactor for molecules/queries.
+    generates reaction from input queries/molecules using
+    transformation template (CGRtools ReactionContainer).
+    -----------------------------------------------------
+    input: transformation template, list of reactants
+    output: list of products
+    -----------------------------------------------------
+    reactor allows only this reaction transformations:
+         ONE to ONE   # 1 -> 1
+         ONE to MANY  # 1 -> 2
+         MANY to ONE  # 3 -> 1
+         MANY to MANY # 2 -> 2 (equal)
+
+    reactor init prepares the reactor container:
+
+    >> reactor = CGRreactor(template, delete_atoms=True)
+
+    reactor calling transforms reactants to products and
+    returns generator of all possible products if limit=0
+    else limited to number list of products:
+
+    >> products = reactor(structure, limit=0)
+    >> product = reactor(structure, limit=1)
+
+    """
     def __init__(self, template, delete_atoms=False):
+        """
+        :param template: CGRtools ReactionContainer
+        :param delete_atoms: if True atoms exists in reactants but
+                            not exists in products will be removed
+                """
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
