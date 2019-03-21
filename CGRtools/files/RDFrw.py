@@ -92,6 +92,21 @@ class RDFread(CGRread, WithMixin):
             react = next(self.__data)
             self._file.seek(current_pos)
             return [react]
+
+        elif isinstance(item, slice):
+            start, stop, step = item.indices(_len)
+            req = []
+            if start >= stop:
+                return req
+            self._file.seek(self.__shifts[start])
+            while True:
+                req.append(next(self.__data))
+                if self._file.tell() > self.__shifts[stop]:
+                    break
+            if step > 1:
+                return req[::step]
+            return req
+
         else:
             raise TypeError('indices must be integers or slices')
 
