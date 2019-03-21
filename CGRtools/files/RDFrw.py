@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,14 +17,19 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from bisect import bisect_left
 from collections import defaultdict
 from itertools import chain
 from logging import warning
+from os.path import getsize
+from subprocess import check_output
+from sys import platform
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
 from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
+from ..exceptions import InvalidFileType
 
 
 class RDFread(CGRread, WithMixin):
@@ -32,10 +38,20 @@ class RDFread(CGRread, WithMixin):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+
+        if indexable and platform != 'win32' and not self._is_buffer:
+            self.__file = iter(self._file.readline, '')
+            if next(self.__data):
+                self.__shifts = [int(x.split(':', 1)[0]) for x in
+                                 check_output(["grep", "-boE", "^\$[RM]FMT", self._file.name]).decode().split()]
+                self.__shifts.append(getsize(self._file.name))
+        else:
+            self.__file = self._file
+            next(self.__data)
 
     def read(self):
         """
@@ -48,22 +64,68 @@ class RDFread(CGRread, WithMixin):
     def __iter__(self):
         return self.__data
 
+    def __len__(self):
+        if self.__shifts:
+            return len(self.__shifts) - 1
+        raise self.__error
+
     def __next__(self):
         return next(self.__data)
+
+    def seek(self, offset):
+        if self.__shifts:
+            if 0 <= offset < len(self.__shifts):
+                current_pos = self._file.tell()
+                new_pos = self.__shifts[offset]
+                if current_pos != new_pos:
+                    if current_pos == self.__shifts[-1]:  # reached the end of the file
+                        self.__data = self.__reader()
+                        self.__file = iter(self._file.readline, '')
+                        self._file.seek(0)
+                        next(self.__data)
+                        if offset:  # move not to the beginning of the file
+                            self._file.seek(new_pos)
+                    else:
+                        if not self.__already_seeked:
+                            if self.__shifts[0] < current_pos:  # in the middle of the file
+                                self.__data.send(True)
+                            self.__already_seeked = True
+                        self._file.seek(new_pos)
+            else:
+                raise IndexError('invalid offset')
+        else:
+            raise self.__error
+
+    def tell(self):
+        if self.__shifts:
+            t = self._file.tell()
+            if t == self.__shifts[0]:
+                return 0
+            elif t == self.__shifts[-1]:
+                return len(self.__shifts) - 1
+            elif t in self.__shifts:
+                return bisect_left(self.__shifts, t)
+            else:
+                return bisect_left(self.__shifts, t) - 1
+        raise self.__error
 
     def __reader(self):
         record = parser = mkey = None
         failed = False
-        if next(self._file).startswith('$RXN'):  # parse RXN file
+
+        if next(self.__file).startswith('$RXN'):  # parse RXN file
             is_reaction = True
             ir = 3
             meta = defaultdict(list)
-        else:
-            next(self._file)  # skip header
+            yield False
+        elif next(self.__file).startswith('$DATM'):  # skip header
             ir = 0
             is_reaction = meta = None
+            yield True
+        else:
+            raise InvalidFileType
 
-        for line in self._file:
+        for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
                 continue
             elif parser:
@@ -79,10 +141,15 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if seek:
+                            yield
+                            self.__already_seeked = False
+                            continue
                     except Exception:
                         warning(f'record consist errors:\n{format_exc()}')
-                    record = None
+                    finally:
+                        record = None
                 is_reaction = True
                 ir = 4
                 failed = False
@@ -92,10 +159,15 @@ class RDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if seek:
+                            yield
+                            self.__already_seeked = False
+                            continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    record = None
+                    finally:
+                        record = None
                 ir = 3
                 failed = is_reaction = False
                 mkey = None
@@ -134,6 +206,10 @@ class RDFread(CGRread, WithMixin):
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+
+    __shifts = None
+    __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    __already_seeked = False
 
 
 class RDFwrite(MOLwrite, WithMixin):
