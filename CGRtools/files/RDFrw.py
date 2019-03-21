@@ -27,8 +27,8 @@ from sys import platform
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ..exceptions import InvalidFileType
 from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
+from ..exceptions import InvalidFileType
 from ..containers.common import BaseContainer
 
 
