@@ -220,8 +220,8 @@ class Reactor:
     returns generator of reaction transformations with all
     possible products if limit=0 else limited to number list of reactions:
 
-    >> products = reactor(structure, limit=0)  # generator
-    >> product = reactor(structure, limit=1)  # list with 1 reaction
+    >> reactions = reactor(structure, limit=0)  # generator
+    >> reaction = reactor(structure, limit=1)  # list with 1 reaction
 
     """
     def __init__(self, template, delete_atoms=False):
