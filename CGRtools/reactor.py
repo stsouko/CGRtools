@@ -32,7 +32,7 @@ class CGRreactor:
     using template (CGRtools ReactionContainer)
     -----------------------------------------------------
     input: transformation template, CGR/molecule to edit
-    output: edited CGR/molecule
+    output: edited CGR/molecule or generator
     -----------------------------------------------------
     template should contain one reactant and one product:
     CGRreactor allows only 1 -> 1 transformation
@@ -45,8 +45,8 @@ class CGRreactor:
     returns generator of all possible products if limit=0
     else limited to number list of products:
 
-    >> products = reactor(structure, limit=0)
-    >> product = reactor(structure, limit=1)
+    >> products = reactor(structure, limit=0)  # generator
+    >> product = reactor(structure, limit=1)  # list with 1 product
 
     """
     def __init__(self, template, delete_atoms=False):
@@ -204,7 +204,7 @@ class Reactor:
     transformation template (CGRtools ReactionContainer).
     -----------------------------------------------------
     input: transformation template, list of reactants
-    output: list of products
+    output: list or generator of reactions
     -----------------------------------------------------
     reactor allows only this reaction transformations:
          ONE to ONE   # 1 -> 1
@@ -217,11 +217,11 @@ class Reactor:
     >> reactor = CGRreactor(template, delete_atoms=True)
 
     reactor calling transforms reactants to products and
-    returns generator of all possible products if limit=0
-    else limited to number list of products:
+    returns generator of reaction transformations with all
+    possible products if limit=0 else limited to number list of reactions:
 
-    >> products = reactor(structure, limit=0)
-    >> product = reactor(structure, limit=1)
+    >> products = reactor(structure, limit=0)  # generator
+    >> product = reactor(structure, limit=1)  # list with 1 reaction
 
     """
     def __init__(self, template, delete_atoms=False):
@@ -290,7 +290,8 @@ class Reactor:
     def __get_mapping(self, structures):
         """
         match each pattern to each molecule.
-        if all patterns matches with all molecules return generator of all possible mapping.
+        if all patterns matches with all molecules
+        return generator of all possible mapping.
 
         :param structures: disjoint molecules
         :return: mapping generator
