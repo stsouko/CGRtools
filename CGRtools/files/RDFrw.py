@@ -109,69 +109,6 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t) - 1
         raise self.__error
 
-    def __getitem__(self, item):
-        _len = len(self.__shifts)
-
-        if isinstance(item, int):
-            if item >= _len or item < -_len:
-                raise IndexError('List index out of range')
-            self._file.seek(self.__shifts[item])
-            return next(self.__data)
-
-        elif isinstance(item, slice):
-            start, stop, step = item.indices(_len)
-            req = []
-            if start >= stop:
-                return req
-            self._file.seek(self.__shifts[start])
-            while True:
-                req.append(next(self.__data))
-                if self._file.tell() > self.__shifts[stop]:
-                    break
-            if step > 1:
-                return req[::step]
-            return req
-
-        else:
-            raise TypeError('Indices must be integers or slices')
-
-    def seek(self, offset):
-        if self.__shifts:
-            if 0 <= offset < len(self.__shifts):
-                current_pos = self._file.tell()
-                new_pos = self.__shifts[offset]
-                if current_pos != new_pos:
-                    if current_pos == self.__shifts[-1]:  # reached the end of the file
-                        self.__data = self.__reader()
-                        self.__file = iter(self._file.readline, '')
-                        self._file.seek(0)
-                        next(self.__data)
-                        if offset:  # move not to the beginning of the file
-                            self._file.seek(new_pos)
-                    else:
-                        if not self.__already_seeked:
-                            if self.__shifts[0] < current_pos:  # in the middle of the file
-                                self.__data.send(True)
-                            self.__already_seeked = True
-                        self._file.seek(new_pos)
-            else:
-                raise IndexError('invalid offset')
-        else:
-            raise self.__error
-
-    def tell(self):
-        if self.__shifts:
-            t = self._file.tell()
-            if t == self.__shifts[0]:
-                return 0
-            elif t == self.__shifts[-1]:
-                return len(self.__shifts) - 1
-            elif t in self.__shifts:
-                return bisect_left(self.__shifts, t)
-            else:
-                return bisect_left(self.__shifts, t) - 1
-        raise self.__error
-
     def __reader(self):
         record = parser = mkey = None
         failed = False
