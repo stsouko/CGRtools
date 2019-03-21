@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Adelia Fatykhova <adelik21979@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -78,7 +79,7 @@ class CGRreactor:
                 g = (self.patcher(structure, m) for m in mapping)
 
             if limit > 1:
-                return islice(g, limit)
+                return list(islice(g, limit))
             else:
                 return g
 
@@ -228,7 +229,7 @@ class Reactor:
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactants but
                             not exists in products will be removed
-                """
+        """
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
