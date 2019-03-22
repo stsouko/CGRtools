@@ -318,7 +318,7 @@ class Reactor:
                 mapping = {k: v for k, v in zip(intersection, count(max(checked_atoms) + 1))}
                 structure = structure.remap(mapping, copy=True)
                 info("some atoms in input structures had the same numbers.\n"
-                     f"atoms {list(mapping.keys())} were remapped to {list(mapping.values())}")
+                     f"atoms {list(mapping)} were remapped to {list(mapping.values())}")
             checked_atoms.update(structure.atoms_numbers)
             checked.append(structure)
         return checked
