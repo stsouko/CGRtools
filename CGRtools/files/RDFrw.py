@@ -148,18 +148,17 @@ class RDFread(CGRread, WithMixin):
                 if step > 1:
                     sss = list(range(start, stop, step))
                     for x in sss:
-                        pred = self.tell()
-                        reaction = self.getitem(x)
-                        if self.tell() - pred != 1:
-                            break
-                        elif self.tell() > stop:
+                        t, reaction = self.getitem(x)
+                        # if self.tell() - t != 1:
+                        #     break
+                        if self.tell() > stop:
                             break
                         else:
                             req.append(reaction)
                 else:
                     sss = list(range(start, stop))
                     for x in sss:
-                        reaction = self.getitem(x)
+                        t, reaction = self.getitem(x)
                         if reaction:
                             req.append(reaction)
                         elif self.tell() > stop:
