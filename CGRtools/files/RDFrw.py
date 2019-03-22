@@ -127,23 +127,22 @@ class RDFread(CGRread, WithMixin):
                 if item < 0:
                     item += _len
                 self.seek(item)
-                records = next(self)
+                records = next(self.__data)
             elif isinstance(item, slice):
                 start, stop, step = item.indices(_len)
                 if start == stop:
                     return []
 
-                self.seek(start)
                 if step == 1:
-                    records = [x for x in islice(self.__data, 0, stop - start) if x]
+                    self.seek(start)
+                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
                 else:
                     records = []
-                    for index in list(range(start, stop, step)):
+                    for index in range(start, stop, step):
                         self.seek(index)
-                        record = next(self)
+                        record = next(self.__data)
                         if record:
                             records.append(record)
-                self.seek(_current_pos)
             else:
                 raise TypeError('Indices must be integers or slices')
 
