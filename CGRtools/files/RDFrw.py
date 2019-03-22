@@ -109,7 +109,20 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t) - 1
         raise self.__implement_error
 
+    def getitem(self, item):
+        self.seek(item)
+        reaction = next(self, None)
+        t = self.tell()
+        return t, reaction
+
     def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required block of the file with an error,
+        then only the correct blocks are returned
+        :param item: int or slice
+        :return: ReactionContainer or list of ReactionContainers
+        """
         if self.__shifts:
             _len = len(self.__shifts) - 1
             _current_pos = self.tell()
@@ -119,9 +132,7 @@ class RDFread(CGRread, WithMixin):
                     raise IndexError('List index out of range')
                 if item < 0:
                     item += _len
-                self.seek(item)
-                reaction = next(self, None)
-                t = self.tell()
+                t, reaction = self.getitem(item)
                 self.seek(_current_pos)
                 if reaction is None or t - item != 1:
                     raise self.__index_error
@@ -133,18 +144,26 @@ class RDFread(CGRread, WithMixin):
                 if start == stop:
                     return req
                 number = stop - start
-                if start < 0:
-                    start += _len
                 self.seek(start)
 
-                for _ in range(number):
-                    reaction = next(self, None)
-                    if reaction and self.tell() > start + number:
-                        req.append(next(self, None))
-                    else:
-                        break
                 if step > 1:
-                    return req[::step]
+                    sss = list(range(start, stop, step))
+                    for x in sss:
+                        pred = self.tell()
+                        reaction = self.getitem(x)
+                        if self.tell() - pred != 1:
+                            break
+                        elif self.tell() > stop:
+                            break
+                        else:
+                            req.append(reaction)
+                else:
+                    for x in range(number):
+                        reaction = self.getitem(x)
+                        if reaction:
+                            req.append(reaction)
+                        elif self.tell() > stop:
+                            break
                 self.seek(_current_pos)
                 return req
 
