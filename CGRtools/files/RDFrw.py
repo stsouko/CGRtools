@@ -123,24 +123,26 @@ class RDFread(CGRread, WithMixin):
                 reaction = next(self, None)
                 t = self.tell()
                 self.seek(_current_pos)
-                if None or t - item != 1:
+                if reaction is None or t - item != 1:
                     raise self.__index_error
                 return reaction
 
             elif isinstance(item, slice):
                 start, stop, step = item.indices(_len)
                 req = []
-                if start >= stop:
+                if start == stop:
                     return req
                 number = stop - start
-                if item < 0:
-                    item += _len
+                if start < 0:
+                    start += _len
                 self.seek(start)
 
                 for _ in range(number):
-                    req.append(next(self))
-                    if self.tell() > start + number:
-                        raise self.__index_error
+                    reaction = next(self, None)
+                    if reaction and self.tell() > start + number:
+                        req.append(next(self, None))
+                    else:
+                        break
                 if step > 1:
                     return req[::step]
                 self.seek(_current_pos)
