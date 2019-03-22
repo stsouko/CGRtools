@@ -59,10 +59,10 @@ class RDFread(CGRread, WithMixin):
 
         :return: list of parsed molecules or reactions
         """
-        return list(self.__data)
+        return list(self)
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self.__data if x is not None)
 
     def __len__(self):
         if self.__shifts:
@@ -70,7 +70,7 @@ class RDFread(CGRread, WithMixin):
         raise self.__implement_error
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def seek(self, offset):
         if self.__shifts:
@@ -109,11 +109,10 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t) - 1
         raise self.__implement_error
 
-    def getitem(self, item):
+    def __getitem(self, item):
         self.seek(item)
         reaction = next(self, None)
-        t = self.tell()
-        return t, reaction
+        return reaction
 
     def __getitem__(self, item):
         """
@@ -132,9 +131,9 @@ class RDFread(CGRread, WithMixin):
                     raise IndexError('List index out of range')
                 if item < 0:
                     item += _len
-                t, reaction = self.getitem(item)
+                reaction = self.__getitem(item)
                 self.seek(_current_pos)
-                if reaction is None or t - item != 1:
+                if reaction is None:
                     raise self.__index_error
                 return reaction
 
@@ -145,24 +144,10 @@ class RDFread(CGRread, WithMixin):
                     return req
                 self.seek(start)
 
-                if step > 1:
-                    sss = list(range(start, stop, step))
-                    for x in sss:
-                        t, reaction = self.getitem(x)
-                        # if self.tell() - t != 1:
-                        #     break
-                        if self.tell() > stop:
-                            break
-                        else:
-                            req.append(reaction)
-                else:
-                    sss = list(range(start, stop))
-                    for x in sss:
-                        t, reaction = self.getitem(x)
-                        if reaction:
-                            req.append(reaction)
-                        elif self.tell() > stop:
-                            break
+                for index in list(range(start, stop, step)):
+                    reaction = self.__getitem(index)
+                    if reaction:
+                        req.append(reaction)
                 self.seek(_current_pos)
                 return req
 
@@ -188,7 +173,7 @@ class RDFread(CGRread, WithMixin):
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
-                continue
+                yield None
             elif parser:
                 try:
                     if parser(line):
