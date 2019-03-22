@@ -19,7 +19,7 @@
 #
 from bisect import bisect_left
 from collections import defaultdict
-from itertools import chain
+from itertools import chain, islice
 from logging import warning
 from os.path import getsize
 from subprocess import check_output
@@ -59,18 +59,18 @@ class RDFread(CGRread, WithMixin):
 
         :return: list of parsed molecules or reactions
         """
-        return list(self.__data)
+        return list(self)
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self.__data if x is not None)
 
     def __len__(self):
         if self.__shifts:
             return len(self.__shifts) - 1
-        raise self.__error
+        raise self.__implement_error
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def seek(self, offset):
         if self.__shifts:
@@ -94,7 +94,7 @@ class RDFread(CGRread, WithMixin):
             else:
                 raise IndexError('invalid offset')
         else:
-            raise self.__error
+            raise self.__implement_error
 
     def tell(self):
         if self.__shifts:
@@ -107,7 +107,50 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t)
             else:
                 return bisect_left(self.__shifts, t) - 1
-        raise self.__error
+        raise self.__implement_error
+
+    def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required block of the file with an error,
+        then only the correct blocks are returned
+        :param item: int or slice
+        :return: ReactionContainer or list of ReactionContainers
+        """
+        if self.__shifts:
+            _len = len(self.__shifts) - 1
+            _current_pos = self.tell()
+
+            if isinstance(item, int):
+                if item >= _len or item < -_len:
+                    raise IndexError('List index out of range')
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                records = next(self.__data)
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(_len)
+                if start == stop:
+                    return []
+
+                if step == 1:
+                    self.seek(start)
+                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
+                else:
+                    records = []
+                    for index in range(start, stop, step):
+                        self.seek(index)
+                        record = next(self.__data)
+                        if record:
+                            records.append(record)
+            else:
+                raise TypeError('Indices must be integers or slices')
+
+            self.seek(_current_pos)
+            if records is None:
+                raise self.__index_error
+            return records
+        raise self.__implement_error
 
     def __reader(self):
         record = parser = mkey = None
@@ -137,19 +180,22 @@ class RDFread(CGRread, WithMixin):
                     failed = True
                     parser = None
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
-                        if seek:
-                            yield
-                            self.__already_seeked = False
-                            continue
-                    except Exception:
+                    except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    finally:
-                        record = None
+                        seek = yield None
+
+                    record = None
+                    if seek:
+                        yield
+                        self.__already_seeked = False
+                        continue
+
                 is_reaction = True
                 ir = 4
                 failed = False
@@ -160,14 +206,16 @@ class RDFread(CGRread, WithMixin):
                     record['meta'] = prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
-                        if seek:
-                            yield
-                            self.__already_seeked = False
-                            continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    finally:
-                        record = None
+                        seek = yield None
+
+                    record = None
+                    if seek:
+                        yield
+                        self.__already_seeked = False
+                        continue
+
                 ir = 3
                 failed = is_reaction = False
                 mkey = None
@@ -200,16 +248,19 @@ class RDFread(CGRread, WithMixin):
                 except ValueError:
                     failed = True
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
         if record:
             record['meta'] = prepare_meta(meta)
             try:
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+                yield None
 
     __shifts = None
-    __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     __already_seeked = False
+    __index_error = IndexError('Data block with requested index contain errors')
 
 
 class RDFwrite(MOLwrite, WithMixin):
