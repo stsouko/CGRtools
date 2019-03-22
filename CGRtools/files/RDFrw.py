@@ -143,7 +143,6 @@ class RDFread(CGRread, WithMixin):
                 req = []
                 if start == stop:
                     return req
-                number = stop - start
                 self.seek(start)
 
                 if step > 1:
@@ -158,7 +157,8 @@ class RDFread(CGRread, WithMixin):
                         else:
                             req.append(reaction)
                 else:
-                    for x in range(number):
+                    sss = list(range(start, stop))
+                    for x in sss:
                         reaction = self.getitem(x)
                         if reaction:
                             req.append(reaction)
