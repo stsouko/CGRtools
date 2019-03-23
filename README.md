@@ -16,18 +16,12 @@ INSTALL
 Linux Debian based
 ==================
 
-* Install python3.7 and git
+* Install python3.7, virtualenv and git
 
     ```
     sudo apt install python3.7 python3.7-dev git python3-virtualenv
     ```
     
-* Install virtualenv.
-
-    ```
-    sudo apt install virtualenv
-    ```
-
 * Create new environment and activate it.
 
     ```
