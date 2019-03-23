@@ -25,14 +25,12 @@ def from_rdkit_molecule(data):
     RDKit molecule object to MoleculeContainer converter
     """
     m = MoleculeContainer()
-    atoms = []
+    atoms, mapping = [], []
     for a in data.GetAtoms():
         atom = {'element': a.GetSymbol(), 'charge': a.GetFormalCharge()}
         atoms.append(atom)
+        mapping.append(a.GetAtomMapNum())
 
-        mapping = a.GetAtomMapNum()
-        if mapping:
-            atom['mapping'] = mapping
         isotope = a.GetIsotope()
         if isotope:
             atom['isotope'] = isotope
@@ -47,8 +45,10 @@ def from_rdkit_molecule(data):
             atom['y'] = y
             atom['z'] = z
 
-    for atom in atoms:
-        m.add_atom(atom)
+    for atom, mapping in zip(atoms, mapping):
+        a = m.add_atom(atom)
+        if mapping:
+            m.atom(a)._parsed_mapping = mapping
 
     for bond in data.GetBonds():
         m.add_bond(bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1, _rdkit_bond_map[bond.GetBondType()])
