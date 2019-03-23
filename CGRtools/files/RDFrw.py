@@ -47,7 +47,7 @@ class RDFread(CGRread, WithMixin):
             self.__file = iter(self._file.readline, '')
             if next(self.__data):
                 self.__shifts = [int(x.split(':', 1)[0]) for x in
-                                 check_output(["grep", "-boE", "^\$[RM]FMT", self._file.name]).decode().split()]
+                                 check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).decode().split()]
                 self.__shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
@@ -59,7 +59,7 @@ class RDFread(CGRread, WithMixin):
 
         :return: list of parsed molecules or reactions
         """
-        return list(self)
+        return list(iter(self))  # __len__ method call skip
 
     def __iter__(self):
         return (x for x in self.__data if x is not None)
