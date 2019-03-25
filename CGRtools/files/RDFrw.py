@@ -27,12 +27,12 @@ from sys import platform
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
+from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
 from ..exceptions import InvalidFileType
 
 
-class RDFread(CGRread, WithMixin):
+class RDFread(CGRread, WithMixin, MDLread):
     """
     MDL RDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
@@ -52,25 +52,6 @@ class RDFread(CGRread, WithMixin):
         else:
             self.__file = self._file
             next(self.__data)
-
-    def read(self):
-        """
-        parse whole file
-
-        :return: list of parsed molecules or reactions
-        """
-        return list(iter(self))  # __len__ method call skip
-
-    def __iter__(self):
-        return (x for x in self.__data if x is not None)
-
-    def __len__(self):
-        if self.__shifts:
-            return len(self.__shifts) - 1
-        raise self.__implement_error
-
-    def __next__(self):
-        return next(iter(self))
 
     def seek(self, offset):
         if self.__shifts:
@@ -94,7 +75,7 @@ class RDFread(CGRread, WithMixin):
             else:
                 raise IndexError('invalid offset')
         else:
-            raise self.__implement_error
+            raise self._implement_error
 
     def tell(self):
         if self.__shifts:
@@ -107,50 +88,7 @@ class RDFread(CGRread, WithMixin):
                 return bisect_left(self.__shifts, t)
             else:
                 return bisect_left(self.__shifts, t) - 1
-        raise self.__implement_error
-
-    def __getitem__(self, item):
-        """
-        getting the item by index from the original file,
-        if the required block of the file with an error,
-        then only the correct blocks are returned
-        :param item: int or slice
-        :return: ReactionContainer or list of ReactionContainers
-        """
-        if self.__shifts:
-            _len = len(self.__shifts) - 1
-            _current_pos = self.tell()
-
-            if isinstance(item, int):
-                if item >= _len or item < -_len:
-                    raise IndexError('List index out of range')
-                if item < 0:
-                    item += _len
-                self.seek(item)
-                records = next(self.__data)
-            elif isinstance(item, slice):
-                start, stop, step = item.indices(_len)
-                if start == stop:
-                    return []
-
-                if step == 1:
-                    self.seek(start)
-                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
-                else:
-                    records = []
-                    for index in range(start, stop, step):
-                        self.seek(index)
-                        record = next(self.__data)
-                        if record:
-                            records.append(record)
-            else:
-                raise TypeError('Indices must be integers or slices')
-
-            self.seek(_current_pos)
-            if records is None:
-                raise self.__index_error
-            return records
-        raise self.__implement_error
+        raise self._implement_error
 
     def __reader(self):
         record = parser = mkey = None
@@ -257,10 +195,7 @@ class RDFread(CGRread, WithMixin):
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
 
-    __shifts = None
-    __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     __already_seeked = False
-    __index_error = IndexError('Data block with requested index contain errors')
 
 
 class RDFwrite(MOLwrite, WithMixin):

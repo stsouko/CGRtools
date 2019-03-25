@@ -19,16 +19,15 @@
 from bisect import bisect_left
 from collections import defaultdict
 from io import BytesIO
-from itertools import islice
 from logging import warning
 from subprocess import check_output
 from sys import platform
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread, prepare_meta
+from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, prepare_meta
 
 
-class SDFread(CGRread, WithMixin):
+class SDFread(CGRread, WithMixin, MDLread):
     """
     MDL SDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
@@ -48,25 +47,6 @@ class SDFread(CGRread, WithMixin):
         else:
             self.__file = self._file
 
-    def read(self):
-        """
-        parse whole file
-
-        :return: list of parsed molecules
-        """
-        return list(self.__data)
-
-    def __iter__(self):
-        return (x for x in self.__data if x is not None)
-
-    def __next__(self):
-        return next(iter(self))
-
-    def __len__(self):
-        if self.__shifts:
-            return len(self.__shifts) - 1
-        raise self.__implement_error
-
     def seek(self, offset):
         if self.__shifts:
             if 0 <= offset < len(self.__shifts):
@@ -80,56 +60,13 @@ class SDFread(CGRread, WithMixin):
             else:
                 raise IndexError('invalid offset')
         else:
-            raise self.__implement_error
+            raise self._implement_error
 
     def tell(self):
         if self.__shifts:
             t = self._file.tell()
             return bisect_left(self.__shifts, t)
-        raise self.__implement_error
-
-    def __getitem__(self, item):
-        """
-        getting the item by index from the original file,
-        if the required block of the file with an error,
-        then only the correct blocks are returned
-        :param item: int or slice
-        :return: MoleculeContainer or list of MoleculeContainers
-        """
-        if self.__shifts:
-            _len = len(self.__shifts) - 1
-            _current_pos = self.tell()
-
-            if isinstance(item, int):
-                if item >= _len or item < -_len:
-                    raise IndexError('List index out of range')
-                if item < 0:
-                    item += _len
-                self.seek(item)
-                records = next(self.__data)
-            elif isinstance(item, slice):
-                start, stop, step = item.indices(_len)
-                if start == stop:
-                    return []
-
-                if step == 1:
-                    self.seek(start)
-                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
-                else:
-                    records = []
-                    for index in range(start, stop, step):
-                        self.seek(index)
-                        record = next(self.__data)
-                        if record:
-                            records.append(record)
-            else:
-                raise TypeError('Indices must be integers or slices')
-
-            self.seek(_current_pos)
-            if records is None:
-                raise self.__index_error
-            return records
-        raise self.__implement_error
+        raise self._implement_error
 
     def __reader(self):
         im = 3
@@ -148,6 +85,7 @@ class SDFread(CGRread, WithMixin):
                     failkey = True
                     parser = None
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
 
             elif line.startswith("$$$$"):
                 if record:
@@ -185,6 +123,7 @@ class SDFread(CGRread, WithMixin):
                 except ValueError:
                     failkey = True
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
 
         if record:  # True for MOL file only.
             record['meta'] = prepare_meta(meta)
@@ -192,10 +131,7 @@ class SDFread(CGRread, WithMixin):
                 yield self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
-
-    __shifts = None
-    __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
-    __index_error = IndexError('Data block with requested index contain errors')
+                yield None
 
 
 class SDFwrite(MOLwrite, WithMixin):
