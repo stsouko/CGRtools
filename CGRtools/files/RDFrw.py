@@ -195,6 +195,7 @@ class RDFread(CGRread, WithMixin, MDLread):
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
 
+    __shifts = None
     __already_seeked = False
 
 

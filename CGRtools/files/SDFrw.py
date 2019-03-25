@@ -133,6 +133,8 @@ class SDFread(CGRread, WithMixin, MDLread):
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
 
+    __shifts = None
+
 
 class SDFwrite(MOLwrite, WithMixin):
     """

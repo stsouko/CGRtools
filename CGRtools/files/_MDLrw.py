@@ -435,14 +435,13 @@ class ERXNread:
 
 
 class MDLread:
-
     def read(self):
         """
         parse whole file
 
         :return: list of parsed molecules
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
         return (x for x in self.__data if x is not None)
@@ -451,8 +450,8 @@ class MDLread:
         return next(iter(self))
 
     def __len__(self):
-        if self._shifts:
-            return len(self._shifts) - 1
+        if self.__shifts:
+            return len(self.__shifts) - 1
         raise self._implement_error
 
     def __getitem__(self, item):
@@ -463,8 +462,8 @@ class MDLread:
         :param item: int or slice
         :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
         """
-        if self._shifts:
-            _len = len(self._shifts) - 1
+        if self.__shifts:
+            _len = len(self.__shifts) - 1
             _current_pos = self.tell()
 
             if isinstance(item, int):
@@ -498,7 +497,6 @@ class MDLread:
             return records
         raise self._implement_error
 
-    _shifts = None
     _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     _index_error = IndexError('Data block with requested index contain errors')
 
