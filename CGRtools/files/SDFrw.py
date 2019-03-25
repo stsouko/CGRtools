@@ -16,8 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from bisect import bisect_left
 from collections import defaultdict
 from logging import warning
+from subprocess import check_output
+from sys import platform
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
 from ._MDLrw import MOLwrite, MOLread, EMOLread, prepare_meta
@@ -29,10 +32,20 @@ class SDFread(CGRread, WithMixin):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+
+        if indexable and platform != 'win32' and not self._is_buffer:
+            self.__file = iter(self._file.readline, '')
+            self.__shifts = [0]
+            for x in check_output(['grep', '-bE', r'\$\$\$\$', self._file.name]).decode().split():
+                _pos, _len = x.split(':', 1)
+                self.__shifts.append(int(_pos) + len(_len) + 1)
+            print(self.__shifts)
+        else:
+            self.__file = self._file
 
     def read(self):
         """
@@ -48,12 +61,55 @@ class SDFread(CGRread, WithMixin):
     def __next__(self):
         return next(self.__data)
 
+    def __len__(self):
+        if self.__shifts:
+            return len(self.__shifts) - 1
+        raise self.__implement_error
+
+    def seek(self, offset):
+        if self.__shifts:
+            if 0 <= offset < len(self.__shifts):
+                current_pos = self._file.tell()
+                print('current_pos', current_pos)
+                new_pos = self.__shifts[offset]
+                print('new_pos', new_pos)
+                if current_pos != new_pos:
+                    if current_pos == self.__shifts[-1]:  # reached the end of the file
+                        self.__data = self.__reader()
+                        self.__file = iter(self._file.readline, '')
+                        self._file.seek(0)
+                        if offset:  # move not to the beginning of the file
+                            self._file.seek(new_pos)
+                    else:
+                        if not self.__already_seeked:
+                            if self.__shifts[0] < current_pos:  # in the middle of the file
+                                self.__data.send(True)
+                            self.__already_seeked = True
+                        self._file.seek(new_pos)
+            else:
+                raise IndexError('invalid offset')
+        else:
+            raise self.__implement_error
+
+    def tell(self):
+        if self.__shifts:
+            t = self._file.tell()
+            if t == self.__shifts[0]:
+                return 0
+            elif t == self.__shifts[-1]:
+                return len(self.__shifts) - 1
+            elif t in self.__shifts:
+                return bisect_left(self.__shifts, t)
+            else:
+                return bisect_left(self.__shifts, t) - 1
+        raise self.__implement_error
+
     def __reader(self):
         im = 3
         failkey = False
         mkey = parser = record = None
         meta = defaultdict(list)
-        for line in self._file:
+        for line in self.__file:
             if failkey and not line.startswith("$$$$"):
                 continue
             elif parser:
@@ -70,10 +126,15 @@ class SDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        yield self._convert_structure(record)
+                        seek = yield self._convert_structure(record)
+                        if seek:
+                            yield
+                            self.__already_seeked = False
+                            continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    record = None
+                    finally:
+                        record = None
 
                 im = 3
                 failkey = False
@@ -108,6 +169,10 @@ class SDFread(CGRread, WithMixin):
                 yield self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+
+    __already_seeked = False
+    __shifts = None
+    __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
 
 
 class SDFwrite(MOLwrite, WithMixin):
