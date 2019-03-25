@@ -444,14 +444,14 @@ class MDLread:
         return list(iter(self))
 
     def __iter__(self):
-        return (x for x in self.__data if x is not None)
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
         return next(iter(self))
 
     def __len__(self):
-        if self.__shifts:
-            return len(self.__shifts) - 1
+        if self._shifts:
+            return len(self._shifts) - 1
         raise self._implement_error
 
     def __getitem__(self, item):
@@ -462,8 +462,8 @@ class MDLread:
         :param item: int or slice
         :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
         """
-        if self.__shifts:
-            _len = len(self.__shifts) - 1
+        if self._shifts:
+            _len = len(self._shifts) - 1
             _current_pos = self.tell()
 
             if isinstance(item, int):
@@ -472,7 +472,7 @@ class MDLread:
                 if item < 0:
                     item += _len
                 self.seek(item)
-                records = next(self.__data)
+                records = next(self._data)
             elif isinstance(item, slice):
                 start, stop, step = item.indices(_len)
                 if start == stop:
@@ -480,12 +480,12 @@ class MDLread:
 
                 if step == 1:
                     self.seek(start)
-                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
+                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
                 else:
                     records = []
                     for index in range(start, stop, step):
                         self.seek(index)
-                        record = next(self.__data)
+                        record = next(self._data)
                         if record:
                             records.append(record)
             else:
@@ -497,6 +497,7 @@ class MDLread:
             return records
         raise self._implement_error
 
+    _shifts = None
     _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     _index_error = IndexError('Data block with requested index contain errors')
 

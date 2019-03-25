@@ -36,25 +36,25 @@ class SDFread(CGRread, WithMixin, MDLread):
     def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
-            self.__shifts = [0]
+            self._shifts = [0]
             for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
                 _pos, _line = x.split(b':', 1)
-                self.__shifts.append(int(_pos) + len(_line))
+                self._shifts.append(int(_pos) + len(_line))
         else:
             self.__file = self._file
 
     def seek(self, offset):
-        if self.__shifts:
-            if 0 <= offset < len(self.__shifts):
+        if self._shifts:
+            if 0 <= offset < len(self._shifts):
                 current_pos = self._file.tell()
-                new_pos = self.__shifts[offset]
+                new_pos = self._shifts[offset]
                 if current_pos != new_pos:
-                    if current_pos == self.__shifts[-1]:  # reached the end of the file
-                        self.__data = self.__reader()
+                    if current_pos == self._shifts[-1]:  # reached the end of the file
+                        self._data = self.__reader()
                         self.__file = iter(self._file.readline, '')
                     self._file.seek(new_pos)
             else:
@@ -63,9 +63,9 @@ class SDFread(CGRread, WithMixin, MDLread):
             raise self._implement_error
 
     def tell(self):
-        if self.__shifts:
+        if self._shifts:
             t = self._file.tell()
-            return bisect_left(self.__shifts, t)
+            return bisect_left(self._shifts, t)
         raise self._implement_error
 
     def __reader(self):
@@ -132,8 +132,6 @@ class SDFread(CGRread, WithMixin, MDLread):
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
-
-    __shifts = None
 
 
 class SDFwrite(MOLwrite, WithMixin):

@@ -41,35 +41,35 @@ class RDFread(CGRread, WithMixin, MDLread):
     def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
-            if next(self.__data):
-                self.__shifts = [int(x.split(':', 1)[0]) for x in
+            if next(self._data):
+                self._shifts = [int(x.split(':', 1)[0]) for x in
                                  check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).decode().split()]
-                self.__shifts.append(getsize(self._file.name))
+                self._shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
-            next(self.__data)
+            next(self._data)
 
     def seek(self, offset):
-        if self.__shifts:
-            if 0 <= offset < len(self.__shifts):
+        if self._shifts:
+            if 0 <= offset < len(self._shifts):
                 current_pos = self._file.tell()
-                new_pos = self.__shifts[offset]
+                new_pos = self._shifts[offset]
                 if current_pos != new_pos:
-                    if current_pos == self.__shifts[-1]:  # reached the end of the file
-                        self.__data = self.__reader()
+                    if current_pos == self._shifts[-1]:  # reached the end of the file
+                        self._data = self.__reader()
                         self.__file = iter(self._file.readline, '')
                         self._file.seek(0)
-                        next(self.__data)
+                        next(self._data)
                         if offset:  # move not to the beginning of the file
                             self._file.seek(new_pos)
                     else:
                         if not self.__already_seeked:
-                            if self.__shifts[0] < current_pos:  # in the middle of the file
-                                self.__data.send(True)
+                            if self._shifts[0] < current_pos:  # in the middle of the file
+                                self._data.send(True)
                             self.__already_seeked = True
                         self._file.seek(new_pos)
             else:
@@ -78,16 +78,16 @@ class RDFread(CGRread, WithMixin, MDLread):
             raise self._implement_error
 
     def tell(self):
-        if self.__shifts:
+        if self._shifts:
             t = self._file.tell()
-            if t == self.__shifts[0]:
+            if t == self._shifts[0]:
                 return 0
-            elif t == self.__shifts[-1]:
-                return len(self.__shifts) - 1
-            elif t in self.__shifts:
-                return bisect_left(self.__shifts, t)
+            elif t == self._shifts[-1]:
+                return len(self._shifts) - 1
+            elif t in self._shifts:
+                return bisect_left(self._shifts, t)
             else:
-                return bisect_left(self.__shifts, t) - 1
+                return bisect_left(self._shifts, t) - 1
         raise self._implement_error
 
     def __reader(self):
@@ -195,7 +195,6 @@ class RDFread(CGRread, WithMixin, MDLread):
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
 
-    __shifts = None
     __already_seeked = False
 
 
