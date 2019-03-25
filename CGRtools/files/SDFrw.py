@@ -56,10 +56,10 @@ class SDFread(CGRread, WithMixin):
         return list(self.__data)
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self.__data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def __len__(self):
         if self.__shifts:
@@ -112,6 +112,7 @@ class SDFread(CGRread, WithMixin):
                         yield self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
+                        yield None
                     record = None
 
                 im = 3
