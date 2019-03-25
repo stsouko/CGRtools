@@ -43,7 +43,6 @@ class SDFread(CGRread, WithMixin):
             for x in check_output(['grep', '-bE', r'\$\$\$\$', self._file.name]).decode().split():
                 _pos, _len = x.split(':', 1)
                 self.__shifts.append(int(_pos) + len(_len) + 1)
-            print(self.__shifts)
         else:
             self.__file = self._file
 
@@ -70,9 +69,7 @@ class SDFread(CGRread, WithMixin):
         if self.__shifts:
             if 0 <= offset < len(self.__shifts):
                 current_pos = self._file.tell()
-                print('current_pos', current_pos)
                 new_pos = self.__shifts[offset]
-                print('new_pos', new_pos)
                 if current_pos != new_pos:
                     if current_pos == self.__shifts[-1]:  # reached the end of the file
                         self.__data = self.__reader()
