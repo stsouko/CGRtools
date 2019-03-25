@@ -19,6 +19,7 @@
 from bisect import bisect_left
 from collections import defaultdict
 from io import BytesIO
+from itertools import islice
 from logging import warning
 from subprocess import check_output
 from sys import platform
@@ -87,6 +88,49 @@ class SDFread(CGRread, WithMixin):
             return bisect_left(self.__shifts, t)
         raise self.__implement_error
 
+    def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required block of the file with an error,
+        then only the correct blocks are returned
+        :param item: int or slice
+        :return: MoleculeContainer or list of MoleculeContainers
+        """
+        if self.__shifts:
+            _len = len(self.__shifts) - 1
+            _current_pos = self.tell()
+
+            if isinstance(item, int):
+                if item >= _len or item < -_len:
+                    raise IndexError('List index out of range')
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                records = next(self.__data)
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(_len)
+                if start == stop:
+                    return []
+
+                if step == 1:
+                    self.seek(start)
+                    records = [x for x in islice(self.__data, 0, stop - start) if x is not None]
+                else:
+                    records = []
+                    for index in range(start, stop, step):
+                        self.seek(index)
+                        record = next(self.__data)
+                        if record:
+                            records.append(record)
+            else:
+                raise TypeError('Indices must be integers or slices')
+
+            self.seek(_current_pos)
+            if records is None:
+                raise self.__index_error
+            return records
+        raise self.__implement_error
+
     def __reader(self):
         im = 3
         failkey = False
@@ -151,6 +195,7 @@ class SDFread(CGRread, WithMixin):
 
     __shifts = None
     __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    __index_error = IndexError('Data block with requested index contain errors')
 
 
 class SDFwrite(MOLwrite, WithMixin):
