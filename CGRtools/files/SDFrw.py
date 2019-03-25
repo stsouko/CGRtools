@@ -18,6 +18,7 @@
 #
 from bisect import bisect_left
 from collections import defaultdict
+from io import BytesIO
 from logging import warning
 from subprocess import check_output
 from sys import platform
@@ -40,9 +41,9 @@ class SDFread(CGRread, WithMixin):
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
             self.__shifts = [0]
-            for x in check_output(['grep', '-bE', r'\$\$\$\$', self._file.name]).decode().split():
-                _pos, _len = x.split(':', 1)
-                self.__shifts.append(int(_pos) + len(_len) + 1)
+            for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
+                _pos, _line = x.split(b':', 1)
+                self.__shifts.append(int(_pos) + len(_line))
         else:
             self.__file = self._file
 
@@ -74,15 +75,7 @@ class SDFread(CGRread, WithMixin):
                     if current_pos == self.__shifts[-1]:  # reached the end of the file
                         self.__data = self.__reader()
                         self.__file = iter(self._file.readline, '')
-                        self._file.seek(0)
-                        if offset:  # move not to the beginning of the file
-                            self._file.seek(new_pos)
-                    else:
-                        if not self.__already_seeked:
-                            if self.__shifts[0] < current_pos:  # in the middle of the file
-                                self.__data.send(True)
-                            self.__already_seeked = True
-                        self._file.seek(new_pos)
+                    self._file.seek(new_pos)
             else:
                 raise IndexError('invalid offset')
         else:
@@ -91,14 +84,7 @@ class SDFread(CGRread, WithMixin):
     def tell(self):
         if self.__shifts:
             t = self._file.tell()
-            if t == self.__shifts[0]:
-                return 0
-            elif t == self.__shifts[-1]:
-                return len(self.__shifts) - 1
-            elif t in self.__shifts:
-                return bisect_left(self.__shifts, t)
-            else:
-                return bisect_left(self.__shifts, t) - 1
+            return bisect_left(self.__shifts, t)
         raise self.__implement_error
 
     def __reader(self):
@@ -123,15 +109,10 @@ class SDFread(CGRread, WithMixin):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
-                        seek = yield self._convert_structure(record)
-                        if seek:
-                            yield
-                            self.__already_seeked = False
-                            continue
+                        yield self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    finally:
-                        record = None
+                    record = None
 
                 im = 3
                 failkey = False
@@ -167,7 +148,6 @@ class SDFread(CGRread, WithMixin):
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
 
-    __already_seeked = False
     __shifts = None
     __implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
 
