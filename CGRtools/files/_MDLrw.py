@@ -18,7 +18,7 @@
 #
 from csv import reader
 from logging import warning
-from itertools import count, chain
+from itertools import count, chain, islice
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -432,6 +432,74 @@ class ERXNread:
     __parser_group = __parser = None
     __rend = __empty_skip = False
     __in_mol = 0
+
+
+class MDLread:
+    def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules
+        """
+        return list(iter(self))
+
+    def __iter__(self):
+        return (x for x in self._data if x is not None)
+
+    def __next__(self):
+        return next(iter(self))
+
+    def __len__(self):
+        if self._shifts:
+            return len(self._shifts) - 1
+        raise self._implement_error
+
+    def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required block of the file with an error,
+        then only the correct blocks are returned
+        :param item: int or slice
+        :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
+        """
+        if self._shifts:
+            _len = len(self._shifts) - 1
+            _current_pos = self.tell()
+
+            if isinstance(item, int):
+                if item >= _len or item < -_len:
+                    raise IndexError('List index out of range')
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                records = next(self._data)
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(_len)
+                if start == stop:
+                    return []
+
+                if step == 1:
+                    self.seek(start)
+                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
+                else:
+                    records = []
+                    for index in range(start, stop, step):
+                        self.seek(index)
+                        record = next(self._data)
+                        if record:
+                            records.append(record)
+            else:
+                raise TypeError('Indices must be integers or slices')
+
+            self.seek(_current_pos)
+            if records is None:
+                raise self._index_error
+            return records
+        raise self._implement_error
+
+    _shifts = None
+    _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    _index_error = IndexError('Data block with requested index contain errors')
 
 
 class MOLwrite(CGRwrite):
