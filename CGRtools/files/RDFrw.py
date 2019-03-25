@@ -46,8 +46,8 @@ class RDFread(CGRread, WithMixin, MDLread):
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
             if next(self._data):
-                self._shifts = [int(x.split(':', 1)[0]) for x in
-                                 check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).decode().split()]
+                self._shifts = [int(x.split(b':', 1)[0]) for x in
+                                check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
                 self._shifts.append(getsize(self._file.name))
         else:
             self.__file = self._file
