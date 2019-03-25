@@ -19,7 +19,7 @@
 #
 from bisect import bisect_left
 from collections import defaultdict
-from itertools import chain, islice
+from itertools import chain
 from logging import warning
 from os.path import getsize
 from subprocess import check_output
