@@ -20,7 +20,7 @@ from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
-from os.path import abspath, join, isfile
+from os.path import abspath, join, exists
 from pickle import dump, load
 from tempfile import NamedTemporaryFile
 from ._CGRrw import CGRwrite, cgr_keys
@@ -440,19 +440,15 @@ class ERXNread:
 
 class MDLread:
     @property
-    def _is_file(self):
-        return isfile(self._cash)
+    def _has_file(self):
+        return exists(self._cash)
 
     @property
     def _cash(self):
-        return abspath(self._file.name)
+        return join(NamedTemporaryFile().name, abspath(self._file.name))
 
     def _dump(self, grep_file):
-        temp = NamedTemporaryFile()
-        # temp.name = urlsafe_b64encode(self._cash)
-        __tmp_path = join(temp.name, urlsafe_b64encode(self._cash))
-        dump(grep_file, __tmp_path)
-        return __tmp_path
+        dump(grep_file, self._cash)
 
     @staticmethod
     def _load(path):
