@@ -16,9 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
+from os.path import abspath, join, isfile
+from pickle import dump, load
+from tempfile import NamedTemporaryFile
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -435,6 +439,25 @@ class ERXNread:
 
 
 class MDLread:
+    @property
+    def _is_file(self):
+        return isfile(self._cash)
+
+    @property
+    def _cash(self):
+        return abspath(self._file.name)
+
+    def _dump(self, grep_file):
+        temp = NamedTemporaryFile()
+        # temp.name = urlsafe_b64encode(self._cash)
+        __tmp_path = join(temp.name, urlsafe_b64encode(self._cash))
+        dump(grep_file, __tmp_path)
+        return __tmp_path
+
+    @staticmethod
+    def _load(path):
+        return load(path)
+
     def read(self):
         """
         parse whole file
@@ -497,6 +520,7 @@ class MDLread:
             return records
         raise self._implement_error
 
+    __path = None
     _shifts = None
     _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     _index_error = IndexError('Data block with requested index contain errors')
