@@ -46,7 +46,7 @@ class RDFread(CGRread, WithMixin, MDLread):
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
             if next(self._data):
-                self._shifts = self._is_cached
+                self._shifts = self._load_cache()
                 if self._shifts is None:
                     self._shifts = [int(x.split(b':', 1)[0]) for x in
                                     check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]

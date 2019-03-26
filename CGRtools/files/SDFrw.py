@@ -40,7 +40,7 @@ class SDFread(CGRread, WithMixin, MDLread):
 
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
-            self._shifts = self._is_cached
+            self._shifts = self._load_cache()
             if self._shifts is None:
                 self._shifts = [0]
                 for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
