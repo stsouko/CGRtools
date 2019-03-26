@@ -451,9 +451,9 @@ class MDLread:
     def _cache(self):
         return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))))
 
-    def _dump_cache(self, grep_file):
+    def _dump_cache(self, _shifts):
         with open(self._cache, 'wb') as f:
-            dump(grep_file, f)
+            dump(_shifts, f)
 
     def read(self):
         """
