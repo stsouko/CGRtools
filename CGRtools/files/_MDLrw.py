@@ -453,7 +453,7 @@ class MDLread:
 
     def _dump_cache(self, grep_file):
         with open(self._cache, 'wb') as f:
-            return dump(grep_file, f)
+            dump(grep_file, f)
 
     def read(self):
         """
