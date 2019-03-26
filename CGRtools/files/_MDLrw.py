@@ -20,7 +20,7 @@ from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
-from os.path import abspath, join, exists
+from os.path import abspath, exists
 from pickle import dump, load
 from tempfile import NamedTemporaryFile
 from ._CGRrw import CGRwrite, cgr_keys
