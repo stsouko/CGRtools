@@ -20,9 +20,9 @@ from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
-from os.path import abspath, exists
+from os.path import abspath, exists, join
 from pickle import dump, load
-from tempfile import NamedTemporaryFile
+from tempfile import gettempdir
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -441,19 +441,19 @@ class ERXNread:
 class MDLread:
     @property
     def _has_file(self):
-        return exists(self._cash)
+        return exists(self._cache)
 
     @property
-    def _cash(self):
-        __name = NamedTemporaryFile().name = 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))
-        return abspath(__name)
+    def _cache(self):
+        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))))
 
     def _dump(self, grep_file):
-        dump(grep_file, self._cash)
+        with open(self._cache, 'wb') as f:
+            return dump(grep_file, f)
 
-    @staticmethod
-    def _load(path):
-        return load(path)
+    def _load(self):
+        with open(self._cache, 'rb') as f:
+            return load(f)
 
     def read(self):
         """
