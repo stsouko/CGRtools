@@ -445,7 +445,7 @@ class MDLread:
 
     @property
     def _cash(self):
-        __name = NamedTemporaryFile().name = urlsafe_b64encode('cgrtools_' + abspath(self._file.name))
+        __name = NamedTemporaryFile().name = 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))
         return abspath(__name)
 
     def _dump(self, grep_file):
