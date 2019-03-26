@@ -439,20 +439,19 @@ class ERXNread:
 
 
 class MDLread:
-    @property
-    def _is_cached(self):
+    def _load_cached(self):
         try:
-            with open(self._cache, 'rb') as f:
+            with open(self.__cache_path, 'rb') as f:
                 return load(f)
         except:
             return None
 
     @property
-    def _cache(self):
+    def __cache_path(self):
         return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))))
 
     def _dump_cache(self, _shifts):
-        with open(self._cache, 'wb') as f:
+        with open(self.__cache_path, 'wb') as f:
             dump(_shifts, f)
 
     def read(self):
@@ -517,7 +516,6 @@ class MDLread:
             return records
         raise self._implement_error
 
-    __path = None
     _shifts = None
     _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     _index_error = IndexError('Data block with requested index contain errors')
