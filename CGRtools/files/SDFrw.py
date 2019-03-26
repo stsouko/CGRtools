@@ -46,6 +46,7 @@ class SDFread(CGRread, WithMixin, MDLread):
                 for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
                     _pos, _line = x.split(b':', 1)
                     self._shifts.append(int(_pos) + len(_line))
+                self._dump_cache(self._shifts)
         else:
             self.__file = self._file
 
