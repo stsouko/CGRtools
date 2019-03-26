@@ -46,13 +46,12 @@ class RDFread(CGRread, WithMixin, MDLread):
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
             if next(self._data):
-                if not self._has_file:
+                self._shifts = self._is_cached
+                if self._shifts is None:
                     self._shifts = [int(x.split(b':', 1)[0]) for x in
                                     check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
                     self._shifts.append(getsize(self._file.name))
-                    self._dump(self._shifts)
-                else:
-                    self._shifts = self._load(self._cash)
+                    self._dump_cache(self._shifts)
         else:
             self.__file = self._file
             next(self._data)

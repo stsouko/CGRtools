@@ -20,7 +20,7 @@ from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
-from os.path import abspath, exists, join
+from os.path import abspath, join
 from pickle import dump, load
 from tempfile import gettempdir
 from ._CGRrw import CGRwrite, cgr_keys
@@ -440,20 +440,20 @@ class ERXNread:
 
 class MDLread:
     @property
-    def _has_file(self):
-        return exists(self._cache)
+    def _is_cached(self):
+        try:
+            with open(self._cache, 'rb') as f:
+                return load(f)
+        except:
+            return None
 
     @property
     def _cache(self):
         return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name))))
 
-    def _dump(self, grep_file):
+    def _dump_cache(self, grep_file):
         with open(self._cache, 'wb') as f:
             return dump(grep_file, f)
-
-    def _load(self):
-        with open(self._cache, 'rb') as f:
-            return load(f)
 
     def read(self):
         """
