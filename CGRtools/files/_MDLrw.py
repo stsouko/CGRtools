@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,9 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
-from itertools import count, chain
+from itertools import count, chain, islice
+from os.path import abspath, join
+from pickle import dump, load, UnpicklingError
+from tempfile import gettempdir
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -76,7 +80,7 @@ class MOLread:
             except KeyError:
                 warning('unsupported or invalid stereo')
                 stereo = None
-            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, {'order': int(line[6:9])}, stereo))
+            self.__bonds.append((int(line[0:3]) - 1, int(line[3:6]) - 1, int(line[6:9])))
         elif line.startswith('M  END'):
             cgr = []
             for x in self.__cgr.values():
@@ -234,7 +238,7 @@ class EMOLread:
                 break
         else:
             s = None
-        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], {'order': int(t)}, s))
+        self.__bonds.append((self.__atom_map[a1], self.__atom_map[a2], int(t)))
 
     def __atom_parser(self, line):
         n, a, x, y, z, m, *kvs = line
@@ -301,9 +305,9 @@ class EMOLread:
 
 class RXNread:
     def __init__(self, line, ignore=False):
-        self.__reagents_count = int(line[:3])
-        self.__products_count = int(line[3:6]) + self.__reagents_count
-        self.__reactants_count = int(line[6:].rstrip() or 0) + self.__products_count
+        self.__reactants_count = int(line[:3])
+        self.__products_count = int(line[3:6]) + self.__reactants_count
+        self.__reagents_count = int(line[6:].rstrip() or 0) + self.__products_count
         self.__molecules = []
         self.__ignore = ignore
 
@@ -313,7 +317,7 @@ class RXNread:
                 self.__im = 4
                 self.__molecules.append(self.__parser.getvalue())
                 self.__parser = None
-                if len(self.__molecules) == self.__reactants_count:
+                if len(self.__molecules) == self.__reagents_count:
                     self.__rend = True
                     return True
         elif self.__empty_skip:
@@ -336,22 +340,22 @@ class RXNread:
                 if not self.__ignore:
                     raise
                 self.__empty_skip = True
-                if len(self.__molecules) < self.__reagents_count:
-                    self.__reagents_count -= 1
-                    self.__products_count -= 1
+                if len(self.__molecules) < self.__reactants_count:
                     self.__reactants_count -= 1
+                    self.__products_count -= 1
+                    self.__reagents_count -= 1
                 elif len(self.__molecules) < self.__products_count:
                     self.__products_count -= 1
-                    self.__reactants_count -= 1
-                elif len(self.__molecules) < self.__reactants_count:
-                    self.__reactants_count -= 1
+                    self.__reagents_count -= 1
+                elif len(self.__molecules) < self.__reagents_count:
+                    self.__reagents_count -= 1
                 warning('empty molecule ignored')
 
     def getvalue(self):
         if self.__rend:
-            return {'reagents': self.__molecules[:self.__reagents_count],
-                    'products': self.__molecules[self.__reagents_count:self.__products_count],
-                    'reactants': self.__molecules[self.__products_count:self.__reactants_count]}
+            return {'reactants': self.__molecules[:self.__reactants_count],
+                    'products': self.__molecules[self.__reactants_count:self.__products_count],
+                    'reagents': self.__molecules[self.__products_count:self.__reagents_count]}
         raise ValueError('reaction not complete')
 
     __parser = None
@@ -362,13 +366,13 @@ class RXNread:
 class ERXNread:
     def __init__(self, line, ignore=False):
         tmp = line[13:].split()
-        self.__reagents_count = int(tmp[0])
+        self.__reactants_count = int(tmp[0])
         self.__products_count = int(tmp[1])
-        self.__reactants_count = int(tmp[2]) if len(tmp) == 3 else 0
+        self.__reagents_count = int(tmp[2]) if len(tmp) == 3 else 0
 
-        self.__reagents = []
-        self.__products = []
         self.__reactants = []
+        self.__products = []
+        self.__reagents = []
         self.__ignore = ignore
 
     def __call__(self, line):
@@ -395,11 +399,11 @@ class ERXNread:
                     if self.__in_mol:
                         self.__parser = EMOLread()
                     if self.__parser_group == 'REACTANT':
-                        self.__reagents.append(x)
+                        self.__reactants.append(x)
                     elif self.__parser_group == 'PRODUCT':
                         self.__products.append(x)
                     elif self.__parser_group == 'AGENT':
-                        self.__reactants.append(x)
+                        self.__reagents.append(x)
         elif self.__rend:
             raise SyntaxError('invalid usage')
         elif lineu.startswith('M  V30 END'):
@@ -408,11 +412,11 @@ class ERXNread:
         elif lineu.startswith('M  V30 BEGIN'):
             x = lineu[13:].strip()
             if x == 'REACTANT':
-                self.__in_mol = self.__reagents_count
+                self.__in_mol = self.__reactants_count
             elif x == 'PRODUCT':
                 self.__in_mol = self.__products_count
             elif x == 'AGENT':
-                self.__in_mol = self.__reactants_count
+                self.__in_mol = self.__reagents_count
             else:
                 raise ValueError('invalid RXN CTAB')
             self.__parser_group = x
@@ -426,12 +430,99 @@ class ERXNread:
 
     def getvalue(self):
         if self.__rend:
-            return {'reagents': self.__reagents, 'products': self.__products, 'reactants': self.__reactants}
+            return {'reactants': self.__reactants, 'products': self.__products, 'reagents': self.__reagents}
         raise ValueError('reaction not complete')
 
     __parser_group = __parser = None
     __rend = __empty_skip = False
     __in_mol = 0
+
+
+class MDLread:
+    def _load_cache(self):
+        try:
+            with open(self.__cache_path, 'rb') as f:
+                return load(f)
+        except FileNotFoundError:
+            return
+        except IsADirectoryError as e:
+            raise IsADirectoryError(f'Please delete {self.__cache_path} directory') from e
+        except (UnpicklingError, EOFError) as e:
+            raise UnpicklingError(f'Invalid cache file {self.__cache_path}. Please delete it') from e
+
+    @property
+    def __cache_path(self):
+        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
+
+    def _dump_cache(self, _shifts):
+        with open(self.__cache_path, 'wb') as f:
+            dump(_shifts, f)
+
+    def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules
+        """
+        return list(iter(self))
+
+    def __iter__(self):
+        return (x for x in self._data if x is not None)
+
+    def __next__(self):
+        return next(iter(self))
+
+    def __len__(self):
+        if self._shifts:
+            return len(self._shifts) - 1
+        raise self._implement_error
+
+    def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required block of the file with an error,
+        then only the correct blocks are returned
+        :param item: int or slice
+        :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
+        """
+        if self._shifts:
+            _len = len(self._shifts) - 1
+            _current_pos = self.tell()
+
+            if isinstance(item, int):
+                if item >= _len or item < -_len:
+                    raise IndexError('List index out of range')
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                records = next(self._data)
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(_len)
+                if start == stop:
+                    return []
+
+                if step == 1:
+                    self.seek(start)
+                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
+                else:
+                    records = []
+                    for index in range(start, stop, step):
+                        self.seek(index)
+                        record = next(self._data)
+                        if record:
+                            records.append(record)
+            else:
+                raise TypeError('Indices must be integers or slices')
+
+            self.seek(_current_pos)
+            if records is None:
+                raise self._index_error
+            return records
+        raise self._implement_error
+
+    _shifts = None
+    _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    _index_error = IndexError('Data block with requested index contain errors')
 
 
 class MOLwrite(CGRwrite):
@@ -441,8 +532,6 @@ class MOLwrite(CGRwrite):
         for atom in atoms:
             if atom['isotope']:
                 mol_prop.append(atom['isotope'])
-            if atom['elements']:
-                mol_prop.append(atom['elements'])
             if atom['multiplicity']:
                 mol_prop.append(atom['multiplicity'])
 
@@ -460,7 +549,7 @@ class MOLwrite(CGRwrite):
             mol_prop.append(f'M  SED {i:3d} {jv}\n')
 
         return ''.join(chain((f'\n\n\n{len(atoms):3d}{len(bonds):3d}  0  0  0  0            999 V2000\n',),
-                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:>3s} 0{i["charge"]}  0  0  '
+                             (f'{i["x"]:10.4f}{i["y"]:10.4f}{i["z"]:10.4f} {i["symbol"]:3s} 0{i["charge"]}  0  0  '
                               f'0  0  0  0  0{i["mapping"]:3d}  0  0\n' for i in atoms),
                              ("%3d%3d  %s  %s  0  0  0\n" % i for i in bonds), mol_prop))
 
@@ -468,16 +557,6 @@ class MOLwrite(CGRwrite):
     def _isotope_map(x, n):
         if x:
             return f'M  ISO  1 {n:3d} {x:3d}\n'
-
-    @staticmethod
-    def _atom_list_map(x, n):
-        if x:
-            return f'M  ALS {n:3d}{len(x):3d} F {"".join(f"{x:>4s}" for x in x)}\n'
-
-    @staticmethod
-    def _atom_not_list_map(x, n):
-        if x:
-            return f'M  ALS {n:3d}{len(x):3d} T {"".join(f"{x:>4s}" for x in x)}\n'
 
     @staticmethod
     def _multiplicity_map(x, n):

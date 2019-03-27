@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@ class Aromatize:
 
         :return: number of processed rings
         """
-        rings = [x for x in self.get_sssr() if 4 < len(x) < 7]
+        rings = [x for x in self.sssr if 4 < len(x) < 7]
         if not rings:
             return 0
         total = 0
@@ -91,7 +91,7 @@ class Aromatize:
                         continue
 
                     for m, pos in enumerate(positions):
-                        if self._node[r[pos]] in _pyrole_atoms:
+                        if self._node[r[pos]]._atom in _pyrole_atoms:
                             dear = _pyrole_fix[key][m]
                             self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond], \
                                 self._adj[r4][r5][bond], self._adj[r5][r1][bond] = dear
@@ -123,7 +123,7 @@ class Aromatize:
                     position = _pyrole.get((self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
                                             self._adj[r4][r5][bond], self._adj[r5][r1][bond]))
 
-                    if position is not None and self._node[r[position]] in _pyrole_atoms:
+                    if position is not None and self._node[r[position]]._atom in _pyrole_atoms:
                         self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 4
                         self._adj[r4][r5][bond] = self._adj[r5][r1][bond] = 4
                         found.append(n)

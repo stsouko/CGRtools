@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,13 +18,15 @@
 #
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
+from networkx.classes.function import frozen
 from .common import BaseContainer
-from ..algorithms import Aromatize, StringMolecule, CGRCompose, Standardize
+from ..algorithms import Aromatize, Calculate2D, Compose, DepictMolecule, Morgan, Smiles, Standardize
 from ..attributes import Atom, Bond
+from ..cache import cached_args_method
 from ..periodictable import H
 
 
-class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, BaseContainer):
+class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standardize, DepictMolecule, BaseContainer):
     """
     storage for Molecules
 
@@ -37,7 +39,7 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
         """
         set or reset hyb and neighbors marks to atoms.
         """
-        for i, atom in self._node.items():
+        for i, atom in self.atoms():
             neighbors = 0
             hybridization = 1
             # hybridization 1- sp3; 2- sp2; 3- sp1; 4- aromatic
@@ -70,11 +72,11 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
         """
         explicit = defaultdict(list)
         c = 0
-        for n, atom in self._node.items():
-            if atom == 'H':
-                m = next(self.neighbors(n))
-                if self._node[m] != 'H':
-                    explicit[m].append(n)
+        for n, atom in self.atoms():
+            if atom.element == 'H':
+                for m in self.neighbors(n):
+                    if self._node[m].element != 'H':
+                        explicit[m].append(n)
 
         for n, h in explicit.items():
             atom = self._node[n]
@@ -97,8 +99,8 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
         :return: number of added atoms
         """
         tmp = []
-        for n, atom in self._node.items():
-            if atom != 'H':
+        for n, atom in self.atoms():
+            if atom.element != 'H':
                 for _ in range(atom.get_implicit_h([x.order for x in self._adj[n].values()])):
                     tmp.append(n)
         for n in tmp:
@@ -107,12 +109,30 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
         self.flush_cache()
         return len(tmp)
 
+    def substructure(self, atoms, meta=False, as_view=True):
+        """
+        create substructure containing atoms from nbunch list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_view: If True, the returned graph-view provides a read-only view
+            of the original structure scaffold without actually copying any data.
+        """
+        s = super().substructure(atoms, meta, as_view)
+        if as_view:
+            s.check_valence = s.explicify_hydrogens = s.implicify_hydrogens = s.reset_query_marks = frozen
+            s.standardize = s.aromatize = frozen
+        return s
+
+    @cached_args_method
     def atom_implicit_h(self, atom):
         return self._node[atom].get_implicit_h([x.order for x in self._adj[atom].values()])
 
+    @cached_args_method
     def atom_explicit_h(self, atom):
-        return sum(self._node[x] == 'H' for x in self.neighbors(atom))
+        return sum(self._node[x].element == 'H' for x in self.neighbors(atom))
 
+    @cached_args_method
     def atom_total_h(self, atom):
         return self.atom_explicit_h(atom) + self.atom_implicit_h(atom)
 
@@ -122,11 +142,12 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
 
         :return: list of invalid atoms
         """
-        return [f'atom {x} has invalid valence' for x, atom in self._node.items()
-                if not atom.check_valence(self.environment(x))]
+        return [x for x, atom in self.atoms() if not atom.check_valence(self.environment(x))]
 
     def _matcher(self, other):
         """
+        return VF2 GraphMatcher
+
         MoleculeContainer < MoleculeContainer
         MoleculeContainer < CGRContainer
         """
@@ -134,7 +155,33 @@ class MoleculeContainer(StringMolecule, Aromatize, CGRCompose, Standardize, Base
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr-cgr possible')
 
-    _visible = ()
+    def __setstate__(self, state):
+        if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
+            node = {}
+            for n, atom in state['_node'].items():
+                a = node[n] = Atom()
+                a.element = atom['element']
+                a.mapping = atom['map']
+                a.x = atom['s_x']
+                a.y = atom['s_y']
+                a.z = atom['s_z']
+                if atom['s_charge']:
+                    a.charge = atom['s_charge']
+                if 's_radical' in atom:
+                    a.multiplicity = atom['s_radical']
+                if 'isotope' in atom:
+                    a.isotope = atom['isotope']
+
+            adj = defaultdict(dict)
+            seen = set()
+            for n, m_bond in state['_adj'].items():
+                seen.add(n)
+                for m, bond in m_bond.items():
+                    if m not in seen:
+                        b = adj[n][m] = adj[m][n] = Bond()
+                        b.order = bond['s_bond'] if bond['s_bond'] != 9 else 5
+            state = {'meta': state['_BaseContainer__meta'], 'node': node, 'adj': dict(adj)}
+        super().__setstate__(state)
 
 
 __all__ = ['MoleculeContainer']

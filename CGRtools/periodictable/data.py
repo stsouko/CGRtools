@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,6 +22,7 @@ from itertools import product
 # http://onlinelibrarystatic.wiley.com/marvin/help/sci/ValenceCalculator.html
 # elements, charge, radical, bonds, [implicitH]
 _valence_rules = (
+    ('H', -1, 0, 0, 0),
     # elemental Me
     (('Li', 'Na', 'K', 'Rb', 'Cs', 'Fr'), 0, 0, 0, 0),
     # 1 bond is accepted

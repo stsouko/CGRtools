@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,12 +18,12 @@
 #
 from collections.abc import MutableSequence
 from functools import reduce
-from hashlib import md5, sha256
-from operator import mul, or_
+from operator import or_
 from .cgr import CGRContainer
-from .common import BaseContainer
 from .molecule import MoleculeContainer
 from .query import QueryCGRContainer
+from ..algorithms import HashableSmiles, DepictReaction
+from ..cache import cached_method
 
 
 class MindfulList(MutableSequence):
@@ -59,67 +59,63 @@ class MindfulList(MutableSequence):
         self.__check = True
         self.__data[key] = value
 
-    def __repr__(self):
-        return '%s([%s])' % (self.__class__.__name__, ', '.join(repr(x) for x in self.__data))
-
     def __str__(self):
         return '[%s]' % ', '.join(str(x) for x in self.__data)
 
 
-class ReactionContainer:
-    """reaction storage. contains reagents, products and reactants lists"""
-    __slots__ = ('__reagents', '__products', '__reactants', '__meta', '__signatures', '__pickle')
+class ReactionContainer(DepictReaction, HashableSmiles):
+    """
+    reaction storage. contains reactants, products and reagents lists.
 
-    def __init__(self, reagents=None, products=None, reactants=None, meta=None):
+    reaction storages hashable and comparable. based on reaction unique signature (SMIRKS).
+    for reactions with query containers hash and comparison may give errors due to non-uniqueness.
+    query containers itself not support hashing and comparison.
+    """
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow')
+
+    def __init__(self, reactants=None, products=None, reagents=None, meta=None):
         """
         new empty or filled reaction object creation
 
-        :param reagents: list of MoleculeContainers [or other Structure Containers] in left side of reaction
-        :param products: right side of reaction. see reagents
-        :param reactants: middle side of reaction: solvents, catalysts, etc. see reagents
+        :param reactants: list of MoleculeContainers [or other Structure Containers] in left side of reaction
+        :param products: right side of reaction. see reactants
+        :param reagents: middle side of reaction: solvents, catalysts, etc. see reactants
         :param meta: dictionary of metadata. like DTYPE-DATUM in RDF
 
         """
-        self.__reagents = MindfulList(reagents)
-        self.__products = MindfulList(products)
         self.__reactants = MindfulList(reactants)
+        self.__products = MindfulList(products)
+        self.__reagents = MindfulList(reagents)
         if meta is None:
             self.__meta = {}
         else:
             self.__meta = dict(meta)
-        self.__signatures = {}
-        self.__pickle = None
+        self._arrow = None
 
     def __getitem__(self, item):
-        if item == 'reagents':
-            return self.__reagents
-        elif item == 'products':
-            return self.__products
-        elif item == 'reactants':
+        if item in ('reactants', 0):
             return self.__reactants
+        elif item in ('products', 1):
+            return self.__products
+        elif item in ('reagents', 2):
+            return self.__reagents
         elif item == 'meta':
             return self.__meta
         raise AttributeError('invalid attribute')
 
     def __getstate__(self):
-        return dict(reagents=list(self.__reagents), products=list(self.__products), reactants=list(self.__reactants),
+        return dict(reactants=list(self.__reactants), products=list(self.__products), reagents=list(self.__reagents),
                     meta=self.meta)
 
     def __setstate__(self, state):
+        if next(iter(state)) == 'reagents':  # 3.0 compatibility
+            state['reagents'], state['reactants'] = state['reactants'], state['reagents']
         self.__init__(**state)
 
-    def pickle(self):
-        """return json serializable reaction"""
-        return dict(reagents=[x.pickle() for x in self.__reagents], products=[x.pickle() for x in self.__products],
-                    reactants=[x.pickle() for x in self.__reactants], meta=self.meta)
-
-    @classmethod
-    def unpickle(cls, data):
-        """convert json serializable reaction into ReactionContainer object instance"""
-        return cls(reagents=[BaseContainer.unpickle(x) for x in data['reagents']],
-                   products=[BaseContainer.unpickle(x) for x in data['products']],
-                   reactants=[BaseContainer.unpickle(x) for x in data['reactants']],
-                   meta=data['meta'])
+    @property
+    def reactants(self):
+        """reactants list. see products"""
+        return self.__reactants
 
     @property
     def reagents(self):
@@ -132,11 +128,6 @@ class ReactionContainer:
         return self.__products
 
     @property
-    def reactants(self):
-        """reactants list. see products"""
-        return self.__reactants
-
-    @property
     def meta(self):
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
@@ -147,51 +138,9 @@ class ReactionContainer:
 
         :return: ReactionContainer
         """
-        return self.__class__(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
-                              products=[x.copy() for x in self.__products],
-                              reactants=[x.copy() for x in self.__reactants])
-
-    def get_signature_hash(self, **kwargs):
-        """
-        get 48 bytes hash of signature string. see get_signature
-
-        :return: bytes
-        """
-        bs = self.get_signature(**kwargs).encode()
-        return md5(bs).digest() + sha256(bs).digest()
-
-    def get_signature(self, *, flush_cache=False, **kwargs):
-        """
-        return string representation of reaction.
-        CAUTION: if reaction contains CGRs. signature will not be obvious
-
-        :param isotope: set isotope marks
-        :param stereo: set stereo marks
-        :param hybridization: set hybridization mark of atom
-        :param neighbors: set neighbors count mark of atom
-        :param atom: set elements marks
-        :param flush_cache: recalculate signature if True
-        """
-        if self.__signatures and (flush_cache or any(x.get_state() for x in
-                                                     (self.__reagents, self.__reactants, self.__products))):
-            self.__signatures = {}
-        if kwargs.keys() - {'atom', 'isotope', 'stereo', 'hybridization', 'neighbors'}:
-            raise KeyError('only full canonical signature supported')
-
-        k = tuple(sorted(kwargs))
-        if k in self.__signatures:
-            return self.__signatures[k]
-
-        sig = []
-        for ml in (self.__reagents, self.__reactants, self.__products):
-            ms = []
-            for m in sorted(ml, key=lambda x: reduce(mul, x.get_morgan(**kwargs))):
-                mol = m.get_signature(flush_cache=flush_cache, **kwargs)
-                ms.append('{%s}' % mol if isinstance(m, (CGRContainer, QueryCGRContainer)) else mol)
-            sig.append('.'.join(ms))
-
-        self.__signatures[k] = out = '>'.join(sig)
-        return out
+        return type(self)(reagents=[x.copy() for x in self.__reagents], meta=self.__meta.copy(),
+                          products=[x.copy() for x in self.__products],
+                          reactants=[x.copy() for x in self.__reactants])
 
     def implicify_hydrogens(self):
         """
@@ -239,6 +188,22 @@ class ReactionContainer:
             self.flush_cache()
         return total
 
+    def standardize(self):
+        """
+        standardize functional groups and convert structures to aromatic form. works only for Molecules
+
+        :return: number of processed molecules
+        """
+        total = 0
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                if hasattr(m, 'standardize'):
+                    if m.standardize():
+                        total += 1
+        if total:
+            self.flush_cache()
+        return total
+
     def reset_query_marks(self):
         """
         set or reset hyb and neighbors marks to atoms.
@@ -249,11 +214,12 @@ class ReactionContainer:
                     m.reset_query_marks()
         self.flush_cache()
 
+    @cached_method
     def compose(self):
         """
         get CGR of reaction
 
-        reactants will be presented as unchanged molecules
+        reagents will be presented as unchanged molecules
         :return: CGRContainer
         """
         rr = self.__reagents + self.__reactants
@@ -277,24 +243,88 @@ class ReactionContainer:
         """
         return self.compose()
 
-    def flush_cache(self):
-        """clear cached signatures and representation strings. use if structures objects in reaction object changed"""
-        self.__pickle = None
-        self.__signatures = {}
+    def calculate2d(self, force=True):
+        """
+        recalculate 2d coordinates. currently rings can be calculated badly.
 
+        :param force: ignore existing coordinates of atoms
+        """
+        for ml in (self.__reagents, self.__reactants, self.__products):
+            for m in ml:
+                m.calculate2d(force)
+        self.fix_positions()
+
+    def fix_positions(self):
+        """
+        fix coordinates of molecules in reaction
+        """
+        shift_x = 0
+        for m in self.__reactants:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x = max_x + 1
+        arrow_min = shift_x
+
+        if self.__reagents:
+            for m in self.__reagents:
+                max_x = self.__fix_positions(m, shift_x, 1.5)
+                shift_x = max_x + 1
+        else:
+            shift_x += 3
+        arrow_max = shift_x - 1
+
+        for m in self.__products:
+            max_x = self.__fix_positions(m, shift_x, 0)
+            shift_x = max_x + 1
+        self._arrow = (arrow_min, arrow_max)
+        self.flush_cache()
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x, shift_y):
+        min_x = min(atom.x for atom in molecule._node.values()) - shift_x
+        max_x = max(atom.x for atom in molecule._node.values()) - min_x
+        min_y = min(atom.y for atom in molecule._node.values()) - shift_y
+        for atom in molecule._node.values():
+            atom.x = atom.x - min_x
+            atom.y = atom.y - min_y
+        return max_x
+
+    @cached_method
     def __str__(self):
-        return self.get_signature()
+        """
+        SMIRKS of reaction. query containers in reaction {surrounded by curly braces}
+        """
+        sig = []
+        for ml in (self.__reactants, self.__reagents, self.__products):
+            sig.append(self.__get_smiles(ml) if ml else '')
+        return '>'.join(sig)
 
-    def __repr__(self):
-        if self.__pickle is None or any(x.get_state() for x in (self.__reagents, self.__reactants, self.__products)):
-            self.__pickle = '%s.unpickle(%s)' % (type(self).__name__, self.pickle())
-        return self.__pickle
+    @staticmethod
+    def __get_smiles(molecules):
+        smiles = []
+        union = MoleculeContainer()  # need for whole atoms ordering
+        queries = []
+        atoms = {}
+        for m in molecules:
+            if isinstance(m, (MoleculeContainer, CGRContainer)):
+                union._node.update(m._node)
+                union._adj.update(m._adj)
+                atoms.update(dict.fromkeys(m, m))
+            elif isinstance(m, QueryCGRContainer):  # queries added as is without ordering
+                queries.append('{%s}' % m)
+            else:
+                queries.append(str(m))
 
-    def __hash__(self):
-        return hash(str(self))
+        order_atoms = set(atoms)
+        order = union.atoms_order  # whole atoms order
+        while order_atoms:
+            next_molecule = atoms[min(order_atoms, key=order.__getitem__)]  # get molecule with smallest atom
+            order_atoms.difference_update(next_molecule)
+            smiles.append('{%s}' % next_molecule if isinstance(next_molecule, CGRContainer) else str(next_molecule))
+        smiles.extend(queries)  # queries always in the end of list
+        return '.'.join(smiles)
 
-    def __bytes__(self):
-        return self.get_signature_hash()
+    def flush_cache(self):
+        self.__dict__.clear()
 
 
 __all__ = ['ReactionContainer']
