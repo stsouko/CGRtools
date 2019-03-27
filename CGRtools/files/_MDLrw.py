@@ -16,9 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
 from itertools import count, chain, islice
+from os.path import abspath, join
+from pickle import dump, load, UnpicklingError
+from tempfile import gettempdir
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -435,6 +439,25 @@ class ERXNread:
 
 
 class MDLread:
+    def _load_cache(self):
+        try:
+            with open(self.__cache_path, 'rb') as f:
+                return load(f)
+        except FileNotFoundError:
+            return
+        except IsADirectoryError as e:
+            raise IsADirectoryError(f'Please delete {self.__cache_path} directory') from e
+        except (UnpicklingError, EOFError) as e:
+            raise UnpicklingError(f'Invalid cache file {self.__cache_path}. Please delete it') from e
+
+    @property
+    def __cache_path(self):
+        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
+
+    def _dump_cache(self, _shifts):
+        with open(self.__cache_path, 'wb') as f:
+            dump(_shifts, f)
+
     def read(self):
         """
         parse whole file
