@@ -192,6 +192,44 @@ c5.update(element='C', charge=1,  hybridization=1)
 central[str(p2)] = p2
 query_patch[str(p2)].extend(_prepare([(b1, c5)], [{'charge': 0}, ({'order': 2}, {'charge': 0})]))
 
+# N=N#N >> N=[N+]=[N-]
+n1 = QueryAtom()
+n2 = QueryAtom()
+n3 = QueryAtom()
+n1.update(element='N', hybridization=2)
+n2.update(element='N', neighbors=2, hybridization=3)
+n3.update(element='N', neighbors=1, hybridization=3)
+central[str(n2)] = n2
+query_patch[str(n2)].extend(_prepare([(b3, n3)],
+                                     [{'charge': 1}, ({'order': 2}, {'charge': -1})]))
+
+
+# N=N(C)=0 >> N=[N+](C)-[0-]
+n1 = QueryAtom()
+n2 = QueryAtom()
+c3 = QueryAtom()
+o4 = QueryAtom()
+n1.update(element='N', hybridization=2)
+n2.update(element='N', neighbors=3, hybridization=2)
+c3.update(element='C')
+o4.update(element='O', neighbors=1, hybridization=2)
+central[str(n2)] = n2
+query_patch[str(n2)].extend(_prepare([(b2, o4)],
+                                     [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
+
+
+# [N-]-[N+](C)=0 >> N=[N+](C)-[0-]
+n1 = QueryAtom()
+n2 = QueryAtom()
+c3 = QueryAtom()
+o4 = QueryAtom()
+n1.update(element='N', hybridization=1, charge=-1)
+n2.update(element='N', neighbors=3, hybridization=2, charge=1)
+c3.update(element='C')
+o4.update(element='O', neighbors=1, hybridization=2)
+central[str(n2)] = n2
+query_patch[str(n2)].extend(_prepare([(b2, o4)],
+                                     [{'charge': 1}, ({'order': 1}, {'charge': -1})]))
 
 
 del b1, b2, b3, a, o2, n, n1, n2, n3
