@@ -440,7 +440,7 @@ query_patch['N3;3'].extend(_prepare([(b2, o12), (b2, n22), (b1, c)],
 #      C             C
 #
 central['N+3;2'] = np32
-query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, np121), (b1, c)],
+query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, nn21), (b1, c)],
                                      [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1}),
                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
