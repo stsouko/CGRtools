@@ -39,6 +39,12 @@ class RDFread(CGRread, WithMixin, MDLread):
     pathlib.Path object or another buffered reader object
     """
     def __init__(self, file, *args, indexable=False, **kwargs):
+        """
+        :param file: support str of block and file types: .rxn, .rdf, TextIOWrapper, StringIO,
+        BytesIO, BufferedReader, BufferedIOBase
+        :param indexable: if True supported methods seek, tell, len, getitem and cache dumps in /tmp
+        after reboot it will drop
+        """
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self._data = self.__reader()
