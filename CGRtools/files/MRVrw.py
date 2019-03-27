@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -67,12 +67,22 @@ def xml_dict(parent_element, stop_list=None):
 
 
 class MRVread(CGRread, WithMixin):
+    """
+    ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in binary mode file, string path to file,
+    pathlib.Path object or another binary buffered reader object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules or reactions
+        """
         return list(self.__data)
 
     def __iter__(self):
@@ -119,8 +129,8 @@ class MRVread(CGRread, WithMixin):
                 warning('invalid MDocument')
 
     def __parse_reaction(self, data):
-        reaction = dict(reagents=[], products=[], reactants=[])
-        for tag, group in (('reactantList', 'reagents'), ('productList', 'products'), ('agentList', 'reactants')):
+        reaction = dict(reactants=[], products=[], reagents=[])
+        for tag, group in (('reactantList', 'reactants'), ('productList', 'products'), ('agentList', 'reagents')):
             if tag in data and 'molecule' in data[tag]:
                 molecule = data[tag]['molecule']
                 if isinstance(molecule, dict):
@@ -167,7 +177,7 @@ class MRVread(CGRread, WithMixin):
                               'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
                               'charge': int(atom.get('@formalCharge', 0)),
                               'multiplicity': self.__radical_map[atom['@radical']] if '@radical' in atom else None,
-                              'map': int(atom.get('@mrvMap', 0)),
+                              'mapping': int(atom.get('@mrvMap', 0)),
                               'x': float(atom['@x3'] if '@x3' in atom else atom['@x2']),
                               'y': float(atom['@y3'] if '@y3' in atom else atom['@y2']),
                               'z': float(atom['@z3'] if '@z3' in atom else 0.)})
@@ -236,7 +246,7 @@ class MRVread(CGRread, WithMixin):
                         stereo = None
                 else:
                     stereo = None
-                bonds.append((atom_map[a1], atom_map[a2], {'order': order}, stereo))
+                bonds.append((atom_map[a1], atom_map[a2], order))
 
         if 'molecule' in data:
             dm = data['molecule']
@@ -260,17 +270,30 @@ class MRVread(CGRread, WithMixin):
 
 
 class MRVwrite(CGRwrite, WithMixin):
+    """
+    ChemAxon MRV files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRwrite, self).__init__(file, 'w')
 
     def close(self, *args, **kwargs):
+        """
+        write close tag of MRV file and close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
         if not self.__finalized:
             self._file.write('</cml>')
             self.__finalized = True
         super().close(*args, **kwargs)
 
     def write(self, data):
+        """
+        write single molecule or reaction into file
+        """
         self._file.write('<cml>')
         self.__write(data)
         self.write = self.__write
@@ -282,38 +305,34 @@ class MRVwrite(CGRwrite, WithMixin):
             m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
             for k, v in data.meta.items():
-                if '\n' in v:
+                if isinstance(v, str):
                     v = f'<![CDATA[{v}]]>'
                 self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList>')
-            self._file.write(self.__format_mol(*m['structure']))
+            self._file.write(self.__format_mol(*m))
             self._file.write('</molecule>')
         else:
+            if not data._arrow:
+                data.fix_positions()
+
             c = count(1)
-            s = x = 0
-            rl = len(data.reagents)
             self._file.write('<reaction>')
-            for i, j in (('reagents', 'reactantList'), ('products', 'productList')):
+            for i, j in ((data.reactants, 'reactantList'), (data.products, 'productList'),
+                         (data.reagents, 'agentList')):
                 self._file.write(f'<{j}>')
-                for n, m in zip(c, data[i]):
-                    m = self._convert_structure(m, s)
-                    if self._fix_position:
-                        s = m['max_x'] + (3 if n == rl else 1)
-                    if n == rl:  # get last reagent right atom position
-                        x = m['max_x']
-                    elif not rl and n == 1:
-                        x = m['min_x'] - 3
-                    self._file.write('<molecule>')
-                    self._file.write(self.__format_mol(*m['structure']))
+                for n, m in zip(c, i):
+                    m = self._convert_structure(m)
+                    self._file.write(f'<molecule molID="m{n}">')
+                    self._file.write(self.__format_mol(*m))
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
 
-            self._file.write(f'<arrow type="DEFAULT" x1="{x + .5:.4f}" y1="0" x2="{x + 2.5:.4f}" y2="0"/>'
-                             '<propertyList>')
+            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0]:.4f}" y1="1" x2="{data._arrow[1]:.4f}" '
+                             f'y2="1"/><propertyList>')
             for k, v in data.meta.items():
-                if '\n' in v:
+                if isinstance(v, str):
                     v = f'<![CDATA[{v}]]>'
-                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
+                self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
             self._file.write('</propertyList></reaction>')
         self._file.write('</MChemicalStruct></MDocument>')
 
@@ -322,7 +341,7 @@ class MRVwrite(CGRwrite, WithMixin):
         return ''.join(chain(('<atomArray>',),
                              (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
                               f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}"'
-                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}{atom["elements"]}/>'
+                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}/>'
                               for atom in atoms),
                              ('</atomArray><bondArray>',),
                              (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
@@ -332,18 +351,6 @@ class MRVwrite(CGRwrite, WithMixin):
                               f'fieldData="{v.replace(">", "&gt;").replace("<", "&lt;")}" '
                               f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
                               for n, (i, t, v) in enumerate(cgr, start=1))))
-
-    @staticmethod
-    def _atom_list_map(x, n):
-        if x:
-            return ' mrvQueryProps="L,%s:"' % ','.join(x)
-        return ''
-
-    @staticmethod
-    def _atom_not_list_map(x, n):
-        if x:
-            return ' mrvQueryProps="L!%s:"' % '!'.join(x)
-        return ''
 
     @staticmethod
     def _isotope_map(x, n):

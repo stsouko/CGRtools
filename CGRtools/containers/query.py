@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,13 +20,13 @@ from networkx.algorithms.isomorphism import GraphMatcher
 from .cgr import CGRContainer
 from .common import BaseContainer
 from .molecule import MoleculeContainer
-from ..algorithms import StringMolecule, StringCGR
-from ..attributes import QueryAtom, QueryBond, DynQueryAtom, DynQueryBond
+from ..algorithms import SmilesQuery, SmilesQueryCGR
+from ..attributes import QueryAtom, DynQueryAtom, Bond, DynBond
 
 
-class QueryContainer(StringMolecule, BaseContainer):
+class QueryContainer(SmilesQuery, BaseContainer):
     node_attr_dict_factory = QueryAtom
-    edge_attr_dict_factory = QueryBond
+    edge_attr_dict_factory = Bond
 
     def _matcher(self, other):
         """
@@ -40,13 +40,10 @@ class QueryContainer(StringMolecule, BaseContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
-    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
-        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
-
-class QueryCGRContainer(StringCGR, BaseContainer):
+class QueryCGRContainer(SmilesQueryCGR, BaseContainer):
     node_attr_dict_factory = DynQueryAtom
-    edge_attr_dict_factory = DynQueryBond
+    edge_attr_dict_factory = DynBond
 
     def _matcher(self, other):
         """
@@ -58,9 +55,6 @@ class QueryCGRContainer(StringCGR, BaseContainer):
         elif isinstance(other, QueryCGRContainer):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
-
-    def get_signature(self, *, hybridization=True, neighbors=True, **kwargs):
-        return super().get_signature(hybridization=hybridization, neighbors=neighbors, **kwargs)
 
 
 __all__ = ['QueryContainer', 'QueryCGRContainer']

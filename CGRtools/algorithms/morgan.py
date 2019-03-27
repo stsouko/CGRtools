@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -21,38 +21,31 @@ from functools import reduce
 from itertools import count
 from logging import warning
 from operator import mul, itemgetter
+from ..cache import cached_property
 
 
 class Morgan:
-    def _morgan(self, atom=True, isotope=False, stereo=False, hybridization=False, neighbors=False, tries=None):
+    @cached_property
+    def atoms_order(self):
         """
         Morgan like algorithm for graph nodes ordering
 
-        :param atom: differentiate elements and charges
-        :param isotope: differentiate isotopes
-        :param stereo: differentiate stereo atoms and bonds
-        :param hybridization: differentiate hybridization of atoms
-        :param neighbors: differentiate neighbors of atoms. useful for queries structures
-        :param tries: maximum number of iterations for stationary point search
         :return: dict of atom-weight pairs
         """
         if not len(self):  # for empty containers
             return {}
+        elif len(self) == 1:  # optimize single atom containers
+            return dict.fromkeys(self, 2)
 
-        params = {n: (node.weight(atom, isotope, stereo, hybridization, neighbors),
-                      tuple(sorted(edge.weight(stereo) for edge in self._adj[n].values())))
-                  for n, node in self._node.items()}
+        params = {n: (int(node), tuple(sorted(int(edge) for edge in self._adj[n].values())))
+                  for n, node in self.atoms()}
         newlevels = {}
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                    for x, y in sorted(params.items(), key=itemgetter(1))}
 
-        if tries is None:
-            tries = len(self) * 4
-        elif tries == 1:
-            return weights
+        tries = len(self) * 4
 
-        scaf = {n: tuple(m) for n, m in self._adj.items()}
         numb = len(set(weights.values()))
         stab = 0
 
@@ -62,15 +55,17 @@ class Morgan:
             countprime = iter(primes)
 
             # weights[n] ** 2 NEED for differentiation of molecules like A-B or any other complete graphs.
-            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in scaf.items()}
+            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in self._adj.items()}
 
             weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                        for x, y in sorted(tmp.items(), key=itemgetter(1))}
 
             numb = len(set(weights.values()))
-            if numb == oldnumb:
+            if numb == len(self):  # each atom now unique
+                break
+            elif numb == oldnumb:
                 x = Counter(weights.values())
-                if x[max(x)] > 1:
+                if x[min(x)] > 1:
                     if stab == 3:
                         break
                 elif stab >= 2:
@@ -110,7 +105,7 @@ def _eratosthenes():
             d[x] = p
 
 
-primes = tuple(x for _, x in zip(range(1000), _eratosthenes()))
+primes = {x: n for n, x in zip(range(1000), _eratosthenes())}
 
 
 __all__ = ['Morgan']

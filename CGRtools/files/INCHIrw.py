@@ -29,8 +29,9 @@ from ..periodictable import common_isotopes
 
 class INCHIread(CGRread, WithMixin):
     """
-    accept file wich consist INCHI per lines
-
+    INCHI separated per lines files reader. works similar to opened file object. support `with` context manager.
+    on initialization accept opened in text mode file, string path to file,
+    pathlib.Path object or another buffered reader object.
     line should be start with INCHI string and
     optionally continues with space/tab separated list of key:value [or key=value] data.
     AuxInfo also can be stored in data.
@@ -45,6 +46,11 @@ class INCHIread(CGRread, WithMixin):
         self.__data = self.__reader()
 
     def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules
+        """
         return list(self.__data)
 
     def __iter__(self):
@@ -107,7 +113,7 @@ class INCHIread(CGRread, WithMixin):
                     continue
                 order = atom.bond_type[k]
                 if order:
-                    bonds.append((n, m, {'order': order}, None))
+                    bonds.append((n, m, order))
         lib.FreeStructFromINCHI(byref(structure))
         return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
 
