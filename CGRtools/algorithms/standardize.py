@@ -29,7 +29,6 @@ class Standardize:
 
         :return: number of found groups
         """
-        self.aromatize()
         self.reset_query_marks()
         seen = set()
         total = 0
