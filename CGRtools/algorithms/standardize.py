@@ -416,7 +416,7 @@ query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, c_2)],
 # N = N # N >> N = N+ = N-
 #
 central['N2;3'] = n23
-query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, n122)],
+query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, n22)],
                                     [{'charge': 1}, ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
