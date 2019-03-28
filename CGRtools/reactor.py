@@ -267,14 +267,14 @@ class Reactor:
                     if self.__split:
                         return ReactionContainer(reactants=structures, products=patch.split())
                     return ReactionContainer(reactants=structures, products=[patch])
-                elif limit > 1:
-                    if self.__split:
-                        return [ReactionContainer(reactants=structures, products=x.split()) for x in patch]
-                    return [ReactionContainer(reactants=structures, products=[x]) for x in patch]
+                if self.__split:
+                    g = (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
                 else:
-                    if self.__split:
-                        return (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
-                    return (ReactionContainer(reactants=structures, products=[x]) for x in patch)
+                    g = (ReactionContainer(reactants=structures, products=[x]) for x in patch)
+                if limit > 1:
+                    return list(g)
+                else:
+                    return g
         else:
             structures = self.__remap(structures)
             mapping = self.__get_mapping(structures)
