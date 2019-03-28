@@ -262,9 +262,10 @@ class Reactor:
             raise TypeError('only list of Molecules possible')
         if self.__single:
             patch = self.__reactor(structures[0])
-            if self.__split:
-                return ReactionContainer(reactants=structures, products=patch.split())
-            return ReactionContainer(reactants=structures, products=[patch])
+            if patch:
+                if self.__split:
+                    return ReactionContainer(reactants=structures, products=patch.split())
+                return ReactionContainer(reactants=structures, products=[patch])
         else:
             structures = self.__remap(structures)
             mapping = self.__get_mapping(structures)
