@@ -16,18 +16,12 @@ INSTALL
 Linux Debian based
 ==================
 
-* Install python3.7 and git
+* Install python3.7, virtualenv and git
 
     ```
     sudo apt install python3.7 python3.7-dev git python3-virtualenv
     ```
     
-* Install virtualenv.
-
-    ```
-    sudo apt install virtualenv
-    ```
-
 * Create new environment and activate it.
 
     ```
@@ -109,12 +103,11 @@ bugs fixing is going on)
     jupyter notebook
     ```
     
-* Download tutorial files
+* Download tutorial files to same directory
 
    <https://github.com/cimm-kzn/CGRtools/tree/master/tutorial>
 
-* Open .ipynb file in jupyter browser
-
+* Open .ipynb files from tutorial directory in Jupyter browser
 
 **If you still have questions, please open issue within github.**
 

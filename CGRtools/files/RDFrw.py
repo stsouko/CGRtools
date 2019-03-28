@@ -27,12 +27,12 @@ from sys import platform
 from time import strftime
 from traceback import format_exc
 from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, EMOLread, RXNread, ERXNread, prepare_meta
+from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, RXNread, ERXNread, prepare_meta
 from ..containers.common import BaseContainer
 from ..exceptions import InvalidFileType
 
 
-class RDFread(CGRread, WithMixin):
+class RDFread(CGRread, WithMixin, MDLread):
     """
     MDL RDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
@@ -41,73 +41,57 @@ class RDFread(CGRread, WithMixin):
     def __init__(self, file, *args, indexable=False, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
             self.__file = iter(self._file.readline, '')
-            if next(self.__data):
-                self.__shifts = [int(x.split(':', 1)[0]) for x in
-                                 check_output(["grep", "-boE", "^\$[RM]FMT", self._file.name]).decode().split()]
-                self.__shifts.append(getsize(self._file.name))
+            if next(self._data):
+                self._shifts = self._load_cache()
+                if self._shifts is None:
+                    self._shifts = [int(x.split(b':', 1)[0]) for x in
+                                    check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
+                    self._shifts.append(getsize(self._file.name))
+                    self._dump_cache(self._shifts)
         else:
             self.__file = self._file
-            next(self.__data)
-
-    def read(self):
-        """
-        parse whole file
-
-        :return: list of parsed molecules or reactions
-        """
-        return list(self.__data)
-
-    def __iter__(self):
-        return self.__data
-
-    def __len__(self):
-        if self.__shifts:
-            return len(self.__shifts) - 1
-        raise self.__error
-
-    def __next__(self):
-        return next(self.__data)
+            next(self._data)
 
     def seek(self, offset):
-        if self.__shifts:
-            if 0 <= offset < len(self.__shifts):
+        if self._shifts:
+            if 0 <= offset < len(self._shifts):
                 current_pos = self._file.tell()
-                new_pos = self.__shifts[offset]
+                new_pos = self._shifts[offset]
                 if current_pos != new_pos:
-                    if current_pos == self.__shifts[-1]:  # reached the end of the file
-                        self.__data = self.__reader()
+                    if current_pos == self._shifts[-1]:  # reached the end of the file
+                        self._data = self.__reader()
                         self.__file = iter(self._file.readline, '')
                         self._file.seek(0)
-                        next(self.__data)
+                        next(self._data)
                         if offset:  # move not to the beginning of the file
                             self._file.seek(new_pos)
                     else:
                         if not self.__already_seeked:
-                            if self.__shifts[0] < current_pos:  # in the middle of the file
-                                self.__data.send(True)
+                            if self._shifts[0] < current_pos:  # in the middle of the file
+                                self._data.send(True)
                             self.__already_seeked = True
                         self._file.seek(new_pos)
             else:
                 raise IndexError('invalid offset')
         else:
-            raise self.__error
+            raise self._implement_error
 
     def tell(self):
-        if self.__shifts:
+        if self._shifts:
             t = self._file.tell()
-            if t == self.__shifts[0]:
+            if t == self._shifts[0]:
                 return 0
-            elif t == self.__shifts[-1]:
-                return len(self.__shifts) - 1
-            elif t in self.__shifts:
-                return bisect_left(self.__shifts, t)
+            elif t == self._shifts[-1]:
+                return len(self._shifts) - 1
+            elif t in self._shifts:
+                return bisect_left(self._shifts, t)
             else:
-                return bisect_left(self.__shifts, t) - 1
-        raise self.__error
+                return bisect_left(self._shifts, t) - 1
+        raise self._implement_error
 
     def __reader(self):
         record = parser = mkey = None
@@ -137,19 +121,22 @@ class RDFread(CGRread, WithMixin):
                     failed = True
                     parser = None
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
-                        if seek:
-                            yield
-                            self.__already_seeked = False
-                            continue
-                    except Exception:
+                    except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    finally:
-                        record = None
+                        seek = yield None
+
+                    record = None
+                    if seek:
+                        yield
+                        self.__already_seeked = False
+                        continue
+
                 is_reaction = True
                 ir = 4
                 failed = False
@@ -160,14 +147,16 @@ class RDFread(CGRread, WithMixin):
                     record['meta'] = prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
-                        if seek:
-                            yield
-                            self.__already_seeked = False
-                            continue
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
-                    finally:
-                        record = None
+                        seek = yield None
+
+                    record = None
+                    if seek:
+                        yield
+                        self.__already_seeked = False
+                        continue
+
                 ir = 3
                 failed = is_reaction = False
                 mkey = None
@@ -200,15 +189,15 @@ class RDFread(CGRread, WithMixin):
                 except ValueError:
                     failed = True
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    yield None
         if record:
             record['meta'] = prepare_meta(meta)
             try:
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+                yield None
 
-    __shifts = None
-    __error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
     __already_seeked = False
 
 

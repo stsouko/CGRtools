@@ -133,22 +133,22 @@ class SSSR:
 
         c_set = []
         for k, p1ij in pid1.items():
-            dij = len(p1ij[0]) - 1
+            dij = len(p1ij[0]) * 2 - 2
             p2ij = pid2[k]
-
-            if not p2ij and len(p1ij) == 1:
-                continue
-
-            c_num = 2 * dij
-            if p2ij:
-                c_num += 1
-
-            c_set.append((c_num, p1ij, p2ij))
+            if len(p1ij) == 1:  # one shortest
+                if not p2ij:  # need shortest + 1 path
+                    continue
+                c_set.append((dij + 1, p1ij, p2ij))
+            elif not p2ij:  # one or more odd rings
+                c_set.append((dij, p1ij, None))
+            else:  # odd and even rings found (e.g. bicycle)
+                c_set.append((dij, p1ij, None))
+                c_set.append((dij + 1, p1ij, p2ij))
 
         c_sssr = {}
         for c_num, p1ij, p2ij in sorted(c_set):
             if c_num % 2:  # odd rings
-                c1 = p1ij[0]
+                c1 = p1ij[0]  # any shortest acceptable. sssr is not a unique set of rings
                 c11 = c1[1]
                 c12 = c1[-2]
                 for c2 in p2ij:

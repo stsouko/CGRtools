@@ -19,14 +19,11 @@
 """
 Available file parsers and writers
 """
-from importlib.util import find_spec
 from .INCHIrw import *
 from .MRVrw import *
 from .RDFrw import *
 from .SDFrw import *
-
-if find_spec('coho'):
-    from .SMILESrw import *
+from .SMILESrw import *
 
 
 __all__ = [x for x in locals() if x.endswith(('read', 'write'))]
