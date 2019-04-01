@@ -68,8 +68,8 @@ class RDFread(CGRread, WithMixin, MDLread):
 
     def seek(self, offset):
         """
-        shifts the position in the original file
-        :param offset: position
+        shifts on a given number of record in the original file
+        :param offset: number of record
         """
         if self._shifts:
             if 0 <= offset < len(self._shifts):
