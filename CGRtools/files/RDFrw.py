@@ -42,8 +42,9 @@ class RDFread(CGRread, WithMixin, MDLread):
         """
         :param file: support str of block and file types: .rxn, .rdf, TextIOWrapper, StringIO,
         BytesIO, BufferedReader, BufferedIOBase
-        :param indexable: if True supported methods seek, tell, len, getitem and cache dumps in /tmp
-        after reboot it will drop
+        :param indexable: if True: it only works when dealing with a real file (the path to the file is specified),
+        the grep utility is used to speed up the search for the required positions in the file,
+        supported methods seek, tell, len, getitem and cache dumps in /tmp directory after reboot it will drop
         """
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
