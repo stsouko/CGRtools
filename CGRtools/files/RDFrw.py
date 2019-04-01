@@ -40,11 +40,14 @@ class RDFread(CGRread, WithMixin, MDLread):
     """
     def __init__(self, file, *args, indexable=False, **kwargs):
         """
-        :param file: support str of block and file types: .rxn, .rdf, TextIOWrapper, StringIO,
-        BytesIO, BufferedReader, BufferedIOBase
-        :param indexable: if True: it only works when dealing with a real file (the path to the file is specified),
-        the grep utility is used to speed up the search for the required positions in the file,
-        supported methods seek, tell, len, getitem and cache dumps in /tmp directory after reboot it will drop
+        :param indexable: if True:
+            supported methods seek, tell, len, getitem and cache dumps, the external grep utility
+            (supporting in unix-like o.s) is used to speed up the search for the required positions in the file,
+            it only works when dealing with a real file (the path to the file is specified),
+            the object behaves like a normal open file
+                        if False:
+            works like generator converting a record into ReactionContainer and returning each record in order,
+            records containing Mapping, ... errors are skipped
         """
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
@@ -64,6 +67,10 @@ class RDFread(CGRread, WithMixin, MDLread):
             next(self._data)
 
     def seek(self, offset):
+        """
+        shifts the position in the original file
+        :param offset: position
+        """
         if self._shifts:
             if 0 <= offset < len(self._shifts):
                 current_pos = self._file.tell()
@@ -88,6 +95,9 @@ class RDFread(CGRread, WithMixin, MDLread):
             raise self._implement_error
 
     def tell(self):
+        """
+        :return: number of records processed from the original file
+        """
         if self._shifts:
             t = self._file.tell()
             if t == self._shifts[0]:
