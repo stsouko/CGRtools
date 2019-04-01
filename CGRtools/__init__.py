@@ -25,4 +25,4 @@ from .preparer import *
 from .reactor import *
 
 
-__all__ = ['CGRpreparer', 'CGRreactor']
+__all__ = ['CGRpreparer', 'CGRreactor', 'Reactor']
