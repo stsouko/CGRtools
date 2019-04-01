@@ -46,7 +46,7 @@ class RDFread(CGRread, WithMixin, MDLread):
             it only works when dealing with a real file (the path to the file is specified),
             the object behaves like a normal open file
                         if False:
-            works like generator converting a record into ReactionContainer and returning each record in order,
+            works like generator converting a record into ReactionContainer and returning each object in order,
             records containing Mapping, ... errors are skipped
         """
         super().__init__(*args, **kwargs)
