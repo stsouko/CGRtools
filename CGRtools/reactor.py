@@ -262,19 +262,15 @@ class Reactor:
             raise TypeError('only list of Molecules possible')
         if self.__single:
             patch = self.__reactor(structures[0], limit, skip_intersection)
-            if patch:
-                if limit == 1:
-                    if self.__split:
-                        return ReactionContainer(reactants=structures, products=patch.split())
-                    return ReactionContainer(reactants=structures, products=[patch])
+            if limit == 1 and patch:
                 if self.__split:
-                    g = (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
-                else:
-                    g = (ReactionContainer(reactants=structures, products=[x]) for x in patch)
-                if limit > 1:
-                    return list(g)
-                else:
-                    return g
+                    return ReactionContainer(reactants=structures, products=patch.split())
+                return ReactionContainer(reactants=structures, products=[patch])
+            if self.__split:
+                g = (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
+            else:
+                g = (ReactionContainer(reactants=structures, products=[x]) for x in patch)
+            return list(g) if limit > 1 else g
         else:
             structures = self.__remap(structures)
             mapping = self.__get_mapping(structures)
