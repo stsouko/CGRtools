@@ -41,13 +41,12 @@ class RDFread(CGRread, WithMixin, MDLread):
     def __init__(self, file, *args, indexable=False, **kwargs):
         """
         :param indexable: if True:
-            supported methods seek, tell, len, getitem and cache dumps, the external grep utility
-            (supporting in unix-like o.s) is used to speed up the search for the required positions in the file,
-            it only works when dealing with a real file (the path to the file is specified),
+            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
+            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
             the object behaves like a normal open file
                         if False:
             works like generator converting a record into ReactionContainer and returning each object in order,
-            records containing Mapping, ... errors are skipped
+            records with errors are skipped
         """
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)

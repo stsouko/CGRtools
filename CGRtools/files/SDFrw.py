@@ -34,6 +34,15 @@ class SDFread(CGRread, WithMixin, MDLread):
     pathlib.Path object or another buffered reader object
     """
     def __init__(self, file, *args, indexable=False, **kwargs):
+        """
+        :param indexable: if True:
+            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
+            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
+            the object behaves like a normal open file
+                        if False:
+            works like generator converting a record into MoleculeContainer and returning each object in order,
+            records with errors are skipped
+        """
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
         self._data = self.__reader()
@@ -51,6 +60,10 @@ class SDFread(CGRread, WithMixin, MDLread):
             self.__file = self._file
 
     def seek(self, offset):
+        """
+        shifts on a given number of record in the original file
+        :param offset: number of record
+        """
         if self._shifts:
             if 0 <= offset < len(self._shifts):
                 current_pos = self._file.tell()
@@ -66,6 +79,9 @@ class SDFread(CGRread, WithMixin, MDLread):
             raise self._implement_error
 
     def tell(self):
+        """
+        :return: number of records processed from the original file
+        """
         if self._shifts:
             t = self._file.tell()
             return bisect_left(self._shifts, t)
