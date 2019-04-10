@@ -257,14 +257,20 @@ class Reactor:
         self.__reactor = CGRreactor(template, delete_atoms)
         self.__patterns = [QueryContainer(r) for r in reactants]
 
-    def __call__(self, structures, limit=0, skip_intersection=True):
+    def __call__(self, structures, limit=1, skip_intersection=True):
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only list of Molecules possible')
         if self.__single:
-            patch = self.__reactor(structures[0])
+            patch = self.__reactor(structures[0], limit, skip_intersection)
+            if limit == 1 and patch:
+                if self.__split:
+                    return ReactionContainer(reactants=structures, products=patch.split())
+                return ReactionContainer(reactants=structures, products=[patch])
             if self.__split:
-                return ReactionContainer(reactants=structures, products=patch.split())
-            return ReactionContainer(reactants=structures, products=[patch])
+                g = (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
+            else:
+                g = (ReactionContainer(reactants=structures, products=[x]) for x in patch)
+            return list(g) if limit > 1 else g
         else:
             structures = self.__remap(structures)
             mapping = self.__get_mapping(structures)

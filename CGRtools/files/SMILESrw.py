@@ -16,10 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from coho.smiles import Parser
+from importlib.util import find_spec
 from logging import warning
 from re import split
 from traceback import format_exc
+from warnings import warn
 from ._CGRrw import WithMixin, CGRread
 from ..periodictable import elements_list
 
@@ -126,4 +127,10 @@ class SMILESread(CGRread, WithMixin):
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
 
 
-__all__ = ['SMILESread']
+if find_spec('coho'):
+    from coho.smiles import Parser
+    __all__ = ['SMILESread']
+else:
+    warn('coho library not installed', ImportWarning)
+    __all__ = []
+    del SMILESread
