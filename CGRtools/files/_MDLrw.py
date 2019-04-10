@@ -440,6 +440,12 @@ class ERXNread:
 
 class MDLread:
     def _load_cache(self):
+        """
+        the method is implemented for the purpose of optimization, byte positions will not be re-read from a file
+        that has already been used, if the content of the file has changed, and the name has been left the same,
+        the old version of byte offsets will be loaded
+        :return: list of byte offsets from existing file
+        """
         try:
             with open(self.__cache_path, 'rb') as f:
                 return load(f)
@@ -455,6 +461,9 @@ class MDLread:
         return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
 
     def _dump_cache(self, _shifts):
+        """
+        _shifts dumps in /tmp directory after reboot it will drop
+        """
         with open(self.__cache_path, 'wb') as f:
             dump(_shifts, f)
 
@@ -473,6 +482,9 @@ class MDLread:
         return next(iter(self))
 
     def __len__(self):
+        """
+        :return: number of records in the original file
+        """
         if self._shifts:
             return len(self._shifts) - 1
         raise self._implement_error
@@ -480,8 +492,8 @@ class MDLread:
     def __getitem__(self, item):
         """
         getting the item by index from the original file,
-        if the required block of the file with an error,
-        then only the correct blocks are returned
+        if the required record of the file with an error,
+        then only the correct record are returned
         :param item: int or slice
         :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
         """
