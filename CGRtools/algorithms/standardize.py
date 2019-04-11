@@ -432,8 +432,8 @@ query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, c_2)],
 #
 # - N = N = N >> - N = N+ = N-
 #
-central['N2;2'] = n22
-query_patch['N2;2'].extend(_prepare([(b2, n1_), (b2, n22)],
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b2, n1_), (b2, n22)],
                                     [{'charge': 1}, ({}, {'charge': -1, '_hybridization': 2})]))
 
 
@@ -482,7 +482,7 @@ query_patch['N2;3'].extend(_prepare([(b2, o12), (b3, с23)],
 n21 = QueryAtom()
 n21.update(element='N', neighbors=2, hybridization=1)
 central['N2;3'] = n23
-query_patch['N2;2'].extend(_prepare([(b1, n21), (b3, n1_)],
+query_patch['N2;3'].extend(_prepare([(b1, n21), (b3, n1_)],
                                     [{'charge': 1}, ({'order': 2}, {'_hybridization': 2}),
                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
