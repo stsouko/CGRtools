@@ -467,7 +467,7 @@ query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, nn21), (b1, c)],
 # - C # N = O >> - C # N+ - O-
 #
 с23 = QueryAtom()
-с23.update(element='С', neighbors=2, hybridization=3)
+с23.update(element='C', neighbors=2, hybridization=3)
 central['N2;3'] = n23
 query_patch['N2;3'].extend(_prepare([(b2, o12), (b3, с23)],
                                     [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
