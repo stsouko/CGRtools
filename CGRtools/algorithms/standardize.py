@@ -421,6 +421,24 @@ query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, n22)],
 
 # 22
 #
+# C = N # N >> C = N+ = N-
+#
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, c_2)],
+                                    [{'charge': 1}, ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 23
+#
+# - N = N = N >> - N = N+ = N-
+#
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b2, n1_), (b2, n22)],
+                                    [{'charge': 1}, ({}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 24
+#
 # N = N = O >> N = N+ - O-
 #     |            |
 #     C            C
@@ -432,7 +450,7 @@ query_patch['N3;3'].extend(_prepare([(b2, o12), (b2, n22), (b1, c)],
                                     [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
-# 23
+# 25
 #
 # N- - N+ = O >> N = N+ - O-
 #      |             |
@@ -442,6 +460,31 @@ central['N+3;2'] = np32
 query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, nn21), (b1, c)],
                                      [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1}),
                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 26
+#
+# - C # N = O >> - C # N+ - O-
+#
+с23 = QueryAtom()
+с23.update(element='C', neighbors=2, hybridization=3)
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b2, o12), (b3, с23)],
+                                    [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+
+
+# 27
+#
+# - N - N # N >> - N = N+ = N-
+#   |
+#   H
+#
+n21 = QueryAtom()
+n21.update(element='N', neighbors=2, hybridization=1)
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b1, n21), (b3, n1_)],
+                                    [{'charge': 1}, ({'order': 2}, {'_hybridization': 2}),
+                                     ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
 __all__ = ['Standardize']
