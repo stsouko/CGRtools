@@ -17,10 +17,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from importlib.util import find_spec
 from itertools import chain, count
 from logging import warning
-from lxml.etree import iterparse, QName, tostring
 from traceback import format_exc
+from warnings import warn
 from ._CGRrw import CGRread, CGRwrite, WithMixin, cgr_keys
 from ..containers.common import BaseContainer
 from ..exceptions import EmptyMolecule
@@ -373,4 +374,10 @@ class MRVwrite(CGRwrite, WithMixin):
     __finalized = False
 
 
-__all__ = ['MRVread', 'MRVwrite']
+if find_spec('lxml'):
+    from lxml.etree import iterparse, QName, tostring
+    __all__ = ['MRVread', 'MRVwrite']
+else:
+    warn('lxml library not installed', ImportWarning)
+    __all__ = ['MRVwrite']
+    del MRVread

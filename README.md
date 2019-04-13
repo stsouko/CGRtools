@@ -76,21 +76,14 @@ Windows
 
 General part
 ============
-* Into activated environment install networkx library (Currently DEV version, due to special 
-parts of code that was contributed to networkx and will appear in next release)
 
-    ```
-    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
-    ```
-    
-* **stable version will be available through PyPI (The same as DEV for now)**
+* **stable version will be available through PyPI**
 
     ```
     pip install CGRTools
     ```    
     
-* Install CGRtools library DEV version for features that are not well tested (Currently DEV version and stable version is the same as 
-bugs fixing is going on)
+* Install CGRtools library DEV version for features that are not well tested
 
     ```
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
