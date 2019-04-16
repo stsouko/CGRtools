@@ -16,7 +16,41 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from typing import Set, List
 from ..cache import cached_property
+
+
+class TickedPath:
+    __slots__ = '__path', '__ticks'
+
+    def __init__(self, root, first):
+        self.__path = [root, first]
+        self.__ticks = []
+
+    def append(self, node):
+        self.__path.append(node)
+
+    def tick(self):
+        self.__ticks.insert(0, len(self.__path))
+
+    @property
+    def paths(self):
+        paths = [self.__path]
+        for x in self.__ticks:
+            paths.append(self.__path[:x])
+        return paths
+
+    @property
+    def path(self):
+        return self.__path
+
+    @property
+    def leaf(self):
+        return self.__path[-1]
+
+    @property
+    def root(self):
+        return self.__path[0]
 
 
 class SSSR:
@@ -27,10 +61,10 @@ class SSSR:
         http://doi.org/10.1073/pnas.0813040106
     """
     @cached_property
-    def sssr(self):
+    def skin_atoms_set(self) -> Set[int]:
         adj = self._adj
         if len(adj) < 3:
-            return []
+            return set()
 
         atoms = {x for x, y in adj.items() if y}  # ignore isolated atoms
         terminals = {x for x, y in adj.items() if len(y) == 1}
@@ -42,42 +76,51 @@ class SSSR:
                     break
                 terminals.update(bubble)
             atoms.difference_update(terminals)  # skip not-cycle chains
+        return atoms
 
-        if not atoms:
-            return []
+    @cached_property
+    def skin_atoms(self) -> List[int]:
+        return list(self.skin_atoms_set)
 
+    def _closures(self):
+        adj = self._adj
+        atoms = self.skin_atoms_set
         n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
-        terminated = {}
+
         tail = atoms.pop()
-        next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
+        next_stack = {x: [TickedPath(tail, x)] for x in adj[tail].keys() & atoms}
+        terminated = {}
 
         while True:
             next_front = set()
             found_odd = set()
             stack, next_stack = next_stack, {}
             for broom in stack.values():
-                tail = broom[0][-1]
+                tail = broom[0].leaf
                 next_front.add(tail)
                 neighbors = adj[tail].keys() & atoms
                 if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
                         continue
-                    next_broom = [branch + [n] for branch in broom]
+                    for branch in broom:
+                        branch.append(n)
+
                     if n in stack:  # odd rings
                         found_odd.add(tail)
                         if n in next_stack:
-                            next_stack[n].extend(next_broom)
+                            next_stack[n].extend(broom)
                         else:
-                            stack[n].extend(next_broom)  # not visited
+                            stack[n].extend(broom)  # not visited
                             terminated[n] = stack[n]
                     elif n in next_stack:  # even rings
-                        next_stack[n].extend(next_broom)
+                        next_stack[n].extend(broom)
                         if n not in terminated:
                             terminated[n] = next_stack[n]
                     else:
-                        next_stack[n] = next_broom
+                        next_stack[n] = broom
                 elif neighbors:
+                    nn = neighbors.pop()  # extract
                     for n in neighbors:
                         if n in found_odd:
                             continue
@@ -98,6 +141,9 @@ class SSSR:
                         else:
                             next_stack[n] = next_broom
 
+                    if nn in found_odd:
+                        continue
+
             atoms.difference_update(next_front)
             if not atoms:
                 break
@@ -105,7 +151,14 @@ class SSSR:
                 n_sssr += 1
                 tail = atoms.pop()
                 next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
+        return terminated, n_sssr
 
+    @cached_property
+    def sssr(self):
+        if not self.skin_atoms_set:
+            return []
+
+        terminated, n_sssr = self._closures()
         if not n_sssr:
             return []
 
