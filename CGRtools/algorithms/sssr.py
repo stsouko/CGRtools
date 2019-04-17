@@ -20,39 +20,6 @@ from typing import Set, List
 from ..cache import cached_property
 
 
-class TickedPath:
-    __slots__ = '__path', '__ticks'
-
-    def __init__(self, root, first):
-        self.__path = [root, first]
-        self.__ticks = []
-
-    def append(self, node):
-        self.__path.append(node)
-
-    def tick(self):
-        self.__ticks.insert(0, len(self.__path))
-
-    @property
-    def paths(self):
-        paths = [self.__path]
-        for x in self.__ticks:
-            paths.append(self.__path[:x])
-        return paths
-
-    @property
-    def path(self):
-        return self.__path
-
-    @property
-    def leaf(self):
-        return self.__path[-1]
-
-    @property
-    def root(self):
-        return self.__path[0]
-
-
 class SSSR:
     """ SSSR calculation. based on idea of PID matrices from:
         Lee, C. J., Kang, Y.-M., Cho, K.-H., & No, K. T. (2009).
@@ -88,45 +55,39 @@ class SSSR:
         n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
 
         tail = atoms.pop()
-        next_stack = {x: [TickedPath(tail, x)] for x in adj[tail].keys() & atoms}
+        next_stack = {x: [((tail, x), ())] for x in adj[tail].keys() & atoms}
         terminated = {}
 
         while True:
             next_front = set()
             found_odd = set()
             stack, next_stack = next_stack, {}
-            for broom in stack.values():
-                tail = broom[0].leaf
+            for tail, broom in stack.items():
                 next_front.add(tail)
                 neighbors = adj[tail].keys() & atoms
                 if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
                         continue
-                    for branch in broom:
-                        branch.append(n)
-
+                    next_broom = [((*path, n), ticks) for path, ticks in broom]
                     if n in stack:  # odd rings
                         found_odd.add(tail)
                         if n in next_stack:
-                            next_stack[n].extend(broom)
+                            next_stack[n].extend(next_broom)
                         else:
-                            stack[n].extend(broom)  # not visited
+                            stack[n].extend(next_broom)  # not visited
                             terminated[n] = stack[n]
                     elif n in next_stack:  # even rings
-                        next_stack[n].extend(broom)
+                        next_stack[n].extend(next_broom)
                         if n not in terminated:
                             terminated[n] = next_stack[n]
                     else:
-                        next_stack[n] = broom
+                        next_stack[n] = next_broom
                 elif neighbors:
-                    nn = neighbors.pop()  # extract
                     for n in neighbors:
                         if n in found_odd:
                             continue
-                        next_broom = [[tail, n]]
-                        for branch in broom:
-                            next_broom.append(branch + [n])
+                        next_broom = [((*path, n), (*ticks, len(path) - 1)) for path, ticks in broom]
                         if n in stack:  # odd rings
                             found_odd.add(tail)
                             if n in next_stack:
@@ -140,9 +101,6 @@ class SSSR:
                                 terminated[n] = next_stack[n]
                         else:
                             next_stack[n] = next_broom
-
-                    if nn in found_odd:
-                        continue
 
             atoms.difference_update(next_front)
             if not atoms:
