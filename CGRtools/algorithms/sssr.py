@@ -16,8 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import combinations, product
-from networkx import shortest_simple_paths, NetworkXNoPath, number_connected_components
 from ..cache import cached_property
 
 
@@ -34,7 +32,7 @@ class SSSR:
         if len(adj) < 3:
             return []
 
-        atoms = {x for x, y in adj.items() if len(y)}  # ignore isolated atoms
+        atoms = {x for x, y in adj.items() if y}  # ignore isolated atoms
         terminals = {x for x, y in adj.items() if len(y) == 1}
         if terminals:
             bubble = terminals
@@ -48,7 +46,7 @@ class SSSR:
         if not atoms:
             return []
 
-        n_sssr = self.bonds_count - len(self) + 1
+        n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
         terminated = {}
         tail = atoms.pop()
         next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
@@ -71,8 +69,8 @@ class SSSR:
                         if n in next_stack:
                             next_stack[n].extend(next_broom)
                         else:
-                            next_broom.extend(stack[n])
-                            terminated[n] = next_stack[n] = next_broom
+                            stack[n].extend(next_broom)  # not visited
+                            terminated[n] = stack[n]
                     elif n in next_stack:  # even rings
                         next_stack[n].extend(next_broom)
                         if n not in terminated:
@@ -91,8 +89,8 @@ class SSSR:
                             if n in next_stack:
                                 next_stack[n].extend(next_broom)
                             else:
-                                next_broom.extend(stack[n])
-                                terminated[n] = next_stack[n] = next_broom
+                                stack[n].extend(next_broom)  # not visited
+                                terminated[n] = stack[n]
                         elif n in next_stack:  # even rings
                             next_stack[n].extend(next_broom)
                             if n not in terminated:
@@ -135,41 +133,42 @@ class SSSR:
 
         c_set = []
         for k, p1ij in pid1.items():
-            dij = len(p1ij[0]) - 1
+            dij = len(p1ij[0]) * 2 - 2
             p2ij = pid2[k]
+            if len(p1ij) == 1:  # one shortest
+                if not p2ij:  # need shortest + 1 path
+                    continue
+                c_set.append((dij + 1, p1ij, p2ij))
+            elif not p2ij:  # one or more odd rings
+                c_set.append((dij, p1ij, None))
+            else:  # odd and even rings found (e.g. bicycle)
+                c_set.append((dij, p1ij, None))
+                c_set.append((dij + 1, p1ij, p2ij))
 
-            if not p2ij and len(p1ij) == 1:
-                continue
-
-            c_num = 2 * dij
-            if p2ij:
-                c_num += 1
-
-            c_set.append((c_num, p1ij, p2ij))
-
-        n_ringidx, c_sssr = 0, {}
+        c_sssr = {}
         for c_num, p1ij, p2ij in sorted(c_set):
-            if c_num % 2:
-                c1 = p1ij[0]
+            if c_num % 2:  # odd rings
+                c1 = p1ij[0]  # any shortest acceptable. sssr is not a unique set of rings
                 c11 = c1[1]
+                c12 = c1[-2]
                 for c2 in p2ij:
-                    if c11 != c2[1]:
-                        c = c1 + c2[-2:0:-1]
-                        ck = tuple(sorted(c))
-                        if ck not in c_sssr:
-                            c_sssr[ck] = c
-                            n_ringidx += 1
-                        if n_ringidx == n_sssr:
+                    if c11 == c2[1] or c12 == c2[-2]:
+                        continue
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        if len(c_sssr) == n_sssr:
                             return list(c_sssr.values())
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
-                    if c1[1] != c2[1]:
-                        c = c1 + c2[-2:0:-1]
-                        ck = tuple(sorted(c))
-                        if ck not in c_sssr:
-                            c_sssr[ck] = c
-                            n_ringidx += 1
-                        if n_ringidx == n_sssr:
+                    if c1[1] == c2[1] or c1[-2] == c2[-2]:
+                        continue
+                    c = c1 + c2[-2:0:-1]
+                    ck = tuple(sorted(c))
+                    if ck not in c_sssr:
+                        c_sssr[ck] = c
+                        if len(c_sssr) == n_sssr:
                             return list(c_sssr.values())
 
 

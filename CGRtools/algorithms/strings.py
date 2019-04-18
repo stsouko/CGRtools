@@ -50,10 +50,6 @@ dyn_multiplicity_str = {(1, 1): "*", (1, 2): "*>*2", (1, 3): "*>*3", (1, None): 
 
 
 class HashableSmiles:
-    @cached_method
-    def __bytes__(self):
-        return sha512(str(self).encode()).digest()
-
     def __hash__(self):
         return hash(str(self))
 
@@ -62,6 +58,10 @@ class HashableSmiles:
 
 
 class StringCommon:
+    @cached_method
+    def __bytes__(self):
+        return sha512(str(self).encode()).digest()
+
     def _flatten(self, weights):
         node = self._node
         adj = self._adj

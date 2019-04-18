@@ -16,9 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from base64 import urlsafe_b64encode
 from csv import reader
 from logging import warning
-from itertools import count, chain
+from itertools import count, chain, islice
+from os.path import abspath, join
+from pickle import dump, load, UnpicklingError
+from tempfile import gettempdir
 from ._CGRrw import CGRwrite, cgr_keys
 from ..exceptions import EmptyMolecule
 from ..periodictable import common_isotopes
@@ -432,6 +436,105 @@ class ERXNread:
     __parser_group = __parser = None
     __rend = __empty_skip = False
     __in_mol = 0
+
+
+class MDLread:
+    def _load_cache(self):
+        """
+        the method is implemented for the purpose of optimization, byte positions will not be re-read from a file
+        that has already been used, if the content of the file has changed, and the name has been left the same,
+        the old version of byte offsets will be loaded
+        :return: list of byte offsets from existing file
+        """
+        try:
+            with open(self.__cache_path, 'rb') as f:
+                return load(f)
+        except FileNotFoundError:
+            return
+        except IsADirectoryError as e:
+            raise IsADirectoryError(f'Please delete {self.__cache_path} directory') from e
+        except (UnpicklingError, EOFError) as e:
+            raise UnpicklingError(f'Invalid cache file {self.__cache_path}. Please delete it') from e
+
+    @property
+    def __cache_path(self):
+        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
+
+    def _dump_cache(self, _shifts):
+        """
+        _shifts dumps in /tmp directory after reboot it will drop
+        """
+        with open(self.__cache_path, 'wb') as f:
+            dump(_shifts, f)
+
+    def read(self):
+        """
+        parse whole file
+
+        :return: list of parsed molecules
+        """
+        return list(iter(self))
+
+    def __iter__(self):
+        return (x for x in self._data if x is not None)
+
+    def __next__(self):
+        return next(iter(self))
+
+    def __len__(self):
+        """
+        :return: number of records in the original file
+        """
+        if self._shifts:
+            return len(self._shifts) - 1
+        raise self._implement_error
+
+    def __getitem__(self, item):
+        """
+        getting the item by index from the original file,
+        if the required record of the file with an error,
+        then only the correct record are returned
+        :param item: int or slice
+        :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
+        """
+        if self._shifts:
+            _len = len(self._shifts) - 1
+            _current_pos = self.tell()
+
+            if isinstance(item, int):
+                if item >= _len or item < -_len:
+                    raise IndexError('List index out of range')
+                if item < 0:
+                    item += _len
+                self.seek(item)
+                records = next(self._data)
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(_len)
+                if start == stop:
+                    return []
+
+                if step == 1:
+                    self.seek(start)
+                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
+                else:
+                    records = []
+                    for index in range(start, stop, step):
+                        self.seek(index)
+                        record = next(self._data)
+                        if record:
+                            records.append(record)
+            else:
+                raise TypeError('Indices must be integers or slices')
+
+            self.seek(_current_pos)
+            if records is None:
+                raise self._index_error
+            return records
+        raise self._implement_error
+
+    _shifts = None
+    _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
+    _index_error = IndexError('Data block with requested index contain errors')
 
 
 class MOLwrite(CGRwrite):

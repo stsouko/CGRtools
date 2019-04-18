@@ -30,3 +30,10 @@ class MappingError(ValueError):
     bad files parsing
     """
     pass
+
+
+class InvalidFileType(TypeError):
+    """
+    bad files parsing
+    """
+    pass

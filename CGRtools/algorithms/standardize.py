@@ -29,7 +29,6 @@ class Standardize:
 
         :return: number of found groups
         """
-        self.aromatize()
         self.reset_query_marks()
         seen = set()
         total = 0
@@ -101,7 +100,7 @@ o.update(element='O')
 n33.update(element='N', neighbors=3, hybridization=3)
 central['N3;3'] = n33
 query_patch['N3;3'].extend(_prepare([(b2, o), (b2, o), (b1, a)],
-                                    [{'charge': 1, '_hybridization': 2}, 
+                                    [{'charge': 1, '_hybridization': 2},
                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
@@ -115,7 +114,7 @@ n34 = QueryAtom()
 n34.update(element='N', neighbors=3, hybridization=4)
 central['N3;4'] = n34
 query_patch['N3;4'].extend(_prepare([(b2, o), (b4, a), (b4, a)],
-                                    [{'charge': 1}, 
+                                    [{'charge': 1},
                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
 
 
@@ -131,7 +130,7 @@ np23.update(element='N', charge=1, neighbors=2, hybridization=3)
 n1_.update(element='N', neighbors=1)
 central['N+2;3'] = np23
 query_patch['N+2;3'].extend(_prepare([(b1, nn21), (b3, n1_)],
-                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}), 
+                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
                                       ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
@@ -155,7 +154,7 @@ query_patch['N2;3'].extend(_prepare([(b3, np23), (b2, nn12)],
 cn_1 = QueryAtom()
 cn_1.update(element='C', charge=-1, hybridization=1)
 query_patch['N+2;3'].extend(_prepare([(b1, cn_1), (b3, n1_)],
-                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}), 
+                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
                                       ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
@@ -171,7 +170,7 @@ n22.update(element='N', neighbors=2, hybridization=2)
 np1_.update(element='N', charge=1, neighbors=1)
 central['N2;2'] = n22
 query_patch['N2;2'].extend(_prepare([(b2, np1_), (b1, c)],
-                                    [{'charge': 1, '_hybridization': 3}, 
+                                    [{'charge': 1, '_hybridization': 3},
                                      ({'order': 3}, {'charge': 0, '_hybridization': 3})]))
 
 
@@ -184,7 +183,7 @@ n31 = QueryAtom()
 cp_1.update(element='C', charge=1, hybridization=1)
 n31.update(element='N', neighbors=3, hybridization=1)
 central['N3;1'] = n31
-query_patch['N3;1'].extend(_prepare([(b1, cp_1), (b1, a), (b1, a)], 
+query_patch['N3;1'].extend(_prepare([(b1, cp_1), (b1, a), (b1, a)],
                                     [{'charge': 1, '_hybridization': 2},
                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
 
@@ -212,7 +211,7 @@ n122 = QueryAtom()
 cp22.update(element='C', charge=1, neighbors=2, hybridization=2)
 n122.update(element='N', neighbors=(1, 2), hybridization=2)
 central['C+2;2'] = cp22
-query_patch['C+2;2'].extend(_prepare([(b2, n122), (b1, a)], 
+query_patch['C+2;2'].extend(_prepare([(b2, n122), (b1, a)],
                                      [{'charge': 0, '_hybridization': 3},
                                       ({'order': 3}, {'charge': 1, '_hybridization': 3})]))
 
@@ -409,6 +408,83 @@ query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, o)],
 query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, c_2)],
                                      [{'charge': 0, '_hybridization': 3},
                                       ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 21
+#
+# N = N # N >> N = N+ = N-
+#
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, n22)],
+                                    [{'charge': 1}, ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 22
+#
+# C = N # N >> C = N+ = N-
+#
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, c_2)],
+                                    [{'charge': 1}, ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 23
+#
+# - N = N = N >> - N = N+ = N-
+#
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b2, n1_), (b2, n22)],
+                                    [{'charge': 1}, ({}, {'charge': -1, '_hybridization': 2})]))
+
+
+# 24
+#
+# N = N = O >> N = N+ - O-
+#     |            |
+#     C            C
+#
+o12 = QueryAtom()
+o12.update(element='O', neighbors=1, hybridization=2)
+central['N3;3'] = n33
+query_patch['N3;3'].extend(_prepare([(b2, o12), (b2, n22), (b1, c)],
+                                    [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+
+
+# 25
+#
+# N- - N+ = O >> N = N+ - O-
+#      |             |
+#      C             C
+#
+central['N+3;2'] = np32
+query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, nn21), (b1, c)],
+                                     [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1}),
+                                     ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+
+
+# 26
+#
+# - C # N = O >> - C # N+ - O-
+#
+с23 = QueryAtom()
+с23.update(element='C', neighbors=2, hybridization=3)
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b2, o12), (b3, с23)],
+                                    [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+
+
+# 27
+#
+# - N - N # N >> - N = N+ = N-
+#   |
+#   H
+#
+n21 = QueryAtom()
+n21.update(element='N', neighbors=2, hybridization=1)
+central['N2;3'] = n23
+query_patch['N2;3'].extend(_prepare([(b1, n21), (b3, n1_)],
+                                    [{'charge': 1}, ({'order': 2}, {'_hybridization': 2}),
+                                     ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
 __all__ = ['Standardize']

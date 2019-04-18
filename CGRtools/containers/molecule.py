@@ -75,9 +75,9 @@ class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standar
         c = 0
         for n, atom in self.atoms():
             if atom.element == 'H':
-                m = next(self.neighbors(n))
-                if self._node[m].element != 'H':
-                    explicit[m].append(n)
+                for m in self.neighbors(n):
+                    if self._node[m].element != 'H':
+                        explicit[m].append(n)
 
         for n, h in explicit.items():
             atom = self._node[n]
