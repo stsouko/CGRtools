@@ -18,6 +18,7 @@
 #
 from collections import defaultdict
 from itertools import combinations, product
+from typing import List
 from ..cache import cached_property
 
 
@@ -99,6 +100,112 @@ def _dihedral_sign(n, u, v, w):
 
 class Stereo:
     @cached_property
+    def tetrahedrons(self):
+        # tetrahedral should be single bonded and contain zero or one H
+        atoms = self._node
+        return {n: tuple(env) for n, env in self._adj.items()
+                if atoms[n].element == 'C' and all(x.order == 1 for x in env.values())}
+
+    def __tetrahedrons(self):
+        atoms = self._node
+        tetrahedrons = {}
+        for n, env in self.tetrahedrons.items():
+            env = tuple(x for x in env if atoms[x].element != 'H')
+            if len(env) >= 3:
+                tetrahedrons[n] = env
+        return tetrahedrons
+
+    @cached_property
+    def cumulenes(self) -> List[List[int]]:
+        """
+        list of alkenes, allenes and cumulenes atoms lists
+        """
+        atoms = self._node
+        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        for n, m, bond in self.bonds():
+            if bond.order == 2 and atoms[n].element == atoms[m].element == 'C':
+                adj[n].add(m)
+                adj[m].add(n)
+
+        if not adj:
+            return []
+
+        terminals = {x for x, y in adj.items() if len(y) == 1}
+        cumulenes = []
+        while terminals:
+            m = terminals.pop()
+            path = [m]
+            cumulenes.append(path)
+            while m not in terminals:
+                n, m = m, adj[m].pop()
+                adj[m].discard(n)
+                path.append(m)
+            terminals.discard(m)
+        return cumulenes
+
+    def __allenes(self):
+        # structure of allene:
+        # (central atom, first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom,
+        #  second enter or None, second exit or None)
+        allenes = []
+        for path in self.cumulenes:
+            lp = len(path)
+            if lp % 2:
+                try:
+                    allenes.append((path[lp // 2], *self.__cumulene_filter(path)))
+                except TypeError:
+                    pass
+        return allenes
+
+    def __alkenes(self):
+        # structure of alkene:
+        # (first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom,
+        #  second enter or None, second exit or None)
+        alkenes = []
+        for path in self.cumulenes:
+            if len(path) == 2:
+                sp = set(path)
+                if any(len(ring) <= 7 and sp.issubset(ring) for ring in self.sssr):
+                    continue
+                env = self.__cumulene_filter(path)
+                if env:
+                    alkenes.append(env)
+        return alkenes
+
+    def __cumulenes(self):
+        # structure of cis_trans:
+        # (first central atom, second central atom, first neighbor atom of enter atom, enter atom, exit atom,
+        #  first neighbor atom of exit atom, second enter or None, second exit or None)
+        cis_trans = []
+        for path in self.cumulenes:
+            lp = len(path)
+            if lp > 3 and not lp % 2:
+                try:
+                    cis_trans.append((path[lp // 2 - 1], path[lp // 2], *self.__cumulene_filter(path)))
+                except TypeError:
+                    pass
+        return cis_trans
+
+    def __cumulene_filter(self, path):
+        adj = self._adj
+        atoms = self._node
+        n, m = path[0], path[-1]
+        n1, m1 = path[1], path[-2]
+
+        nn = [x for x in adj[n] if x != n1 and atoms[x].element != 'H']
+        mn = [x for x in adj[m] if x != m1 and atoms[x].element != 'H']
+        if nn and mn:
+            if len(nn) == 2:
+                sn = nn[1]
+            else:
+                sn = None
+            if len(mn) == 2:
+                sm = mn[1]
+            else:
+                sm = None
+            return nn[0], n, m, mn[0], sn, sm
+
+    @cached_property
     def chiral_atoms(self):
         """
         dict of chiral atoms valued with ordered neighbors
@@ -153,74 +260,6 @@ class Stereo:
         for k, l, m, n, i, j, x, y, v, w in self.__potentially_atropisomer:
             pass
         return
-
-    @cached_property
-    def __potentially_alkene(self):
-        # detect allenes and cis/trans double bonds.
-        adj = defaultdict(list)  # carbon double bonds adjacency matrix
-        for n, m, bond in self.bonds():
-            if bond.order == 2 and self.atom(n).element == self.atom(m).element == 'C':
-                adj[n].append(m)
-                adj[m].append(n)
-
-        if not adj:
-            return [], []
-
-        terminals = {x for x, y in adj.items() if len(y) == 1}
-        cis_trans = []
-        allene = []
-
-        # structure of allene:
-        # (first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom, central atom,
-        #  second enter or None, second exit or None)
-
-        # structure of cis_trans:
-        # (first neighbor atom of enter atom, enter atom, exit atom, first neighbor atom of exit atom,
-        #  first central atom, second central atom, second enter or None, second exit or None)
-
-        while terminals:
-            n = terminals.pop()
-            m = adj[n][0]  # terminal atom has 1 neighbor always
-            path = [n, m]
-            while m not in terminals:
-                n, m = m, next(x for x in adj[m] if x != n)
-                path.append(m)
-            terminals.discard(m)
-
-            n, m = path[0], path[-1]
-            if self.atom_total_h(n) == 2 or self.atom_total_h(m) == 2:
-                continue  # ignore terminal alkenes
-            nn = (x for x in self._adj[n] if x != path[1])
-            mn = (x for x in self._adj[m] if x != path[-2])
-
-            lp = len(path)
-            if lp == 2:
-                # ignore double bonds in small rings
-                sp = set(path)
-                if not any(True for ring in self.sssr if sp.issubset(ring) and len(ring) <= 7):
-                    cis_trans.append((next(nn), n, m, next(mn), n, m, next(nn, None), next(mn, None)))
-            elif lp % 2:
-                allene.append((next(nn), n, m, next(mn), path[lp // 2], next(nn, None), next(mn, None)))
-            else:
-                cis_trans.append((next(nn), n, m, next(mn), path[lp // 2 - 1], path[lp // 2],
-                                  next(nn, None), next(mn, None)))
-        return cis_trans, allene
-
-    @cached_property
-    def __potentially_tetrahedron(self):
-        # tetrahedral should be single bonded and contain zero or one H
-        chiral = {}
-        for n, m_bond in self._adj.items():
-            if len(m_bond) < 3:
-                continue
-            if not all(x.order == 1 for x in m_bond.values()):
-                continue
-            if self.atom_total_h(n) > 1:  # more then one H impossible
-                continue
-            if self.atom_implicit_h(n) + len(m_bond) != 4:
-                continue
-            chiral[n] = tuple(m_bond)
-        return chiral
 
     @cached_property
     def __potentially_atropisomer(self):
@@ -292,30 +331,6 @@ class Stereo:
             for x in sring.intersection(tetrahedron):
                 if len(self._adj[x]) != len({order[x] for x in self._adj[x]}):
                     target.append(x)
-
-    def __tetrahedron(self):
-        chiral = {}
-        weights = self.atoms_order
-        for n in self.__potentially_tetrahedron:
-            m_bond = self._adj[n]
-            # chiral atom all times contain unique neighbors
-            if len(m_bond) == len({weights[x] for x in m_bond}):
-                chiral[n] = tuple(m_bond)  # neighbors order
-        """
-        if chiral:  # generate new weights
-            weights = weights.copy()
-            countprime = iter(list(primes)[len(self):])
-            for n in chiral:
-                weights[n] = next(countprime)
-            weights = self._morgan(weights)
-            for n in self.__potentially_tetrahedron:
-                if n in chiral:
-                    continue
-                m_bond = self._adj[n]
-                if len(m_bond) == len({weights[x] for x in m_bond}):
-                    chiral[n] = tuple(m_bond)  # neighbors order
-        """
-        return chiral
 
 
 __all__ = ['Stereo']
