@@ -18,37 +18,113 @@
 #
 from collections import defaultdict
 from itertools import repeat
+from typing import List
+from ..cache import cached_property
 from ..periodictable import C
 
 
 class Aromatize:
-    def aromatize(self):
+    @cached_property
+    def aromatic_rings(self) -> List[List[int]]:
+        adj = self._adj
+        return [ring for ring in self.sssr if len(x) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
+                and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
+
+    def aromatize(self) -> int:
         """
         convert structure to aromatic form
 
         :return: number of processed rings
         """
-        rings = [x for x in self.sssr if 4 < len(x) < 7]
-        if not rings:
-            return 0
-        total = 0
-        while True:
-            c = self._quinonize(rings, 'order')
-            if c:
-                total += c
-            elif total:
-                break
+        rings5 = []
+        rings6 = []
+        rings10 = []  # fix azulene search
+        for r in self.sssr:
+            lr = len(r)
+            if lr == 6:
+                rings6.append(r)
+            elif lr == 5 and all(set(x).isdisjoint(r) for x in rings10):
+                rings5.append(r)
 
-            c = self._aromatize(rings, 'order')
-            if not c:
-                break
-            total += c
+        if not (rings6 or rings5 or rings10):
+            return 0
+
+        init = len(rings6) + len(rings5) + len(rings10)
+
+        old = 0
+        new = init
+        rings5_c = rings5.copy()
+        rings6_c = rings6.copy()
+        while new != old:
+            found = []
+            for n, r in enumerate(rings6_c):
+                if self.__quinonize_benzene(r):
+                    found.insert(0, n)
+            for n in found:
+                del rings6_c[n]
+
+            old, new = new, len(rings6_c) + len(rings5_c)
+        total = init - new
+
+        old = 0
+        new = init
+        rings5_c = rings5.copy()
+        rings6_c = rings6.copy()
+        rings10_c = rings10.copy()
+        while new != old:
+            found = []
+            for n, r in enumerate(rings6_c):
+                if self.__aromatize_benzene(r):
+                    found.insert(0, n)
+            for n in found:
+                del rings6_c[n]
+
+            found = []
+            for n, r in enumerate(rings5_c):
+                if self.__aromatize_pyrole(r):
+                    found.insert(0, n)
+            for n in found:
+                del rings5_c[n]
+
+            found = []
+            for n, r in enumerate(rings10_c):
+                if self.__aromatize_azulene(r):
+                    found.insert(0, n)
+            for n in found:
+                del rings10_c[n]
+
+            old, new = new, len(rings6_c) + len(rings5_c) + len(rings10_c)
+        total += init - new
 
         if total:
             self.flush_cache()
         return total
 
-    def _quinonize(self, rings, bond):
+    def __quinonize_benzene(self, ring):
+        r1, r2, r3, r4, r5, r6 = r
+        key = (self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
+               self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond])
+        if 4 not in key:
+            continue
+
+        doubles = tuple(y for y, x in enumerate(r) if len(self._adj[x]) == 3 and
+                        next(attr[bond] for a, attr in self._adj[x].items() if a not in r) == 2)
+        if not doubles:
+            continue
+
+        if len(doubles) == 6:
+            self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 1
+            self._adj[r4][r5][bond] = self._adj[r5][r6][bond] = self._adj[r6][r1][bond] = 1
+            found.append(n)
+        else:
+            if key in _quinone_pattern.get(doubles, {}):
+                dear = _quinone_fix.get(doubles)
+                self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond], \
+                self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond] = dear
+                found.append(n)
+
+    def _quinonize(self, rings):
+        bond = 'order'
         rings = rings.copy()
         init = len(rings)
         old = 0
@@ -102,36 +178,38 @@ class Aromatize:
             new = len(rings)
         return init - old
 
-    def _aromatize(self, rings, bond):
-        rings = rings.copy()
-        init = len(rings)
-        old = 0
-        new = len(rings)
-        while new != old:
-            old = new
-            found = []
-            for n, r in enumerate(rings):
-                if len(r) == 6:
-                    r1, r2, r3, r4, r5, r6 = r
-                    if (self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                            self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond]) in _benzene:
-                        self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 4
-                        self._adj[r4][r5][bond] = self._adj[r5][r6][bond] = self._adj[r6][r1][bond] = 4
-                        found.append(n)
-                elif len(r) == 5:
-                    r1, r2, r3, r4, r5 = r
-                    position = _pyrole.get((self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                                            self._adj[r4][r5][bond], self._adj[r5][r1][bond]))
+    def __aromatize_benzene(self, ring):
+        adj = self._adj
+        r1, r2, r3, r4, r5, r6 = ring
+        r12 = adj[r1][r2]
+        r23 = adj[r2][r3]
+        r34 = adj[r3][r4]
+        r45 = adj[r4][r5]
+        r56 = adj[r5][r6]
+        r61 = adj[r6][r1]
+        if (r12.order, r23.order, r34.order, r45.order, r56.order, r61.order) in _benzene:
+            r12.order = r23.order = r34.order = r45.order = r56.order = r61.order = 4
+            return True
+        return False
 
-                    if position is not None and self._node[r[position]]._atom in _pyrole_atoms:
-                        self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 4
-                        self._adj[r4][r5][bond] = self._adj[r5][r1][bond] = 4
-                        found.append(n)
+    def __aromatize_pyrole(self, ring):
+        adj = self._adj
+        atoms = self._node
+        r1, r2, r3, r4, r5 = ring
+        r12 = adj[r1][r2]
+        r23 = adj[r2][r3]
+        r34 = adj[r3][r4]
+        r45 = adj[r4][r5]
+        r51 = adj[r5][r1]
+        position = _pyrole.get((r12.order, r23.order, r34.order, r45.order, r51.order))
 
-            for n in found[::-1]:
-                del rings[n]
-            new = len(rings)
-        return init - old
+        if position is not None and atoms[ring[position]]._atom in _pyrole_atoms:
+            r12.order = r23.order = r34.order = r45.order = r51.order = 4
+            return True
+        return False
+
+    def __aromatize_azulene(self, ring):
+        return False
 
 
 def _clock(a):
