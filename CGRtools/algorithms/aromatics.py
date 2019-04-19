@@ -36,15 +36,65 @@ class Aromatize:
 
         :return: number of processed rings
         """
-        rings5 = []
+        rings5 = {}
+        rings7 = {}
         rings6 = []
-        rings10 = []  # fix azulene search
-        for r in self.sssr:
-            lr = len(r)
+        rings10 = []
+        for ring in self.sssr:
+            lr = len(ring)
             if lr == 6:
-                rings6.append(r)
-            elif lr == 5 and all(set(x).isdisjoint(r) for x in rings10):
-                rings5.append(r)
+                rings6.append(ring)
+            if lr == 5:
+                rings5[frozenset(ring)] = ring
+            elif lr == 7:
+                rings7[frozenset(ring)] = ring
+
+        #
+        #    7    8
+        #  /   \ / \
+        # 1     6   9
+        # |     |   |
+        # 2     5---10
+        #  \   /
+        #   3-4
+        #
+        for r7_k, r7 in rings7.items():
+            for r5 in rings5:
+                c = r5 & r7_k
+                if len(c) == 2:
+                    break  # found r5r7
+            else:
+                continue  # not found
+            n, m = c
+            # rearrange ring to n(6)----m(5)
+            i = r7.index(n)
+            ij = i - r7.index(m)
+            if ij == 1:  # normal direction. e.g. 1-2-3-4-5-6-7
+                r7 = r7[i:] + r7[:i]
+            elif ij == -1:  # reverse direction. e.g.  1-7-6-5-4-3-2
+                r7 = r7[i::-1] + r7[:i:-1]
+            elif i:
+                r7 = r7[::-1]
+
+            # rearrange ring to m(5)---n(6)
+            r5 = rings5.pop(r5)
+            i = r5.index(m)
+            j = r5.index(n)
+            ij = i - j
+            if ij == 1:  # normal direction. e.g. 8-6-5-10-9
+                r5 = r5[i + 1:] + r5[:j]  # 10-9-8
+            elif ij == -1:  # reverse direction. e.g 10-5-6-8-9
+                if i:
+                    r5 = r5[i - 1::-1] + r5[:j:-1]
+                else:
+                    r5 = r5[:1:-1]
+            elif i:
+                r5 = r5[-2:0:-1]
+            else:
+                r5 = r5[1:-1]
+            rings10.append(r7 + r5)
+
+        rings5 = list(rings5.values())
 
         if not (rings6 or rings5 or rings10):
             return 0
