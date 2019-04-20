@@ -65,6 +65,13 @@ class Aromatize:
                 for n in found:
                     del rings5_c[n]
 
+                found = []
+                for n, r in enumerate(rings10_c):
+                    if self.__quinonize_azulene(r):
+                        found.insert(0, n)
+                for n in found:
+                    del rings10_c[n]
+
                 old, new = new, len(rings6_c) + len(rings5_c) + len(rings10_c)
             c = init - new
             if c:
@@ -218,6 +225,22 @@ class Aromatize:
             if atoms[ring[pos]]._atom in _pyrole_atoms:
                 r12.order, r23.order, r34.order, r45.order, r51.order = _pyrole_fix[key][m]
                 return True
+        return False
+
+    def __quinonize_azulene(self, ring):
+        adj = self._adj
+        r1, r2, r3, r4, r5, r6, r7, r8, r9, r0 = ring
+        r12 = adj[r1][r2]
+        r23 = adj[r2][r3]
+        r34 = adj[r3][r4]
+        r45 = adj[r4][r5]
+        r56 = adj[r5][r6]
+        r67 = adj[r6][r7]
+        r78 = adj[r7][r8]
+        r89 = adj[r8][r9]
+        r90 = adj[r9][r0]
+        r01 = adj[r0][r1]
+        r17 = adj[r1][r7]
         return False
 
     def __aromatize_benzene(self, ring):
