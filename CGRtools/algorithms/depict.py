@@ -18,11 +18,44 @@
 #
 from collections import defaultdict
 from math import atan2, sin, cos
+from numpy import array
 from ..cache import cached_method
 from ..periodictable import cpk
 
 
 class Depict:
+    @staticmethod
+    def fer(f, l, s):
+        x1, y1 = f
+        x2, y2 = l
+        x3, y3 = s
+        v1 = (x2 - x1, y2 - y1)
+        v2 = (x3 - x1, y3 - y1)
+        dot = v1[0] * v2[-1] - v1[-1] * v2[0]
+        if dot > 0:
+            return -1
+        else:
+            return 1
+
+    @staticmethod
+    def len_vector(s, e):
+        se = array(e) - array(s)
+        return (se[0] ** 2 + se[-1] ** 2) ** .5
+
+    @classmethod
+    def exe(cls, f, l, h, center):
+        _f_c = array(center) - array(f)
+        _f_l = array(l) - array(f)
+        _c_f = array(f) - array(center)
+        _l_f = array(f) - array(l)
+        cos_alpha1 = sum(_f_c * _f_l) / (cls.len_vector(f, center) * cls.len_vector(f, l))
+        cos_alpha2 = sum(_c_f * _l_f) / (cls.len_vector(center, f) * cls.len_vector(l, f))
+        sin_alpha1 = (1 - cos_alpha1 ** 2) ** .5
+        sin_alpha2 = (1 - cos_alpha2 ** 2) ** .5
+        x1 = h * cos_alpha1 / sin_alpha1
+        x2 = h * cos_alpha2 / sin_alpha2
+        return [[x1, h], [x2, h]]
+
     def depict(self, carbon=False, colors=None, font=.4, double_space=.04, triple_space=.07, aromatic_space=.08,
                dashes=(.2, .1), embedding=False):
         if colors is None:
