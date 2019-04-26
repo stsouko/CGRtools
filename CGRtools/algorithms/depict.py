@@ -23,16 +23,16 @@ from ..periodictable import cpk
 
 
 class Depict:
-    @staticmethod
-    def sign_of_the_angle_between_ab_ac_2d(a, b, c):
+    def sign_2d(self, a, b, c):
         """
-        :params a, b, c: coordinates x,y of atoms a, b, c
+        sing of the angle between ab and ac
+        :params a, b, c: numbers of atoms a, b, c
         :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
         """
-        x1, y1 = a
-        x2, y2 = b
-        x3, y3 = c
-        d = (x2-x1) * (y3-y1) - (y2-y1) * (x3-x1)
+        a = self.nodes(a)
+        b = self.nodes(b)
+        c = self.nodes(c)
+        d = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
         if d > 0:
             return -1
         elif d:
@@ -40,33 +40,30 @@ class Depict:
         else:
             return 0
 
-    @staticmethod
-    def distance_2d(a, b):
+    def distance_2d(self, a, b):
         """
-        :params a, b: coordinates x,y of atoms a, b
+        :params a, b: numbers of atoms a, b
         :return: distance between a, b
         """
-        x1, y1 = a
-        x2, y2 = b
-        return ((x2-x1)**2 + (y2-y1)**2)**.5
+        a = self.nodes(a)
+        b = self.nodes(b)
+        return ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** .5
 
-    def coordinates_for_dot(self, a, b, center, h):
+    def dot_coordinates(self, a, b, c, h):
         """
-        :params a, b: coordinates x,y of atoms a, b
-        :param center: cycle center coordinates x,y
+        for angle (a b c)
+        :params a, b, c: numbers of atoms a, b, c
         :param h: offset from bond to dotted line
-        :return: list of two points for dotted line
+        :return: point for dotted line
         """
-        x1, y1 = a
-        x2, y2 = b
-        x3, y3 = center
-        cos_alpha1 = sum([(x3-x1)*(x2-x1), (y3-y1)*(y2-y1)]) / (self.distance_2d(a, center) * self.distance_2d(a, b))
-        cos_alpha2 = sum([(x3-x2)*(x1-x2), (y3-y2)*(y1-y2)]) / (self.distance_2d(b, center) * self.distance_2d(b, a))
-        sin_alpha1 = (1 - cos_alpha1 ** 2) ** .5
-        sin_alpha2 = (1 - cos_alpha2 ** 2) ** .5
-        x_dot1 = h * cos_alpha1 / sin_alpha1
-        x_dot2 = x2 - h * cos_alpha2 / sin_alpha2
-        return [[x_dot1, h], [x_dot2, h]]
+        _a = self.nodes(a)
+        _b = self.nodes(b)
+        _c = self.nodes(c)
+        cos_alpha = sum([(c.x - _a.x) * (_b.x - _a.x), (c.y - _a.y) * (_b.y - _a.y)]) / \
+                    (self.distance_2d(a, c) * self.distance_2d(a, b))
+        sin_alpha = (1 - cos_alpha ** 2) ** .5
+        x_dot1 = h * cos_alpha / sin_alpha
+        return [x_dot1, h]
 
     def depict(self, carbon=False, colors=None, font=.4, double_space=.04, triple_space=.07, aromatic_space=.08,
                dashes=(.2, .1), embedding=False):
@@ -116,8 +113,8 @@ class Depict:
             width = max_x - min_x + 2.5 * font
             height = max_y - min_y + 2.5 * font
             svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-                       f'viewBox="{min_x - 1.25 * font:.2f} {-max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
-                       f'xmlns="http://www.w3.org/2000/svg" version="1.1">')
+            f'viewBox="{min_x - 1.25 * font:.2f} {-max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
+            f'xmlns="http://www.w3.org/2000/svg" version="1.1">')
             svg.append('</svg>')
         if embedding:
             return '\n'.join(svg), max_x, max_y
@@ -219,8 +216,8 @@ class DepictReaction:
         height = r_max_y + 2.5 * font
 
         svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-                   f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
-                   'xmlns="http://www.w3.org/2000/svg" version="1.1">')
+        f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
+        'xmlns="http://www.w3.org/2000/svg" version="1.1">')
         svg.append('</svg>')
         return '\n'.join(svg)
 
