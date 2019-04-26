@@ -49,7 +49,7 @@ class Depict:
         b = self.nodes(b)
         return ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** .5
 
-    def dot_coordinates(self, a, b, c, h):
+    def dot_coordinates_2d(self, a, b, c, h):
         """
         for angle (a b c)
         :params a, b, c: numbers of atoms a, b, c
