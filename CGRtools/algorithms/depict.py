@@ -59,11 +59,11 @@ class Depict:
         _a = self.nodes(a)
         _b = self.nodes(b)
         _c = self.nodes(c)
-        cos_alpha = sum([(c.x - _a.x) * (_b.x - _a.x), (c.y - _a.y) * (_b.y - _a.y)]) / \
+        cos_alpha = sum([(_c.x - _a.x) * (_b.x - _a.x), (_c.y - _a.y) * (_b.y - _a.y)]) / \
                     (self.distance_2d(a, c) * self.distance_2d(a, b))
         sin_alpha = (1 - cos_alpha ** 2) ** .5
-        x_dot1 = h * cos_alpha / sin_alpha
-        return [x_dot1, h]
+        x_dot = h * cos_alpha / sin_alpha
+        return [x_dot, h]
 
     def depict(self, carbon=False, colors=None, font=.4, double_space=.04, triple_space=.07, aromatic_space=.08,
                dashes=(.2, .1), embedding=False):
