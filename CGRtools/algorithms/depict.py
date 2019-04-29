@@ -29,9 +29,9 @@ class Depict:
         :params a, b, c: numbers of atoms a, b, c
         :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
         """
-        a = self.nodes(a)
-        b = self.nodes(b)
-        c = self.nodes(c)
+        a = self.node[a]
+        b = self.node[b]
+        c = self.node[c]
         d = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
         if d > 0:
             return -1
@@ -45,8 +45,8 @@ class Depict:
         :params a, b: numbers of atoms a, b
         :return: distance between a, b
         """
-        a = self.nodes(a)
-        b = self.nodes(b)
+        a = self.node[a]
+        b = self.node[b]
         return ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** .5
 
     def dot_coordinates_2d(self, a, b, c, h):
@@ -56,9 +56,9 @@ class Depict:
         :param h: offset from bond to dotted line
         :return: point for dotted line
         """
-        _a = self.nodes(a)
-        _b = self.nodes(b)
-        _c = self.nodes(c)
+        _a = self.node[a]
+        _b = self.node[b]
+        _c = self.node[c]
         cos_alpha = sum([(_c.x - _a.x) * (_b.x - _a.x), (_c.y - _a.y) * (_b.y - _a.y)]) / \
                     (self.distance_2d(a, c) * self.distance_2d(a, b))
         sin_alpha = (1 - cos_alpha ** 2) ** .5
