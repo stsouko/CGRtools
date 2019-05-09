@@ -27,8 +27,50 @@ class Aromatize:
     @cached_property
     def aromatic_rings(self) -> List[List[int]]:
         adj = self._adj
-        return [ring for ring in self.sssr if len(x) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
+        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
                 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
+
+    def dearomatize(self):
+        adj = defaultdict(set)  # aromatic skeleton
+        for n, m_bond in self._adj.items():
+            for m, bond in m_bond.items():
+                if bond.order == 4:
+                    adj[n].add(m)
+
+    def dummy_aromatize(self):
+        """
+        convert structure to aromatic form (dummy algorithm. don't detect quinones)
+
+        :return: number of processed rings
+        """
+        adj = self._adj
+        atom = self._node
+        unsaturated = {n for n, m_bond in self._adj.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
+
+        total = 0
+        for ring in self.sssr:
+            lr = len(ring)
+            if lr in (5, 6, 7) and unsaturated.issuperset(ring):
+                for n, m in zip(ring, ring[1:]):
+                    b = adj[n][m]
+                    if b.order != 4:
+                        b.order = 4
+                b = adj[ring[0]][ring[-1]]
+                if b.order != 4:
+                    b.order = 4
+                total += 1
+            elif lr == 5:
+                sr = set(ring)
+                if len(unsaturated & sr) == 4 and atom[(sr - unsaturated).pop()]._atom in _pyrole_atoms:
+                    for n, m in zip(ring, ring[1:]):
+                        b = adj[n][m]
+                        if b.order != 4:
+                            b.order = 4
+                    b = adj[ring[0]][ring[-1]]
+                    if b.order != 4:
+                        b.order = 4
+                    total += 1
+        return total
 
     def aromatize(self) -> int:
         """
