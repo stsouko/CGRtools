@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,18 +22,21 @@ class EmptyMolecule(ValueError):
     """
     bad files parsing
     """
-    pass
 
 
 class MappingError(ValueError):
     """
     bad files parsing
     """
-    pass
 
 
 class InvalidFileType(TypeError):
     """
     bad files parsing
     """
-    pass
+
+
+class InvalidAromaticRing(ValueError):
+    """
+    aromatic ring has impossible kekule structure
+    """

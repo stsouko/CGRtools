@@ -20,6 +20,7 @@ from collections import defaultdict
 from itertools import repeat
 from typing import List
 from ..cache import cached_property
+from ..exceptions import InvalidAromaticRing
 from ..periodictable import C
 
 
@@ -45,9 +46,9 @@ class Aromatize:
         """
         adj = self._adj
         atom = self._node
-        unsaturated = {n for n, m_bond in self._adj.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
-
         total = 0
+        unsaturated = {n for n, m_bond in adj.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
+
         for ring in self.sssr:
             lr = len(ring)
             if lr in (5, 6, 7) and unsaturated.issuperset(ring):
@@ -70,9 +71,93 @@ class Aromatize:
                     if b.order != 4:
                         b.order = 4
                     total += 1
+        if total:
+            self.flush_cache()
         return total
 
     def aromatize(self) -> int:
+        """
+        convert structure to aromatic form
+
+        :return: number of processed rings
+        """
+        self.dummy_aromatize()
+        adj = self._adj
+        patch = set()
+        total = 0
+        double_bonded = {n for n, m_bond in adj.items() if any(bond.order == 2 for bond in m_bond.values())}
+
+        quinones = []
+        condensed_rings = defaultdict(lambda: defaultdict(list))
+        for ring in self.aromatic_rings:
+            ring = tuple(ring)
+            if not double_bonded.isdisjoint(ring):  # search quinones
+                quinones.append(ring)
+
+            for n, m in zip(ring, ring[1:]):  # condensed rings graph
+                condensed_rings[n][m].append(ring)
+                condensed_rings[m][n].append(ring)
+            n, *_, m = ring
+            condensed_rings[n][m].append(ring)
+            condensed_rings[m][n].append(ring)
+
+        while quinones:
+            total += 1
+            ring = quinones.pop()
+            for n, m in zip(ring, ring[1:]):  # remove from condensed rings graph
+                condensed_rings[n][m].remove(ring)
+                condensed_rings[m][n].remove(ring)
+            n, *_, m = ring
+            condensed_rings[n][m].remove(ring)
+            condensed_rings[m][n].remove(ring)
+
+            start = next(n for n, m in enumerate(ring) if m in double_bonded)
+            if start:  # reorder double bonded to starting position
+                ordered_ring = ring[start:] + ring[:start]
+            else:
+                ordered_ring = ring
+
+            bond = 1
+            n = ordered_ring[0]
+            for m in ordered_ring[1:]:
+                if bond == 1:
+                    if m not in double_bonded:
+                        bond = 2
+                    if not condensed_rings[n][m]:
+                        patch.add((n, m, 1))
+                    elif n in double_bonded:  # found new quinone ring (Y)
+                        q = condensed_rings[n][m][0]
+                        if q not in quinones:
+                            quinones.insert(0, q)  # low priority
+                else:
+                    if m in double_bonded:
+                        raise InvalidAromaticRing(ring)
+                    bond = 1
+                    if not condensed_rings[n][m]:
+                        patch.add((n, m, 2))
+                        double_bonded.add(n)
+                        double_bonded.add(m)
+                        if condensed_rings[n][p]:
+                            q = condensed_rings[n][p][0]
+                            if q in quinones:  # up priority
+                                quinones.remove(q)
+                                quinones.append(q)
+                            else:
+                                quinones.insert(0, q)
+                p, n = n, m
+            else:
+                m = ordered_ring[0]
+                if bond != 1 and not condensed_rings[n][p]:
+                    raise InvalidAromaticRing(ring)
+                patch.add((n, m, 1))
+
+        if patch:
+            for n, m, b in patch:
+                adj[n][m].order = b
+            self.flush_cache()
+        return total
+
+    def aromatize_(self) -> int:
         """
         convert structure to aromatic form
 
@@ -162,12 +247,11 @@ class Aromatize:
         rings5 = {}
         rings7 = {}
         rings6 = []
-        rings10 = []
         for ring in self.sssr:
             lr = len(ring)
             if lr == 6:
                 rings6.append(ring)
-            if lr == 5:
+            elif lr == 5:
                 rings5[frozenset(ring)] = ring
             elif lr == 7:
                 rings7[frozenset(ring)] = ring
@@ -182,13 +266,19 @@ class Aromatize:
         #  \   /
         #   3-4
         #
+        possible_rings10 = defaultdict(list)
         for r7_k, r7 in rings7.items():
-            for r5 in rings5:
-                c = r5 & r7_k
+            for r5_k, r5 in rings5.items():
+                c = r5_k & r7_k
                 if len(c) == 2:
-                    break  # found r5r7
-            else:
-                continue  # not found
+                    possible_rings10[r7_k].append((c, r7, r5))  # found r5r7
+
+        rings10 = []
+        ambiguous = []
+        for r7_k, cr75_list in possible_rings10.items():
+            if len(cr75_list) == 1:
+                rings10.append(cr75_list[0])
+
             n, m = c
             # rearrange ring to n(6)----m(5)
             i = r7.index(n)
