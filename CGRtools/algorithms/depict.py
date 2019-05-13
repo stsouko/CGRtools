@@ -22,71 +22,74 @@ from ..cache import cached_method
 from ..periodictable import cpk
 
 
+def sign_2d(a_x, a_y, b_x, b_y, c_x, c_y):
+    """
+    sing of the angle between ab and ac
+    :params a_x, a_y, b_x, b_y, c_x, c_y: coordinates of atoms a, b, c
+    :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
+    """
+    d = (b_x - a_x) * (c_y - a_y) - (b_y - a_y) * (c_x - a_x)
+    if d > 0:
+        return -1
+    elif d:
+        return 1
+    else:
+        return 0
+
+
+def distance_2d(a_x, a_y, b_x, b_y):
+    """
+    :params a_x, a_y, b_x, b_y: coordinates of atoms a, b
+    :return: distance between a, b
+    """
+    return ((b_x - a_x) ** 2 + (b_y - a_y) ** 2) ** .5
+
+
+def dot_coordinate_2d(a_x, a_y, b_x, b_y, c_x, c_y, h):
+    """
+    for angle (a b c)
+    :params a_x, a_y, b_x, b_y, c_x, c_y: coordinates of atoms a, b and center of aromatic ring
+    :param h: offset from bond to dotted line
+    :return: x for dotted line
+    """
+
+    cos_alpha = sum([(c_x - a_x) * (b_x - a_x), (c_y - a_y) * (b_y - a_y)]) / \
+                (distance_2d(a_x, a_y, c_x, c_y) * distance_2d(a_x, a_y, b_x, b_y))
+    sin_alpha = (1 - cos_alpha ** 2) ** .5
+    x_dot = h * cos_alpha / sin_alpha
+    return x_dot
+
+
 class Depict:
-    def sign_2d(self, a, b, c):
-        """
-        sing of the angle between ab and ac
-        :params a, b, c: numbers of atoms a, b, c
-        :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
-        """
-        a = self._node[a]
-        b = self._node[b]
-        c = self._node[c]
-        d = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-        if d > 0:
-            return -1
-        elif d:
-            return 1
-        else:
-            return 0
-
-    def distance_2d(self, a, b):
-        """
-        :params a, b: numbers of atoms a, b
-        :return: distance between a, b
-        """
-        a = self._node[a]
-        b = self._node[b]
-        return ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** .5
-
-    def dot_coordinates_2d(self, a, b, c, h):
-        """
-        for angle (a b c)
-        :params a, b, c: numbers of atoms a, b, c
-        :param h: offset from bond to dotted line
-        :return: x for dotted line
-        """
-        _a = self._node[a]
-        _b = self._node[b]
-        _c = self._node[c]
-        cos_alpha = sum([(_c.x - _a.x) * (_b.x - _a.x), (_c.y - _a.y) * (_b.y - _a.y)]) / \
-                    (self.distance_2d(a, c) * self.distance_2d(a, b))
-        sin_alpha = (1 - cos_alpha ** 2) ** .5
-        x_dot = h * cos_alpha / sin_alpha
-        return x_dot
-
     def __bond(self):
         svg = []
         for n, m, bond in self.bonds():
-            na, ma = self._node[n], self._node[m]
-            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
-            svg.extend(self._render_bond(bond, nx, ny, mx, my))
+            nodes = self._node
+            na, ma = nodes[n], nodes[m]
+            svg.extend(self._render_bond(bond, na.x, na.y, ma.x, ma.y))
         return svg
 
     def _aromatic_bond(self):
         bonds = defaultdict(set)
         for ring in self.aromatic_rings:
-            self = self.copy()
-            self.add_node('center')
-            self.node['center'].x = sum(self._node[x].x for x in ring) / len(ring)
-            self.node['center'].y = sum(self._node[y].y for y in ring) / len(ring)
+            center_x = sum(self._node[x].x for x in ring) / len(ring)
+            center_y = sum(self._node[y].y for y in ring) / len(ring)
+            nodes = self._node
             a, b, c = ring[:3]
-            sign = self.sign_2d(a, b, c)
+            a, b, c = nodes[a], nodes[b], nodes[c]
+            sign = self.sign_2d(a.x, a.y, b.x, b.y, c.x, c.y)
             for n, m in zip(ring, ring[1:]):
-                pass
+                if m not in bonds[n]:
+                    bonds[n].add(m)
+                    bonds[m].add(n)
+                    n, m = nodes[n], nodes[m]
+                    x_dot_1 = dot_coordinate_2d(n.x, n.y, m.x, m.y, center_x, center_y, self.aromatic_space)
+                    x_dot_1, y_dot_1 = self._rotate_vector(x_dot_1, self.aromatic_space, n.x, n.y, m.x, m.y)
+                    x_dot_2 = dot_coordinate_2d(m.x, m.y, n.x, n.y, center_x, center_y, self.aromatic_space)
+                    x_dot_2, y_dot_2 = self._rotate_vector(x_dot_2, self.aromatic_space, m.x, m.y, n.x, n.y)
 
-    def depict(self, carbon=False, colors=None, font=.4, embedding=False):
-        if colors is None:
+    def depict(self, embedding=False):
+        if self.colors is None:
             colors = cpk
         min_x = min(x.x for x in self._node.values())
         max_x = max(x.x for x in self._node.values())
@@ -96,21 +99,21 @@ class Depict:
         svg = ['  <g fill="none" stroke="black" stroke-width=".03">']
         svg.extend(self.__bond())
         svg.append('  </g>')
-        sup_font = .75 * font
-        up_font = -.5 * font
+        sup_font = .75 * self.font
+        up_font = -.5 * self.font
         for n, atom in self.atoms():
-            tmp = self._render_atom(atom, colors[atom.element], font, sup_font, up_font,
-                                               carbon or not bool(self._adj[n]))
+            tmp = self._render_atom(atom, colors[atom.element], self.font, sup_font, up_font,
+                                    self.carbon or not bool(self._adj[n]))
             svg.extend(tmp)
         if svg:
             svg.insert(0, '  <g font-family="sans-serif">')
             svg.append('  </g>')
 
         if not embedding:
-            width = max_x - min_x + 2.5 * font
-            height = max_y - min_y + 2.5 * font
+            width = max_x - min_x + 2.5 * self.font
+            height = max_y - min_y + 2.5 * self.font
             svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-            f'viewBox="{min_x - 1.25 * font:.2f} {-max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
+            f'viewBox="{min_x - 1.25 * self.font:.2f} {-max_y - 1.25 * self.font:.2f} {width:.2f} {height:.2f}" '
             f'xmlns="http://www.w3.org/2000/svg" version="1.1">')
             svg.append('</svg>')
         if embedding:
@@ -131,6 +134,9 @@ class Depict:
         sin_rad = sin(angle)
         return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
 
+    carbon = False
+    colors = None
+    font = .4
     double_space = .04
     triple_space = .07
     aromatic_space = .08
