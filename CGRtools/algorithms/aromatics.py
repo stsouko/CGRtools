@@ -18,10 +18,18 @@
 #
 from collections import defaultdict
 from itertools import repeat
+from typing import List
+from ..cache import cached_property
 from ..periodictable import C
 
 
 class Aromatize:
+    @cached_property
+    def aromatic_rings(self) -> List[List[int]]:
+        adj = self._adj
+        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
+                and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
+
     def aromatize(self):
         """
         convert structure to aromatic form
