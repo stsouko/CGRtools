@@ -65,30 +65,25 @@ class Depict:
         x_dot = h * cos_alpha / sin_alpha
         return x_dot
 
-    def __bond(self, bonds, svg, radius):
+    def __bond(self):
+        svg = []
         for n, m, bond in self.bonds():
-            if m not in bonds[n]:
-                bonds[n].add(m)
-                bonds[m].add(n)
-                na, ma = self._node[n], self._node[m]
-                nx, ny, mx, my = na.x, na.y, ma.x, ma.y
+            na, ma = self._node[n], self._node[m]
+            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
+            svg.extend(self._render_bond(bond, nx, ny, mx, my))
+        return svg
 
-                # indent bond from atom
-                if radius[n]:
-                    dx, dy = self._rotate_vector(radius[n], 0, mx, my, nx, ny)
-                    nx += dx
-                    ny -= dy
-                    rn = True
-                else:
-                    rn = False
-                if radius[m]:
-                    dx, dy = self._rotate_vector(radius[m], 0, mx, my, nx, ny)
-                    mx -= dx
-                    my += dy
-                    rm = True
-                else:
-                    rm = False
-                svg.extend(self._render_bond(bond, nx, ny, mx, my, rn, rm))
+    def _aromatic_bond(self):
+        bonds = defaultdict(set)
+        for ring in self.aromatic_rings:
+            self = self.copy()
+            self.add_node('center')
+            self.node['center'].x = sum(self._node[x].x for x in ring) / len(ring)
+            self.node['center'].y = sum(self._node[y].y for y in ring) / len(ring)
+            a, b, c = ring[:3]
+            sign = self.sign_2d(a, b, c)
+            for n, m in zip(ring, ring[1:]):
+                pass
 
     def depict(self, carbon=False, colors=None, font=.4, embedding=False):
         if colors is None:
@@ -98,24 +93,19 @@ class Depict:
         min_y = min(x.y for x in self._node.values())
         max_y = max(x.y for x in self._node.values())
 
-        svg = []
-        radius = {}
+        svg = ['  <g fill="none" stroke="black" stroke-width=".03">']
+        svg.extend(self.__bond())
+        svg.append('  </g>')
         sup_font = .75 * font
         up_font = -.5 * font
         for n, atom in self.atoms():
-            tmp, radius[n] = self._render_atom(atom, colors[atom.element], font, sup_font, up_font,
+            tmp = self._render_atom(atom, colors[atom.element], font, sup_font, up_font,
                                                carbon or not bool(self._adj[n]))
             svg.extend(tmp)
         if svg:
             svg.insert(0, '  <g font-family="sans-serif">')
             svg.append('  </g>')
 
-        svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
-
-        bonds = defaultdict(set)
-        self.__bond(bonds, svg, radius)
-
-        svg.append('  </g>')
         if not embedding:
             width = max_x - min_x + 2.5 * font
             height = max_y - min_y + 2.5 * font
@@ -155,9 +145,10 @@ class DepictMolecule(Depict):
             x_shift = -shifts[atom.element] * font
             y_shift = .35 * font
             radius = -1.5 * x_shift
-            svg.append(f'    <g fill="{color}">')
-            svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" font-size="{font:.2f}">'
-                       f'{atom.element}</text>')
+            svg.append(f'   <g fill="{color}">')
+            svg.append(f'       <circle cx="{"x"}" cy="{"y"}" r="{"radius"}" fill="white"/>'
+                       f'       <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" font-size="{font:.2f}">'
+                       f'   {atom.element}</text>')
             if atom.charge:
                 svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
                            f'font-size="{sup_font:.2f}">{charge_str[atom.charge]}</text>')
@@ -170,9 +161,9 @@ class DepictMolecule(Depict):
             svg.append('    </g>')
         else:
             radius = 0
-        return svg, radius
+        return svg
 
-    def _render_bond(self, bond, nx, ny, mx, my, rn, rm):
+    def _render_bond(self, bond, nx, ny, mx, my):
         if bond.order in (1, 4):
             return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />']
         elif bond.order == 2:
