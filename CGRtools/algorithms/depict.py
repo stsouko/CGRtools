@@ -23,16 +23,15 @@ from ..periodictable import cpk
 
 
 class Depict:
-    @staticmethod
-    def sign_2d(graph, a, b, c):
+    def sign_2d(self, a, b, c):
         """
         sing of the angle between ab and ac
         :params a, b, c: numbers of atoms a, b, c
         :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
         """
-        a = graph.node[a]
-        b = graph.node[b]
-        c = graph.node[c]
+        a = self._node[a]
+        b = self._node[b]
+        c = self._node[c]
         d = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
         if d > 0:
             return -1
@@ -41,63 +40,54 @@ class Depict:
         else:
             return 0
 
-    @staticmethod
-    def distance_2d(graph, a, b):
+    def distance_2d(self, a, b):
         """
         :params a, b: numbers of atoms a, b
         :return: distance between a, b
         """
-        a = graph.node[a]
-        b = graph.node[b]
+        a = self._node[a]
+        b = self._node[b]
         return ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** .5
 
-    @staticmethod
-    def dot_coordinates_2d(graph, a, b, c, h):
+    def dot_coordinates_2d(self, a, b, c, h):
         """
         for angle (a b c)
         :params a, b, c: numbers of atoms a, b, c
         :param h: offset from bond to dotted line
         :return: x for dotted line
         """
-        _a = graph.node[a]
-        _b = graph.node[b]
-        _c = graph.node[c]
+        _a = self._node[a]
+        _b = self._node[b]
+        _c = self._node[c]
         cos_alpha = sum([(_c.x - _a.x) * (_b.x - _a.x), (_c.y - _a.y) * (_b.y - _a.y)]) / \
-                    (graph.distance_2d(graph, a, c) * graph.distance_2d(graph, a, b))
+                    (self.distance_2d(a, c) * self.distance_2d(a, b))
         sin_alpha = (1 - cos_alpha ** 2) ** .5
         x_dot = h * cos_alpha / sin_alpha
         return x_dot
 
-    def __bond(self, data, graph, bonds, svg, radius, aromatic=False, double_space=.04, triple_space=.07, aromatic_space=.08,
-               dashes=(.2, .1), sign=1):
-        for n, m, bond in data:
-            if m not in bonds[n]:
-                bonds[n].add(m)
-                bonds[m].add(n)
-                na, ma = graph.node[n], graph.node[m]
-                nx, ny, mx, my = na.x, na.y, ma.x, ma.y
-                delta = None
-                if aromatic:
-                    delta = [self.dot_coordinates_2d(graph, 'center', n, m, aromatic_space),
-                             self.dot_coordinates_2d(graph, 'center', m, n, aromatic_space)]
+    def __bond(self, n, m, bond, bonds, svg, radius):
+        if m not in bonds[n]:
+            bonds[n].add(m)
+            bonds[m].add(n)
+            na, ma = self._node[n], self._node[m]
+            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
 
-                # indent bond from atom
-                if radius[n]:
-                    dx, dy = graph._rotate_vector(radius[n], 0, mx, my, nx, ny)
-                    nx += dx
-                    ny -= dy
-                    rn = True
-                else:
-                    rn = False
-                if radius[m]:
-                    dx, dy = graph._rotate_vector(radius[m], 0, mx, my, nx, ny)
-                    mx -= dx
-                    my += dy
-                    rm = True
-                else:
-                    rm = False
-                svg.extend(graph._render_bond(bond, nx, ny, mx, my, rn, rm,
-                                              double_space, triple_space, -aromatic_space, dashes, delta))
+            # indent bond from atom
+            if radius[n]:
+                dx, dy = self._rotate_vector(radius[n], 0, mx, my, nx, ny)
+                nx += dx
+                ny -= dy
+                rn = True
+            else:
+                rn = False
+            if radius[m]:
+                dx, dy = self._rotate_vector(radius[m], 0, mx, my, nx, ny)
+                mx -= dx
+                my += dy
+                rm = True
+            else:
+                rm = False
+            svg.extend(self._render_bond(bond, nx, ny, mx, my, rn, rm))
 
     def depict(self, carbon=False, colors=None, font=.4, embedding=False):
         if colors is None:
@@ -122,20 +112,22 @@ class Depict:
         svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
 
         bonds = defaultdict(set)
-        for ring in self.sssr:
-            sub = self.subgraph(ring)
-            if all(x[2].order == 4 for x in sub.bonds()):
-                numbers = [x[0] for x in sub.atoms()]
-                sub = sub.copy()
-                sub.add_node('center')
-                sub.node['center'].x = sum(x[-1].x for x in sub.atoms()) / len(numbers)
-                sub.node['center'].y = sum(x[-1].y for x in sub.atoms()) / len(numbers)
-                data = [(ring[-1], ring[0], sub.bond(ring[-1], ring[0]))]
-                for n, m in zip(ring, ring[1:]):
-                    data.append((n, m, sub.bond(n, m)))
-                self.__bond(data, sub, bonds, svg, radius, aromatic=True,
-                            sign=self.sign_2d(sub, numbers[0], numbers[1], numbers[2]))
-        self.__bond(self.bonds(), self, bonds, svg, radius)
+        for n, m, bond in self.bonds():
+            self.__bond(n, m, bond, bonds, svg, radius)
+
+        # for ring in self.sssr:
+        #     sub = self.subgraph(ring)
+        #     if all(x[2].order == 4 for x in sub.bonds()):
+        #         numbers = [x[0] for x in sub.atoms()]
+        #         sub = sub.copy()
+        #         sub.add_node('center')
+        #         sub.node['center'].x = sum(x[-1].x for x in sub.atoms()) / len(numbers)
+        #         sub.node['center'].y = sum(x[-1].y for x in sub.atoms()) / len(numbers)
+        #         data = [(ring[-1], ring[0], sub.bond(ring[-1], ring[0]))]
+        #         for n, m in zip(ring, ring[1:]):
+        #             data.append((n, m, sub.bond(n, m)))
+        #         self.__bond(data, bonds, svg, radius)
+        # self.__bond(self.bonds(), bonds, svg, radius)
         svg.append('  </g>')
         if not embedding:
             width = max_x - min_x + 2.5 * font
@@ -161,6 +153,11 @@ class Depict:
         cos_rad = cos(angle)
         sin_rad = sin(angle)
         return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
+
+    double_space = .04
+    triple_space = .07
+    aromatic_space = .08
+    dashes = (.2, .1)
 
 
 class DepictMolecule(Depict):
@@ -188,25 +185,25 @@ class DepictMolecule(Depict):
             radius = 0
         return svg, radius
 
-    def _render_bond(self, bond, nx, ny, mx, my, rn, rm, double_space, triple_space, aromatic_space, dashes, delta):
-        if bond.order == 1:
+    def _render_bond(self, bond, nx, ny, mx, my, rn, rm):
+        if bond.order == 1 or bond.order == 4:
             return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />']
         elif bond.order == 2:
-            dx, dy = self._rotate_vector(0, double_space, mx, my, nx, ny)
+            dx, dy = self._rotate_vector(0, self.double_space, mx, my, nx, ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
         elif bond.order == 3:
-            dx, dy = self._rotate_vector(0, triple_space, mx, my, nx, ny)
+            dx, dy = self._rotate_vector(0, self.triple_space, mx, my, nx, ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
-        elif bond.order == 4:
-            dx, dy = self._rotate_vector(0, aromatic_space, mx, my, nx, ny)
-            return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
-                    f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" '
-                    f'stroke-dasharray="{dashes[0]:.2f} {dashes[1]:.2f}" />']
+        # elif bond.order == 4:
+        #     dx, dy = self._rotate_vector(0, self.aromatic_space, mx, my, nx, ny)
+        #     return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
+        #             f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" '
+        #             f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />']
         return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                f'stroke-dasharray="{dashes[0]:.2f} {dashes[1]:.2f}" />']
+                f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />']
 
     def __rings(self):
         rings = defaultdict(list)
