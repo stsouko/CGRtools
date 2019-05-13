@@ -65,29 +65,30 @@ class Depict:
         x_dot = h * cos_alpha / sin_alpha
         return x_dot
 
-    def __bond(self, n, m, bond, bonds, svg, radius):
-        if m not in bonds[n]:
-            bonds[n].add(m)
-            bonds[m].add(n)
-            na, ma = self._node[n], self._node[m]
-            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
+    def __bond(self, bonds, svg, radius):
+        for n, m, bond in self.bonds():
+            if m not in bonds[n]:
+                bonds[n].add(m)
+                bonds[m].add(n)
+                na, ma = self._node[n], self._node[m]
+                nx, ny, mx, my = na.x, na.y, ma.x, ma.y
 
-            # indent bond from atom
-            if radius[n]:
-                dx, dy = self._rotate_vector(radius[n], 0, mx, my, nx, ny)
-                nx += dx
-                ny -= dy
-                rn = True
-            else:
-                rn = False
-            if radius[m]:
-                dx, dy = self._rotate_vector(radius[m], 0, mx, my, nx, ny)
-                mx -= dx
-                my += dy
-                rm = True
-            else:
-                rm = False
-            svg.extend(self._render_bond(bond, nx, ny, mx, my, rn, rm))
+                # indent bond from atom
+                if radius[n]:
+                    dx, dy = self._rotate_vector(radius[n], 0, mx, my, nx, ny)
+                    nx += dx
+                    ny -= dy
+                    rn = True
+                else:
+                    rn = False
+                if radius[m]:
+                    dx, dy = self._rotate_vector(radius[m], 0, mx, my, nx, ny)
+                    mx -= dx
+                    my += dy
+                    rm = True
+                else:
+                    rm = False
+                svg.extend(self._render_bond(bond, nx, ny, mx, my, rn, rm))
 
     def depict(self, carbon=False, colors=None, font=.4, embedding=False):
         if colors is None:
@@ -112,22 +113,8 @@ class Depict:
         svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
 
         bonds = defaultdict(set)
-        for n, m, bond in self.bonds():
-            self.__bond(n, m, bond, bonds, svg, radius)
+        self.__bond(bonds, svg, radius)
 
-        # for ring in self.sssr:
-        #     sub = self.subgraph(ring)
-        #     if all(x[2].order == 4 for x in sub.bonds()):
-        #         numbers = [x[0] for x in sub.atoms()]
-        #         sub = sub.copy()
-        #         sub.add_node('center')
-        #         sub.node['center'].x = sum(x[-1].x for x in sub.atoms()) / len(numbers)
-        #         sub.node['center'].y = sum(x[-1].y for x in sub.atoms()) / len(numbers)
-        #         data = [(ring[-1], ring[0], sub.bond(ring[-1], ring[0]))]
-        #         for n, m in zip(ring, ring[1:]):
-        #             data.append((n, m, sub.bond(n, m)))
-        #         self.__bond(data, bonds, svg, radius)
-        # self.__bond(self.bonds(), bonds, svg, radius)
         svg.append('  </g>')
         if not embedding:
             width = max_x - min_x + 2.5 * font
@@ -186,7 +173,7 @@ class DepictMolecule(Depict):
         return svg, radius
 
     def _render_bond(self, bond, nx, ny, mx, my, rn, rm):
-        if bond.order == 1 or bond.order == 4:
+        if bond.order in (1, 4):
             return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />']
         elif bond.order == 2:
             dx, dy = self._rotate_vector(0, self.double_space, mx, my, nx, ny)
@@ -197,11 +184,6 @@ class DepictMolecule(Depict):
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
-        # elif bond.order == 4:
-        #     dx, dy = self._rotate_vector(0, self.aromatic_space, mx, my, nx, ny)
-        #     return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
-        #             f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" '
-        #             f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />']
         return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                 f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />']
 
