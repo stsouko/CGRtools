@@ -17,47 +17,19 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from math import atan2, sin, cos
+from math import atan2, sin, cos, hypot
 from ..cache import cached_method
 from ..periodictable import cpk
 
 
-def sign_2d(a_x, a_y, b_x, b_y, c_x, c_y):
+def rotate_vector(x, y, x2, y2, x1, y1):
     """
-    sing of the angle between ab and ac
-    :params a_x, a_y, b_x, b_y, c_x, c_y: coordinates of atoms a, b, c
-    :return: sign of angle, if negative - clockwise, elif positive - counterclockwise
+    rotate x,y vector over x2-x1, y2-y1 angle
     """
-    d = (b_x - a_x) * (c_y - a_y) - (b_y - a_y) * (c_x - a_x)
-    if d > 0:
-        return -1
-    elif d:
-        return 1
-    else:
-        return 0
-
-
-def distance_2d(a_x, a_y, b_x, b_y):
-    """
-    :params a_x, a_y, b_x, b_y: coordinates of atoms a, b
-    :return: distance between a, b
-    """
-    return ((b_x - a_x) ** 2 + (b_y - a_y) ** 2) ** .5
-
-
-def dot_coordinate_2d(a_x, a_y, b_x, b_y, c_x, c_y, h):
-    """
-    for angle (a b c)
-    :params a_x, a_y, b_x, b_y, c_x, c_y: coordinates of atoms a, b and center of aromatic ring
-    :param h: offset from bond to dotted line
-    :return: x for dotted line
-    """
-
-    cos_alpha = sum([(c_x - a_x) * (b_x - a_x), (c_y - a_y) * (b_y - a_y)]) / \
-                (distance_2d(a_x, a_y, c_x, c_y) * distance_2d(a_x, a_y, b_x, b_y))
-    sin_alpha = (1 - cos_alpha ** 2) ** .5
-    x_dot = h * cos_alpha / sin_alpha
-    return x_dot
+    angle = atan2(y2 - y1, x2 - x1)
+    cos_rad = cos(angle)
+    sin_rad = sin(angle)
+    return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
 
 
 class Depict:
@@ -70,23 +42,65 @@ class Depict:
         return svg
 
     def _aromatic_bond(self):
-        bonds = defaultdict(set)
+        svg = []
+        nodes = self._node
         for ring in self.aromatic_rings:
-            center_x = sum(self._node[x].x for x in ring) / len(ring)
-            center_y = sum(self._node[y].y for y in ring) / len(ring)
-            nodes = self._node
-            a, b, c = ring[:3]
-            a, b, c = nodes[a], nodes[b], nodes[c]
-            sign = self.sign_2d(a.x, a.y, b.x, b.y, c.x, c.y)
+            c_x = sum(nodes[x].x for x in ring) / len(ring)
+            c_y = sum(nodes[y].y for y in ring) / len(ring)
+
             for n, m in zip(ring, ring[1:]):
-                if m not in bonds[n]:
-                    bonds[n].add(m)
-                    bonds[m].add(n)
-                    n, m = nodes[n], nodes[m]
-                    x_dot_1 = dot_coordinate_2d(n.x, n.y, m.x, m.y, center_x, center_y, self.aromatic_space)
-                    x_dot_1, y_dot_1 = self._rotate_vector(x_dot_1, self.aromatic_space, n.x, n.y, m.x, m.y)
-                    x_dot_2 = dot_coordinate_2d(m.x, m.y, n.x, n.y, center_x, center_y, self.aromatic_space)
-                    x_dot_2, y_dot_2 = self._rotate_vector(x_dot_2, self.aromatic_space, m.x, m.y, n.x, n.y)
+                n, m = nodes[n], nodes[m]
+                # n aligned xy
+                mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
+
+                # nm reoriented xy
+                mr_x, mr_y = hypot(mn_x, mn_y), 0
+                cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y, 0, 0)
+
+                if self.aromatic_space / cr_y < .65:
+                    if cr_y > 0:
+                        ar_y = br_y = self.aromatic_space
+                    else:
+                        ar_y = br_y = -self.aromatic_space
+
+                    ar_x = self.aromatic_space * cr_x / abs(cr_y)
+                    br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
+
+                    # backward reorienting
+                    an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y, 0, 0)
+                    bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y, 0, 0)
+                    a_x, a_y = an_x + n.x, an_y + n.y
+                    b_x, b_y = bn_x + n.x, bn_y + n.y
+
+                    svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
+                               f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
+
+            n, m = nodes[ring[-1]], nodes[ring[0]]
+            # n aligned xy
+            mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
+
+            # nm reoriented xy
+            mr_x, mr_y = hypot(mn_x, mn_y), 0
+            cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y, 0, 0)
+
+            if self.aromatic_space / cr_y < .65:
+                if cr_y > 0:
+                    ar_y = br_y = self.aromatic_space
+                else:
+                    ar_y = br_y = -self.aromatic_space
+
+                ar_x = self.aromatic_space * cr_x / abs(cr_y)
+                br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
+
+                # backward reorienting
+                an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y, 0, 0)
+                bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y, 0, 0)
+                a_x, a_y = an_x + n.x, an_y + n.y
+                b_x, b_y = bn_x + n.x, bn_y + n.y
+
+                svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
+                           f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
+        return svg
 
     def depict(self, embedding=False):
         if self.colors is None:
@@ -98,6 +112,7 @@ class Depict:
 
         svg = ['  <g fill="none" stroke="black" stroke-width=".03">']
         svg.extend(self.__bond())
+        svg.extend(self._aromatic_bond())
         svg.append('  </g>')
         sup_font = .75 * self.font
         up_font = -.5 * self.font
@@ -124,16 +139,6 @@ class Depict:
     def _repr_svg_(self):
         return self.depict()
 
-    @staticmethod
-    def _rotate_vector(x, y, x2, y2, x1, y1):
-        """
-        rotate x,y vector over x2-x1, y2-y1 angle
-        """
-        angle = atan2(y2 - y1, x2 - x1)
-        cos_rad = cos(angle)
-        sin_rad = sin(angle)
-        return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
-
     carbon = False
     colors = None
     font = .4
@@ -152,7 +157,7 @@ class DepictMolecule(Depict):
             y_shift = .35 * font
             radius = -1.5 * x_shift
             svg.append(f'   <g fill="{color}">')
-            svg.append(f'       <circle cx="{"x"}" cy="{"y"}" r="{"radius"}" fill="white"/>'
+            svg.append(f'       <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="white"/>'
                        f'       <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" font-size="{font:.2f}">'
                        f'   {atom.element}</text>')
             if atom.charge:
@@ -165,19 +170,17 @@ class DepictMolecule(Depict):
                 svg.append(f'      <text x="{atom.x - font:.2f}" y="{-y_shift - atom.y:.2f}" '
                            f'font-size="{sup_font:.2f}">{atom.isotope}</text>')
             svg.append('    </g>')
-        else:
-            radius = 0
         return svg
 
     def _render_bond(self, bond, nx, ny, mx, my):
         if bond.order in (1, 4):
             return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />']
         elif bond.order == 2:
-            dx, dy = self._rotate_vector(0, self.double_space, mx, my, nx, ny)
+            dx, dy = rotate_vector(0, self.double_space, mx, my, nx, ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
         elif bond.order == 3:
-            dx, dy = self._rotate_vector(0, self.triple_space, mx, my, nx, ny)
+            dx, dy = rotate_vector(0, self.triple_space, mx, my, nx, ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
