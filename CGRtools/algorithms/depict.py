@@ -16,7 +16,6 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
 from math import atan2, sin, cos, hypot
 from ..cache import cached_method
 from ..periodictable import cpk
@@ -186,16 +185,6 @@ class DepictMolecule(Depict):
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
         return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                 f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />']
-
-    def __rings(self):
-        rings = defaultdict(list)
-        for n, x in enumerate(self.sssr, start=1):
-            for y in x:
-                rings[y].append(n)
-        centers = {}
-        for n, x in enumerate(self.sssr, start=1):
-            atoms = [self._node[x] for x in x]
-            centers[n] = (sum(x.x for x in atoms) / len(x), sum(x.y for x in atoms) / len(x))
 
 
 class DepictReaction:
