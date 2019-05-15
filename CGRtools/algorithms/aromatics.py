@@ -89,18 +89,15 @@ class Aromatize:
         total = 0
         double_bonded = {n for n, m_bond in adj.items() if any(bond.order == 2 for bond in m_bond.values())}
 
-        pyrroles = set()
+        pyroles = set()
         quinones = []
-        azulenes = set()
         condensed_rings = defaultdict(lambda: defaultdict(list))
         for ring in self.aromatic_rings:
             ring = tuple(ring)
             if not double_bonded.isdisjoint(ring):  # search quinones
                 quinones.append(ring)
             if len(ring) == 5:
-                pyrroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
-                if all(atom[n]._atom not in _not_azulene_atoms for n in ring):
-                    azulenes.update(ring)
+                pyroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
 
             for n, m in zip(ring, ring[1:]):  # fill condensed rings graph
                 condensed_rings[n][m].append(ring)
@@ -126,14 +123,19 @@ class Aromatize:
             else:
                 ordered_ring = ring
 
-            is_not_ring7 = len(ring) != 7 or len(doubles) % 2
+            is_ring7 = len(ring) == 7 and len(doubles) % 2 == 0  # bis- or tetra- 7-ring quinones
 
             bond = 1
             n = ordered_ring[0]
             for m in ordered_ring[1:]:
                 if bond == 1:
-                    if m not in double_bonded and m not in pyrroles and (is_not_ring7 or m not in azulenes):
+                    if not (m in double_bonded or m in pyroles or
+                            is_ring7 and condensed_rings[n][m] and not condensed_rings[n][p]):
                         bond = 2
+                        # single bond followed by double if common atom:
+                        # not already has double bond [quinone] or
+                        # not pyrole atom with LP or
+                        # 7-ring has 2 condensed rings in a row
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 1))
                     elif n in double_bonded:  # found new quinone ring (Y)
@@ -143,7 +145,8 @@ class Aromatize:
                 else:
                     if m in double_bonded:
                         raise InvalidAromaticRing(ring)
-                    bond = 1
+                    if not (is_ring7 and condensed_rings[n][m] and not condensed_rings[n][p]):
+                        bond = 1
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 2))
                         double_bonded.add(n)
