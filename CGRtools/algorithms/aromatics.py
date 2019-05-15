@@ -91,6 +91,7 @@ class Aromatize:
 
         pyrroles = set()
         quinones = []
+        azulenes = set()
         condensed_rings = defaultdict(lambda: defaultdict(list))
         for ring in self.aromatic_rings:
             ring = tuple(ring)
@@ -98,6 +99,8 @@ class Aromatize:
                 quinones.append(ring)
             if len(ring) == 5:
                 pyrroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
+                if all(atom[n]._atom not in _not_azulene_atoms for n in ring):
+                    azulenes.update(ring)
 
             for n, m in zip(ring, ring[1:]):  # fill condensed rings graph
                 condensed_rings[n][m].append(ring)
@@ -116,17 +119,20 @@ class Aromatize:
             condensed_rings[n][m].remove(ring)
             condensed_rings[m][n].remove(ring)
 
-            start = next(n for n, m in enumerate(ring) if m in double_bonded)
+            doubles = [n for n, m in enumerate(ring) if m in double_bonded]
+            start = doubles[0]
             if start:  # reorder double bonded to starting position
                 ordered_ring = ring[start:] + ring[:start]
             else:
                 ordered_ring = ring
 
+            is_not_ring7 = len(ring) != 7 or len(doubles) % 2
+
             bond = 1
             n = ordered_ring[0]
             for m in ordered_ring[1:]:
                 if bond == 1:
-                    if m not in double_bonded and m not in pyrroles:
+                    if m not in double_bonded and m not in pyrroles and (is_not_ring7 or m not in azulenes):
                         bond = 2
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 1))
@@ -440,6 +446,7 @@ def _clock(a):
 
 
 _pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
+_not_azulene_atoms = ('O', 'S', 'Se', C(-1))
 
 _azulene = {(1, 2, 1, 2, 1, 2, 1, 2, 1, 2), (2, 1, 2, 1, 2, 1, 2, 1, 2, 1)}
 
