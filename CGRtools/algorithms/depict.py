@@ -40,8 +40,8 @@ class Depict:
         nodes = self._node
         for n, m, bond in self.bonds():
             na, ma = nodes[n], nodes[m]
-            bond, classic = self._render_bond(bond, na.x, na.y, ma.x, ma.y)
-            if classic:
+            bond, aromatic = self._render_bond(bond, na.x, na.y, ma.x, ma.y)
+            if aromatic:
                 bonds[n].add(m)
                 bonds[m].add(n)
             svg.append(bond)
@@ -51,39 +51,41 @@ class Depict:
             c_y = sum(nodes[y].y for y in ring) / len(ring)
 
             for n, m in zip(ring, ring[1:]):
-                svg.append(self.render_aromatic_bond(n, m, c_x, c_y, nodes, bonds))
+                if m in bonds[n]:
+                    n, m = nodes[n], nodes[m]
+                    svg.append(self.render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
 
             n, m = ring[-1], ring[0]
-            svg.append(self.render_aromatic_bond(n, m, c_x, c_y, nodes, bonds))
+            if m in bonds[n]:
+                n, m = nodes[n], nodes[m]
+                svg.append(self.render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
         return svg
 
-    def render_aromatic_bond(self, n, m, c_x, c_y, nodes, bonds):
-        if m in bonds[n]:
-            n, m = nodes[n], nodes[m]
-            # n aligned xy
-            mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
+    def render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
+        # n aligned xy
+        mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
-            # nm reoriented xy
-            mr_x, mr_y = hypot(mn_x, mn_y), 0
-            cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
+        # nm reoriented xy
+        mr_x, mr_y = hypot(mn_x, mn_y), 0
+        cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
 
-            if self.aromatic_space / cr_y < .65:
-                if cr_y > 0:
-                    ar_y = br_y = self.aromatic_space
-                else:
-                    ar_y = br_y = -self.aromatic_space
+        if self.aromatic_space / cr_y < .65:
+            if cr_y > 0:
+                ar_y = br_y = self.aromatic_space
+            else:
+                ar_y = br_y = -self.aromatic_space
 
-                ar_x = self.aromatic_space * cr_x / abs(cr_y)
-                br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
+            ar_x = self.aromatic_space * cr_x / abs(cr_y)
+            br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
 
-                # backward reorienting
-                an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
-                bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y)
-                a_x, a_y = an_x + n.x, an_y + n.y
-                b_x, b_y = bn_x + n.x, bn_y + n.y
+            # backward reorienting
+            an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
+            bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y)
+            a_x, a_y = an_x + n_x, an_y + n_y
+            b_x, b_y = bn_x + n_x, bn_y + n_y
 
-                return f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" ' \
-                       f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />'
+            return f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" ' \
+                f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />'
 
     def depict(self, embedding=False):
         if self.colors is None:
@@ -108,7 +110,8 @@ class Depict:
                                           self.carbon or not bool(self._adj[n]))
             atoms.extend(tmp)
             svg.extend(mask)
-        svg.extend(['       </mask>', '    </defs>'])
+        svg.append('       </mask>')
+        svg.append('    </defs>')
 
         if atoms:
             atoms.insert(0, '     <g font-family="sans-serif">')
@@ -167,19 +170,21 @@ class DepictMolecule(Depict):
         return svg, mask
 
     def _render_bond(self, bond, nx, ny, mx, my):
-        if bond.order in (1, 4):
-            return f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />', True
+        if bond.order == 1:
+            return f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />', False
         elif bond.order == 2:
             dx, dy = rotate_vector(0, self.double_space, mx - nx, my - ny)
             return f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />\n' \
-                   f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
+                       f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
                    False
         elif bond.order == 3:
             dx, dy = rotate_vector(0, self.triple_space, mx - nx, my - ny)
             return f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />\n' \
-                   f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />\n' \
-                   f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
+                       f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />\n' \
+                       f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
                    False
+        elif bond.order == 4:
+            return f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />', True
         return f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" \n' \
                f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />', False
 
