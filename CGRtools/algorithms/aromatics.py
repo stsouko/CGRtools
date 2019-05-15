@@ -32,6 +32,7 @@ class Aromatize:
                 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
 
     def dearomatize(self):
+        raise NotImplementedError
         adj = defaultdict(set)  # aromatic skeleton
         for n, m_bond in self._adj.items():
             for m, bond in m_bond.items():
@@ -98,7 +99,7 @@ class Aromatize:
             if len(ring) == 5:
                 pyrroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
 
-            for n, m in zip(ring, ring[1:]):  # condensed rings graph
+            for n, m in zip(ring, ring[1:]):  # fill condensed rings graph
                 condensed_rings[n][m].append(ring)
                 condensed_rings[m][n].append(ring)
             n, *_, m = ring
