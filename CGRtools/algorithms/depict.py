@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -21,18 +22,46 @@ from ..cache import cached_method
 from ..periodictable import cpk
 
 
-def rotate_vector(x, y, x2, y2, x1, y1):
+def rotate_vector(x1, y1, x2, y2):
     """
     rotate x,y vector over x2-x1, y2-y1 angle
     """
-    angle = atan2(y2 - y1, x2 - x1)
+    angle = atan2(y2, x2)
     cos_rad = cos(angle)
     sin_rad = sin(angle)
-    return cos_rad * x + sin_rad * y, -sin_rad * x + cos_rad * y
+    return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
+
+
+def render_aromatic_bond(n, m, c_x, c_y, h, nodes, dashes):
+    n, m = nodes[n], nodes[m]
+    # n aligned xy
+    mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
+
+    # nm reoriented xy
+    mr_x, mr_y = hypot(mn_x, mn_y), 0
+    cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
+
+    if h / cr_y < .65:
+        if cr_y > 0:
+            ar_y = br_y = h
+        else:
+            ar_y = br_y = -h
+
+        ar_x = h * cr_x / abs(cr_y)
+        br_x = ((abs(cr_y) - h) * mr_x + h * cr_x) / abs(cr_y)
+
+        # backward reorienting
+        an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
+        bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y)
+        a_x, a_y = an_x + n.x, an_y + n.y
+        b_x, b_y = bn_x + n.x, bn_y + n.y
+
+        return f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" ' \
+               f'stroke-dasharray="{dashes[0]:.2f} {dashes[1]:.2f}" />'
 
 
 class Depict:
-    def __bond(self):
+    def _bond(self):
         svg = []
         for n, m, bond in self.bonds():
             nodes = self._node
@@ -48,57 +77,10 @@ class Depict:
             c_y = sum(nodes[y].y for y in ring) / len(ring)
 
             for n, m in zip(ring, ring[1:]):
-                n, m = nodes[n], nodes[m]
-                # n aligned xy
-                mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
+                svg.append(render_aromatic_bond(n, m, c_x, c_y, self.aromatic_space, nodes, self.dashes))
 
-                # nm reoriented xy
-                mr_x, mr_y = hypot(mn_x, mn_y), 0
-                cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y, 0, 0)
-
-                if self.aromatic_space / cr_y < .65:
-                    if cr_y > 0:
-                        ar_y = br_y = self.aromatic_space
-                    else:
-                        ar_y = br_y = -self.aromatic_space
-
-                    ar_x = self.aromatic_space * cr_x / abs(cr_y)
-                    br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
-
-                    # backward reorienting
-                    an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y, 0, 0)
-                    bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y, 0, 0)
-                    a_x, a_y = an_x + n.x, an_y + n.y
-                    b_x, b_y = bn_x + n.x, bn_y + n.y
-
-                    svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                               f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
-
-            n, m = nodes[ring[-1]], nodes[ring[0]]
-            # n aligned xy
-            mn_x, mn_y, cn_x, cn_y = m.x - n.x, m.y - n.y, c_x - n.x, c_y - n.y
-
-            # nm reoriented xy
-            mr_x, mr_y = hypot(mn_x, mn_y), 0
-            cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y, 0, 0)
-
-            if self.aromatic_space / cr_y < .65:
-                if cr_y > 0:
-                    ar_y = br_y = self.aromatic_space
-                else:
-                    ar_y = br_y = -self.aromatic_space
-
-                ar_x = self.aromatic_space * cr_x / abs(cr_y)
-                br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
-
-                # backward reorienting
-                an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y, 0, 0)
-                bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y, 0, 0)
-                a_x, a_y = an_x + n.x, an_y + n.y
-                b_x, b_y = bn_x + n.x, bn_y + n.y
-
-                svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                           f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
+            n, m = ring[-1], ring[0]
+            svg.append(render_aromatic_bond(n, m, c_x, c_y, self.aromatic_space, nodes, self.dashes))
         return svg
 
     def depict(self, embedding=False):
@@ -110,13 +92,11 @@ class Depict:
         max_y = max(x.y for x in self._node.values())
 
         svg = ['  <g fill="none" stroke="black" stroke-width=".03">']
-        svg.extend(self.__bond())
+        svg.extend(self._bond())
         svg.extend(self._aromatic_bond())
         svg.append('  </g>')
-        sup_font = .75 * self.font
-        up_font = -.5 * self.font
         for n, atom in self.atoms():
-            tmp = self._render_atom(atom, colors[atom.element], self.font, sup_font, up_font,
+            tmp = self._render_atom(atom, colors[atom.element], self.font, self.sup_font, self.up_font,
                                     self.carbon or not bool(self._adj[n]))
             svg.extend(tmp)
         if svg:
@@ -127,8 +107,9 @@ class Depict:
             width = max_x - min_x + 2.5 * self.font
             height = max_y - min_y + 2.5 * self.font
             svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-            f'viewBox="{min_x - 1.25 * self.font:.2f} {-max_y - 1.25 * self.font:.2f} {width:.2f} {height:.2f}" '
-            f'xmlns="http://www.w3.org/2000/svg" version="1.1">')
+                          f'viewBox="{min_x - 1.25 * self.font:.2f} {-max_y - 1.25 * self.font:.2f} {width:.2f} '
+                          f'{height:.2f}" '
+                          f'xmlns="http://www.w3.org/2000/svg" version="1.1">')
             svg.append('</svg>')
         if embedding:
             return '\n'.join(svg), max_x, max_y
@@ -141,6 +122,8 @@ class Depict:
     carbon = False
     colors = None
     font = .4
+    sup_font = .75 * font
+    up_font = -.5 * font
     double_space = .04
     triple_space = .07
     aromatic_space = .08
@@ -175,11 +158,11 @@ class DepictMolecule(Depict):
         if bond.order in (1, 4):
             return [f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />']
         elif bond.order == 2:
-            dx, dy = rotate_vector(0, self.double_space, mx, my, nx, ny)
+            dx, dy = rotate_vector(0, self.double_space, mx-nx, my-ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
         elif bond.order == 3:
-            dx, dy = rotate_vector(0, self.triple_space, mx, my, nx, ny)
+            dx, dy = rotate_vector(0, self.triple_space, mx-nx, my-ny)
             return [f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />',
                     f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />',
                     f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />']
@@ -212,8 +195,8 @@ class DepictReaction:
         height = r_max_y + 2.5 * font
 
         svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-        f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
-        'xmlns="http://www.w3.org/2000/svg" version="1.1">')
+                      f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
+                      'xmlns="http://www.w3.org/2000/svg" version="1.1">')
         svg.append('</svg>')
         return '\n'.join(svg)
 
