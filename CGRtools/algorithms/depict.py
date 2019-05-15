@@ -34,7 +34,7 @@ def rotate_vector(x1, y1, x2, y2):
 
 
 class Depict:
-    def _bond(self):
+    def __bond(self):
         svg = []
         bonds = defaultdict(set)
         nodes = self._node
@@ -53,15 +53,15 @@ class Depict:
             for n, m in zip(ring, ring[1:]):
                 if m in bonds[n]:
                     n, m = nodes[n], nodes[m]
-                    svg.append(self.render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
+                    svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
 
             n, m = ring[-1], ring[0]
             if m in bonds[n]:
                 n, m = nodes[n], nodes[m]
-                svg.append(self.render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
+                svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
         return svg
 
-    def render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
+    def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -88,15 +88,13 @@ class Depict:
                 f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />'
 
     def depict(self, embedding=False):
-        if self.colors is None:
-            colors = cpk
         min_x = min(x.x for x in self._node.values())
         max_x = max(x.x for x in self._node.values())
         min_y = min(x.y for x in self._node.values())
         max_y = max(x.y for x in self._node.values())
 
         bonds = ['    <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask)">']
-        bonds.extend(self._bond())
+        bonds.extend(self.__bond())
         bonds.append('    </g>')
 
         width = max_x - min_x + 2.5 * self.font
@@ -106,8 +104,7 @@ class Depict:
                f'<rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
                f'width="{width:.2f}" height="{height:.2f}" fill="white" />']
         for n, atom in self.atoms():
-            tmp, mask = self._render_atom(atom, colors[atom.element], self.font, self.sup_font, self.up_font,
-                                          self.carbon or not bool(self._adj[n]))
+            tmp, mask = self._render_atom(atom, self.carbon or not bool(self._adj[n]))
             atoms.extend(tmp)
             svg.extend(mask)
         svg.append('       </mask>')
@@ -134,7 +131,7 @@ class Depict:
         return self.depict()
 
     carbon = False
-    colors = None
+    colors = cpk
     font = .4
     sup_font = .75 * font
     up_font = -.5 * font
@@ -145,26 +142,26 @@ class Depict:
 
 
 class DepictMolecule(Depict):
-    @staticmethod
-    def _render_atom(atom, color, font, sup_font, up_font, carbon):
+    def _render_atom(self, atom, carbon):
         svg = []
         mask = []
         if atom.element != 'C' or carbon or atom.charge or atom.multiplicity or atom.isotope != atom.common_isotope:
-            x_shift = -shifts[atom.element] * font
-            y_shift = .35 * font
+            x_shift = -shifts[atom.element] * self.font
+            y_shift = .35 * self.font
             radius = -1.5 * x_shift
-            svg.append(f'      <g fill="{color}">')
-            svg.append(f'          <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" font-size="{font:.2f}" '
+            svg.append(f'      <g fill="{self.colors[atom.element]}">')
+            svg.append(f'          <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
+                       f'font-size="{self.font:.2f}" '
                        f'>{atom.element}</text>')
             if atom.charge:
                 svg.append(f'          <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                           f'font-size="{sup_font:.2f}">{charge_str[atom.charge]}</text>')
+                           f'font-size="{self.sup_font:.2f}">{charge_str[atom.charge]}</text>')
             if atom.multiplicity:
-                svg.append(f'          <text x="{atom.x + x_shift:.2f}" y="{up_font - atom.y:.2f}" '
-                           f'font-size="{sup_font:.2f}">{multiplicity_str[atom.multiplicity]}</text>')
+                svg.append(f'          <text x="{atom.x + x_shift:.2f}" y="{self.up_font - atom.y:.2f}" '
+                           f'font-size="{self.sup_font:.2f}">{multiplicity_str[atom.multiplicity]}</text>')
             if atom.isotope != atom.common_isotope:
-                svg.append(f'          <text x="{atom.x - font:.2f}" y="{-y_shift - atom.y:.2f}" '
-                           f'font-size="{sup_font:.2f}">{atom.isotope}</text>')
+                svg.append(f'          <text x="{atom.x - self.font:.2f}" y="{-y_shift - atom.y:.2f}" '
+                           f'font-size="{self.sup_font:.2f}">{atom.isotope}</text>')
             svg.append('      </g>')
             mask = [f'          <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>']
         return svg, mask
@@ -175,13 +172,13 @@ class DepictMolecule(Depict):
         elif bond.order == 2:
             dx, dy = rotate_vector(0, self.double_space, mx - nx, my - ny)
             return f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />\n' \
-                       f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
+                   f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
                    False
         elif bond.order == 3:
             dx, dy = rotate_vector(0, self.triple_space, mx - nx, my - ny)
             return f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" />\n' \
-                       f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />\n' \
-                       f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
+                   f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />\n' \
+                   f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" />', \
                    False
         elif bond.order == 4:
             return f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />', True
@@ -222,10 +219,6 @@ class DepictReaction:
     @cached_method
     def _repr_svg_(self):
         return self.depict()
-
-
-class DepictCGR:
-    pass
 
 
 shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .35, 'O': .35,
