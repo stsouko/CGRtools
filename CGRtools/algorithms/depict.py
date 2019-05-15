@@ -212,8 +212,8 @@ class DepictReaction:
         height = r_max_y + 2.5 * font
 
         svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-        f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
-        'xmlns="http://www.w3.org/2000/svg" version="1.1">')
+                      f'viewBox="{-1.25 * font:.2f} {-r_max_y - 1.25 * font:.2f} {width:.2f} {height:.2f}" '
+                      'xmlns="http://www.w3.org/2000/svg" version="1.1">')
         svg.append('</svg>')
         return '\n'.join(svg)
 
