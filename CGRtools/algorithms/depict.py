@@ -104,7 +104,7 @@ class Depict:
                f'<rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
                f'width="{width:.2f}" height="{height:.2f}" fill="white" />']
         for n, atom in self.atoms():
-            tmp, mask = self._render_atom(atom, self.carbon or not bool(self._adj[n]))
+            tmp, mask = self._render_atom(atom, not bool(self._adj[n]))
             atoms.extend(tmp)
             svg.extend(mask)
         svg.append('       </mask>')
@@ -142,10 +142,11 @@ class Depict:
 
 
 class DepictMolecule(Depict):
-    def _render_atom(self, atom, carbon):
+    def _render_atom(self, atom, single):
         svg = []
         mask = []
-        if atom.element != 'C' or carbon or atom.charge or atom.multiplicity or atom.isotope != atom.common_isotope:
+        if single or atom.element != 'C' or self.carbon or atom.charge or atom.multiplicity or \
+                atom.isotope != atom.common_isotope:
             x_shift = -shifts[atom.element] * self.font
             y_shift = .35 * self.font
             radius = -1.5 * x_shift
