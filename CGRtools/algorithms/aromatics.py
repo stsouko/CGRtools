@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import repeat
 from typing import List
 from ..cache import cached_property
 from ..exceptions import InvalidAromaticRing
@@ -91,13 +90,18 @@ class Aromatize:
 
         pyroles = set()
         quinones = []
+        azulenes = set()
         condensed_rings = defaultdict(lambda: defaultdict(list))
         for ring in self.aromatic_rings:
             ring = tuple(ring)
             if not double_bonded.isdisjoint(ring):  # search quinones
                 quinones.append(ring)
-            if len(ring) == 5:
+
+            lr = len(ring)
+            if lr == 5:
                 pyroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
+            elif lr == 7:
+                azulenes.update(ring)
 
             for n, m in zip(ring, ring[1:]):  # fill condensed rings graph
                 condensed_rings[n][m].append(ring)
@@ -123,19 +127,27 @@ class Aromatize:
             else:
                 ordered_ring = ring
 
-            is_ring7 = len(ring) == 7 and len(doubles) % 2 == 0  # bis- or tetra- 7-ring quinones
+            lr = len(ring)
+            if lr == 7:
+                unbalansed_ring = len(doubles) in (2, 4)  # bis- or tetra- azulene 7-ring quinones
+            elif lr == 6:
+                unbalansed_ring = len(doubles) % 2
+            elif not azulenes.isdisjoint(ring):
+                unbalansed_ring = len(doubles) == 2  # bis- azulene 5-ring quinones
+            else:  # pyroles
+                unbalansed_ring = len(doubles) == 1
 
             bond = 1
             n = ordered_ring[0]
             for m in ordered_ring[1:]:
                 if bond == 1:
                     if not (m in double_bonded or m in pyroles or
-                            is_ring7 and condensed_rings[n][m] and not condensed_rings[n][p]):
+                            unbalansed_ring and condensed_rings[n][m] and not condensed_rings[n][p]):
                         bond = 2
                         # single bond followed by double if common atom:
                         # not already has double bond [quinone] or
                         # not pyrole atom with LP or
-                        # 7-ring has 2 condensed rings in a row
+                        # unbalansed_ring has 2 condensed rings in a row
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 1))
                     elif n in double_bonded:  # found new quinone ring (Y)
@@ -145,7 +157,7 @@ class Aromatize:
                 else:
                     if m in double_bonded:
                         raise InvalidAromaticRing(ring)
-                    if not (is_ring7 and condensed_rings[n][m] and not condensed_rings[n][p]):
+                    if not (unbalansed_ring and condensed_rings[n][m] and not condensed_rings[n][p]):
                         bond = 1
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 2))
@@ -161,7 +173,7 @@ class Aromatize:
                 p, n = n, m
             else:
                 m = ordered_ring[0]
-                if bond != 1 and not condensed_rings[n][p]:
+                if bond != 1:
                     raise InvalidAromaticRing(ring)
                 patch.add((n, m, 1))
 
@@ -171,393 +183,8 @@ class Aromatize:
             self.flush_cache()
         return total
 
-    def aromatize_(self) -> int:
-        """
-        convert structure to aromatic form
-
-        :return: number of processed rings
-        """
-        rings5, rings6, rings10 = self.__prepare_rings()
-        if not (rings6 or rings5 or rings10):
-            return 0
-
-        init = len(rings6) + len(rings5) + len(rings10)
-        total = 0
-        while True:
-            # quinone rules don't match if condensed aromatics rings has invalid bond orders.
-            # this require repeating of quinonize step after aromatize step
-            old = 0
-            new = init
-            rings5_c = rings5.copy()
-            rings6_c = rings6.copy()
-            rings10_c = rings10.copy()
-            while new != old:
-                found = []
-                for n, r in enumerate(rings6_c):
-                    if self.__quinonize_benzene(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings6_c[n]
-
-                found = []
-                for n, r in enumerate(rings5_c):
-                    if self.__quinonize_pyrole(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings5_c[n]
-
-                found = []
-                for n, r in enumerate(rings10_c):
-                    if self.__quinonize_azulene(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings10_c[n]
-
-                old, new = new, len(rings6_c) + len(rings5_c) + len(rings10_c)
-            c = init - new
-            if c:
-                total += c
-            elif total:
-                break
-
-            old = 0
-            new = init
-            rings5_c = rings5.copy()
-            rings6_c = rings6.copy()
-            rings10_c = rings10.copy()
-            while new != old:
-                found = []
-                for n, r in enumerate(rings6_c):
-                    if self.__aromatize_benzene(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings6_c[n]
-
-                found = []
-                for n, r in enumerate(rings5_c):
-                    if self.__aromatize_pyrole(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings5_c[n]
-
-                found = []
-                for n, r in enumerate(rings10_c):
-                    if self.__aromatize_azulene(r):
-                        found.insert(0, n)
-                for n in found:
-                    del rings10_c[n]
-
-                old, new = new, len(rings6_c) + len(rings5_c) + len(rings10_c)
-            c = init - new
-            if not c:
-                break
-            total += c
-
-        if total:
-            self.flush_cache()
-        return total
-
-    def __prepare_rings(self):
-        rings5 = {}
-        rings7 = {}
-        rings6 = []
-        for ring in self.sssr:
-            lr = len(ring)
-            if lr == 6:
-                rings6.append(ring)
-            elif lr == 5:
-                rings5[frozenset(ring)] = ring
-            elif lr == 7:
-                rings7[frozenset(ring)] = ring
-
-        # for azulene only external contour need for detection
-        #
-        #    7    8
-        #  /   \ / \
-        # 1     6   9
-        # |     |   |
-        # 2     5---10
-        #  \   /
-        #   3-4
-        #
-        possible_rings10 = defaultdict(list)
-        for r7_k, r7 in rings7.items():
-            for r5_k, r5 in rings5.items():
-                c = r5_k & r7_k
-                if len(c) == 2:
-                    possible_rings10[r7_k].append((c, r7, r5))  # found r5r7
-
-        rings10 = []
-        ambiguous = []
-        for r7_k, cr75_list in possible_rings10.items():
-            if len(cr75_list) == 1:
-                rings10.append(cr75_list[0])
-
-            n, m = c
-            # rearrange ring to n(6)----m(5)
-            i = r7.index(n)
-            ij = i - r7.index(m)
-            if ij == 1:  # normal direction. e.g. 1-2-3-4-5-6-7
-                r7 = r7[i:] + r7[:i]
-            elif ij == -1:  # reverse direction. e.g.  1-7-6-5-4-3-2
-                r7 = r7[i::-1] + r7[:i:-1]
-            elif i:
-                r7 = r7[::-1]
-
-            # rearrange ring to m(5)---n(6)
-            r5 = rings5.pop(r5)
-            i = r5.index(m)
-            j = r5.index(n)
-            ij = i - j
-            if ij == 1:  # normal direction. e.g. 8-6-5-10-9
-                r5 = r5[i + 1:] + r5[:j]  # 10-9-8
-            elif ij == -1:  # reverse direction. e.g 10-5-6-8-9
-                if i:
-                    r5 = r5[i - 1::-1] + r5[:j:-1]
-                else:
-                    r5 = r5[:1:-1]
-            elif i:
-                r5 = r5[-2:0:-1]
-            else:
-                r5 = r5[1:-1]
-            rings10.append(r7 + r5)
-
-        return list(rings5.values()), rings6, rings10
-
-    def __quinonize_benzene(self, ring):
-        adj = self._adj
-        r1, r2, r3, r4, r5, r6 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r56 = adj[r5][r6]
-        r61 = adj[r6][r1]
-        key = (r12.order, r23.order, r34.order, r45.order, r56.order, r61.order)
-        if 4 not in key:
-            return False
-
-        doubles = tuple(y for y, x in enumerate(ring) if len(adj[x]) == 3 and
-                        next(b.order for a, b in adj[x].items() if a not in ring) == 2)
-        if not doubles:
-            return False
-
-        if len(doubles) == 6:
-            r12.order = r23.order = r34.order = r45.order = r56.order = r61.order = 1
-            return True
-        if key in _quinone_pattern.get(doubles, {}):
-            r12.order, r23.order, r34.order, r45.order, r56.order, r61.order = _quinone_fix.get(doubles)
-            return True
-        return False
-
-    def __quinonize_pyrole(self, ring):
-        adj = self._adj
-        atoms = self._node
-        r1, r2, r3, r4, r5 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r51 = adj[r5][r1]
-        key = (r12.order, r23.order, r34.order, r45.order, r51.order)
-        if 4 not in key:
-            return False
-
-        positions = _pyrole_pattern.get(key)
-        if positions is None:
-            return False
-
-        for m, pos in enumerate(positions):
-            if atoms[ring[pos]]._atom in _pyrole_atoms:
-                r12.order, r23.order, r34.order, r45.order, r51.order = _pyrole_fix[key][m]
-                return True
-        return False
-
-    def __quinonize_azulene(self, ring):
-        adj = self._adj
-        r1, r2, r3, r4, r5, r6, r7, r8, r9, r0 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r56 = adj[r5][r6]
-        r67 = adj[r6][r7]
-        r78 = adj[r7][r8]
-        r89 = adj[r8][r9]
-        r90 = adj[r9][r0]
-        r01 = adj[r0][r1]
-        r17 = adj[r1][r7]
-        return False
-
-    def __aromatize_benzene(self, ring):
-        adj = self._adj
-        r1, r2, r3, r4, r5, r6 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r56 = adj[r5][r6]
-        r61 = adj[r6][r1]
-        if (r12.order, r23.order, r34.order, r45.order, r56.order, r61.order) in _benzene:
-            r12.order = r23.order = r34.order = r45.order = r56.order = r61.order = 4
-            return True
-        return False
-
-    def __aromatize_pyrole(self, ring):
-        adj = self._adj
-        atoms = self._node
-        r1, r2, r3, r4, r5 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r51 = adj[r5][r1]
-        position = _pyrole.get((r12.order, r23.order, r34.order, r45.order, r51.order))
-
-        if position is not None and atoms[ring[position]]._atom in _pyrole_atoms:
-            r12.order = r23.order = r34.order = r45.order = r51.order = 4
-            return True
-        return False
-
-    def __aromatize_azulene(self, ring):
-        adj = self._adj
-        r1, r2, r3, r4, r5, r6, r7, r8, r9, r0 = ring
-        r12 = adj[r1][r2]
-        r23 = adj[r2][r3]
-        r34 = adj[r3][r4]
-        r45 = adj[r4][r5]
-        r56 = adj[r5][r6]
-        r67 = adj[r6][r7]
-        r78 = adj[r7][r8]
-        r89 = adj[r8][r9]
-        r90 = adj[r9][r0]
-        r01 = adj[r0][r1]
-        r17 = adj[r1][r7]
-        if (r12.order, r23.order, r34.order, r45.order, r56.order,
-            r67.order, r78.order, r89.order, r90.order, r01.order) in _azulene:
-            r12.order = r23.order = r34.order = r45.order = r56.order = 4
-            r67.order = r78.order = r89.order = r90.order = r01.order = r17.order = 4
-            return True
-        return False
-
-
-def _clock(a):
-    yield a
-    for _ in range(1, len(a)):
-        a = a[1:] + a[:1]
-        yield a
-
 
 _pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
-_not_azulene_atoms = ('O', 'S', 'Se', C(-1))
-
-_azulene = {(1, 2, 1, 2, 1, 2, 1, 2, 1, 2), (2, 1, 2, 1, 2, 1, 2, 1, 2, 1)}
-
-_benzene = set()
-_benzene.update(_clock((1, 2, 1, 2, 1, 2)))
-_benzene.update(_clock((1, 2, 1, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 1, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 1, 2, 4, 4)))
-_benzene.update(_clock((1, 2, 1, 4, 4, 2)))
-_benzene.update(_clock((1, 2, 1, 4, 1, 4)))
-_benzene.update(_clock((1, 2, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 1, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 1, 4, 4, 4)))
-_benzene.update(_clock((1, 2, 4, 4, 4, 2)))
-_benzene.update(_clock((1, 4, 1, 4, 1, 4)))
-_benzene.update(_clock((4, 2, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 2, 4, 4)))
-_benzene.update(_clock((1, 4, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 4, 1, 4)))
-_benzene.update(_clock((1, 4, 4, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 4, 4, 4, 4)))
-_benzene.update(_clock((1, 4, 4, 4, 4, 2)))
-_benzene.update(_clock((1, 4, 4, 4, 4, 4)))
-_benzene.update(_clock((4, 2, 4, 4, 4, 4)))
-
-_ind = (0, 4, 3, 2, 1)
-_pyrole = {}
-_pyrole.update(zip(_clock((1, 2, 1, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 1, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 1, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 4, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 1, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 4, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 4, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 4, 4, 1)), _ind))
-# fixes after quinonize
-_pyrole.update(zip(_clock((4, 2, 4, 4, 4)), _ind))
-_pyrole.update(zip(_clock((4, 4, 4, 2, 4)), _ind))
-_pyrole.update(zip(_clock((4, 2, 4, 2, 4)), _ind))
-_pyrole.update(zip(_clock((4, 4, 2, 4, 4)), _ind))
-
-_ind = ((0, 1), (0, 5), (4, 5), (3, 4), (2, 3), (1, 2))  # o-quinones
-_quinone_pattern = {}
-_quinone_fix = {}
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((4, 4, 4, 2, 4, 4)),
-                 _clock((4, 4, 4, 4, 2, 4)),
-                 _clock((4, 4, 2, 4, 4, 4)),
-                 _clock((4, 4, 2, 4, 2, 4)),
-                 _clock((4, 4, 4, 1, 2, 4)),
-                 _clock((4, 4, 2, 1, 4, 4)),
-                 _clock((4, 4, 2, 1, 2, 4)),
-
-                 _clock((1, 4, 4, 4, 4, 4)),
-                 _clock((1, 4, 4, 2, 4, 4)),
-                 _clock((1, 4, 4, 4, 2, 4)),
-                 _clock((1, 4, 2, 4, 4, 4)),
-                 _clock((1, 4, 2, 4, 2, 4)),
-                 _clock((1, 4, 4, 1, 2, 4)),
-                 _clock((1, 4, 2, 1, 4, 4)),
-                 _clock((1, 4, 2, 1, 2, 4)),
-
-                 _clock((1, 1, 4, 4, 4, 4)),
-                 _clock((1, 4, 4, 4, 4, 1))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 1, 2, 1, 2, 1))))
-
-_ind = ((0, 1, 2, 3), (0, 1, 2, 5), (0, 1, 4, 5), (0, 3, 4, 5), (2, 3, 4, 5), (1, 2, 3, 4))  # 1,2,3,4-quinones
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((1, 4, 1, 4, 4, 4)),
-                 _clock((1, 4, 1, 4, 2, 4))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 1, 1, 1, 2, 1))))
-
-_ind = ((0, 3), (2, 5), (1, 4))  # p-quinones
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((4, 2, 4, 4, 4, 4)),
-                 _clock((4, 2, 4, 4, 2, 4))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 2, 1, 1, 2, 1))))
-
-# pyroles condensed with quinones fixes
-_ind = (0, 4, 3, 2, 1)
-_pyrole_pattern = defaultdict(list)
-_pyrole_fix = defaultdict(list)
-for i, *p in zip(_ind,
-                 zip(_clock((4, 1, 4, 4, 4)), _clock((1, 1, 1, 2, 1))),
-                 zip(_clock((4, 4, 4, 1, 4)), _clock((1, 2, 1, 1, 1))),
-                 zip(_clock((4, 1, 4, 2, 4)), _clock((1, 1, 1, 2, 1))),
-                 zip(_clock((4, 2, 4, 1, 4)), _clock((1, 2, 1, 1, 1))),
-                 zip(_clock((4, 1, 4, 1, 4)), repeat((1, 1, 1, 1, 1)))
-                 ):
-    for x, y in p:
-        _pyrole_pattern[x].append(i)
-        _pyrole_fix[x].append(y)
-
-_pyrole_pattern = dict(_pyrole_pattern)
-_pyrole_fix = dict(_pyrole_fix)
-
-
-del x, y, i, p, _ind
 
 
 __all__ = ['Aromatize']
