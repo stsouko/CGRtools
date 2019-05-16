@@ -68,11 +68,10 @@ class Aromatize:
 
         :return: number of processed rings
         """
-        self.dummy_aromatize()
+        total = self.dummy_aromatize()
         adj = self._bonds
         atom = self._atoms
         patch = set()
-        total = 0
         double_bonded = {n for n, m_bond in adj.items() if any(bond.order == 2 for bond in m_bond.values())}
 
         pyroles = set()
@@ -98,7 +97,6 @@ class Aromatize:
             condensed_rings[m][n].append(ring)
 
         while quinones:
-            total += 1
             ring = quinones.pop()
             for n, m in zip(ring, ring[1:]):  # remove from condensed rings graph
                 condensed_rings[n][m].remove(ring)
