@@ -20,6 +20,7 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from networkx.classes.function import frozen
+from typing import List
 from .common import BaseContainer
 from ..algorithms import Morgan, SmilesCGR, CGRCompose
 from ..attributes import DynAtom, DynBond
@@ -146,6 +147,16 @@ class CGRContainer(CGRCompose, Morgan, SmilesCGR, BaseContainer):
         if as_view:
             s.reset_query_marks = frozen
         return s
+
+    @cached_property
+    def aromatic_rings(self) -> List[List[int]]:
+        """
+        existed or formed aromatic rings atoms numbers
+        """
+        adj = self._bonds
+        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and (
+                adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
+                adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:])))]
 
     def _matcher(self, other):
         """

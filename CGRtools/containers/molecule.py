@@ -19,10 +19,11 @@
 from collections import defaultdict
 from networkx.algorithms.isomorphism import GraphMatcher
 from networkx.classes.function import frozen
+from typing import List
 from .common import BaseContainer
 from ..algorithms import Aromatize, Calculate2D, Compose, DepictMolecule, Morgan, Smiles, Standardize, Stereo
 from ..attributes import Atom, Bond
-from ..cache import cached_args_method
+from ..cache import cached_args_method, cached_property
 from ..periodictable import H
 
 
@@ -144,6 +145,15 @@ class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standar
         :return: list of invalid atoms
         """
         return [x for x, atom in self.atoms() if not atom.check_valence(self.environment(x))]
+
+    @cached_property
+    def aromatic_rings(self) -> List[List[int]]:
+        """
+        aromatic rings atoms numbers
+        """
+        adj = self._bonds
+        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
+                and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
 
     def _matcher(self, other):
         """

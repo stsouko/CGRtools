@@ -17,35 +17,22 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from typing import List
-from ..cache import cached_property
 from ..exceptions import InvalidAromaticRing
 from ..periodictable import C
 
 
+_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
+
+
 class Aromatize:
-    @cached_property
-    def aromatic_rings(self) -> List[List[int]]:
-        adj = self._adj
-        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
-                and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
-
-    def dearomatize(self):
-        raise NotImplementedError
-        adj = defaultdict(set)  # aromatic skeleton
-        for n, m_bond in self._adj.items():
-            for m, bond in m_bond.items():
-                if bond.order == 4:
-                    adj[n].add(m)
-
     def dummy_aromatize(self):
         """
         convert structure to aromatic form (dummy algorithm. don't detect quinones)
 
         :return: number of processed rings
         """
-        adj = self._adj
-        atom = self._node
+        adj = self._bonds
+        atom = self._atoms
         total = 0
         unsaturated = {n for n, m_bond in adj.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
 
@@ -82,8 +69,8 @@ class Aromatize:
         :return: number of processed rings
         """
         self.dummy_aromatize()
-        adj = self._adj
-        atom = self._node
+        adj = self._bonds
+        atom = self._atoms
         patch = set()
         total = 0
         double_bonded = {n for n, m_bond in adj.items() if any(bond.order == 2 for bond in m_bond.values())}
@@ -183,8 +170,13 @@ class Aromatize:
             self.flush_cache()
         return total
 
-
-_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
+    def dearomatize(self):
+        raise NotImplementedError
+        adj = defaultdict(set)  # aromatic skeleton
+        for n, m_bond in self._bonds.items():
+            for m, bond in m_bond.items():
+                if bond.order == 4:
+                    adj[n].add(m)
 
 
 __all__ = ['Aromatize']
