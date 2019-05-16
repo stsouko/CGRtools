@@ -25,40 +25,51 @@ from ..periodictable import elements_list
 
 
 class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
-    __slots__ = ('graph', '_node', '_adj')
+    __slots__ = ('graph', '_node', '_adj', '_bonds', '_atoms', '_meta')
 
     def __init__(self, *args, **kwargs):
         """
         Empty data object initialization or conversion from another object type
         """
         super().__init__(*args, **kwargs)
+        self._bonds = self._adj  # migration ad-hoc
+        self._atoms = self._node
+        self._meta = self.graph
 
     def __dir__(self):
         return [] or super().__dir__()
 
     def __getstate__(self):
-        return {'meta': self.graph, 'node': self._node, 'adj': self._adj}
+        return {'node': self._atoms, 'adj': self._bonds, 'meta': self._meta}  # migration ad-hoc
 
     def __setstate__(self, state):
         if 'graph' in state:  # 3.0.10 compatibility.
             state['meta'] = state['graph']
-        self.graph = state['meta']
-        self._node = state['node']
-        self._adj = state['adj']
+        if 'node' in state:  # 3.1 compatibility.
+            state['atoms'] = state['node']
+            state['bonds'] = state['adj']
+
+        self._meta = state['meta']
+        self._atoms = state['atoms']
+        self._bonds = state['bonds']
+
+        self._adj = self._bonds  # migration ad-hoc
+        self._node = self._atoms
+        self.graph = self._meta
 
     def atom(self, n):
-        return self._node[n]
+        return self._atoms[n]
 
     def bond(self, n, m):
-        return self._adj[n][m]
+        return self._bonds[n][m]
 
     @property
     def meta(self):
-        return self.graph
+        return self._meta
 
     @cached_property
     def atoms_numbers(self):
-        return list(self._node)
+        return list(self._atoms)
 
     @cached_property
     def atoms_count(self):
@@ -74,7 +85,7 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         """
         if _map is None:
             _map = max(self, default=0) + 1
-        elif _map in self._node:
+        elif _map in self._atoms:
             raise KeyError('atom with same number exists')
 
         attr_dict = self.node_attr_dict_factory()
@@ -85,8 +96,8 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         else:
             attr_dict.update(atom)
 
-        self._adj[_map] = self.adjlist_inner_dict_factory()
-        self._node[_map] = attr_dict
+        self._bonds[_map] = self.adjlist_inner_dict_factory()
+        self._atoms[_map] = attr_dict
         self.flush_cache()
         return _map
 
@@ -96,9 +107,9 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         """
         if atom1 == atom2:
             raise KeyError('atom loops impossible')
-        if atom1 not in self._node or atom2 not in self._node:
+        if atom1 not in self._atoms or atom2 not in self._atoms:
             raise KeyError('atoms not found')
-        if atom1 in self._adj[atom2]:
+        if atom1 in self._bonds[atom2]:
             raise KeyError('atoms already bonded')
 
         attr_dict = self.edge_attr_dict_factory()
@@ -107,7 +118,7 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         else:
             attr_dict.update(bond)
 
-        self._adj[atom1][atom2] = self._adj[atom2][atom1] = attr_dict
+        self._bonds[atom1][atom2] = self._bonds[atom2][atom1] = attr_dict
         self.flush_cache()
 
     def delete_atom(self, n):
@@ -132,7 +143,7 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         :param atom: number
         :return: list
         """
-        return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
+        return tuple((bond, self._atoms[n]) for n, bond in self._bonds[atom].items())
 
     def substructure(self, atoms, meta=False, as_view=True):
         """
@@ -166,7 +177,7 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         """
         nodes = [set(atoms)]
         for i in range(deep):
-            n = {y for x in nodes[-1] for y in self._adj[x]} | nodes[-1]
+            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
             if n in nodes:
                 break
             nodes.append(n)
@@ -205,7 +216,7 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         other nodes excluded substructure of graph
         :return graph or None
         """
-        n = self._node.keys() - set(other)
+        n = self._atoms.keys() - set(other)
         if n:
             return self.substructure(n)
 
@@ -213,14 +224,14 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         """
         iterate over all atoms
         """
-        return iter(self._node.items())
+        return iter(self._atoms.items())
 
     def bonds(self):
         """
         iterate other all bonds
         """
         seen = set()
-        for n, m_bond in self._adj.items():
+        for n, m_bond in self._bonds.items():
             seen.add(n)
             for m, bond in m_bond.items():
                 if m not in seen:
