@@ -33,7 +33,62 @@ def rotate_vector(x1, y1, x2, y2):
 
 
 class Depict:
-    def __bond(self):
+    def depict(self, *, embedding=False):
+        min_x = min(x.x for x in self._atoms.values())
+        max_x = max(x.x for x in self._atoms.values())
+        min_y = min(x.y for x in self._atoms.values())
+        max_y = max(x.y for x in self._atoms.values())
+
+        svg = [f'    <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask)">']
+        svg.extend(self._bond())
+        svg.append('    </g>')
+
+        atoms = []
+        masks = []
+        for n, atom in self.atoms():
+            tmp, mask = self._render_atom(atom, not self._bonds[n])
+            atoms.extend(tmp)
+            masks.extend(mask)
+
+        if atoms:
+            atoms.insert(0, '     <g font-family="sans-serif">')
+            atoms.append('    </g>')
+
+        if not embedding:
+            width = max_x - min_x + 2.5 * self.font
+            height = max_y - min_y + 2.5 * self.font
+            masks = '\n'.join(masks)
+            svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
+                          f'viewBox="{min_x - 1.25 * self.font:.2f} {-max_y - 1.25 * self.font:.2f} {width:.2f} '
+                          f'{height:.2f}" '
+                          'xmlns="http://www.w3.org/2000/svg" version="1.1">\n    <defs>\n      <mask id="mask">\n'
+                          f'        <rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
+                          f'width="{width:.2f}" height="{height:.2f}" fill="white" />\n'
+                          f'{masks}         </mask>\n   </defs>')
+
+        svg.extend(atoms)
+        if embedding:
+            return svg, max_x, max_y, masks
+        svg.append('</svg>')
+        return '\n'.join(svg)
+
+    @cached_method
+    def _repr_svg_(self):
+        return self.depict()
+
+    carbon = False
+    colors = cpk
+    font = .4
+    sup_font = .75 * font
+    up_font = -.5 * font
+    double_space = .04
+    triple_space = .07
+    aromatic_space = .08
+    dashes = (.2, .1)
+
+
+class DepictMolecule(Depict):
+    def _bond(self):
         svg = []
         nodes = self._atoms
         for n, m, bond in self.bonds():
@@ -78,62 +133,6 @@ class Depict:
             return f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" ' \
                 f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />'
 
-    def depict(self, *, embedding=False):
-        min_x = min(x.x for x in self._atoms.values())
-        max_x = max(x.x for x in self._atoms.values())
-        min_y = min(x.y for x in self._atoms.values())
-        max_y = max(x.y for x in self._atoms.values())
-
-        svg = [f'    <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask)">']
-        svg.extend(self.__bond())
-        svg.append('    </g>')
-
-        atoms = []
-        masks = []
-        for n, atom in self.atoms():
-            tmp, mask = self._render_atom(atom, not bool(self._bonds[n]))
-            atoms.extend(tmp)
-            masks.extend(mask)
-
-        if atoms:
-            atoms.insert(0, '     <g font-family="sans-serif">')
-            atoms.append('    </g>')
-
-        if not embedding:
-            width = max_x - min_x + 2.5 * self.font
-            height = max_y - min_y + 2.5 * self.font
-            masks = '\n'.join(masks)
-            svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-                          f'viewBox="{min_x - 1.25 * self.font:.2f} {-max_y - 1.25 * self.font:.2f} {width:.2f} '
-                          f'{height:.2f}" '
-                          f'xmlns="http://www.w3.org/2000/svg" version="1.1">\n'
-                          f'    <defs>\n      <mask id="mask">\n'
-                          f'        <rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
-                          f'width="{width:.2f}" height="{height:.2f}" fill="white" />\n'
-                          f'{masks}         </mask>\n   </defs>')
-
-        svg.extend(atoms)
-        if embedding:
-            return svg, max_x, max_y, '\n'.join(masks)
-        svg.append('</svg>')
-        return '\n'.join(svg)
-
-    @cached_method
-    def _repr_svg_(self):
-        return self.depict()
-
-    carbon = False
-    colors = cpk
-    font = .4
-    sup_font = .75 * font
-    up_font = -.5 * font
-    double_space = .04
-    triple_space = .07
-    aromatic_space = .08
-    dashes = (.2, .1)
-
-
-class DepictMolecule(Depict):
     def _render_atom(self, atom, single):
         svg = []
         mask = []
@@ -190,7 +189,7 @@ class DepictReaction:
             for m in ml:
                 tmp, max_x, max_y, mask = m.depict(embedding=True)
                 svg.extend(tmp)
-                masks.append(mask)
+                masks.extend(mask)
                 if max_x > r_max_x:
                     r_max_x = max_x
                 if max_y > r_max_y:
@@ -204,6 +203,8 @@ class DepictReaction:
                       'xmlns="http://www.w3.org/2000/svg" version="1.1">\n'
                       '  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto">'
                       '<path d="M0,0 L0,6 L9,3 z" /></marker>\n         <mask id="mask">\n'
+                      f'        <rect x="{-1.25 * self.font:.2f}" y="{-r_max_y - 1.25 * self.font:.2f}" '
+                      f'width="{width:.2f}" height="{height:.2f}" fill="white" />\n'
                       f'{masks}        </mask>  </defs>')
         svg.append('</svg>')
         return '\n'.join(svg)
