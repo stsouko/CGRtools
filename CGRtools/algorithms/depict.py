@@ -51,7 +51,7 @@ class Depict:
             masks.extend(mask)
 
         if atoms:
-            atoms.insert(0, '     <g font-family="sans-serif">')
+            atoms.insert(0, '    <g font-family="sans-serif">')
             atoms.append('    </g>')
 
         if not embedding:
@@ -64,7 +64,7 @@ class Depict:
                           'xmlns="http://www.w3.org/2000/svg" version="1.1">\n    <defs>\n      <mask id="mask">\n'
                           f'        <rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
                           f'width="{width:.2f}" height="{height:.2f}" fill="white" />\n'
-                          f'{masks}         </mask>\n   </defs>')
+                          f'{masks}\n      </mask>\n    </defs>')
 
         svg.extend(atoms)
         if embedding:
@@ -155,7 +155,7 @@ class DepictMolecule(Depict):
                 svg.append(f'          <text x="{atom.x - self.font:.2f}" y="{-y_shift - atom.y:.2f}" '
                            f'font-size="{self.sup_font:.2f}">{atom.isotope}</text>')
             svg.append('      </g>')
-            mask = [f'          <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>']
+            mask = [f'        <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>']
         return svg, mask
 
     def _render_bond(self, bond, nx, ny, mx, my):
@@ -181,7 +181,7 @@ class DepictReaction:
             self.fix_positions()
 
         masks = []
-        svg = [f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
+        svg = [f'    <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                'stroke="black" stroke-width=".04" marker-end="url(#arrow)" />']
 
         r_max_x = r_max_y = 0
@@ -201,11 +201,12 @@ class DepictReaction:
         svg.insert(0, f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                       f'viewBox="{-1.25 * self.font:.2f} {-r_max_y - 1.25 * self.font:.2f} {width:.2f} {height:.2f}" '
                       'xmlns="http://www.w3.org/2000/svg" version="1.1">\n'
-                      '  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto">'
-                      '<path d="M0,0 L0,6 L9,3 z" /></marker>\n         <mask id="mask">\n'
+                      '    <defs>\n       <marker id="arrow" markerWidth="10" markerHeight="10" '
+                      'refX="0" refY="3" orient="auto">\n        <path d="M0,0 L0,6 L9,3 z" />\n       </marker>\n'
+                      '       <mask id="mask">\n'
                       f'        <rect x="{-1.25 * self.font:.2f}" y="{-r_max_y - 1.25 * self.font:.2f}" '
                       f'width="{width:.2f}" height="{height:.2f}" fill="white" />\n'
-                      f'{masks}        </mask>  </defs>')
+                      f'{masks}       </mask>\n    </defs>')
         svg.append('</svg>')
         return '\n'.join(svg)
 
