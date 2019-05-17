@@ -40,7 +40,7 @@ class Depict:
         max_y = max(x.y for x in self._atoms.values())
 
         svg = [f'    <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask)">']
-        svg.extend(self._bond())
+        svg.extend(self._bond_depict())
         svg.append('    </g>')
 
         atoms = []
@@ -88,7 +88,7 @@ class Depict:
 
 
 class DepictMolecule(Depict):
-    def _bond(self):
+    def _bond_depict(self):
         svg = []
         nodes = self._atoms
         for n, m, bond in self.bonds():
