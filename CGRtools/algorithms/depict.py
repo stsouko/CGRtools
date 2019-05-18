@@ -460,12 +460,18 @@ class DepictCGR(Depict):
             for n, m in zip(ring, ring[1:]):
                 bond = self._bonds[n][m]
                 n, m = nodes[n], nodes[m]
-                svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y, self.aromatic_color(bond)))
+                a_x, a_y, b_x, b_y = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+                svg.append(f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
+                           f'stroke="{self.aromatic_color(bond)}" '
+                           f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
 
             n, m = ring[-1], ring[0]
             bond = self._bonds[n][m]
             n, m = nodes[n], nodes[m]
-            svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y, self.aromatic_color(bond)))
+            a_x, a_y, b_x, b_y = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+            svg.append(f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
+                       f'stroke="{self.aromatic_color(bond)}" '
+                       f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
         return svg
 
     @staticmethod
@@ -476,7 +482,7 @@ class DepictCGR(Depict):
             return 'red'
         return 'black'
 
-    def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
+    def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -496,11 +502,8 @@ class DepictCGR(Depict):
             # backward reorienting
             an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
             bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y)
-            a_x, a_y = an_x + n_x, an_y + n_y
-            b_x, b_y = bn_x + n_x, bn_y + n_y
 
-            return f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" stroke="{color}" ' \
-                   f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />'
+            return an_x + n_x, an_y + n_y, bn_x + n_x, bn_y + n_y
 
     def _render_atoms(self):
         svg = []
