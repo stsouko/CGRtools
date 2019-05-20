@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import defaultdict
 from math import atan2, sin, cos, hypot
 from ..cache import cached_method
 from ..periodictable import cpk
@@ -85,7 +86,6 @@ class Depict:
     double_space = .04
     triple_space = .07
     aromatic_space = .08
-    quadruple_space = .05
     dashes = (.2, .1)
 
 
@@ -245,11 +245,15 @@ class DepictCGR(Depict):
         nodes = self._atoms
         for n, m, bond in self.bonds():
             order, p_order = bond.order, bond.p_order
-            n, m = nodes[n], nodes[m]
-            nx, ny, mx, my = n.x, n.y, m.x, m.y
+            na, ma = nodes[n], nodes[m]
+            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
             rv = lambda s: rotate_vector(0, s, mx - nx, my - ny)
             if order == 1:
-                if p_order in (1, 4):
+                if p_order == 1:
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />')
+                elif p_order == 4:
+                    self.__colors[n][m] = 'green'
+                    self.__colors[m][n] = 'green'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" />')
                 elif p_order == 2:
                     dx, dy = rv(self.double_space)
@@ -266,9 +270,8 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
                 elif p_order is None:
-                    if order == 1:
-                        svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                                   'stroke="red"/>')
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
+                               'stroke="red"/>')
                 else:
                     dx, dy = rv(self.double_space)
                     svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
@@ -277,14 +280,25 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
             elif order == 4:
-                if p_order in (1, 4):
+                if p_order == 4:
+                    self.__colors[n][m] = 'black'
+                    self.__colors[m][n] = 'black'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-                elif order == 4 and p_order == 2:
+                elif p_order == 1:
+                    self.__colors[n][m] = 'red'
+                    self.__colors[m][n] = 'red'
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                elif p_order == 2:
+                    self.__colors[n][m] = 'red'
+                    self.__colors[m][n] = 'red'
                     dx, dy = rv(self.double_space)
-                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
+                    svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dx:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
                 elif p_order == 3:
+                    self.__colors[n][m] = 'red'
+                    self.__colors[m][n] = 'red'
                     dx, dy = rv(self.triple_space)
                     svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
                                f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
@@ -292,13 +306,14 @@ class DepictCGR(Depict):
                                f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="green"/>\n'
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
-                elif p_order == 4:
-                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="red"/>')
                 elif p_order is None:
+                    self.__colors[n][m] = 'red'
+                    self.__colors[m][n] = 'red'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                'stroke="red"/>')
                 else:
+                    self.__colors[n][m] = 'black'
+                    self.__colors[m][n] = 'black'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>')
             elif order == 2:
                 if p_order == 2:
@@ -314,8 +329,11 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
                 elif p_order == 4:
+                    self.__colors[n][m] = 'green'
+                    self.__colors[m][n] = 'green'
                     dx, dy = rv(self.double_space)
-                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
+                    svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
                 elif p_order == 3:
@@ -356,7 +374,9 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" 'f'stroke="red"/>')
                 elif p_order == 4:
-                    dx, dy = rv(self.quadruple_space)
+                    self.__colors[n][m] = 'green'
+                    self.__colors[m][n] = 'green'
+                    dx, dy = rv(self.triple_space)
                     svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" '
                                f'y2="{-my + dy:.2f}" stroke="red"/>\n'
                                f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
@@ -378,7 +398,7 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
                 else:
-                    dx, dy = rv(self.quadruple_space)
+                    dx, dy = rv(self.double_space)
                     svg.append(f'      <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" x2="{mx + 3 * dx:.2f}" '
                                f'y2="{-my + 3 * dy:.2f}"/>\n '
                                f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" stroke="green"/>\n'
@@ -389,9 +409,12 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - 3 * dx:.2f}" y1="{-ny - 3 * dy:.2f}" x2="{mx - 3 * dx:.2f}" '
                                f'y2="{-my - 3 * dy:.2f}" stroke="red"/>')
             elif order is None:
-                if p_order is None:
-                    pass
-                elif p_order in (1, 4):
+                if p_order == 1:
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
+                               'stroke="green"/>')
+                elif p_order == 4:
+                    self.__colors[n][m] = 'green'
+                    self.__colors[m][n] = 'green'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                'stroke="green"/>')
                 elif p_order == 2:
@@ -423,6 +446,7 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
                 elif p_order == 4:
+                    self.__colors[n][m] = 'black'
                     svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                'stroke="green"/>')
                 elif p_order == 2:
@@ -435,7 +459,7 @@ class DepictCGR(Depict):
                                f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
                 elif p_order == 3:
-                    dx, dy = rv(self.quadruple_space)
+                    dx, dy = rv(self.double_space)
                     svg.append(f'      <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" '
                                f'x2="{mx + 3 * dx:.2f}" y2="{-my + 3 * dy:.2f}"/>\n '
                                f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" stroke="red"/>\n'
@@ -454,30 +478,20 @@ class DepictCGR(Depict):
             c_y = sum(nodes[y].y for y in ring) / len(ring)
 
             for n, m in zip(ring, ring[1:]):
-                bond = self._bonds[n][m]
-                n, m = nodes[n], nodes[m]
-                a_x, a_y, b_x, b_y = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+                na, ma = nodes[n], nodes[m]
+                a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+
                 svg.append(f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                           f'stroke="{self.__aromatic_color(bond)}" '
+                           f'stroke="{self.__colors[n][m]}" '
                            f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
 
             n, m = ring[-1], ring[0]
-            bond = self._bonds[n][m]
-            n, m = nodes[n], nodes[m]
-            a_x, a_y, b_x, b_y = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+            na, ma = nodes[n], nodes[m]
+            a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
             svg.append(f'      <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                       f'stroke="{self.__aromatic_color(bond)}" '
+                       f'stroke="{self.__colors[n][m]}" '
                        f'stroke-dasharray="{self.dashes[0]:.2f} {self.dashes[1]:.2f}" />')
         return svg
-
-    @staticmethod
-    def __aromatic_color(bond):
-        if bond.order == 4:
-            if bond.p_order == 4:
-                return 'black'
-            else:
-                return 'red'
-        return 'green'
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
         # n aligned xy
@@ -532,7 +546,8 @@ class DepictCGR(Depict):
                 mask.append(f'          <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>')
         return svg, mask
 
-    aromatic_space = .09
+    aromatic_space = .14
+    __colors = defaultdict(dict)
 
 
 shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .35, 'O': .35,
