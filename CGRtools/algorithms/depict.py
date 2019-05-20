@@ -18,6 +18,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from math import atan2, sin, cos, hypot
+from uuid import uuid4
 from ..cache import cached_method
 from ..periodictable import cpk
 
@@ -54,12 +55,13 @@ class Depict:
 
         if bonds:
             if masks:
-                svg.append('  <defs>\n    <mask id="mask">\n'
+                uid = str(uuid4())
+                svg.append(f'  <defs>\n    <mask id="mask-{uid}">\n'
                            f'      <rect x="{min_x - 1.25 * self.font:.2f}" y="{-max_y - 1.25 * self.font:.2f}" '
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
                 svg.extend(masks)
                 svg.append('    </mask>\n  </defs>\n'
-                           '  <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask)">')
+                           f'  <g fill="none" stroke="black" stroke-width=".03"  mask="url(#mask-{uid})">')
             else:
                 svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
             svg.extend(bonds)
@@ -207,14 +209,15 @@ class DepictReaction:
             svg.append('  <defs>\n    <marker id="arrow" markerWidth="10" markerHeight="10" '
                        'refX="0" refY="3" orient="auto">\n      <path d="M0,0 L0,6 L9,3"/>\n    </marker>')
             if r_masks:
-                svg.append('    <mask id="mask">\n'
+                uid = str(uuid4())
+                svg.append(f'    <mask id="mask-{uid}">\n'
                            f'      <rect x="{-1.25 * self.font:.2f}" y="{-r_max_y - 1.25 * self.font:.2f}" '
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
                 svg.extend(r_masks)
                 svg.append('    </mask>\n  </defs>\n'
                            f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
-                           '  <g fill="none" stroke="black" stroke-width=".03" mask="url(#mask)">')
+                           f'  <g fill="none" stroke="black" stroke-width=".03" mask="url(#mask-{uid})">')
             else:
                 svg.append('  </defs>')
                 svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
