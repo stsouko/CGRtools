@@ -472,12 +472,12 @@ class DepictCGR(Depict):
 
     @staticmethod
     def __aromatic_color(bond):
-        if bond.order != bond.p_order:
+        if bond.order == 4:
             if bond.p_order == 4:
-                return 'green'
-            elif bond.order == 4:
+                return 'black'
+            else:
                 return 'red'
-        return 'black'
+        return 'green'
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
         # n aligned xy
