@@ -38,18 +38,8 @@ class Aromatize:
 
         for ring in self.sssr:
             lr = len(ring)
-            if lr in (5, 6, 7) and unsaturated.issuperset(ring):
-                for n, m in zip(ring, ring[1:]):
-                    b = adj[n][m]
-                    if b.order != 4:
-                        b.order = 4
-                b = adj[ring[0]][ring[-1]]
-                if b.order != 4:
-                    b.order = 4
-                total += 1
-            elif lr == 5:
-                sr = set(ring)
-                if len(unsaturated & sr) == 4 and atom[(sr - unsaturated).pop()]._atom in _pyrole_atoms:
+            if lr in (5, 6, 7):
+                if unsaturated.issuperset(ring):  # benzene, azulene, pyridine and quinones
                     for n, m in zip(ring, ring[1:]):
                         b = adj[n][m]
                         if b.order != 4:
@@ -58,6 +48,17 @@ class Aromatize:
                     if b.order != 4:
                         b.order = 4
                     total += 1
+                else:  # pyrole, cyclopentapyridine and quinones
+                    sr = set(ring)
+                    if len(unsaturated & sr) == lr - 1 and atom[(sr - unsaturated).pop()]._atom in _pyrole_atoms:
+                        for n, m in zip(ring, ring[1:]):
+                            b = adj[n][m]
+                            if b.order != 4:
+                                b.order = 4
+                        b = adj[ring[0]][ring[-1]]
+                        if b.order != 4:
+                            b.order = 4
+                        total += 1
         if total:
             self.flush_cache()
         return total
@@ -76,18 +77,14 @@ class Aromatize:
 
         pyroles = set()
         quinones = []
-        azulenes = set()
         condensed_rings = defaultdict(lambda: defaultdict(list))
         for ring in self.aromatic_rings:
             ring = tuple(ring)
-            if not double_bonded.isdisjoint(ring):  # search quinones
-                quinones.append(ring)
-
             lr = len(ring)
-            if lr == 5:
+            if lr in (5, 6):
                 pyroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
-            elif lr == 7:
-                azulenes.update(ring)
+            if not double_bonded.isdisjoint(ring):
+                quinones.append(ring)
 
             for n, m in zip(ring, ring[1:]):  # fill condensed rings graph
                 condensed_rings[n][m].append(ring)
@@ -113,36 +110,42 @@ class Aromatize:
                 ordered_ring = ring
 
             lr = len(ring)
-            if lr == 7:
-                unbalansed_ring = len(doubles) in (2, 4)  # bis- or tetra- azulene 7-ring quinones
-            elif lr == 6:
-                unbalansed_ring = len(doubles) % 2
-            elif not azulenes.isdisjoint(ring):
-                unbalansed_ring = len(doubles) == 2  # bis- azulene 5-ring quinones
-            else:  # pyroles
-                unbalansed_ring = len(doubles) == 1
+            if lr == 6:
+                unbalanced_ring = len(doubles) in (1, 3)
+            else:  # bis- or tetra- azulene 7-ring and pyrole or bis azulenes 5-rings quinones
+                unbalanced_ring = len(doubles) in (2, 4)
+
+            pyrole_like = not pyroles.isdisjoint(ring)
 
             bond = 1
             n = ordered_ring[0]
             for m in ordered_ring[1:]:
                 if bond == 1:
-                    if not (m in double_bonded or m in pyroles or
-                            unbalansed_ring and condensed_rings[n][m] and not condensed_rings[n][p]):
-                        bond = 2
-                        # single bond followed by double if common atom:
-                        # not already has double bond [quinone] or
-                        # not pyrole atom with LP or
-                        # unbalansed_ring has 2 condensed rings in a row
+                    if m not in double_bonded:
+                        if unbalanced_ring:
+                            if pyrole_like:
+                                if m in pyroles:
+                                    unbalanced_ring = False
+                                else:
+                                    bond = 2
+                            elif condensed_rings[n][m]:
+                                unbalanced_ring = False
+                            else:
+                                bond = 2
+                        else:
+                            bond = 2
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 1))
                     elif n in double_bonded:  # found new quinone ring (Y)
                         q = condensed_rings[n][m][0]
                         if q not in quinones:
-                            quinones.insert(0, q)  # low priority
+                            quinones.append(q)
                 else:
                     if m in double_bonded:
                         raise InvalidAromaticRing(ring)
-                    if not (unbalansed_ring and condensed_rings[n][m] and not condensed_rings[n][p]):
+                    if unbalanced_ring and not pyrole_like and condensed_rings[n][m]:
+                        unbalanced_ring = False
+                    else:
                         bond = 1
                     if not condensed_rings[n][m]:
                         patch.add((n, m, 2))
@@ -150,11 +153,8 @@ class Aromatize:
                         double_bonded.add(m)
                         if condensed_rings[n][p]:
                             q = condensed_rings[n][p][0]
-                            if q in quinones:  # up priority
-                                quinones.remove(q)
+                            if q not in quinones:
                                 quinones.append(q)
-                            else:
-                                quinones.insert(0, q)
                 p, n = n, m
             else:
                 m = ordered_ring[0]
