@@ -168,10 +168,11 @@ class DepictMolecule(Depict):
                            f'font-size="{self._render_font:.2f}">{atom.element}</text>')
                 if atom.charge:
                     svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{charge_str[atom.charge]}</text>')
+                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
                 if atom.multiplicity:
                     svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{multiplicity_str[atom.multiplicity]}</text>')
+                               f'font-size="{self._render_sup_font:.2f}">'
+                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
                 if atom.isotope != atom.common_isotope:
                     svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
@@ -221,12 +222,13 @@ class DepictReaction:
                 svg.append('    </mask>\n  </defs>\n'
                            f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
-                           f'  <g fill="none" stroke="black" stroke-width=".03" mask="url(#mask-{uid})">')
+                           f'  <g fill="none" stroke="{self._render_bonds_color}" '
+                           f'stroke-width=".03" mask="url(#mask-{uid})">')
             else:
                 svg.append('  </defs>')
                 svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
-                svg.append('  <g fill="none" stroke="black" stroke-width=".03">')
+                svg.append(f'  <g fill="none" stroke="{self._render_bonds_color}" stroke-width=".03">')
             svg.extend(r_bonds)
             svg.append('  </g>')
 
@@ -243,6 +245,7 @@ class DepictReaction:
         return self.depict()
 
     _render_font = .4
+    _render_bonds_color = 'black'
 
 
 class DepictCGR(Depict):
@@ -547,13 +550,14 @@ class DepictCGR(Depict):
                 if atom.charge != atom.p_charge:
                     svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">'
-                               f'{p_charge_str[atom.charge][atom.p_charge]}</text>')
+                               f'{_render_p_charge_str[atom.charge][atom.p_charge]}</text>')
                 elif atom.charge:
                     svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{charge_str[atom.charge]}</text>')
+                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
                 if atom.multiplicity:
                     svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{multiplicity_str[atom.multiplicity]}</text>')
+                               f'font-size="{self._render_sup_font:.2f}">'
+                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
                 if atom.isotope != atom.common_isotope:
                     svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
@@ -580,14 +584,14 @@ shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .3
           'Db': .35, 'Sg': .35, 'Bh': .35, 'Hs': .35, 'Mt': .35, 'Ds': .35, 'Rg': .35, 'Cn': .35,
           'Nh': .35, 'Fl': .35, 'Mc': .35, 'Lv': .35, 'Ts': .35, 'Og': .35}
 
-charge_str = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
-p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
-                -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
-                -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
-                0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
-                1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
-                2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
-                3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
-multiplicity_str = {1: '↑↓', 2: '↑', 3: '↑↑'}
+_render_charge_str = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
+_render_p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
+                        -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
+                        -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
+                        0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
+                        1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
+                        2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
+                        3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
+_render_multiplicity_str = {1: '↑↓', 2: '↑', 3: '↑↑'}
 
 __all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR']
