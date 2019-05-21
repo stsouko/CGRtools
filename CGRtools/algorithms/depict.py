@@ -285,8 +285,7 @@ class DepictCGR(Depict):
                 else:
                     dx, dy = rv(self._render_double_space)
                     svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my - dy:.2f}"\n'
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
+                               f'x2="{mx + dx:.2f}" y2="{-my - dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
                                f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
@@ -362,8 +361,7 @@ class DepictCGR(Depict):
                 elif p_order == 5:
                     dx, dy = rv(self._render_triple_space)
                     svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"\n'
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
+                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
                                f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
                                f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>\n'
@@ -411,8 +409,7 @@ class DepictCGR(Depict):
                 else:
                     dx, dy = rv(self._render_double_space)
                     svg.append(f'    <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" x2="{mx + 3 * dx:.2f}" '
-                               f'y2="{-my + 3 * dy:.2f}"/>\n '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
+                               f'y2="{-my + 3 * dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
                                f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
                                f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="red"/>\n'
@@ -444,18 +441,17 @@ class DepictCGR(Depict):
                                f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
                 else:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" \n'
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                f'stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="green"/>')
             else:
                 if p_order == 5:
-                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" \n'
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
                 elif p_order == 1:
                     dx, dy = rv(self._render_double_space)
                     svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
+                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}"stroke="red"/>\n'
                                f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
@@ -476,7 +472,7 @@ class DepictCGR(Depict):
                 elif p_order == 3:
                     dx, dy = rv(self._render_double_space)
                     svg.append(f'    <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" '
-                               f'x2="{mx + 3 * dx:.2f}" y2="{-my + 3 * dy:.2f}"/>\n '
+                               f'x2="{mx + 3 * dx:.2f}" y2="{-my + 3 * dy:.2f}" '
                                f'stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="red"/>\n'
                                f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
@@ -486,7 +482,7 @@ class DepictCGR(Depict):
                                f'    <line x1="{nx - 3 * dx:.2f}" y1="{-ny - 3 * dy:.2f}" '
                                f'x2="{mx - 3 * dx:.2f}" y2="{-my - 3 * dy:.2f}" stroke="green"/>')
                 else:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" \n'
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
                                f'stroke-dasharray="{self._render_dashes[0]:.2f} '
                                f'{self._render_dashes[1]:.2f}" stroke="red"/>')
 
@@ -499,15 +495,15 @@ class DepictCGR(Depict):
                 a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
 
                 svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                           f'stroke="{_ar_bond_colors[n][m]}" '
-                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
+                           f'stroke="{_ar_bond_colors[n][m]}"/>')
 
             n, m = ring[-1], ring[0]
             na, ma = nodes[n], nodes[m]
             a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
             svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                       f'stroke="{_ar_bond_colors[n][m]}" '
-                       f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+                       f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
+                       f'stroke="{_ar_bond_colors[n][m]}"/>')
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
