@@ -208,11 +208,11 @@ class DepictReaction:
                 if max_y > r_max_y:
                     r_max_y = max_y
 
-        width = r_max_x + 2.5 * self.font
-        height = r_max_y + 2.5 * self.font
+        width = r_max_x + 2.5 * self._render_font
+        height = r_max_y + 2.5 * self._render_font
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
-               f'viewBox="{-1.25 * self.font:.2f} {-r_max_y - 1.25 * self.font:.2f} {width:.2f} '
+               f'viewBox="{-1.25 * self._render_font:.2f} {-r_max_y - 1.25 * self._render_font:.2f} {width:.2f} '
                f'{height:.2f}" xmlns="http://www.w3.org/2000/svg" version="1.1">']
 
         if r_bonds:
@@ -221,7 +221,8 @@ class DepictReaction:
             if r_masks:
                 uid = str(uuid4())
                 svg.append(f'    <mask id="mask-{uid}">\n'
-                           f'      <rect x="{-1.25 * self.font:.2f}" y="{-r_max_y - 1.25 * self.font:.2f}" '
+                           f'      <rect x="{-1.25 * self._render_font:.2f}" '
+                           f'y="{-r_max_y - 1.25 * self._render_font:.2f}" '
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
                 svg.extend(r_masks)
                 svg.append('    </mask>\n  </defs>\n'
@@ -248,7 +249,7 @@ class DepictReaction:
     def _repr_svg_(self):
         return self.depict()
 
-    font = .4
+    _render_font = .4
 
 
 class DepictCGR(Depict):
@@ -521,14 +522,14 @@ class DepictCGR(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
 
-        if self.aromatic_space / cr_y < .65:
+        if self._render_aromatic_space / cr_y < .65:
             if cr_y > 0:
-                ar_y = br_y = self.aromatic_space
+                ar_y = br_y = self._render_aromatic_space
             else:
-                ar_y = br_y = -self.aromatic_space
+                ar_y = br_y = -self._render_aromatic_space
 
-            ar_x = self.aromatic_space * cr_x / abs(cr_y)
-            br_x = ((abs(cr_y) - self.aromatic_space) * mr_x + self.aromatic_space * cr_x) / abs(cr_y)
+            ar_x = self._render_aromatic_space * cr_x / abs(cr_y)
+            br_x = ((abs(cr_y) - self._render_aromatic_space) * mr_x + self._render_aromatic_space * cr_x) / abs(cr_y)
 
             # backward reorienting
             an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
@@ -567,7 +568,7 @@ class DepictCGR(Depict):
                 mask.append(f'      <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>')
         return svg, mask
 
-    aromatic_space = .14
+    _render_aromatic_space = .14
 
 
 shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .35, 'O': .35,
