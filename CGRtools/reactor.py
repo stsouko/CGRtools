@@ -166,23 +166,30 @@ class CGRreactor:
 
         if to_delete:
             # if deleted atoms have another path to remain fragment, the path is preserved
-            not_delete = set(mapping.values()).difference(to_delete)
+            remain = set(mapping.values()).difference(to_delete)
             delete, global_seen = set(), set()
             for x in to_delete:
-                seen = {x}
-                env = [n for n in structure.adj[x] if n not in global_seen]
-                while env:
-                    n = env.pop()
-                    if n not in seen:
-                        seen.add(n)
-                        if n in not_delete:
-                            global_seen.update(seen)
-                            seen.clear()
-                        elif n in to_delete:
+                env = [n for n in structure.adj[x] if n not in remain]
+                global_seen.add(x)
+                seen = set()
+                for n in env:
+                    seen.add(n)
+                    stack = [x for x in structure.adj[n] if x not in global_seen]
+                    while stack:
+                        current = stack.pop()
+                        seen.add(current)
+                        global_seen.update(seen)
+                        if current in remain:
+                            seen = set()
+                            stack = []
+                        elif current in to_delete:
                             delete.update(seen)
                         else:
-                            env.extend([x for x in structure.adj[n]
-                                        if x not in seen and x not in env])
+                            neighbors = [x for x in structure.adj[current] if x not in global_seen]
+                            if not neighbors:
+                                delete.update(seen)
+                            stack.extend(neighbors)
+
             to_delete.update(delete)
 
         for n, atom in self.__atom_attrs.items():
