@@ -169,26 +169,24 @@ class CGRreactor:
             remain = set(mapping.values()).difference(to_delete)
             delete, global_seen = set(), set()
             for x in to_delete:
-                env = [n for n in structure.adj[x] if n not in remain]
-                global_seen.add(x)
-                seen = set()
-                for n in env:
+                for n in structure.adj[x]:
+                    if n in global_seen or n in remain:
+                        continue
+                    seen = set()
                     seen.add(n)
+                    global_seen.add(n)
                     stack = [x for x in structure.adj[n] if x not in global_seen]
                     while stack:
                         current = stack.pop()
-                        seen.add(current)
-                        global_seen.update(seen)
                         if current in remain:
-                            seen = set()
-                            stack = []
-                        elif current in to_delete:
-                            delete.update(seen)
-                        else:
-                            neighbors = [x for x in structure.adj[current] if x not in global_seen]
-                            if not neighbors:
-                                delete.update(seen)
-                            stack.extend(neighbors)
+                            break
+                        if current in to_delete:
+                            continue
+                        seen.add(current)
+                        global_seen.add(current)
+                        stack.extend([x for x in structure.adj[current] if x not in global_seen])
+                    else:
+                        delete.update(seen)
 
             to_delete.update(delete)
 
