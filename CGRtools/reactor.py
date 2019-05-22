@@ -164,6 +164,32 @@ class CGRreactor:
         atoms = {}
         new_atoms = {}
 
+        if to_delete:
+            # if deleted atoms have another path to remain fragment, the path is preserved
+            remain = set(mapping.values()).difference(to_delete)
+            delete, global_seen = set(), set()
+            for x in to_delete:
+                for n in structure.adj[x]:
+                    if n in global_seen or n in remain:
+                        continue
+                    seen = set()
+                    seen.add(n)
+                    global_seen.add(n)
+                    stack = [x for x in structure.adj[n] if x not in global_seen]
+                    while stack:
+                        current = stack.pop()
+                        if current in remain:
+                            break
+                        if current in to_delete:
+                            continue
+                        seen.add(current)
+                        global_seen.add(current)
+                        stack.extend([x for x in structure.adj[current] if x not in global_seen])
+                    else:
+                        delete.update(seen)
+
+            to_delete.update(delete)
+
         for n, atom in self.__atom_attrs.items():
             if n in mapping:
                 n = mapping[n]
@@ -262,10 +288,13 @@ class Reactor:
             raise TypeError('only list of Molecules possible')
         if self.__single:
             patch = self.__reactor(structures[0], limit, skip_intersection)
-            if limit == 1 and patch:
-                if self.__split:
-                    return ReactionContainer(reactants=structures, products=patch.split())
-                return ReactionContainer(reactants=structures, products=[patch])
+            if limit == 1:
+                if patch:
+                    if self.__split:
+                        return ReactionContainer(reactants=structures, products=patch.split())
+                    return ReactionContainer(reactants=structures, products=[patch])
+                else:
+                    return
             if self.__split:
                 g = (ReactionContainer(reactants=structures, products=x.split()) for x in patch)
             else:
