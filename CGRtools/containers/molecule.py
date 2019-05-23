@@ -154,6 +154,44 @@ class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standar
         return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and adj[ring[0]][ring[-1]].order == 4
                 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
 
+    @cached_property
+    def cumulenes(self) -> List[List[int]]:
+        """
+        alkenes, allenes and cumulenes atoms numbers
+        """
+        atoms = self._atoms
+        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        for n, m_bond in self._bonds.items():
+            if atoms[n].element == 'C':
+                adj_n = adj[n].add
+                for m, bond in m_bond.items():
+                    if bond.order == 2 and atoms[m].element == 'C':
+                        adj_n(m)
+        if not adj:
+            return []
+
+        terminals = {x for x, y in adj.items() if len(y) == 1}
+        cumulenes = []
+        while terminals:
+            m = terminals.pop()
+            path = [m]
+            cumulenes.append(path)
+            while m not in terminals:
+                n, m = m, adj[m].pop()
+                adj[m].discard(n)
+                path.append(m)
+            terminals.discard(m)
+        return cumulenes
+
+    @cached_property
+    def tetrahedrons(self) -> List[int]:
+        """
+        carbon sp3 atoms numbers
+        """
+        atoms = self._atoms
+        return [n for n, env in self._bonds.items()
+                if atoms[n].element == 'C' and all(x.order == 1 for x in env.values())]
+
     def _matcher(self, other):
         """
         return VF2 GraphMatcher
