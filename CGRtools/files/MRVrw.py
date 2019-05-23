@@ -42,7 +42,7 @@ def xml_dict(parent_element, stop_list=None):
         for element in parent_element:
             name = QName(element).localname
             if name in stop_list:
-                text.append(tostring(element, encoding=str))
+                text.append(tostring(element, encoding=str, with_tail=False))
             else:
                 elements_grouped[name].append(element)
 
@@ -53,9 +53,9 @@ def xml_dict(parent_element, stop_list=None):
 
         for element_tag, element_group in elements_grouped.items():
             if len(element_group) == 1:
-                out[element_tag] = xml_dict(element_group[0])
+                out[element_tag] = xml_dict(element_group[0], stop_list)
             else:
-                out[element_tag] = [xml_dict(x) for x in element_group]
+                out[element_tag] = [xml_dict(x, stop_list) for x in element_group]
 
     if parent_element.text:
         t = parent_element.text.strip()
