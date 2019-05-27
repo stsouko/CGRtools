@@ -253,13 +253,13 @@ class CGRread:
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomhyb':
-                atom_data[n]['hybridization'], atom_data[c_atoms[1]]['p_hybridization'] = self.__parse_dyn(c_value)
+                atom_data[n]['hybridization'], atom_data[n]['p_hybridization'] = self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
                     is_query = True
             elif c_type == 'dynatomneighbors':
-                atom_data[n]['neighbors'], atom_data[c_atoms[1]]['p_neighbors'] = self.__parse_dyn(c_value)
+                atom_data[n]['neighbors'], atom_data[n]['p_neighbors'] = self.__parse_dyn(c_value)
                 if not is_cgr:
                     is_cgr = True
                 if not is_query:
