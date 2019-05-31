@@ -40,3 +40,21 @@ class InvalidAromaticRing(ValueError):
     """
     aromatic ring has impossible kekule structure
     """
+
+
+class IsConnectedAtom(Exception):
+    """
+    atom already attached to graph
+    """
+
+
+class IsNotConnectedAtom(Exception):
+    """
+    atom already attached to graph
+    """
+
+
+class ValenceError(Exception):
+    """
+    atom has error in valence
+    """
