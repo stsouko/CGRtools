@@ -52,9 +52,6 @@ class Depict:
         viewbox_x = min_x - 1.25 * self._render_font
         viewbox_y = -max_y - 1.25 * self._render_font
 
-        bonds.insert(0, f'    <line x1="{viewbox_x:.2f}" y1="{-viewbox_y:.2f}" '
-                        f'x2="{viewbox_x + width:.2f}" y2="{-viewbox_y:.2f}" stroke="none"/>')
-
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
                f'{height:.2f}" xmlns="http://www.w3.org/2000/svg" version="1.1">']
@@ -71,6 +68,8 @@ class Depict:
                            f'stroke-width=".03"  mask="url(#mask-{uid})">')
             else:
                 svg.append(f'  <g fill="none" stroke="{self._render_bonds_color}" stroke-width=".03">')
+            svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{-viewbox_y:.2f}" '
+                       f'x2="{viewbox_x + width:.2f}" y2="{-viewbox_y:.2f}" stroke="none"/>')
             svg.extend(bonds)
             svg.append('  </g>')
 
@@ -236,8 +235,8 @@ class DepictReaction:
                 svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
                 svg.append(f'  <g fill="none" stroke="{self._render_bonds_color}" stroke-width=".03">')
-            r_bonds.insert(0, f'    <line x1="{viewbox_x:.2f}" y1="{-viewbox_y:.2f}" '
-                              f'x2="{viewbox_x + width:.2f}" y2="{-viewbox_y:.2f}" stroke="none"/>')
+            svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{-viewbox_y:.2f}" '
+                       f'x2="{viewbox_x + width:.2f}" y2="{-viewbox_y:.2f}" stroke="none"/>')
             svg.extend(r_bonds)
             svg.append('  </g>')
 
