@@ -125,10 +125,14 @@ class DepictMolecule(Depict):
 
             for n, m in zip(ring, ring[1:]):
                 n, m = nodes[n], nodes[m]
-                svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
+                aromatic = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+                if aromatic:
+                    svg.append(aromatic)
 
             n, m = nodes[ring[-1]], nodes[ring[0]]
-            svg.append(self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y))
+            aromatic = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+            if aromatic:
+                svg.append(aromatic)
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
