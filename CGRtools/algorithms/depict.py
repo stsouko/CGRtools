@@ -504,18 +504,24 @@ class DepictCGR(Depict):
 
             for n, m in zip(ring, ring[1:]):
                 na, ma = nodes[n], nodes[m]
-                a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+                aromatic = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+                if aromatic:
+                    a_x, a_y, b_x, b_y = aromatic
+
+                    svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
+                               f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
+                               f'stroke="{_ar_bond_colors[n][m]}"/>')
+
+            n, m = ring[-1], ring[0]
+            na, ma = nodes[n], nodes[m]
+            aromatic = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+            if aromatic:
+                a_x, a_y, b_x, b_y = aromatic
 
                 svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
                            f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
                            f'stroke="{_ar_bond_colors[n][m]}"/>')
 
-            n, m = ring[-1], ring[0]
-            na, ma = nodes[n], nodes[m]
-            a_x, a_y, b_x, b_y = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
-            svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                       f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
-                       f'stroke="{_ar_bond_colors[n][m]}"/>')
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
