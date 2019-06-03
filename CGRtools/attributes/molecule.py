@@ -122,11 +122,13 @@ class Atom(AtomAttribute):
 
     def __setattr__(self, key, value):
         if key == 'element':
-            value = self._element_check(value)
+            if not self._skip_checks:
+                value = self._element_check(value)
             if value != self._atom:
                 super().__setattr__('_atom', value(self.charge, self.multiplicity))
         elif key in ('charge', 'isotope', 'multiplicity'):
-            value = getattr(self, f'_{key}_check')(value)
+            if not self._skip_checks:
+                value = getattr(self, f'_{key}_check')(value)
             attrs = {'multiplicity': self.multiplicity, 'isotope': self.isotope,
                      'charge': self.charge, key: value}
             super().__setattr__('_atom', type(self._atom)(**attrs))
@@ -198,7 +200,7 @@ class Atom(AtomAttribute):
 
             value = self._check_kwargs(value)
             if 'element' in value:
-                super().__setattr__('_atom', 
+                super().__setattr__('_atom',
                                     value['element'](charge=value.get('charge', self.charge),
                                                      multiplicity=value.get('multiplicity', self.multiplicity),
                                                      isotope=value.get('isotope')))
