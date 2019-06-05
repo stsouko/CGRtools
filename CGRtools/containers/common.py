@@ -157,6 +157,9 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         s = self.subgraph(atoms)
         if as_view:
             s.add_atom = s.add_bond = s.delete_atom = s.delete_bond = frozen  # more informative exception
+            s._meta = s.graph
+            s._bonds = s._adj
+            s._atoms = s._node
             return s
         s = s.copy()
         if not meta:
