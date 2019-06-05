@@ -214,4 +214,4 @@ class Ts(Element, PeriodVII, GroupXVII):
         return ()
 
 
-__all__ = ['F', 'Cl', 'Br', 'At', 'I', 'Ts']
+__all__ = ['F', 'Cl', 'Br', 'I', 'At', 'Ts']

@@ -30,10 +30,6 @@ class Sc(Element, PeriodIV, GroupIII):
         return 21
 
     @property
-    def electronegativity(self):
-        return 1.36
-
-    @property
     def isotopes_distribution(self):
         return FrozenDict({45: 1.0})
 

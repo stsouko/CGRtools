@@ -20,7 +20,7 @@
 #
 from abc import ABC, abstractmethod
 from collections import Mapping, defaultdict
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, Set, List
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
 
@@ -33,7 +33,7 @@ class class_cached_property:
 
     def __get__(self, obj, cls):
         if obj is None:
-            return
+            return self
         try:
             class_cache = cls.__class_cache__[type(obj)]
         except KeyError:
@@ -48,36 +48,128 @@ class class_cached_property:
         return cached
 
 
-class Element(ABC):
-    __slots__ = ('__isotope', '__charge', '__is_radical', '__graph', '__map')
-    __class_cache__ = {}
+class Core(ABC):
+    __slots__ = ('__isotope', '_graph', '_map')
 
-    def __init__(self, charge: int = 0, isotope: Optional[int] = None, is_radical: bool = False):
+    def __init__(self, isotope: Optional[int] = None):
         """
         element object with specified charge, isotope and multiplicity
 
-        :param charge: formal charge of atom
         :param isotope: isotope number of element
-        :param is_radical: multiplicity of atom
         """
-        if isinstance(charge, int) and isinstance(is_radical, bool):
-            if not charge or any(charge == c and is_radical == r for c, r, *_ in self._valences_exceptions):
-                self.__charge = charge
-                self.__is_radical = is_radical
-            else:
-                raise ValueError('invalid charge and radical combination')
-        else:
-            raise TypeError('integer charge value and bool radical value required')
-
-        if isotope is None:
-            self.__isotope = None
-        elif isinstance(isotope, int):
-            if isotope in self.isotopes_distribution:
-                self.__isotope = isotope
-            else:
+        if isinstance(isotope, int):
+            if isotope not in self.isotopes_distribution:
                 raise ValueError('isotope number impossible or not stable')
-        else:
+        elif isotope is not None:
             raise TypeError('integer isotope number required')
+        self.__isotope = isotope
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.__isotope})'
+
+    @property
+    @abstractmethod
+    def atomic_number(self) -> int:
+        """
+        element number
+        """
+
+    @property
+    def isotope(self):
+        return self.__isotope
+
+    @property
+    def atomic_mass(self):
+        mass = self.isotopes_masses
+        if self.__isotope is None:
+            return sum(x * mass[i] for i, x in self.isotopes_distribution.items())
+        return mass[self.__isotope]
+
+    @property
+    @abstractmethod
+    def isotopes_distribution(self) -> Dict[int, float]:
+        """
+        isotopes distribution in earth
+        """
+
+    @property
+    @abstractmethod
+    def isotopes_masses(self) -> Dict[int, float]:
+        """
+        isotopes distribution in earth
+        """
+
+    @property
+    def charge(self):
+        try:
+            return self._graph()._charges[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def is_radical(self):
+        try:
+            return self._graph()._radicals[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def x(self):
+        try:
+            return self._graph()._plane[self._map][0]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def y(self):
+        try:
+            return self._graph()._plane[self._map][1]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def neighbors(self):
+        try:
+            return self._graph()._neighbors[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def hybridization(self):
+        try:
+            return self._graph()._hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    def copy(self):
+        """
+        detached from graph copy of element
+        """
+        copy = object.__new__(self.__class__)
+        copy._Core__isotope = self.__isotope
+        return copy
+
+    def _attach_to_graph(self, graph, _map):
+        try:
+            self._graph
+        except AttributeError:
+            self._graph = ref(graph)
+            self._map = _map
+        else:
+            raise IsConnectedAtom
+
+    def _change_map(self, _map):
+        try:
+            self._graph
+        except AttributeError:
+            raise IsNotConnectedAtom
+        else:
+            self._map = _map
+
+
+class Element(Core):
+    __slots__ = ()
+    __class_cache__ = {}
 
     @classmethod
     def from_symbol(cls, symbol):
@@ -103,96 +195,23 @@ class Element(ABC):
 
     def __eq__(self, other):
         return isinstance(other, Element) and self.atomic_number == other.atomic_number and \
-               self.__charge == other.charge and self.__isotope == other.isotope \
-               and self.__is_radical == other.__is_radical
+               self.isotope == other.isotope
 
-    def __hash__(self):
+    def __int__(self):
         """
-        7bit | 9bit | 3bit | 1bit
+        21bit = 9bit | 7bit | 4bit | 1bit
         """
-        return self.atomic_number << 13 | (self.__isotope or 0) << 4 | self.__charge + 3 << 1 | self.__is_radical
+        return (self.isotope or 0) << 12 | self.atomic_number << 5 | self.charge + 4 << 1 | self.is_radical
 
-    def _attach_to_graph(self, graph, _map):
-        try:
-            self.__graph
-        except AttributeError:
-            self.__graph = ref(graph)
-            self.__map = _map
-        else:
-            raise IsConnectedAtom
-
-    def copy(self):
-        """
-        detached from graph copy of element
-        """
-        copy = object.__new__(self.__class__)
-        copy._Element__charge = self.__charge
-        copy._Element__isotope = self.__isotope
-        copy._Element__is_radical = self.__is_radical
-        return copy
-
-    def valence_rules(self, valence: int):
+    def valence_rules(self, charge: int, is_radical: bool, valence: int) -> \
+            List[Tuple[Set[Tuple[int, 'Element']], Dict[Tuple[int, 'Element'], int], int]]:
         """
         valence rules for element with specific charge/radical state
         """
         try:
-            return self._compiled_valence_rules[(self.__charge, self.__is_radical, valence)]
+            return self._compiled_valence_rules[(charge, is_radical, valence)]
         except KeyError:
             raise ValenceError
-
-    @property
-    def charge(self):
-        return self.__charge
-
-    @property
-    def isotope(self):
-        return self.__isotope
-
-    @property
-    def is_radical(self):
-        return self.__is_radical
-
-    @property
-    def atomic_mass(self):
-        mass = self.isotopes_masses
-        if self.__isotope is None:
-            return sum(x * mass[i] for i, x in self.isotopes_distribution.items())
-        return mass[self.__isotope]
-
-    @property
-    @abstractmethod
-    def atomic_number(self) -> int:
-        """
-        element number
-        """
-
-    @property
-    def x(self):
-        try:
-            return self.__graph()._plane[self.__map][0]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def y(self):
-        try:
-            return self.__graph()._plane[self.__map][1]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    @abstractmethod
-    def isotopes_distribution(self) -> Dict[int, float]:
-        """
-        isotopes distribution in earth
-        """
-
-    @property
-    @abstractmethod
-    def isotopes_masses(self) -> Dict[int, float]:
-        """
-        isotopes distribution in earth
-        """
 
     @property
     @abstractmethod
@@ -222,11 +241,21 @@ class Element(ABC):
         """
 
     @class_cached_property
-    def _compiled_valence_rules(self):
+    def _compiled_charge_radical(self) -> Set[Tuple[int, bool]]:
+        """
+        exceptions in charges, radical state
+        examples:
+        (-1, False) - anion, not radical
+        (0, True) - neutral radical
+        """
+        return {(c, r) for c, r, *_ in self._valences_exceptions}
+
+    @class_cached_property
+    def _compiled_valence_rules(self) -> \
+            Dict[Tuple[int, bool, int], List[Tuple[Set[Tuple[int, 'Element']], Dict[Tuple[int, 'Element'], int], int]]]:
         """
         dictionary with key = (charge, is_radical, sum_of_bonds) and
-        value = implicit H count, set of ((bond, element class), ) - required neighbors.
-        if atom can to have implicit hydrogens - required set don't contain it
+        value = list of possible neighbors and implicit H count
         """
         elements_classes = {x.__name__: x for x in Element.__subclasses__()}
 
@@ -257,6 +286,108 @@ class Element(ABC):
             else:
                 rules[(charge, is_radical, explicit)].append((explicit_set, explicit_dict, 0))
         return dict(rules)
+
+
+class DynamicElement(Core):
+    __slots__ = ('__p_charge', '__p_is_radical')
+
+    @classmethod
+    def from_symbol(cls, symbol):
+        """
+        get DynamicElement class by its symbol
+        """
+        try:
+            element = next(x for x in DynamicElement.__subclasses__() if x.__name__ == symbol)
+        except StopIteration:
+            raise ValueError(f'DynamicElement with symbol "{symbol}" not found')
+        return element
+
+    @classmethod
+    def from_atomic_number(cls, number):
+        """
+        get DynamicElement class by its number
+        """
+        try:
+            element = next(x for x in DynamicElement.__subclasses__() if x.atomic_number.fget(None) == number)
+        except StopIteration:
+            raise ValueError(f'DynamicElement with number "{number}" not found')
+        return element
+
+    @property
+    def p_charge(self):
+        try:
+            return self._graph()._p_charges[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_is_radical(self):
+        try:
+            return self._graph()._p_radicals[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_neighbors(self):
+        try:
+            return self._graph()._p_neighbors[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_hybridization(self):
+        try:
+            return self._graph()._p_hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    def __eq__(self, other):
+        return isinstance(other, DynamicElement) and self.atomic_number == other.atomic_number and \
+               self.isotope == other.isotope
+
+    def __int__(self):
+        """
+        26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
+        """
+        return (self.isotope or 0) << 17 | self.atomic_number << 10 | self.charge + 4 << 6 | \
+            self.__p_charge + 4 << 2 | self.is_radical << 1 | self.__p_is_radical
+
+
+class QueryElement(Core):
+    __slots__ = ()
+
+    @classmethod
+    def from_symbol(cls, symbol):
+        """
+        get Element class by its symbol
+        """
+        try:
+            element = next(x for x in QueryElement.__subclasses__() if x.__name__ == symbol)
+        except StopIteration:
+            raise ValueError(f'Element with symbol "{symbol}" not found')
+        return element
+
+    @classmethod
+    def from_atomic_number(cls, number):
+        """
+        get Element class by its number
+        """
+        try:
+            element = next(x for x in QueryElement.__subclasses__() if x.atomic_number.fget(None) == number)
+        except StopIteration:
+            raise ValueError(f'Element with number "{number}" not found')
+        return element
+
+    def __eq__(self, other):
+        return isinstance(other, (Element, QueryElement)) and self.atomic_number == other.atomic_number and \
+            self.isotope == other.isotope
+
+    def __int__(self):
+        """
+        21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 2bit
+        """
+        return (self.isotope or 0) << 18 | self.atomic_number << 11 | self.charge + 4 << 7 | self.is_radical << 6 | \
+            self.neighbors << 2 | self.hybridization - 1
 
 
 class FrozenDict(Mapping):

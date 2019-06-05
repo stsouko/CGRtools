@@ -19,29 +19,42 @@
 """
 periodic table of elements classes
 """
-from .element import Element
+from abc import ABCMeta
+from .element import Element, DynamicElement
 from .groups import *
 from .periods import *
-from .I import *
-from .II import *
-from .III import *
-from .IV import *
-from .V import *
-from .VI import *
-from .VIII import *
-from .IX import *
-from .X import *
-from .XI import *
-from .XII import *
-from .XIII import *
-from .XIV import *
-from .XV import *
-from .XVI import *
-from .XVII import *
-from .XVIII import *
+from .groupI import *
+from .groupII import *
+from .groupIII import *
+from .groupIV import *
+from .groupV import *
+from .groupVI import *
+from .groupVII import *
+from .groupVIII import *
+from .groupIX import *
+from .groupX import *
+from .groupXI import *
+from .groupXII import *
+from .groupXIII import *
+from .groupXIV import *
+from .groupXV import *
+from .groupXVI import *
+from .groupXVII import *
+from .groupXVIII import *
+
+modules = {v.__name__: v for k, v in globals().items() if k.startswith('group') and k != 'groups'}
+elements = {k: v for k, v in globals().items() if isinstance(v, ABCMeta) and k != 'Element' and issubclass(v, Element)}
+
+__all__ = ['Element', 'DynamicElement']
+__all__.extend(k for k in globals() if k.startswith('Group'))
+__all__.extend(k for k in globals() if k.startswith('Period'))
+__all__.extend(elements)
 
 
-__all__ = ['Element']  # ordered wildcard
-__all__.extend(k for k in locals() if k.startswith('Group'))
-__all__.extend(k for k in locals() if k.startswith('Period'))
-__all__.extend(k for k, v in locals().items() if isinstance(v, Element))
+for k, v in elements.items():
+    name = f'Dynamic{k}'
+    globals()[name] = cls = type(name, (DynamicElement, *v.__mro__[-3:-1]),
+                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number})
+    setattr(modules[v.__module__], name, cls)
+    modules[v.__module__].__all__.append(name)
+    __all__.append(name)

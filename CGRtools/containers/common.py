@@ -18,30 +18,39 @@
 #
 from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
-from typing import Dict
+from typing import Dict, Optional, Tuple
+from ..algorithms.isomorphism import Isomorphism
 
 
-class Graph(ABC):
-    __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__')
+class Graph(Isomorphism, ABC):
+    __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
+                 '_radicals')
 
     def __init__(self):
         """
         Empty data object initialization or conversion from another object type
         """
-        self._bonds = {}
         self._atoms = {}
-        self._meta = {}
+        self._charges = {}
+        self._radicals = {}
         self._plane = {}
+        self._bonds = {}
+        self._meta = {}
+        self._parsed_mapping = {}
         self.__dict__ = {}
 
     def __getstate__(self):
-        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane}
+        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane,
+                'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals}
 
     def __setstate__(self, state):
         self._atoms = state['atoms']
+        self._charges = state['charges']
+        self._radicals = state['radicals']
+        self._plane = state['plane']
         self._bonds = state['bonds']
         self._meta = state['meta']
-        self._plane = state['plane']
+        self._parsed_mapping = state['parsed_mapping']
         self.__dict__ = {}
 
     def __len__(self):
@@ -101,7 +110,8 @@ class Graph(ABC):
         return self._meta
 
     @abstractmethod
-    def add_atom(self, atom, _map=None):
+    def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
+                 is_radical: bool = False, xy: Tuple[float, float] = None) -> int:
         """
         new atom addition
         """
@@ -112,15 +122,26 @@ class Graph(ABC):
         elif _map in self._atoms:
             raise ValueError('atom with same number exists')
 
+        if xy is None:
+            xy = (0., 0.)
+        elif not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
+            raise TypeError('XY should be tuple with 2 float')
+        if not isinstance(charge, int) or charge > 4 or charge < -4:
+            raise TypeError('formal charge should be int in range [-4, 4]')
+        if not isinstance(is_radical, bool):
+            raise TypeError('radical state should be bool')
+
         self._atoms[_map] = atom
+        self._charges[_map] = charge
+        self._radicals[_map] = is_radical
+        self._plane[_map] = xy
         self._bonds[_map] = {}
-        self._plane[_map] = (0, 0)
         atom._attach_to_graph(self, _map)
         self.__dict__.clear()
         return _map
 
     @abstractmethod
-    def add_bond(self, n, m, bond):
+    def add_bond(self, n: int, m: int, bond):
         """
         new bond addition
         """
@@ -135,19 +156,25 @@ class Graph(ABC):
         self.__dict__.clear()
 
     @abstractmethod
-    def delete_atom(self, n):
+    def delete_atom(self, n: int):
         """
         implementation of atom removing
         """
         del self._atoms[n]
+        del self._charges[n]
+        del self._radicals[n]
         del self._plane[n]
         sb = self._bonds
         for m in sb.pop(n):
             del sb[m][n]
+        try:
+            del self._parsed_mapping[n]
+        except KeyError:
+            pass
         self.__dict__.clear()
 
     @abstractmethod
-    def delete_bond(self, n, m):
+    def delete_bond(self, n: int, m: int):
         """
         implementation of bond removing
         """
@@ -172,37 +199,55 @@ class Graph(ABC):
 
         mg = mapping.get
         sp = self._plane
+        sc = self._charges
+        sr = self._radicals
 
         if copy:
             h = self.__class__()
             h._meta.update(self._meta)
             hb = h._bonds
             ha = h._atoms
+            hc = h._charges
+            hr = h._radicals
             hp = h._plane
+            hm = h._parsed_mapping
             for n, atom in self._atoms.items():
                 m = mg(n, n)
+                hc[m] = sc[n]
+                hr[m] = sr[n]
                 hp[m] = sp[n]
                 ha[m] = atom = atom.copy()
                 atom._attach_to_graph(h, m)
         else:
             hb = {}
             ha = {}
+            hc = {}
+            hr = {}
             hp = {}
+            hm = {}
             for n, atom in self._atoms.items():
                 m = mg(n, n)
+                hc[m] = sc[n]
+                hr[m] = sr[n]
                 hp[m] = sp[n]
                 ha[m] = atom
-                atom._Element__map = m  # change mapping number
+                atom._change_map(m)  # change mapping number
             self._atoms = ha
+            self._charges = hc
+            self._radicals = hr
             self._plane = hp
 
         for n1, n2_bond in self._bonds.items():
             hb[mg(n1, n1)] = {mg(n2, n2): b for n2, b in n2_bond.items()}
 
+        for n, m in self._parsed_mapping.items():
+            hm[mg(n, n)] = m
+
         if copy:
             return h
 
         self._bonds = hb
+        self._parsed_mapping = hm
         return self
 
     def flush_cache(self):
