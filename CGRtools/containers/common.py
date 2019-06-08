@@ -18,7 +18,7 @@
 #
 from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Iterable
 from ..algorithms.isomorphism import Isomorphism
 
 
@@ -109,6 +109,23 @@ class Graph(Isomorphism, ABC):
     def meta(self):
         return self._meta
 
+    @property
+    def connected_components(self):
+        if not self._atoms:
+            return []
+        atoms = set(self._atoms)
+        components = []
+        while atoms:
+            start = atoms.pop()
+            component = list(self.__component(start))
+            components.append(component)
+            atoms.difference_update(component)
+        return components
+
+    @property
+    def connected_components_count(self):
+        return len(self.connected_components)
+
     @abstractmethod
     def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
                  is_radical: bool = False, xy: Tuple[float, float] = None) -> int:
@@ -182,18 +199,8 @@ class Graph(Isomorphism, ABC):
         del self._bonds[m][n]
         self.__dict__.clear()
 
-    def substructure(self, atoms, *, meta=False, as_view=True):
-        """
-        create substructure containing atoms from atoms list
-
-        :param atoms: list of atoms numbers of substructure
-        :param meta: if True metadata will be copied to substructure
-        :param as_view: If True, the returned graph-view provides a read-only view
-            of the original structure scaffold without actually copying any data.
-        """
-
     @abstractmethod
-    def remap(self, mapping: Dict[int, int], *, copy=False):
+    def remap(self, mapping: Dict[int, int], *, copy: bool = False):
         if len(mapping) != len(set(mapping.values())):
             raise ValueError('mapping overlap')
 
@@ -237,8 +244,8 @@ class Graph(Isomorphism, ABC):
             self._radicals = hr
             self._plane = hp
 
-        for n1, n2_bond in self._bonds.items():
-            hb[mg(n1, n1)] = {mg(n2, n2): b for n2, b in n2_bond.items()}
+        for n, m_bond in self._bonds.items():
+            hb[mg(n, n)] = {mg(m, m): b for m, b in m_bond.items()}
 
         for n, m in self._parsed_mapping.items():
             hm[mg(n, n)] = m
@@ -250,8 +257,156 @@ class Graph(Isomorphism, ABC):
         self._parsed_mapping = hm
         return self
 
+    @abstractmethod
+    def copy(self, *, meta: bool = True):
+        """
+        copy of graph
+
+        :param meta: include metadata
+        """
+        copy = object.__new__(self.__class__)
+        copy.__dict__ = {}
+        copy._meta = self._meta.copy() if meta else {}
+
+        copy._charges = self._charges.copy()
+        copy._radicals = self._radicals.copy()
+        copy._plane = self._plane.copy()
+        copy._parsed_mapping = self._parsed_mapping.copy()
+
+        copy._bonds = cb = {n: {} for n in self._bonds}
+        seen = set()
+        for n, m_bond in self._bonds.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    cb[n][m] = cb[m][n] = bond.copy()
+
+        copy._atoms = ca = {}
+        for n, atom in self._atoms.items():
+            ca[n] = atom = atom.copy()
+            atom._attach_to_graph(copy, n)
+        return copy
+
+    @abstractmethod
+    def substructure(self, atoms: Iterable[int], *, meta: bool = False, as_query=False, sub=None) -> 'Graph':
+        """
+       create substructure containing atoms from atoms list
+
+       :param atoms: list of atoms numbers of substructure
+       :param meta: if True metadata will be copied to substructure
+       :param as_query: return Query object based on graph substructure
+       """
+        if not atoms:
+            raise ValueError('empty atoms list not allowed')
+        if set(atoms) - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        atoms = tuple(n for n in self._atoms if n in atoms)  # save original order
+        sub = object.__new__(sub)
+
+        sc = self._charges
+        sr = self._radicals
+        sp = self._plane
+        sb = self._bonds
+
+        sub._meta = self._meta.copy() if meta else {}
+        sub._charges = {n: sc[n] for n in atoms}
+        sub._radicals = {n: sr[n] for n in atoms}
+        sub._plane = {n: sp[n] for n in atoms}
+        sub._parsed_mapping = {n: m for n, m in self._parsed_mapping.items() if n in atoms}
+
+        sub._bonds = cb = {n: {} for n in atoms}
+        seen = set()
+        for n in atoms:
+            seen.add(n)
+            for m, bond in sb[n].items():
+                if m not in seen and m in atoms:
+                    cb[n][m] = cb[m][n] = bond.copy()
+
+        return sub, atoms
+
+    def __and__(self, other):
+        """
+        substructure of graph
+        """
+        return self.substructure(other)
+
+    def __sub__(self, other):
+        """
+        other nodes excluded substructure of graph
+        :return graph or None
+        """
+        atoms = set(other)
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        atoms = self._atoms.keys() - atoms
+        if atoms:
+            return self.substructure(atoms)
+        raise ValueError('full substitution not allowed')
+
+    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False, as_query=True):
+        """
+        create substructure containing atoms and their neighbors
+
+        :param atoms: list of core atoms in graph
+        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
+            etc up to deep or while new nodes available
+        :param deep: number of bonds between atoms and neighbors
+        :param meta: copy metadata to each substructure
+        :param as_query: return Query object based on graph substructure
+        """
+        atoms = set(atoms)
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        nodes = [atoms]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+        if dante:
+            return [self.substructure(a, meta=meta, as_query=as_query) for a in nodes]
+        else:
+            return self.substructure(nodes[-1], meta=meta, as_query=as_query)
+
+    def union(self, other: 'Graph') -> 'Graph':
+        if self._atoms.keys() & other._atoms.keys():
+            raise KeyError('mapping of graphs is not disjoint')
+
+        u = self.copy(meta=False)
+        u._charges.update(other._charges)
+        u._radicals.update(other._radicals)
+        u._plane.update(other._plane)
+        u._parsed_mapping.update(other._parsed_mapping)
+        return u
+
+    def __or__(self, other):
+        """
+        G | H is union of graphs
+        """
+        return self.union(other)
+
+    def split(self, meta=False):
+        """
+        split disconnected structure to connected substructures
+
+        :param meta: copy metadata to each substructure
+        :return: list of substructures
+        """
+        return [self.substructure(c, meta=meta) for c in self.connected_components]
+
     def flush_cache(self):
         self.__dict__.clear()
+
+    def __component(self, start):
+        bonds = self._bonds
+        seen = {start}
+        queue = [start]
+        while queue:
+            start = queue.pop(0)
+            yield start
+            for i in bonds[start].keys() - seen:
+                queue.append(i)
+                seen.add(i)
 
     @staticmethod
     def _get_subclass(name):

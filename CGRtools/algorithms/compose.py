@@ -172,33 +172,4 @@ class Compose:
         return h
 
 
-class CGRCompose(Compose):
-    def __invert__(self):
-        """
-        decompose CGR
-        """
-        return self.decompose()
-
-    def decompose(self):
-        """
-        decompose CGR to pair of Molecules, which represents reactants and products state of reaction
-
-        :return: tuple of two molecules
-        """
-        mc = self._get_subclass('MoleculeContainer')
-        reactants = mc()
-        products = mc()
-
-        for n, atom in self.atoms():
-            reactants.add_atom(atom._reactant, n)
-            products.add_atom(atom._product, n)
-
-        for n, m, bond in self.bonds():
-            if bond._reactant is not None:
-                reactants.add_bond(n, m, bond._reactant)
-            if bond._product is not None:
-                products.add_bond(n, m, bond._product)
-        return reactants, products
-
-
-__all__ = ['Compose', 'CGRCompose']
+__all__ = ['Compose']

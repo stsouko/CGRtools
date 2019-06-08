@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify

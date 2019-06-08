@@ -16,35 +16,25 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from networkx.algorithms.isomorphism import GraphMatcher
-from .cgr import CGRContainer
-from .common import BaseContainer
-from .molecule import MoleculeContainer
-from ..algorithms import SmilesQuery, SmilesQueryCGR
-from ..attributes import QueryAtom, DynQueryAtom, Bond, DynBond
+from . import cgr, molecule  # cyclic imports resolve
+from .common import Graph
 
 
-class QueryContainer(SmilesQuery, BaseContainer):
-    node_attr_dict_factory = QueryAtom
-    edge_attr_dict_factory = Bond
-
+class QueryContainer(Graph):
     def _matcher(self, other):
         """
         QueryContainer < MoleculeContainer
         QueryContainer < QueryContainer[more general]
         QueryContainer < QueryCGRContainer[more general]
         """
-        if isinstance(other, MoleculeContainer):
+        if isinstance(other, molecule.MoleculeContainer):
             return GraphMatcher(other, self, lambda x, y: y == x, lambda x, y: y == x)
         elif isinstance(other, (QueryContainer, QueryCGRContainer)):
             return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
         raise TypeError('only query-molecule, query-query or query-cgr_query possible')
 
 
-class QueryCGRContainer(SmilesQueryCGR, BaseContainer):
-    node_attr_dict_factory = DynQueryAtom
-    edge_attr_dict_factory = DynBond
-
+class QueryCGRContainer(Graph):
     def _matcher(self, other):
         """
         QueryCGRContainer < CGRContainer
@@ -57,4 +47,4 @@ class QueryCGRContainer(SmilesQueryCGR, BaseContainer):
         raise TypeError('only cgr_query-cgr or cgr_query-cgr_query possible')
 
 
-__all__ = ['QueryContainer', 'QueryCGRContainer']
+__all__ = []

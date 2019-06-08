@@ -390,6 +390,10 @@ class QueryElement(Core):
             self.neighbors << 2 | self.hybridization - 1
 
 
+class DynamicQueryElement(Core):
+    ...
+
+
 class FrozenDict(Mapping):
     __slots__ = '__d'
 

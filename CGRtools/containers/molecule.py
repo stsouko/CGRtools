@@ -18,26 +18,39 @@
 #
 from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
-from typing import List, Union, Dict
+from typing import List, Union
+from . import query  # cyclic imports resolve
 from .common import Graph
 from ..exceptions import ValenceError
-from ..periodictable import Element
+from ..periodictable import Element, QueryElement
 
 
 class Bond:
-    __slots__ = ('order',)
+    __slots__ = ('__order',)
 
     def __init__(self, order):
         if not isinstance(order, int):
             raise TypeError('invalid order value')
         if order < 1 or order > 5:
             raise ValueError('order should be in range [1, 5]')
-        self.order = order
+        self.__order = order
 
     def __eq__(self, other):
         if isinstance(other, Bond):
-            return self.order == other.order
+            return self.__order == other.order
         return False
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.__order})'
+
+    @property
+    def order(self):
+        return self.__order
+
+    def copy(self):
+        copy = object.__new__(self.__class__)
+        copy._Bond__order = self.__order
+        return copy
 
 
 class MoleculeContainer(Graph):
@@ -94,6 +107,15 @@ class MoleculeContainer(Graph):
                     sh[m] = 2
                 elif sh[m] == 2:
                     sh[m] = 3
+
+            try:  # remove stereo marks on bonded atoms and all its bonds
+                del self._atoms_stereo[m]
+            except KeyError:
+                pass
+            if sbs[m]:
+                for x in sbs[m]:
+                    del sbs[x][m]  # remove incoming
+                sbs[m] = {}  # remove outgoing
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
             if order == 4:
@@ -102,33 +124,20 @@ class MoleculeContainer(Graph):
             elif order == 3:
                 if sh[n] not in (3, 4):
                     sh[n] = 3
-            elif order == 2:
+            elif order == 2:  # SO3 and other 3 double-bonded has hyb = 3
                 if sh[n] == 1:
                     sh[n] = 2
                 elif sh[n] == 2:
                     sh[n] = 3
-                # SO3 and other 3 double-bonded has hyb = 3
 
-        # remove stereo marks on bonded atoms and all its bonds
-        for x in sbs[n]:
-            if x != m:
-                del sbs[x][n]
-        for x in sbs[m]:
-            if x != n:
-                del sbs[x][m]
-        if sbs[n]:
-            sbs[n] = {}
-        if sbs[m]:
-            sbs[m] = {}
-
-        try:
-            del self._atoms_stereo[n]
-        except KeyError:
-            pass
-        try:
-            del self._atoms_stereo[m]
-        except KeyError:
-            pass
+            try:  # remove atom stereo state
+                del self._atoms_stereo[n]
+            except KeyError:
+                pass
+            if sbs[n]:
+                for x in sbs[n]:
+                    del sbs[x][n]
+                sbs[n] = {}
 
     def delete_atom(self, n):
         old_bonds = self._bonds[n]  # save bonds
@@ -167,18 +176,17 @@ class MoleculeContainer(Graph):
                 sh[m] = hybridization
                 sn[m] -= 1
 
-        # remove stereo marks on deleted atoms and all its neighbors
-        for m in sbs.pop(n):
-            del sbs[m][n]
-        try:
-            del sas[n]
-        except KeyError:
-            pass
-        for m in old_bonds:
+            # remove stereo marks on deleted atoms and all its neighbors
             try:
-                del sas[m]
+                del sas[n]
             except KeyError:
                 pass
+            for m in sbs.pop(n):
+                del sbs[m][n]
+                try:
+                    del sas[m]
+                except KeyError:
+                    pass
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
@@ -209,6 +217,15 @@ class MoleculeContainer(Graph):
                         hybridization = 2
             sh[m] = hybridization
             sn[m] -= 1
+            # remove stereo marks on unbonded atoms and all its bonds
+            try:
+                del self._atoms_stereo[m]
+            except KeyError:
+                pass
+            if sbs[m]:
+                for x in sbs[m]:
+                    del sbs[x][m]
+                sbs[m] = {}
         if atoms[m].atomic_number != 1:
             hybridization = 1
             for x, bond in self._bonds[n].items():
@@ -229,26 +246,14 @@ class MoleculeContainer(Graph):
             sh[n] = hybridization
             sn[n] -= 1
 
-        # remove stereo marks on unbonded atoms and all its bonds
-        for x in sbs[n]:
-            if x != m:
-                del sbs[x][n]
-        for x in sbs[m]:
-            if x != n:
-                del sbs[x][m]
-        if sbs[n]:
-            sbs[n] = {}
-        if sbs[m]:
-            sbs[m] = {}
-
-        try:
-            del self._atoms_stereo[n]
-        except KeyError:
-            pass
-        try:
-            del self._atoms_stereo[m]
-        except KeyError:
-            pass
+            try:
+                del self._atoms_stereo[n]
+            except KeyError:
+                pass
+            if sbs[n]:
+                for x in sbs[n]:
+                    del sbs[x][n]
+                sbs[n] = {}
 
     def remap(self, mapping, *, copy=False):
         h = super().remap(mapping, copy=copy)
@@ -289,6 +294,110 @@ class MoleculeContainer(Graph):
         self._atoms_stereo = has
         self._bonds_stereo = hbs
         return self
+
+    def copy(self, *, meta=True) -> 'MoleculeContainer':
+        copy = super().copy(meta=meta)
+        copy._neighbors = self._neighbors.copy()
+        copy._hybridization = self._hybridization.copy()
+        copy._conformers = [c.copy() for c in self._conformers]
+        copy._atoms_stereo = self._atoms_stereo.copy()
+        copy._bonds_stereo = {n: s.copy() for n, s in self._bonds_stereo.items()}
+        return copy
+
+    def substructure(self, atoms, *, meta=False, as_query=False):
+        sub, atoms = super().substructure(atoms, meta=meta, sub=query.QueryContainer if as_query else self.__class__)
+        sa = self._atoms
+        sb = self._bonds
+
+        lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
+        not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
+        sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
+        sub._bonds_stereo = cbs = {n: {} for n in atoms}
+        for n, m_stereo in self._bonds_stereo.items():
+            if n in not_skin:
+                ns = cbs[n]
+                for m, s in m_stereo.items():
+                    if m in not_skin:
+                        ns[m] = s
+
+        if as_query:
+            sub._atoms = ca = {}
+            for n in atoms:
+                atom = sa[n]
+                ca[n] = atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                atom._attach_to_graph(sub, n)
+
+            sn = self._neighbors
+            sh = self._hybridization
+            sub._neighbors = {n: sn[n] for n in atoms}
+            sub._hybridization = {n: sh[n] for n in atoms}
+        else:
+            sub._conformers = []
+            sub._atoms = ca = {}
+            for n in atoms:
+                ca[n] = atom = sa[n].copy()
+                atom._attach_to_graph(sub, n)
+
+            # recalculate query marks
+            sub._neighbors = sn = {}
+            sub._hybridization = sh = {}
+            atoms = sub._atoms
+            for n, m_bonds in sub._bonds.items():
+                neighbors = 0
+                hybridization = 1
+                for m, bond in m_bonds.items():
+                    if atoms[m].atomic_number == 1:  # ignore hydrogen
+                        continue
+                    neighbors += 1
+                    if hybridization == 4:
+                        continue
+                    order = bond.order
+                    if order == 4:
+                        hybridization = 4
+                    elif order == 3:
+                        if hybridization != 3:
+                            hybridization = 3
+                    elif order == 2:
+                        if hybridization == 2:
+                            hybridization = 3
+                        elif hybridization == 1:
+                            hybridization = 2
+                sn[n] = neighbors
+                sh[n] = hybridization
+        return sub
+
+    def union(self, other):
+        if isinstance(other, MoleculeContainer):
+            u = super().union(other)
+            u._conformers.clear()
+
+            u._neighbors.update(other._neighbors)
+            u._hybridization.update(other._hybridization)
+            u._atoms_stereo.update(other._atoms_stereo)
+
+            ub = u._bonds
+            for n in other._bonds:
+                ub[n] = {}
+            seen = set()
+            for n, m_bond in other._bonds.items():
+                seen.add(n)
+                for m, bond in m_bond.items():
+                    if m not in seen:
+                        ub[n][m] = ub[m][n] = bond.copy()
+
+            us = u._bonds_stereo
+            for n, m_stereo in other._bonds_stereo.items():
+                us[n] = m_stereo.copy()
+
+            ua = u._atoms
+            for n, atom in other._atoms.items():
+                ua[n] = atom = atom.copy()
+                atom._attach_to_graph(u, n)
+            return u
+        elif isinstance(other, Graph):
+            return other.union(self)
+        else:
+            raise TypeError('Graph expected')
 
     def implicify_hydrogens(self):
         """
