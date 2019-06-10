@@ -32,7 +32,7 @@ setup(
     author_email='stsouko@live.ru',
     python_requires='>=3.6.1',
     install_requires=['networkx>=2.3,<2.4'],
-    extras_require={'smiles': ['coho>=0.4,<0.5'], 'mrv': ['lxml>=4.1,<4.4']},
+    extras_require={'mrv': ['lxml>=4.1,<4.4']},
     package_data={'CGRtools.files.dll': ['LICENCE', 'readme.txt', 'libinchi.so', 'libinchi.dll']},
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').open().read(),

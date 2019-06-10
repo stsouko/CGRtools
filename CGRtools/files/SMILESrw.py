@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Artem Mukanov <nostro32@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,11 +17,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from importlib.util import find_spec
 from logging import warning
 from re import split
 from traceback import format_exc
-from warnings import warn
 from ._CGRrw import WithMixin, CGRread
 from ..periodictable import elements_list
 
@@ -40,7 +39,6 @@ class SMILESread(CGRread, WithMixin):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
         super(CGRread, self).__init__(file)
-        self.__parser = Parser()
         self.__data = self.__reader()
 
     def read(self):
@@ -68,7 +66,7 @@ class SMILESread(CGRread, WithMixin):
                 except ValueError:
                     warning(f'invalid metadata entry: {x}')
 
-            if '>' in smi:
+            if '>' in smi and smi[smi.index('>') + 1] not in {'+', '-', '.', '=', '#', ':', '~'}:
                 record = dict(reactants=[], reagents=[], products=[], meta=meta)
                 try:
                     reactants, reagents, products = smi.split('>')
@@ -125,12 +123,3 @@ class SMILESread(CGRread, WithMixin):
                 'bonds': [(b['atom0'], b['atom1'], self.__bond_map[b['order']]) for b in self.__parser.bonds]}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
-
-
-if find_spec('coho'):
-    from coho.smiles import Parser
-    __all__ = ['SMILESread']
-else:
-    warn('coho library not installed', ImportWarning)
-    __all__ = []
-    del SMILESread
