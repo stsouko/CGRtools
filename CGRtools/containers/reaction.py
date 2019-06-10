@@ -64,7 +64,6 @@ class ReactionContainer:
         else:
             self.__meta = dict(meta)
         self._arrow = None
-        self.__dict__ = {}
 
     def __getitem__(self, item):
         if item in ('reactants', 0):

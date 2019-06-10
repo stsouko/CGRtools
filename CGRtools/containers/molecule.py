@@ -255,7 +255,7 @@ class MoleculeContainer(Graph):
                     del sbs[x][n]
                 sbs[n] = {}
 
-    def remap(self, mapping, *, copy=False):
+    def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         sn = self._neighbors

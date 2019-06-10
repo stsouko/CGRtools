@@ -37,7 +37,6 @@ class Graph(Isomorphism, ABC):
         self._bonds = {}
         self._meta = {}
         self._parsed_mapping = {}
-        self.__dict__ = {}
 
     def __getstate__(self):
         return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane,
@@ -51,7 +50,6 @@ class Graph(Isomorphism, ABC):
         self._bonds = state['bonds']
         self._meta = state['meta']
         self._parsed_mapping = state['parsed_mapping']
-        self.__dict__ = {}
 
     def __len__(self):
         return len(self._atoms)
@@ -143,8 +141,10 @@ class Graph(Isomorphism, ABC):
             xy = (0., 0.)
         elif not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
             raise TypeError('XY should be tuple with 2 float')
-        if not isinstance(charge, int) or charge > 4 or charge < -4:
+        if not isinstance(charge, int):
             raise TypeError('formal charge should be int in range [-4, 4]')
+        if charge > 4 or charge < -4:
+            raise ValueError('formal charge should be in range [-4, 4]')
         if not isinstance(is_radical, bool):
             raise TypeError('radical state should be bool')
 
@@ -190,7 +190,6 @@ class Graph(Isomorphism, ABC):
             pass
         self.__dict__.clear()
 
-    @abstractmethod
     def delete_bond(self, n: int, m: int):
         """
         implementation of bond removing

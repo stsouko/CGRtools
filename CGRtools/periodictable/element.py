@@ -19,33 +19,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from abc import ABC, abstractmethod
+from CachedMethods import class_cached_property
 from collections import Mapping, defaultdict
 from typing import Optional, Tuple, Dict, Set, List
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
-
-
-class class_cached_property:
-    def __init__(self, func):
-        self.__doc__ = getattr(func, '__doc__')
-        self.func = func
-        self.name = func.__name__
-
-    def __get__(self, obj, cls):
-        if obj is None:
-            return self
-        try:
-            class_cache = cls.__class_cache__[type(obj)]
-        except KeyError:
-            cached = self.func(obj)
-            cls.__class_cache__[type(obj)] = {self.name: cached}
-        else:
-            try:
-                cached = class_cache[self.name]
-            except KeyError:
-                cached = class_cache[self.name] = self.func(obj)
-
-        return cached
 
 
 class Core(ABC):
@@ -167,6 +145,45 @@ class Core(ABC):
             self._map = _map
 
 
+class Dynamic:
+    @property
+    def p_charge(self):
+        try:
+            return self._graph()._p_charges[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_is_radical(self):
+        try:
+            return self._graph()._p_radicals[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_neighbors(self):
+        try:
+            return self._graph()._p_neighbors[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_hybridization(self):
+        try:
+            return self._graph()._p_hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+
+class Query:
+    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                             (1, 2, 3, 4): 15}  # 4 bit
+    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+
+
 class Element(Core):
     __slots__ = ()
     __class_cache__ = {}
@@ -194,8 +211,11 @@ class Element(Core):
         return element
 
     def __eq__(self, other):
+        """
+        compare attached to molecules elements
+        """
         return isinstance(other, Element) and self.atomic_number == other.atomic_number and \
-               self.isotope == other.isotope
+            self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical
 
     def __int__(self):
         """
@@ -288,7 +308,7 @@ class Element(Core):
         return dict(rules)
 
 
-class DynamicElement(Core):
+class DynamicElement(Core, Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
     @classmethod
@@ -313,47 +333,23 @@ class DynamicElement(Core):
             raise ValueError(f'DynamicElement with number "{number}" not found')
         return element
 
-    @property
-    def p_charge(self):
-        try:
-            return self._graph()._p_charges[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_is_radical(self):
-        try:
-            return self._graph()._p_radicals[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_neighbors(self):
-        try:
-            return self._graph()._p_neighbors[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_hybridization(self):
-        try:
-            return self._graph()._p_hybridizations[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
     def __eq__(self, other):
+        """
+        compare attached to molecules dynamic elements
+        """
         return isinstance(other, DynamicElement) and self.atomic_number == other.atomic_number and \
-               self.isotope == other.isotope
+            self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical and \
+            self.p_charge == other.p_charge and self.p_is_radical == other.p_is_radical
 
     def __int__(self):
         """
         26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
         """
         return (self.isotope or 0) << 17 | self.atomic_number << 10 | self.charge + 4 << 6 | \
-            self.__p_charge + 4 << 2 | self.is_radical << 1 | self.__p_is_radical
+            self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
 
 
-class QueryElement(Core):
+class QueryElement(Core, Query):
     __slots__ = ()
 
     @classmethod
@@ -364,7 +360,7 @@ class QueryElement(Core):
         try:
             element = next(x for x in QueryElement.__subclasses__() if x.__name__ == symbol)
         except StopIteration:
-            raise ValueError(f'Element with symbol "{symbol}" not found')
+            raise ValueError(f'QueryElement with symbol "{symbol}" not found')
         return element
 
     @classmethod
@@ -375,23 +371,104 @@ class QueryElement(Core):
         try:
             element = next(x for x in QueryElement.__subclasses__() if x.atomic_number.fget(None) == number)
         except StopIteration:
-            raise ValueError(f'Element with number "{number}" not found')
+            raise ValueError(f'QueryElement with number "{number}" not found')
         return element
 
     def __eq__(self, other):
-        return isinstance(other, (Element, QueryElement)) and self.atomic_number == other.atomic_number and \
-            self.isotope == other.isotope
+        """
+        compare attached to molecules elements and query elements
+        """
+        if isinstance(other, Element):
+            if self.atomic_number == other.atomic_number and self.isotope == other.isotope and \
+                    self.charge == other.charge and self.is_radical == other.is_radical:
+                if self.neighbors:
+                    if other.neighbors in self.neighbors:
+                        if self.hybridization:
+                            if other.hybridization in self.hybridization:
+                                return True
+                        else:
+                            return True
+                elif self.hybridization:
+                    if other.hybridization in self.hybridization:
+                        return True
+                else:
+                    return True
+        elif isinstance(other, QueryElement) and self.atomic_number == other.atomic_number and \
+                self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical \
+                and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+            # equal query element has equal query marks
+            return True
+        return False
 
     def __int__(self):
         """
-        21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 2bit
+        21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 4bit
         """
-        return (self.isotope or 0) << 18 | self.atomic_number << 11 | self.charge + 4 << 7 | self.is_radical << 6 | \
-            self.neighbors << 2 | self.hybridization - 1
+        return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-class DynamicQueryElement(Core):
-    ...
+class DynamicQueryElement(Core, Dynamic, Query):
+    __slots__ = ()
+
+    @classmethod
+    def from_symbol(cls, symbol):
+        """
+        get Element class by its symbol
+        """
+        try:
+            element = next(x for x in DynamicQueryElement.__subclasses__() if x.__name__ == symbol)
+        except StopIteration:
+            raise ValueError(f'DynamicQueryElement with symbol "{symbol}" not found')
+        return element
+
+    @classmethod
+    def from_atomic_number(cls, number):
+        """
+        get Element class by its number
+        """
+        try:
+            element = next(x for x in DynamicQueryElement.__subclasses__() if x.atomic_number.fget(None) == number)
+        except StopIteration:
+            raise ValueError(f'DynamicQueryElement with number "{number}" not found')
+        return element
+
+    def __eq__(self, other):
+        if isinstance(other, DynamicElement):
+            if self.atomic_number == other.atomic_number and self.isotope == other.isotope and \
+                    self.charge == other.charge and self.p_charge == other.p_charge and \
+                    self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical:
+                if self.neighbors:  # neighbors and p_neighbors all times paired
+                    if (other.neighbors, other.p_neighbors) in zip(self.neighbors, self.p_neighbors):
+                        if self.hybridization:
+                            if (other.hybridization, other.p_hybridization) in zip(self.hybridization,
+                                                                                   self.p_hybridization):
+                                return True
+                        else:
+                            return True
+                elif self.hybridization:
+                    if (other.hybridization, other.p_hybridization) in zip(self.hybridization, self.p_hybridization):
+                        return True
+                else:
+                    return True
+        elif isinstance(other, DynamicQueryElement) and self.atomic_number == other.atomic_number and \
+                self.isotope == other.isotope and self.charge == other.charge and self.p_charge == other.p_charge and \
+                self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
+                self.neighbors == other.neighbors and self.hybridization and other.hybridization and \
+                self.p_neighbors == other.p_neighbors and self.p_hybridization and other.p_hybridization:
+            # equal query element has equal query marks
+            return True
+        return False
+
+    def __int__(self):
+        """
+        42bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 4bit | 4bit | 4bit| 4bit
+        """
+        return (self.isotope or 0) << 33 | self.atomic_number << 26 | self.charge + 4 << 22 | self.p_charge << 18 | \
+            self.is_radical << 17 | self.p_is_radical << 16 | \
+            self._hybridization_bitmap[self.hybridization] << 12 | \
+            self._hybridization_bitmap[self.p_hybridization] << 8 | \
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._neighbors_bitmap.get(self.p_neighbors, 15)
 
 
 class FrozenDict(Mapping):

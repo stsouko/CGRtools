@@ -20,9 +20,9 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple
-from . import query  # cyclic imports resolve
+from . import cgr_query as query  # cyclic imports resolve
+from . import molecule
 from .common import Graph
-from .molecule import MoleculeContainer
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
 
@@ -79,20 +79,24 @@ class CGRContainer(Graph):
         self._p_hybridization = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[DynamicElement, int, str], _map=None, *, charge=0, p_charge: int = 0,
+    def add_atom(self, atom: Union[DynamicElement, Element, int, str], _map=None, *, charge=0, p_charge: int = 0,
                  is_radical=False, p_is_radical: bool = False, xy=None):
+        if not isinstance(p_charge, int):
+            raise TypeError('formal charge should be int in range [-4, 4]')
+        if p_charge > 4 or p_charge < -4:
+            raise ValueError('formal charge should be in range [-4, 4]')
+        if not isinstance(p_is_radical, bool):
+            raise TypeError('radical state should be bool')
+
         if not isinstance(atom, DynamicElement):
-            if isinstance(atom, str):
+            if isinstance(atom, Element):
+                atom = DynamicElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+            elif isinstance(atom, str):
                 atom = DynamicElement.from_symbol(atom)()
             elif isinstance(atom, int):
                 atom = DynamicElement.from_atomic_number(atom)()
             else:
                 raise TypeError('DynamicElement object expected')
-
-        if not isinstance(p_charge, int) or p_charge > 4 or p_charge < -4:
-            raise TypeError('formal charge should be int in range [-4, 4]')
-        if not isinstance(p_is_radical, bool):
-            raise TypeError('radical state should be bool')
 
         _map = super().add_atom(atom, _map, charge=charge, is_radical=is_radical, xy=xy)
         self._p_charges[_map] = p_charge
@@ -103,10 +107,14 @@ class CGRContainer(Graph):
         self._p_hybridization[_map] = 1
         return _map
 
-    def add_bond(self, n, m, bond: Union[DynamicBond, int]):
+    def add_bond(self, n, m, bond: Union[DynamicBond, 'molecule.Bond', int]):
         if isinstance(bond, DynamicBond):
             order = bond.order
             p_order = bond.p_order
+        elif isinstance(bond, molecule.Bond):
+            order = p_order = bond.order
+            bond = object.__new__(DynamicBond)
+            bond._DynamicBond__order = bond._DynamicBond__p_order = order
         else:
             order = p_order = bond
             bond = DynamicBond(order, order)
@@ -319,7 +327,7 @@ class CGRContainer(Graph):
             sh[n] = hybridization
             sph[n] = p_hybridization
 
-    def remap(self, mapping, *, copy=False):
+    def remap(self, mapping, *, copy=False) -> 'CGRContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         spr = self._p_radicals
@@ -474,7 +482,7 @@ class CGRContainer(Graph):
                 ua[n] = atom = atom.copy()
                 atom._attach_to_graph(u, n)
             return u
-        elif isinstance(other, MoleculeContainer):
+        elif isinstance(other, molecule.MoleculeContainer):
             u = super().union(other)
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
@@ -564,7 +572,7 @@ class CGRContainer(Graph):
                 adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
                 adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:])))]
 
-    def decompose(self) -> Tuple['MoleculeContainer', 'MoleculeContainer']:
+    def decompose(self) -> Tuple['molecule.MoleculeContainer', 'molecule.MoleculeContainer']:
         """
         decompose CGR to pair of Molecules, which represents reactants and products state of reaction
 
@@ -576,8 +584,8 @@ class CGRContainer(Graph):
         p_radicals = self._p_radicals
         plane = self._plane
 
-        reactants = MoleculeContainer()
-        products = MoleculeContainer()
+        reactants = molecule.MoleculeContainer()
+        products = molecule.MoleculeContainer()
 
         for n, atom in self._atoms.items():
             atom = Element.from_atomic_number(atom.atomic_number)(atom.isotope)

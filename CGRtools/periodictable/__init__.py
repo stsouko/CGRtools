@@ -54,7 +54,29 @@ __all__.extend(elements)
 for k, v in elements.items():
     name = f'Dynamic{k}'
     globals()[name] = cls = type(name, (DynamicElement, *v.__mro__[-3:-1]),
-                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number})
+                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
+                                  'isotopes_distribution': v.isotopes_distribution,
+                                  'isotopes_masses': v.isotopes_masses})
+    setattr(modules[v.__module__], name, cls)
+    modules[v.__module__].__all__.append(name)
+    __all__.append(name)
+
+for k, v in elements.items():
+    name = f'Query{k}'
+    globals()[name] = cls = type(name, (QueryElement, *v.__mro__[-3:-1]),
+                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
+                                  'isotopes_distribution': v.isotopes_distribution,
+                                  'isotopes_masses': v.isotopes_masses})
+    setattr(modules[v.__module__], name, cls)
+    modules[v.__module__].__all__.append(name)
+    __all__.append(name)
+
+for k, v in elements.items():
+    name = f'DynamicQuery{k}'
+    globals()[name] = cls = type(name, (DynamicQueryElement, *v.__mro__[-3:-1]),
+                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
+                                  'isotopes_distribution': v.isotopes_distribution,
+                                  'isotopes_masses': v.isotopes_masses})
     setattr(modules[v.__module__], name, cls)
     modules[v.__module__].__all__.append(name)
     __all__.append(name)
