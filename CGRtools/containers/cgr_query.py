@@ -19,10 +19,11 @@
 from typing import List, Union, Tuple
 from . import cgr, molecule, query  # cyclic imports resolve
 from .common import Graph
+from ..algorithms.smiles import QueryCGRSmiles
 from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement
 
 
-class QueryCGRContainer(Graph):
+class QueryCGRContainer(Graph, QueryCGRSmiles):
     __slots__ = ('_neighbors', '_hybridization', '_p_neighbors', '_p_hybridization')
 
     def __init__(self):

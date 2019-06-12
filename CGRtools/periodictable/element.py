@@ -20,7 +20,8 @@
 #
 from abc import ABC, abstractmethod
 from CachedMethods import class_cached_property
-from collections import Mapping, defaultdict
+from collections import defaultdict
+from collections.abc import Mapping
 from typing import Optional, Tuple, Dict, Set, List
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError

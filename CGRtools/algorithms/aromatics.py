@@ -18,50 +18,49 @@
 #
 from collections import defaultdict
 from ..exceptions import InvalidAromaticRing
-from ..periodictable import C
 
 
-_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
+_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P')
 
 
 class Aromatize:
+    __slots__ = ()
+
     def dummy_aromatize(self):
         """
         convert structure to aromatic form (dummy algorithm. don't detect quinones)
 
         :return: number of processed rings
         """
-        adj = self._bonds
-        atom = self._atoms
-        total = 0
-        unsaturated = {n for n, m_bond in adj.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
+        bonds = self._bonds
+        atoms = self._atoms
+        unsaturated = {n for n, m_bond in bonds.items() if any(bond.order in (2, 4) for bond in m_bond.values())}
+        aromatics = []
 
         for ring in self.sssr:
             lr = len(ring)
             if lr in (5, 6, 7):
                 if unsaturated.issuperset(ring):  # benzene, azulene, pyridine and quinones
-                    for n, m in zip(ring, ring[1:]):
-                        b = adj[n][m]
-                        if b.order != 4:
-                            b.order = 4
-                    b = adj[ring[0]][ring[-1]]
-                    if b.order != 4:
-                        b.order = 4
-                    total += 1
+                    aromatics.append(ring)
                 else:  # pyrole, cyclopentapyridine and quinones
                     sr = set(ring)
-                    if len(unsaturated & sr) == lr - 1 and atom[(sr - unsaturated).pop()]._atom in _pyrole_atoms:
-                        for n, m in zip(ring, ring[1:]):
-                            b = adj[n][m]
-                            if b.order != 4:
-                                b.order = 4
-                        b = adj[ring[0]][ring[-1]]
-                        if b.order != 4:
-                            b.order = 4
-                        total += 1
-        if total:
+                    if len(unsaturated & sr) == lr - 1:
+                        atom = atoms[(sr - unsaturated).pop()]
+                        if atom.atomic_symbol in _pyrole_atoms or atom.charge == -1 and atom.atomic_symbol == 'C':
+                            aromatics.append(ring)
+
+        if aromatics:
+            for ring in aromatics:
+                for n, m in zip(ring, ring[1:]):
+                    b = bonds[n][m]
+                    if b.order != 4:
+                        b._Bond__order = 4
+                b = bonds[ring[0]][ring[-1]]
+                if b.order != 4:
+                    b._Bond__order = 4
             self.flush_cache()
-        return total
+            return len(aromatics)
+        return 0
 
     def aromatize(self) -> int:
         """
@@ -70,10 +69,10 @@ class Aromatize:
         :return: number of processed rings
         """
         total = self.dummy_aromatize()
-        adj = self._bonds
-        atom = self._atoms
+        bonds = self._bonds
+        atoms = self._atoms
         patch = set()
-        double_bonded = {n for n, m_bond in adj.items() if any(bond.order == 2 for bond in m_bond.values())}
+        double_bonded = {n for n, m_bond in bonds.items() if any(bond.order == 2 for bond in m_bond.values())}
 
         pyroles = set()
         quinones = []
@@ -82,7 +81,8 @@ class Aromatize:
             ring = tuple(ring)
             lr = len(ring)
             if lr in (5, 6):
-                pyroles.update(n for n in ring if atom[n]._atom in _pyrole_atoms)
+                pyroles.update(n for n in ring if atoms[n].atomic_symbol in _pyrole_atoms or
+                               atoms[n].charge == -1 and atoms[n].atomic_symbol == 'C')
             if not double_bonded.isdisjoint(ring):
                 quinones.append(ring)
 
@@ -164,7 +164,7 @@ class Aromatize:
 
         if patch:
             for n, m, b in patch:
-                adj[n][m].order = b
+                bonds[n][m]._Bond__order = b
             self.flush_cache()
         return total
 

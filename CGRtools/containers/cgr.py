@@ -22,6 +22,7 @@ from collections import defaultdict
 from typing import List, Union, Tuple
 from . import cgr_query as query, molecule  # cyclic imports resolve
 from .common import Graph
+from ..algorithms.smiles import CGRSmiles
 from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
@@ -52,6 +53,9 @@ class DynamicBond:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
 
+    def __int__(self):
+        return (self.__order or 0) << 4 | self.__p_order
+
     @property
     def order(self):
         return self.__order
@@ -67,7 +71,7 @@ class DynamicBond:
         return copy
 
 
-class CGRContainer(Graph):
+class CGRContainer(Graph, CGRSmiles):
     __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridization', '_p_neighbors', '_p_hybridization')
 
     def __init__(self):

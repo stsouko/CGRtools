@@ -21,6 +21,8 @@ from collections import defaultdict
 from typing import List, Union
 from . import cgr, query  # cyclic imports resolve
 from .common import Graph
+from ..algorithms.aromatics import Aromatize
+from ..algorithms.smiles import MoleculeSmiles
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
@@ -43,6 +45,9 @@ class Bond:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.__order})'
 
+    def __int__(self):
+        return self.__order
+
     @property
     def order(self):
         return self.__order
@@ -53,7 +58,7 @@ class Bond:
         return copy
 
 
-class MoleculeContainer(Graph):
+class MoleculeContainer(Graph, Aromatize, MoleculeSmiles):
     __slots__ = ('_conformers', '_neighbors', '_hybridization', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
 
     def __init__(self):

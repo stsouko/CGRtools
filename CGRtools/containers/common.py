@@ -20,9 +20,11 @@ from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable
 from ..algorithms.isomorphism import Isomorphism
+from ..algorithms.morgan import Morgan
+from ..algorithms.sssr import SSSR
 
 
-class Graph(Isomorphism, ABC):
+class Graph(Isomorphism, SSSR, Morgan, ABC):
     __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
                  '_radicals')
 

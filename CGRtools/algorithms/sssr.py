@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from ..cache import cached_property
+from CachedMethods import cached_property
 
 
 class SSSR:
@@ -26,9 +26,11 @@ class SSSR:
         Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
         http://doi.org/10.1073/pnas.0813040106
     """
+    __slots__ = ()
+
     @cached_property
     def sssr(self):
-        adj = self._adj
+        adj = self._bonds
         if len(adj) < 3:
             return []
 

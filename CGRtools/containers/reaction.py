@@ -274,11 +274,11 @@ class ReactionContainer:
         if mc:
             smiles.append(str(reduce(or_, mc)))
         if cc:
-            smiles.append(f'{{{reduce(or_, cc)}}}')
+            smiles.append(str(reduce(or_, cc)))
         if qc:
             smiles.append(str(reduce(or_, qc)))
         if qcc:
-            smiles.append(f'{{{reduce(or_, qcc)}}}')
+            smiles.append(str(reduce(or_, qcc)))
         return '.'.join(smiles)
 
     def flush_cache(self):
