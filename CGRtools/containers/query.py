@@ -271,6 +271,11 @@ class QueryContainer(Graph):
         else:
             raise TypeError('Graph expected')
 
+    def get_mapping(self, other):
+        if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
+            return super().get_mapping(other)
+        raise TypeError('MoleculeContainer or QueryContainer expected')
+
     def __getstate__(self):
         return {'atoms_stereo': self._atoms_stereo, 'bonds_stereo': self._bonds_stereo, 'neighbors': self._neighbors,
                 'hybridization': self._hybridization, **super().__getstate__()}

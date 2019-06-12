@@ -505,6 +505,11 @@ class CGRContainer(Graph):
         else:
             raise TypeError('Graph expected')
 
+    def get_mapping(self, other):
+        if isinstance(other, CGRContainer):
+            return super().get_mapping(other)
+        raise TypeError('CGRContainer expected')
+
     @cached_property
     def centers_list(self) -> List[List[int]]:
         """ get a list of lists of atoms of reaction centers

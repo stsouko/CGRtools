@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from abc import abstractmethod
 from CachedMethods import cached_property
 from collections import defaultdict
 from typing import Dict
@@ -62,6 +63,7 @@ class Isomorphism:
             return False
         return True
 
+    @abstractmethod
     def get_mapping(self, other) -> Dict[int, int]:
         """
         get self to other substructure mapping generator
@@ -71,8 +73,6 @@ class Isomorphism:
         order_depth = {v[0]: k for k, v in enumerate(order)}
 
         o_atoms = other._atoms
-        o_charges = other._charges
-        o_radicals = other._radicals
         o_bonds = other._bonds
 
         stack = []
@@ -80,9 +80,9 @@ class Isomorphism:
         mapping = {}
         reversed_mapping = {}
 
-        s_atom, s_charge, s_is_radical = order[0][2:-1]
+        s_atom = order[0][1]
         for n, o_atom in o_atoms.items():
-            if s_atom == o_atom and s_charge == o_charges[n] and s_is_radical == o_radicals[n]:
+            if s_atom == o_atom:
                 stack.append((n, 0))
 
         while stack:
@@ -108,23 +108,20 @@ class Isomorphism:
 
                 lp = len(path)
                 for o_n, o_bond in o_bonds[fork].items():
-                    s_n, _, s_atom, s_charge, s_is_radical, s_bond = order[lp]
-                    if o_n not in path and s_bond == o_bond and s_atom == o_atoms[o_n] and s_charge == o_charges[o_n] \
-                            and s_is_radical == o_radicals[o_n] \
+                    s_n, _, s_atom, s_bond = order[lp]
+                    if o_n not in path and s_bond == o_bond and s_atom == o_atoms[o_n] \
                             and all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in closures[s_n]):
                         stack.append((o_n, lp))
 
     @cached_property
     def _compiled_query(self):
         atoms = self._atoms
-        charges = self._charges
-        radicals = self._radicals
         bonds = self._bonds
 
         start, atom = min(atoms.items())  # todo: optimize order
-        stack = [(n, start, atoms[n], charges[n], radicals[n], bond) for n, bond in bonds[start].items()]
+        stack = [(n, start, atoms[n], bond) for n, bond in bonds[start].items()]
         seen = {start}
-        order = [(start, atom, charges[start], radicals[start])]
+        order = [(start, atom)]
         closures = defaultdict(list)
         while stack:
             front, back, *_ = atom = stack.pop()
@@ -133,7 +130,7 @@ class Isomorphism:
                 for n, bond in bonds[front].items():  # todo: optimize order
                     if n != back:
                         if n not in seen:
-                            stack.append((n, front, atoms[n], charges[n], radicals[n], bond))
+                            stack.append((n, front, atoms[n], bond))
                         else:
                             closures[front].append((n, bond))
                 seen.add(front)

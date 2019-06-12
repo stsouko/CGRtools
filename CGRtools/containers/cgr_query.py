@@ -303,6 +303,11 @@ class QueryCGRContainer(Graph):
         else:
             raise TypeError('Graph expected')
 
+    def get_mapping(self, other):
+        if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
+            return super().get_mapping(other)
+        raise TypeError('CGRContainer or QueryCGRContainer expected')
+
     def __getstate__(self):
         return {'p_charges': self._p_charges, 'p_radicals': self._p_radicals, 'neighbors': self._neighbors,
                 'hybridization': self._hybridization, 'p_neighbors': self._p_neighbors,

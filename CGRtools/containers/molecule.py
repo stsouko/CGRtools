@@ -399,6 +399,11 @@ class MoleculeContainer(Graph):
         else:
             raise TypeError('Graph expected')
 
+    def get_mapping(self, other):
+        if isinstance(other, MoleculeContainer):
+            return super().get_mapping(other)
+        raise TypeError('MoleculeContainer expected')
+
     def implicify_hydrogens(self):
         """
         remove explicit hydrogen if possible
