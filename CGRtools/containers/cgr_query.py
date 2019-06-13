@@ -36,27 +36,35 @@ class QueryCGRContainer(Graph):
         self._p_hybridization = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element, int, str], _map=None, *,
-                 charge=0, p_charge: int = 0, is_radical=False, p_is_radical: bool = False, xy=None,
-                 neighbors: Union[int, List[int], Tuple[int]] = 0,
-                 hybridization: Union[int, List[int], Tuple[int]] = 1,
-                 p_neighbors: Union[int, List[int], Tuple[int]] = 0,
-                 p_hybridization: Union[int, List[int], Tuple[int]] = 1):
-        if isinstance(neighbors, int):
+    def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element, int, str], *args,
+                 p_charge: int = 0, p_is_radical: bool = False,
+                 neighbors: Union[int, List[int], Tuple[int], None] = None,
+                 hybridization: Union[int, List[int], Tuple[int], None] = None,
+                 p_neighbors: Union[int, List[int], Tuple[int], None] = None,
+                 p_hybridization: Union[int, List[int], Tuple[int], None] = None, **kwargs):
+        if neighbors is None:
+            neighbors = ()
+        elif isinstance(neighbors, int):
             if neighbors < 0 or neighbors > 14:
                 raise ValueError('neighbors should be in range [0, 14]')
             neighbors = (neighbors,)
         elif isinstance(neighbors, (tuple, list)):
+            if not all(isinstance(n, int) for n in neighbors):
+                raise TypeError('neighbors should be list or tuple of ints')
             if any(n < 0 or n > 14 for n in neighbors):
                 raise ValueError('neighbors should be in range [0, 14]')
             neighbors = tuple(neighbors)
         else:
             raise TypeError('neighbors should be int or list or tuple of ints')
-        if isinstance(p_neighbors, int):
+        if p_neighbors is None:
+            p_neighbors = ()
+        elif isinstance(p_neighbors, int):
             if p_neighbors < 0 or p_neighbors > 14:
                 raise ValueError('neighbors should be in range [0, 14]')
             p_neighbors = (p_neighbors,)
         elif isinstance(p_neighbors, (tuple, list)):
+            if not all(isinstance(n, int) for n in neighbors):
+                raise TypeError('neighbors should be list or tuple of ints')
             if any(n < 0 or n > 14 for n in p_neighbors):
                 raise ValueError('neighbors should be in range [0, 14]')
             p_neighbors = tuple(p_neighbors)
@@ -67,23 +75,31 @@ class QueryCGRContainer(Graph):
         if len(set(zip(neighbors, p_neighbors))) != len(neighbors):
             raise ValueError('paired neighbors and p_neighbors should be unique')
 
-        if isinstance(hybridization, int):
+        if hybridization is None:
+            hybridization = ()
+        elif isinstance(hybridization, int):
             if hybridization < 1 or hybridization > 4:
                 raise ValueError('hybridization should be in range [1, 4]')
             hybridization = (hybridization,)
         elif isinstance(hybridization, (tuple, list)):
+            if not all(isinstance(h, int) for h in hybridization):
+                raise TypeError('hybridizations should be list or tuple of ints')
             if any(h < 1 or h > 4 for h in hybridization):
-                raise ValueError('neighbors should be in range [0, 14]')
+                raise ValueError('hybridizations should be in range [1, 4]')
             hybridization = tuple(hybridization)
         else:
             raise TypeError('hybridization should be int or list or tuple of ints')
-        if isinstance(p_hybridization, int):
+        if p_hybridization is None:
+            p_hybridization = ()
+        elif isinstance(p_hybridization, int):
             if p_hybridization < 1 or p_hybridization > 4:
                 raise ValueError('hybridization should be in range [1, 4]')
             p_hybridization = (p_hybridization,)
         elif isinstance(p_hybridization, (tuple, list)):
+            if not all(isinstance(h, int) for h in p_hybridization):
+                raise TypeError('hybridizations should be list or tuple of ints')
             if any(h < 1 or h > 4 for h in p_hybridization):
-                raise ValueError('neighbors should be in range [0, 14]')
+                raise ValueError('hybridizations should be in range [1, 4]')
             p_hybridization = tuple(p_hybridization)
         else:
             raise TypeError('hybridization should be int or list or tuple of ints')
@@ -109,7 +125,12 @@ class QueryCGRContainer(Graph):
             else:
                 raise TypeError('QueryElement object expected')
 
-        _map = super().add_atom(atom, _map, charge=charge, is_radical=is_radical, xy=xy)
+        _map = super().add_atom(atom, *args, **kwargs)
+        if neighbors:
+            neighbors, p_neighbors = zip(*sorted(zip(neighbors, p_neighbors)))
+        if hybridization:
+            hybridization, p_hybridization = zip(*sorted(zip(hybridization, p_hybridization)))
+
         self._p_charges[_map] = p_charge
         self._p_radicals[_map] = p_is_radical
         self._neighbors[_map] = neighbors

@@ -31,8 +31,8 @@ class Bond:
     def __init__(self, order):
         if not isinstance(order, int):
             raise TypeError('invalid order value')
-        if order < 1 or order > 5:
-            raise ValueError('order should be in range [1, 5]')
+        if order not in (1, 4, 2, 3, 8):
+            raise ValueError('order should be from [1, 2, 3, 4, 8]')
         self.__order = order
 
     def __eq__(self, other):
@@ -64,7 +64,7 @@ class MoleculeContainer(Graph):
         self._bonds_stereo = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[Element, int, str], _map=None, *, charge=0, is_radical=False, xy=None):
+    def add_atom(self, atom: Union[Element, int, str], *args, **kwargs):
         if not isinstance(atom, Element):
             if isinstance(atom, str):
                 atom = Element.from_symbol(atom)()
@@ -73,7 +73,7 @@ class MoleculeContainer(Graph):
             else:
                 raise TypeError('Element object expected')
 
-        _map = super().add_atom(atom, _map, charge=charge, is_radical=is_radical, xy=xy)
+        _map = super().add_atom(atom, *args, **kwargs)
         self._neighbors[_map] = 0
         self._hybridization[_map] = 1
         self._bonds_stereo[_map] = {}

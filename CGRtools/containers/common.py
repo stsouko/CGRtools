@@ -126,7 +126,7 @@ class Graph(Isomorphism, ABC):
 
     @abstractmethod
     def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
-                 is_radical: bool = False, xy: Tuple[float, float] = None) -> int:
+                 is_radical: bool = False, xy: Tuple[float, float] = (0., 0.)) -> int:
         """
         new atom addition
         """
@@ -137,9 +137,7 @@ class Graph(Isomorphism, ABC):
         elif _map in self._atoms:
             raise ValueError('atom with same number exists')
 
-        if xy is None:
-            xy = (0., 0.)
-        elif not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
+        if not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
             raise TypeError('XY should be tuple with 2 float')
         if not isinstance(charge, int):
             raise TypeError('formal charge should be int in range [-4, 4]')

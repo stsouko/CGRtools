@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,17 +17,18 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POINTER, Structure, cdll, byref
+from io import StringIO, TextIOWrapper
 from logging import warning
+from pathlib import Path
 from re import split
 from sys import platform
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRread, WithMixin
+from ._CGRrw import CGRRead, common_isotopes
 from . import __path__ as files_path
-from ..periodictable import common_isotopes
 
 
-class INCHIread(CGRread, WithMixin):
+class INCHIRead(CGRRead):
     """
     INCHI separated per lines files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
@@ -41,9 +42,34 @@ class INCHIread(CGRread, WithMixin):
     id:123 key=value\n
     """
     def __init__(self, file, *args, **kwargs):
+        if isinstance(file, str):
+            self._file = open(file)
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open()
+            self._is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self.__data = self.__reader()
+
+    def close(self, force=False):
+        """
+        close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
 
     def read(self):
         """
@@ -188,7 +214,9 @@ class AUXStructure(Structure):
     pass
 
 
-__all__ = ['INCHIread']
+INCHIread = INCHIRead
+
+__all__ = ['INCHIRead', 'INCHIread']
 
 if platform == 'linux':
     opt_flag = '-'
@@ -200,4 +228,4 @@ elif platform == 'win32':
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []
-    del INCHIread
+    del INCHIRead, INCHIread

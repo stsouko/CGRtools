@@ -38,8 +38,8 @@ class DynamicBond:
         elif p_order is not None and not isinstance(p_order, int):
             raise TypeError('p_order should be int type or None')
 
-        if order < 1 or order > 5 or p_order < 1 or p_order > 5:
-            raise ValueError('order or p_order should be in range [1, 5]')
+        if order not in (1, 4, 2, 3, None, 8) or p_order not in (1, 4, 2, 3, None, 8):
+            raise ValueError('order or p_order should be from [1, 2, 3, 4, 8]')
 
         self.__order = order
         self.__p_order = p_order
@@ -79,8 +79,8 @@ class CGRContainer(Graph):
         self._p_hybridization = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[DynamicElement, Element, int, str], _map=None, *, charge=0, p_charge: int = 0,
-                 is_radical=False, p_is_radical: bool = False, xy=None):
+    def add_atom(self, atom: Union[DynamicElement, Element, int, str], *args, p_charge: int = 0,
+                 p_is_radical: bool = False, **kwargs):
         if not isinstance(p_charge, int):
             raise TypeError('formal charge should be int in range [-4, 4]')
         if p_charge > 4 or p_charge < -4:
@@ -98,7 +98,7 @@ class CGRContainer(Graph):
             else:
                 raise TypeError('DynamicElement object expected')
 
-        _map = super().add_atom(atom, _map, charge=charge, is_radical=is_radical, xy=xy)
+        _map = super().add_atom(atom, *args, **kwargs)
         self._p_charges[_map] = p_charge
         self._p_radicals[_map] = p_is_radical
         self._neighbors[_map] = 0

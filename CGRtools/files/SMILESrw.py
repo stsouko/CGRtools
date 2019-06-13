@@ -17,15 +17,16 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from importlib.util import find_spec
+from io import StringIO, TextIOWrapper
 from logging import warning
+from pathlib import Path
 from re import split
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import WithMixin, CGRread
-from ..periodictable import elements_list
+from ._CGRrw import CGRRead, elements_list
 
 
-class SMILESread(CGRread, WithMixin):
+class SMILESRead(CGRRead):
     """
     SMILES separated per lines files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
@@ -38,10 +39,35 @@ class SMILESread(CGRread, WithMixin):
     C=C>>CC id:123 key=value\n
     """
     def __init__(self, file, *args, **kwargs):
+        if isinstance(file, str):
+            self._file = open(file)
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open()
+            self._is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self.__parser = Parser()
         self.__data = self.__reader()
+
+    def close(self, force=False):
+        """
+        close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
 
     def read(self):
         """
@@ -129,8 +155,9 @@ class SMILESread(CGRread, WithMixin):
 
 if find_spec('coho'):
     from coho.smiles import Parser
-    __all__ = ['SMILESread']
+    SMILESread = SMILESRead
+    __all__ = ['SMILESRead', 'SMILESread']
 else:
     warn('coho library not installed', ImportWarning)
     __all__ = []
-    del SMILESread
+    del SMILESRead

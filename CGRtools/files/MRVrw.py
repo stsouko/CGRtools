@@ -18,12 +18,14 @@
 #
 from collections import defaultdict
 from importlib.util import find_spec
+from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
 from itertools import chain, count
 from logging import warning
+from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRread, CGRwrite, WithMixin, cgr_keys
-from ..containers.common import BaseContainer
+from ._CGRrw import CGRRead, cgr_keys
+from ..containers.common import Graph
 from ..exceptions import EmptyMolecule
 
 
@@ -67,16 +69,41 @@ def xml_dict(parent_element, stop_list=None):
     return out
 
 
-class MRVread(CGRread, WithMixin):
+class MRVread(CGRRead):
     """
     ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in binary mode file, string path to file,
     pathlib.Path object or another binary buffered reader object
     """
     def __init__(self, file, *args, **kwargs):
+        if isinstance(file, str):
+            self._file = open(file, 'rb')
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open('rb')
+            self._is_buffer = False
+        elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. BytesIO, BufferedReader and BufferedIOBase subclasses possible')
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
+
+    def close(self, force=False):
+        """
+        close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
 
     def read(self):
         """
@@ -270,17 +297,28 @@ class MRVread(CGRread, WithMixin):
     __stereo_map = {'H': -1, 'W': 1}
 
 
-class MRVwrite(CGRwrite, WithMixin):
+class MRVwrite:
     """
     ChemAxon MRV files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
+    def __init__(self, file):
+        if isinstance(file, str):
+            self._file = open(file, 'w')
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open('w')
+            self._is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. '
+                            'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
+        self.__writable = True
 
-    def close(self, *args, **kwargs):
+    def close(self, force=False):
         """
         write close tag of MRV file and close opened file
 
@@ -289,7 +327,22 @@ class MRVwrite(CGRwrite, WithMixin):
         if not self.__finalized:
             self._file.write('</cml>')
             self.__finalized = True
-        super().close(*args, **kwargs)
+        if self.__writable:
+            self.write = self.__write_closed
+            self.__writable = False
+
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    @staticmethod
+    def __write_closed(_):
+        raise ValueError('I/O operation on closed writer')
 
     def write(self, data):
         """
@@ -302,7 +355,7 @@ class MRVwrite(CGRwrite, WithMixin):
     def __write(self, data):
         self._file.write('<MDocument><MChemicalStruct>')
 
-        if isinstance(data, BaseContainer):
+        if isinstance(data, Graph):
             m = self._convert_structure(data)
             self._file.write('<molecule><propertyList>')
             for k, v in data.meta.items():

@@ -175,18 +175,13 @@ class Dynamic:
             raise IsNotConnectedAtom
 
 
-class Query:
-    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                             (1, 2, 3, 4): 15}  # 4 bit
-    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
-
-
 class Element(Core):
     __slots__ = ()
     __class_cache__ = {}
+
+    @property
+    def atomic_symbol(self):
+        return self.__class__.__name__
 
     @classmethod
     def from_symbol(cls, symbol):
@@ -311,13 +306,17 @@ class Element(Core):
 class DynamicElement(Core, Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
+    @property
+    def atomic_symbol(self):
+        return self.__class__.__name__[7:]
+
     @classmethod
     def from_symbol(cls, symbol):
         """
         get DynamicElement class by its symbol
         """
         try:
-            element = next(x for x in DynamicElement.__subclasses__() if x.__name__ == symbol)
+            element = next(x for x in DynamicElement.__subclasses__() if x.__name__[7:] == symbol)
         except StopIteration:
             raise ValueError(f'DynamicElement with symbol "{symbol}" not found')
         return element
@@ -349,8 +348,12 @@ class DynamicElement(Core, Dynamic):
             self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
 
 
-class QueryElement(Core, Query):
+class QueryElement(Core):
     __slots__ = ()
+
+    @property
+    def atomic_symbol(self):
+        return self.__class__.__name__[5:]
 
     @classmethod
     def from_symbol(cls, symbol):
@@ -358,7 +361,7 @@ class QueryElement(Core, Query):
         get Element class by its symbol
         """
         try:
-            element = next(x for x in QueryElement.__subclasses__() if x.__name__ == symbol)
+            element = next(x for x in QueryElement.__subclasses__() if x.__name__[5:] == symbol)
         except StopIteration:
             raise ValueError(f'QueryElement with symbol "{symbol}" not found')
         return element
@@ -407,9 +410,20 @@ class QueryElement(Core, Query):
         return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
             self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
+    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                             (1, 2, 3, 4): 15}  # 4 bit
+    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
 
-class DynamicQueryElement(Core, Dynamic, Query):
+
+class DynamicQueryElement(Core, Dynamic):
     __slots__ = ()
+
+    @property
+    def atomic_symbol(self):
+        return self.__class__.__name__[12:]
 
     @classmethod
     def from_symbol(cls, symbol):
@@ -417,7 +431,7 @@ class DynamicQueryElement(Core, Dynamic, Query):
         get Element class by its symbol
         """
         try:
-            element = next(x for x in DynamicQueryElement.__subclasses__() if x.__name__ == symbol)
+            element = next(x for x in DynamicQueryElement.__subclasses__() if x.__name__[12:] == symbol)
         except StopIteration:
             raise ValueError(f'DynamicQueryElement with symbol "{symbol}" not found')
         return element
@@ -462,13 +476,20 @@ class DynamicQueryElement(Core, Dynamic, Query):
 
     def __int__(self):
         """
-        42bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 4bit | 4bit | 4bit| 4bit
+        36bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
         """
-        return (self.isotope or 0) << 33 | self.atomic_number << 26 | self.charge + 4 << 22 | self.p_charge << 18 | \
-            self.is_radical << 17 | self.p_is_radical << 16 | \
-            self._hybridization_bitmap[self.hybridization] << 12 | \
-            self._hybridization_bitmap[self.p_hybridization] << 8 | \
-            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._neighbors_bitmap.get(self.p_neighbors, 15)
+        return (self.isotope or 0) << 27 | self.atomic_number << 20 | self.charge + 4 << 16 | self.p_charge << 12 | \
+            self.is_radical << 11 | self.p_is_radical << 10 | \
+            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
+
+    _hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
+                             ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
+                             ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
+                             ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
+    _neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
+                         ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
+                         ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
 
 
 class FrozenDict(Mapping):

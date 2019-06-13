@@ -33,32 +33,40 @@ class QueryContainer(Graph):
         self._bonds_stereo = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[QueryElement, Element, int, str], _map=None, *, charge=0, is_radical=False, xy=None,
-                 neighbors: Union[int, List[int], Tuple[int]] = 0,
-                 hybridization: Union[int, List[int], Tuple[int]] = 1):
+    def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,
+                 neighbors: Union[int, List[int], Tuple[int], None] = None,
+                 hybridization: Union[int, List[int], Tuple[int], None] = None, **kwargs):
+        if neighbors is None:
+            neighbors = ()
         if isinstance(neighbors, int):
             if neighbors < 0 or neighbors > 14:
                 raise ValueError('neighbors should be in range [0, 14]')
             neighbors = (neighbors,)
         elif isinstance(neighbors, (tuple, list)):
+            if not all(isinstance(n, int) for n in neighbors):
+                raise TypeError('neighbors should be list or tuple of ints')
             if any(n < 0 or n > 14 for n in neighbors):
                 raise ValueError('neighbors should be in range [0, 14]')
             if len(set(neighbors)) != len(neighbors):
                 raise ValueError('neighbors should be unique')
-            neighbors = tuple(neighbors)
+            neighbors = tuple(sorted(neighbors))
         else:
             raise TypeError('neighbors should be int or list or tuple of ints')
 
-        if isinstance(hybridization, int):
+        if hybridization is None:
+            hybridization = ()
+        elif isinstance(hybridization, int):
             if hybridization < 1 or hybridization > 4:
                 raise ValueError('hybridization should be in range [1, 4]')
             hybridization = (hybridization,)
         elif isinstance(hybridization, (tuple, list)):
+            if not all(isinstance(h, int) for h in hybridization):
+                raise TypeError('hybridizations should be list or tuple of ints')
             if any(h < 1 or h > 4 for h in hybridization):
-                raise ValueError('neighbors should be in range [0, 14]')
+                raise ValueError('hybridizations should be in range [1, 4]')
             if len(set(hybridization)) != len(hybridization):
                 raise ValueError('hybridizations should be unique')
-            hybridization = tuple(hybridization)
+            hybridization = tuple(sorted(hybridization))
         else:
             raise TypeError('hybridization should be int or list or tuple of ints')
 
@@ -72,7 +80,7 @@ class QueryContainer(Graph):
             else:
                 raise TypeError('QueryElement object expected')
 
-        _map = super().add_atom(atom, _map, charge=charge, is_radical=is_radical, xy=xy)
+        _map = super().add_atom(atom, *args, **kwargs)
         self._neighbors[_map] = neighbors
         self._hybridization[_map] = hybridization
         self._bonds_stereo[_map] = {}

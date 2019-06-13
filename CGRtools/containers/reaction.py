@@ -54,7 +54,7 @@ class ReactionContainer:
         reactants = tuple(reactants)
         products = tuple(products)
         reagents = tuple(reagents)
-        if any(isinstance(x, Graph) for x in chain(reactants, products, reagents)):
+        if any(not isinstance(x, Graph) for x in chain(reactants, products, reagents)):
             raise TypeError('molecule or CGR or query expected')
         self.__reactants = reactants
         self.__products = products
