@@ -17,9 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from typing import List, Union, Tuple
-from . import cgr  # cyclic imports resolve
-from . import molecule  # cyclic imports resolve
-from . import query  # cyclic imports resolve
+from . import cgr, molecule, query  # cyclic imports resolve
 from .common import Graph
 from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement
 

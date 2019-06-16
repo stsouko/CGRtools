@@ -19,9 +19,9 @@
 from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
 from typing import List, Union
-from . import query  # cyclic imports resolve
+from . import cgr, query  # cyclic imports resolve
 from .common import Graph
-from ..exceptions import ValenceError
+from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
@@ -398,6 +398,133 @@ class MoleculeContainer(Graph):
             return other.union(self)
         else:
             raise TypeError('Graph expected')
+
+    def compose(self, other):
+        """
+        compose 2 graphs to CGR
+
+        :param other: Molecule or CGR Container
+        :return: CGRContainer
+        """
+        sa = self._atoms
+        sc = self._charges
+        sr = self._radicals
+        sp = self._plane
+        sb = self._bonds
+
+        bonds = []
+        adj = defaultdict(lambda: defaultdict(lambda: [None, None]))
+
+        if isinstance(other, MoleculeContainer):
+            oa = other._atoms
+            oc = other._charges
+            or_ = other._radicals
+            op = other._plane
+            ob = other._bonds
+            common = self._atoms.keys() & other
+            h = cgr.CGRContainer()
+            atoms = h._atoms
+
+            for n in self._atoms.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
+                for m, bond in sb[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is broken bond
+                            order = bond.order
+                            bond = object.__new__(cgr.DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
+                        bonds.append((n, m, bond))
+            for n in other._atoms.keys() - common:  # coupling atoms
+                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=oc[n], p_is_radical=or_[n])
+                for m, bond in ob[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is formed bond
+                            order = bond.order
+                            bond = object.__new__(cgr.DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
+                        bonds.append((n, m, bond))
+            for n in common:
+                an = adj[n]
+                for m, bond in sb[n].items():
+                    if m in common:
+                        an[m][0] = bond.order
+                for m, bond in ob[n].items():
+                    if m in common:
+                        an[m][1] = bond.order
+            for n in common:
+                san = sa[n]
+                if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
+                    raise MappingError(f'atoms with number {{{n}}} not equal')
+                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
+                for m, (o1, o2) in adj[n].items():
+                    if m not in atoms:
+                        bond = object.__new__(cgr.DynamicBond)
+                        bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
+                        bonds.append((n, m, bond))
+        elif isinstance(other, cgr.CGRContainer):
+            oa = other._atoms
+            oc = other._charges
+            or_ = other._radicals
+            opc = other._p_charges
+            opr = other._p_radicals
+            op = other._plane
+            ob = other._bonds
+            common = self._atoms.keys() & other
+            h = other.__class__()  # subclasses support
+            atoms = h._atoms
+
+            for n in self._atoms.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
+                for m, bond in sb[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is broken bond
+                            order = bond.order
+                            bond = object.__new__(cgr.DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
+                        bonds.append((n, m, bond))
+            for n in other._atoms.keys() - common:  # coupling atoms
+                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n], p_is_radical=opr[n])
+                for m, bond in ob[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is formed bond
+                            order = bond.p_order
+                            if order:  # skip broken bond. X>None => None>None
+                                bond = object.__new__(cgr.DynamicBond)
+                                bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
+                                bonds.append((n, m, bond))
+                        else:
+                            bonds.append((n, m, bond))
+            for n in common:
+                an = adj[n]
+                for m, bond in sb[n].items():
+                    if m in common:
+                        an[m][0] = bond.order
+                for m, bond in ob[n].items():
+                    if m in an or m in common and bond.p_order:
+                        # self has nm bond or other bond not broken
+                        an[m][1] = bond.p_order
+            for n in common:
+                san = sa[n]
+                if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
+                    raise MappingError(f'atoms with number {{{n}}} not equal')
+                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n], p_is_radical=opr[n])
+                for m, (o1, o2) in adj[n].items():
+                    if m not in atoms:
+                        bond = object.__new__(cgr.DynamicBond)
+                        bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
+                        bonds.append((n, m, bond))
+        else:
+            raise TypeError('MoleculeContainer or CGRContainer expected')
+
+        for n, m, bond in bonds:
+            h.add_bond(n, m, bond)
+        return h
+
+    def __xor__(self, other):
+        """
+        G ^ H is CGR generation
+        """
+        return self.compose(other)
 
     def get_mapping(self, other):
         if isinstance(other, MoleculeContainer):
