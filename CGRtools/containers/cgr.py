@@ -401,10 +401,10 @@ class CGRContainer(Graph):
             sh = self._hybridization
             spn = self._neighbors
             sph = self._hybridization
-            sub._neighbors = {n: sn[n] for n in atoms}
-            sub._hybridization = {n: sh[n] for n in atoms}
-            sub._neighbors = {n: spn[n] for n in atoms}
-            sub._hybridization = {n: sph[n] for n in atoms}
+            sub._neighbors = {n: (sn[n],) for n in atoms}
+            sub._hybridization = {n: (sh[n],) for n in atoms}
+            sub._neighbors = {n: (spn[n],) for n in atoms}
+            sub._hybridization = {n: (sph[n],) for n in atoms}
         else:
             sub._atoms = ca = {}
             for n in atoms:

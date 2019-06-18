@@ -183,6 +183,27 @@ class Element(Core):
     def atomic_symbol(self):
         return self.__class__.__name__
 
+    @property
+    def implicit_hydrogens(self):
+        try:
+            return self._graph()._hydrogens[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def explicit_hydrogens(self):
+        try:
+            return self._graph()._explicit_hydrogens(self._map)
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def total_hydrogens(self):
+        try:
+            return self._graph()._total_hydrogens(self._map)
+        except AttributeError:
+            raise IsNotConnectedAtom
+
     @classmethod
     def from_symbol(cls, symbol):
         """
