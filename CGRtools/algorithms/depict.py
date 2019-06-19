@@ -17,10 +17,10 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_method
 from collections import defaultdict
 from math import atan2, sin, cos, hypot
 from uuid import uuid4
-from ..cache import cached_method
 from ..periodictable import cpk
 
 

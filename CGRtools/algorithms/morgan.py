@@ -17,12 +17,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_property
 from collections import Counter
 from functools import reduce
 from itertools import count
 from logging import warning
 from operator import mul, itemgetter
-from ..cache import cached_property
 
 
 class Morgan:

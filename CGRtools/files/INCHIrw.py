@@ -131,7 +131,7 @@ class INCHIRead(CGRRead):
 
             atoms.append({'element': element, 'charge': int.from_bytes(atom.charge, byteorder='big', signed=True),
                           'mapping': 0, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'isotope': isotope,
-                          'multiplicity': int.from_bytes(atom.radical, byteorder='big') or None})
+                          'is_radical': bool(int.from_bytes(atom.radical, byteorder='big'))})
 
             for k in range(atom.num_bonds):
                 m = atom.neighbor[k]
@@ -141,7 +141,7 @@ class INCHIRead(CGRRead):
                 if order:
                     bonds.append((n, m, order))
         lib.FreeStructFromINCHI(byref(structure))
-        return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
+        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': []}
 
     @staticmethod
     def __parse_aux(string):

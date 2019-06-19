@@ -173,7 +173,7 @@ class CGRRead:
             else:
                 bond, p_bond = value.split('>')
                 m = nm[1]
-                bonds[n][m] = bonds[m][n] = DynamicBond(int(bond), int(p_bond))
+                bonds[n][m] = bonds[m][n] = DynamicBond(int(bond) or None, int(p_bond) or None)
 
         g = CGRContainer()
         pm = g._parsed_mapping
@@ -185,6 +185,8 @@ class CGRRead:
                            xy=(atom['x'], atom['y']))
             pm[n] = atom['mapping']
         for n, m, b in molecule['bonds']:
+            if m in bonds[n] and b != 8:
+                raise ValueError('CGR spec invalid')
             g.add_bond(mapping[n], mapping[m], bonds[n].get(m, b))
         return g
 
