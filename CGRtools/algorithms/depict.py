@@ -166,7 +166,6 @@ class DepictMolecule(Depict):
         mask = []
         for n, atom in self.atoms():
             single = not self._bonds[n]
-
             if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity or \
                     atom.isotope != atom.common_isotope:
                 x_shift = -shifts[atom.element] * self._render_font
@@ -175,7 +174,6 @@ class DepictMolecule(Depict):
                 svg.append(f'    <g fill="{self._render_atoms_colors[atom.element]}">')
                 svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
                            f'font-size="{self._render_font:.2f}">{atom.element}</text>')
-
                 if atom.charge:
                     svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
@@ -186,9 +184,8 @@ class DepictMolecule(Depict):
                 if atom.isotope != atom.common_isotope:
                     svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
-
-                mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
                 svg.append('    </g>')
+                mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
 
         return svg, mask
 
