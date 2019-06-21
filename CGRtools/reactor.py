@@ -350,7 +350,8 @@ class Reactor:
         for structure in structures:
             intersection = set(structure.atoms_numbers).intersection(checked_atoms)
             if intersection:
-                mapping = {k: v for k, v in zip(intersection, count(max([*checked_atoms, len(structure)]) + 1))}
+                mapping = {k: v for k, v in zip(intersection,
+                                                count(max(max(checked_atoms), max(structure.atoms_numbers)) + 1))}
                 structure = structure.remap(mapping, copy=True)
                 structure.reset_query_marks()
                 info("some atoms in input structures had the same numbers.\n"
