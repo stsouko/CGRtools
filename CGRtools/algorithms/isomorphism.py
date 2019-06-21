@@ -19,6 +19,7 @@
 from abc import abstractmethod
 from CachedMethods import cached_property
 from collections import defaultdict
+from itertools import permutations, product
 from typing import Dict
 
 
@@ -68,8 +69,18 @@ class Isomorphism:
         """
         get self to other substructure mapping generator
         """
-        size = len(self._atoms) - 1
-        order, closures = self._compiled_query
+        components, closures = self.__compiled_query
+        for candidates in permutations(other.connected_components, len(components)):
+            for match in product(*(self.__get_mapping(order, closures, other, component)
+                                   for order, component in zip(components, candidates))):
+                mapping = match[0]
+                for m in match[1:]:
+                    mapping.update(m)
+                yield mapping
+
+    @staticmethod
+    def __get_mapping(order, closures, other, atoms):
+        size = len(order) - 1
         order_depth = {v[0]: k for k, v in enumerate(order)}
 
         o_atoms = other._atoms
@@ -82,7 +93,7 @@ class Isomorphism:
 
         s_atom = order[0][1]
         for n, o_atom in o_atoms.items():
-            if s_atom == o_atom:
+            if n in atoms and s_atom == o_atom:
                 stack.append((n, 0))
 
         while stack:
@@ -96,7 +107,7 @@ class Isomorphism:
                         del mapping[reversed_mapping[x]]
                     path = path[:depth]
 
-                back = order[depth + 1][2]
+                back = order[depth + 1][1]
                 if back != s_atom:
                     fork = path[order_depth[back]]
                 else:
@@ -108,33 +119,42 @@ class Isomorphism:
 
                 lp = len(path)
                 for o_n, o_bond in o_bonds[fork].items():
+                    if o_n not in atoms:
+                        continue
                     s_n, _, s_atom, s_bond = order[lp]
                     if o_n not in path and s_bond == o_bond and s_atom == o_atoms[o_n] \
                             and all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in closures[s_n]):
                         stack.append((o_n, lp))
 
     @cached_property
-    def _compiled_query(self):
+    def __compiled_query(self):
         atoms = self._atoms
         bonds = self._bonds
+        atoms_order = self.atoms_order
 
-        start, atom = min(atoms.items())  # todo: optimize order
-        stack = [(n, start, atoms[n], bond) for n, bond in bonds[start].items()]
-        seen = {start}
-        order = [(start, atom)]
         closures = defaultdict(list)
-        while stack:
-            front, back, *_ = atom = stack.pop()
-            if front not in seen:
-                order.append(atom)
-                for n, bond in bonds[front].items():  # todo: optimize order
-                    if n != back:
-                        if n not in seen:
-                            stack.append((n, front, atoms[n], bond))
-                        else:
-                            closures[front].append((n, bond))
-                seen.add(front)
-        return order, closures
+        components = []
+        seen = set()
+        while len(seen) < len(atoms):
+            start = max(atoms.keys() - seen, key=lambda x: atoms_order[x])
+            seen.add(start)
+            stack = [(n, start, atoms[n], bond) for n, bond in sorted(bonds[start].items(),
+                                                                      key=lambda x: atoms_order[x[0]])]
+            order = [(start, atoms[start])]
+            components.append(order)
+
+            while stack:
+                front, back, *_ = atom = stack.pop()
+                if front not in seen:
+                    order.append(atom)
+                    for n, bond in sorted(bonds[front].items(), key=lambda x: atoms_order[x[0]]):
+                        if n != back:
+                            if n not in seen:
+                                stack.append((n, front, atoms[n], bond))
+                            else:
+                                closures[front].append((n, bond))
+                    seen.add(front)
+        return components, closures
 
 
 __all__ = ['Isomorphism']
