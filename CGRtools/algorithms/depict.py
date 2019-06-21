@@ -166,6 +166,7 @@ class DepictMolecule(Depict):
         mask = []
         for n, atom in self.atoms():
             single = not self._bonds[n]
+
             if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity or \
                     atom.isotope != atom.common_isotope:
                 x_shift = -shifts[atom.element] * self._render_font
@@ -174,6 +175,7 @@ class DepictMolecule(Depict):
                 svg.append(f'    <g fill="{self._render_atoms_colors[atom.element]}">')
                 svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
                            f'font-size="{self._render_font:.2f}">{atom.element}</text>')
+
                 if atom.charge:
                     svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
@@ -184,8 +186,10 @@ class DepictMolecule(Depict):
                 if atom.isotope != atom.common_isotope:
                     svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
                                f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
-                svg.append('    </g>')
+
                 mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
+                svg.append('    </g>')
+
         return svg, mask
 
 
@@ -258,6 +262,101 @@ class DepictReaction:
 
     _render_font = .4
     _render_bonds_color = 'black'
+
+class DepictQuery(Depict):
+
+    def _render_bonds(self):
+        svg = []
+        nodes = self._atoms
+        for n, m, bond in self.bonds():
+            n, m = nodes[n], nodes[m]
+            nx, ny, mx, my = n.x, n.y, m.x, m.y
+            if bond.order == 1:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+            elif bond.order == 4:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my+0.5:.2f}"/>'\
+                               f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+            elif bond.order == 2:
+                dx, dy = rotate_vector(0, self._render_double_space, mx - nx, my - ny)
+                svg.append(
+                    f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
+                svg.append(
+                    f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
+            elif bond.order == 3:
+                dx, dy = rotate_vector(0, self._render_triple_space, mx - nx, my - ny)
+                svg.append(
+                    f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                svg.append(
+                    f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
+            else:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
+                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+        return svg
+
+    def _render_atoms(self):
+        svg = []
+        mask = []
+        for n, atom in self.atoms():
+            single = not self._bonds[n]
+            x_shift = -shifts[atom.element[0]] * self._render_font
+            y_shift = .35 * self._render_font
+
+            if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity:
+
+                radius = -1.5 * x_shift
+                svg.append(f'    <g fill="{self._render_atoms_colors[atom.element[0]]}">')
+                svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
+                           f'font-size="{self._render_font:.2f}">{atom.element[0]}</text>')
+
+                if atom.charge:
+                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
+                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
+                if atom.multiplicity:
+                    svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
+                               f'font-size="{self._render_sup_font:.2f}">'
+                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
+
+                mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
+                svg.append('    </g>')
+
+            if atom.neighbors:
+                svg.append(f'    <g fill="#5D8AA8">')
+                reduction = []
+                start_i = 0
+                z = atom.neighbors[0]
+                for i, neighbor in enumerate(atom.neighbors[1:]):
+                    end_i = i
+                    if z + 1 == neighbor:
+                        z = neighbor
+                    else:
+                        if start_i == end_i:
+                            reduction.append(str(atom.neighbors[start_i]))
+                            start_i = end_i + 1
+                        else:
+                            reduction.append((str(atom.neighbors[start_i]) + '-' + str(atom.neighbors[end_i])))
+                            start_i = end_i + 1
+                        z = neighbor
+                    if atom.neighbors[end_i + 1] == atom.neighbors[-1]:
+                        if start_i == end_i:
+                            reduction.append(str(atom.neighbors[start_i]))
+                            start_i = end_i + 1
+                        else:
+                            reduction.append((str(atom.neighbors[start_i]) + '-' + str(atom.neighbors[end_i])))
+                            start_i = end_i + 1
+                for x in reduction:
+                    svg.append(f'      <text x="{atom.x - x_shift - 0.2:.2f}" y="{-y_shift - atom.y + 0.5:.2f}" 'f'font-size="{self._render_sup_font:.2f}">{x}</text>')
+                svg.append('    </g>')
+
+            if atom.hybridization:
+                svg.append(f'    <g fill="#5D8AA8">')
+                for hyb in atom.hybridization:
+                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y + 0.5:.2f}" '
+                               f'font-size="{self._render_sup_font:.2f}">{str(_render_hybridization_str[hyb])}</text>')
+                svg.append('    </g>')
+
+        return svg, mask
 
 
 class DepictCGR(Depict):
@@ -599,6 +698,8 @@ shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .3
           'Nh': .35, 'Fl': .35, 'Mc': .35, 'Lv': .35, 'Ts': .35, 'Og': .35}
 
 _render_charge_str = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
+_render_hybridization_str = {1: 's', 2: 'd', 3: 't', 4: 'a'}
+
 _render_p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
                         -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
                         -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
@@ -608,4 +709,4 @@ _render_p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 
                         3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
 _render_multiplicity_str = {1: '↑↓', 2: '↑', 3: '↑↑'}
 
-__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR']
+__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery']
