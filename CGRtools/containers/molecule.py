@@ -22,6 +22,7 @@ from typing import List, Union
 from . import cgr, query  # cyclic imports resolve
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
+from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
@@ -58,7 +59,7 @@ class Bond:
         return copy
 
 
-class MoleculeContainer(Graph, Aromatize, MoleculeSmiles):
+class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridization', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
 
     def __init__(self):

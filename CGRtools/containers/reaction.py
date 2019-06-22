@@ -25,9 +25,10 @@ from .cgr import CGRContainer
 from .common import Graph
 from .molecule import MoleculeContainer
 from .query import QueryContainer
+from ..algorithms.depict import DepictReaction
 
 
-class ReactionContainer:
+class ReactionContainer(DepictReaction):
     """
     reaction storage. contains reactants, products and reagents lists.
 
@@ -224,6 +225,8 @@ class ReactionContainer:
             for m in self.__reagents:
                 max_x = self.__fix_positions(m, shift_x, 1.5)
                 shift_x = max_x + 1
+            if shift_x - arrow_min < 3:
+                shift_x = arrow_min + 3
         else:
             shift_x += 3
         arrow_max = shift_x - 1

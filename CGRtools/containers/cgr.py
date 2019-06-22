@@ -22,6 +22,7 @@ from collections import defaultdict
 from typing import List, Union, Tuple
 from . import cgr_query as query, molecule  # cyclic imports resolve
 from .common import Graph
+from ..algorithms.depict import DepictCGR
 from ..algorithms.smiles import CGRSmiles
 from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
@@ -71,7 +72,7 @@ class DynamicBond:
         return copy
 
 
-class CGRContainer(Graph, CGRSmiles):
+class CGRContainer(Graph, CGRSmiles, DepictCGR):
     __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridization', '_p_neighbors', '_p_hybridization')
 
     def __init__(self):
