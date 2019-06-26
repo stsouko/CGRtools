@@ -501,7 +501,16 @@ class ERXNRead:
     __in_mol = 0
 
 
-class MDLRead(CGRRead):
+class MDLReadMeta(type):
+    def __call__(cls, *args, **kwargs):
+        if kwargs.get('indexable'):
+            cls = type(cls.__name__, (cls,), {'__len__': lambda x: len(x._shifts) - 1, '__module__': cls.__module__})
+        obj = object.__new__(cls)
+        obj.__init__(*args, **kwargs)
+        return obj
+
+
+class MDLRead(CGRRead, metaclass=MDLReadMeta):
     def __init__(self, file, *args, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
@@ -573,14 +582,6 @@ class MDLRead(CGRRead):
     def __next__(self):
         return next(iter(self))
 
-    def __len__(self):
-        """
-        :return: number of records in the original file
-        """
-        if self._shifts:
-            return len(self._shifts) - 1
-        raise self._implement_error
-
     def __getitem__(self, item):
         """
         getting the item by index from the original file,
@@ -620,7 +621,7 @@ class MDLRead(CGRRead):
 
             self.seek(_current_pos)
             if records is None:
-                raise self._index_error
+                raise IndexError('Data block with requested index contain errors')
             return records
         raise self._implement_error
 
@@ -636,7 +637,6 @@ class MDLRead(CGRRead):
 
     _shifts = None
     _implement_error = NotImplementedError('Indexable supported in unix-like o.s. and for files stored on disk')
-    _index_error = IndexError('Data block with requested index contain errors')
 
 
 class MDLWrite:
