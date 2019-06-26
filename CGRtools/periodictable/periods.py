@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,14 +16,31 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-"""
-Data classes
-"""
-from .molecule import *
-from .cgr import *
-from .query import *
-from .cgr_query import *
-from .reaction import *
 
 
-__all__ = [x for x in locals() if x.endswith('Container')]
+class PeriodI:
+    __slots__ = ()
+
+
+class PeriodII:
+    __slots__ = ()
+
+
+class PeriodIII:
+    __slots__ = ()
+
+
+class PeriodIV:
+    __slots__ = ()
+
+
+class PeriodV:
+    __slots__ = ()
+
+
+class PeriodVI:
+    __slots__ = ()
+
+
+class PeriodVII:
+    __slots__ = ()

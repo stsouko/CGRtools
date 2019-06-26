@@ -18,12 +18,15 @@
 #
 from collections import defaultdict
 from importlib.util import find_spec
+from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
 from itertools import chain, count
 from logging import warning
+from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRread, CGRwrite, WithMixin, cgr_keys
-from ..containers.common import BaseContainer
+from ._CGRrw import CGRRead, cgr_keys, query_keys, elements_set, elements_list
+from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
+from ..containers.common import Graph
 from ..exceptions import EmptyMolecule
 
 
@@ -67,16 +70,41 @@ def xml_dict(parent_element, stop_list=None):
     return out
 
 
-class MRVread(CGRread, WithMixin):
+class MRVRead(CGRRead):
     """
     ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in binary mode file, string path to file,
     pathlib.Path object or another binary buffered reader object
     """
     def __init__(self, file, *args, **kwargs):
+        if isinstance(file, str):
+            self._file = open(file, 'rb')
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open('rb')
+            self._is_buffer = False
+        elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. BytesIO, BufferedReader and BufferedIOBase subclasses possible')
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file, 'rb')
         self.__data = self.__reader()
+
+    def close(self, force=False):
+        """
+        close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
 
     def read(self):
         """
@@ -166,7 +194,7 @@ class MRVread(CGRread, WithMixin):
         return meta
 
     def __parse_molecule(self, data):
-        atoms, bonds, extra, cgr = [], [], [], []
+        atoms, bonds, atoms_lists, cgr, stereo, query = [], [], {}, [], [], []
         atom_map = {}
         if 'atom' in data['atomArray']:
             da = data['atomArray']['atom']
@@ -177,18 +205,27 @@ class MRVread(CGRread, WithMixin):
                 atoms.append({'element': atom['@elementType'],
                               'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
                               'charge': int(atom.get('@formalCharge', 0)),
-                              'multiplicity': self.__radical_map[atom['@radical']] if '@radical' in atom else None,
+                              'is_radical': '@radical' in atom,
                               'mapping': int(atom.get('@mrvMap', 0)),
                               'x': float(atom['@x3'] if '@x3' in atom else atom['@x2']),
                               'y': float(atom['@y3'] if '@y3' in atom else atom['@y2']),
                               'z': float(atom['@z3'] if '@z3' in atom else 0.)})
-                if '@mrvQueryProps' in atom and atom['@mrvQueryProps'][0] == 'L':
-                    al = atom['@mrvQueryProps']
-                    _type = al[1]
-                    al = al[2:-1]
-                    if not al:
-                        raise ValueError('invalid atomlist')
-                    extra.append((n, 'atomlist' if _type == ',' else 'atomnotlist', al.split(_type)))
+                if '@mrvQueryProps' in atom:
+                    if atom['@mrvQueryProps'][0] == 'L':
+                        al = atom['@mrvQueryProps']
+                        _type = al[1]
+                        al = al[2:-1].split(_type)
+                        if not elements_set.issuperset(al):
+                            raise ValueError('invalid atoms list')
+                        if _type != ',':
+                            al = list(elements_set.difference(al))
+                        atoms_lists[n] = al
+                        atoms[-1]['element'] = al[0]
+                    elif atom['@mrvQueryProps'][0] == 'A':
+                        atoms_lists[n] = elements_list
+                        atoms[-1]['element'] = 'C'
+                    else:
+                        raise ValueError('unsupported atom query')
         else:
             atom = data['atomArray']
             for n, (_id, e, x, y) in enumerate(zip(atom['@atomID'].split(),
@@ -197,7 +234,7 @@ class MRVread(CGRread, WithMixin):
                                                    (atom['@y3'] if '@y3' in atom else atom['@y2']).split())):
                 atom_map[_id] = n
                 atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'mapping': 0,
-                              'isotope': None, 'multiplicity': None})
+                              'isotope': None, 'is_radical': False})
             if '@z3' in atom:
                 for a, x in zip(atoms, atom['@z3'].split()):
                     a['z'] = float(x)
@@ -216,15 +253,24 @@ class MRVread(CGRread, WithMixin):
             if '@radical' in atom:
                 for a, x in zip(atoms, atom['@radical'].split()):
                     if x != '0':
-                        a['multiplicity'] = self.__radical_map[x]
+                        a['is_radical'] = True
             if '@mrvQueryProps' in atom:
                 for n, x in enumerate(atom['@mrvQueryProps'].split()):
-                    if x[0] == 'L':
+                    qp = x[0]
+                    if qp == 'L':
                         _type = x[1]
-                        x = x[2:-1]
-                        if not x:
-                            raise ValueError('invalid atomlist')
-                        extra.append((n, 'atomlist' if _type == ',' else 'atomnotlist', x.split(_type)))
+                        x = x[2:-1].split(_type)
+                        if not elements_set.issuperset(x):
+                            raise ValueError('invalid atoms list')
+                        if _type != ',':
+                            x = list(elements_set.difference(x))
+                        atoms_lists[n] = x
+                        atoms[n]['element'] = x[0]
+                    elif qp == 'A':
+                        atoms_lists[n] = elements_list
+                        atoms[n]['element'] = 'C'
+                    elif qp != '0':
+                        raise ValueError('unsupported atom query')
         if not atoms:
             raise EmptyMolecule
 
@@ -238,15 +284,11 @@ class MRVread(CGRread, WithMixin):
                 if 'bondStereo' in bond:
                     if '$' in bond['bondStereo']:
                         try:
-                            stereo = self.__stereo_map[bond['bondStereo']['$']]
+                            stereo.append((atom_map[a1], atom_map[a2], self.__stereo_map[bond['bondStereo']['$']]))
                         except KeyError:
                             warning('invalid or unsupported stereo')
-                            stereo = None
                     else:
                         warning('incorrect bondStereo tag')
-                        stereo = None
-                else:
-                    stereo = None
                 bonds.append((atom_map[a1], atom_map[a2], order))
 
         if 'molecule' in data:
@@ -256,128 +298,231 @@ class MRVread(CGRread, WithMixin):
             for cgr_dat in dm:
                 if cgr_dat['@role'] == 'DataSgroup':
                     t = cgr_dat['@fieldName']
-                    if t not in cgr_keys:
-                        continue
                     a = tuple(atom_map[x] for x in cgr_dat['@atomRefs'].split())
                     v = cgr_dat['@fieldData'].replace('/', '').lower()
-                    if len(a) != cgr_keys[t] or not v:
-                        raise ValueError(f'CGR spec invalid: {cgr_dat}')
-                    cgr.append((a, t, v))
-        return {'atoms': atoms, 'bonds': bonds, 'extra': extra, 'cgr': cgr}
+                    if t in cgr_keys:
+                        if len(a) != cgr_keys[t] or not v:
+                            raise ValueError(f'CGR spec invalid: {cgr_dat}')
+                        cgr.append((a, t, v))
+                    elif t in query_keys:
+                        if len(a) != 1 or not v:
+                            raise ValueError(f'CGR Query spec invalid: {cgr_dat}')
+                        query.append((a[0], query_keys[t], v))
+                    else:
+                        warning(f'ignored data: {cgr_dat}')
+        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': atoms_lists, 'cgr': cgr, 'stereo': stereo,
+                'query': query}
 
     __bond_map = {'Any': 8, 'any': 8, 'A': 4, 'a': 4, '1': 1, '2': 2, '3': 3}
     __radical_map = {'monovalent': 2, 'divalent': 1, 'divalent1': 1, 'divalent3': 3}
     __stereo_map = {'H': -1, 'W': 1}
 
 
-class MRVwrite(CGRwrite, WithMixin):
+class MRVWrite:
     """
     ChemAxon MRV files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
+    def __init__(self, file):
+        if isinstance(file, str):
+            self._file = open(file, 'w')
+            self._is_buffer = False
+        elif isinstance(file, Path):
+            self._file = file.open('w')
+            self._is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self._file = file
+            self._is_buffer = True
+        else:
+            raise TypeError('invalid file. '
+                            'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
+        self.__writable = True
 
-    def close(self, *args, **kwargs):
+    def close(self, force=False):
         """
         write close tag of MRV file and close opened file
 
         :param force: force closing of externally opened file or buffer
         """
         if not self.__finalized:
-            self._file.write('</cml>')
+            self._file.write('</cml>\n')
             self.__finalized = True
-        super().close(*args, **kwargs)
+        if self.__writable:
+            self.write = self.__write_closed
+            self.__writable = False
+
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    @staticmethod
+    def __write_closed(_):
+        raise ValueError('I/O operation on closed writer')
 
     def write(self, data):
         """
         write single molecule or reaction into file
         """
-        self._file.write('<cml>')
+        self._file.write('<cml>\n')
         self.__write(data)
         self.write = self.__write
 
     def __write(self, data):
         self._file.write('<MDocument><MChemicalStruct>')
 
-        if isinstance(data, BaseContainer):
-            m = self._convert_structure(data)
-            self._file.write('<molecule><propertyList>')
-            for k, v in data.meta.items():
-                if isinstance(v, str):
-                    v = f'<![CDATA[{v}]]>'
-                self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
-            self._file.write('</propertyList>')
-            self._file.write(self.__format_mol(*m))
+        if isinstance(data, Graph):
+            self._file.write('<molecule>')
+            if data.meta:
+                self._file.write('<propertyList>')
+                for k, v in data.meta.items():
+                    if isinstance(v, str):
+                        v = f'<![CDATA[{v}]]>'
+                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
+                self._file.write('</propertyList>')
+            self._file.write(self.__convert_structure(data))
             self._file.write('</molecule>')
         else:
             if not data._arrow:
                 data.fix_positions()
 
-            c = count(1)
             self._file.write('<reaction>')
+            if data.meta:
+                self._file.write('<propertyList>')
+                for k, v in data.meta.items():
+                    if isinstance(v, str):
+                        v = f'<![CDATA[{v}]]>'
+                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
+                self._file.write('</propertyList>')
+            c = count(1)
             for i, j in ((data.reactants, 'reactantList'), (data.products, 'productList'),
                          (data.reagents, 'agentList')):
+                if not i:
+                    continue
                 self._file.write(f'<{j}>')
                 for n, m in zip(c, i):
-                    m = self._convert_structure(m)
                     self._file.write(f'<molecule molID="m{n}">')
-                    self._file.write(self.__format_mol(*m))
+                    self._file.write(self.__convert_structure(m))
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
 
             self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0]:.4f}" y1="1" x2="{data._arrow[1]:.4f}" '
-                             f'y2="1"/><propertyList>')
-            for k, v in data.meta.items():
-                if isinstance(v, str):
-                    v = f'<![CDATA[{v}]]>'
-                self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
-            self._file.write('</propertyList></reaction>')
-        self._file.write('</MChemicalStruct></MDocument>')
+                             f'y2="1"/>')
+            self._file.write('</reaction>')
+        self._file.write('</MChemicalStruct></MDocument>\n')
 
-    @staticmethod
-    def __format_mol(atoms, bonds, cgr):
-        return ''.join(chain(('<atomArray>',),
-                             (f'<atom id="a{atom["id"]}" elementType="{atom["symbol"]}" x3="{atom["x"]:.4f}" '
-                              f'y3="{atom["y"]:.4f}" z3="{atom["z"]:.4f}" mrvMap="{atom["mapping"]}"'
-                              f'{atom["charge"]}{atom["multiplicity"]}{atom["isotope"]}/>'
-                              for atom in atoms),
-                             ('</atomArray><bondArray>',),
-                             (f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{order}"{stereo}'
-                              for n, (i, j, order, stereo) in enumerate(bonds, start=1)),
-                             ('</bondArray>',),
-                             (f'<molecule id="sg{n}" role="DataSgroup" fieldName="{t}" '
-                              f'fieldData="{v.replace(">", "&gt;").replace("<", "&lt;")}" '
-                              f'atomRefs="{" ".join(f"a{x}" for x in i)}" x="0" y="{n / 3}"/>'
-                              for n, (i, t, v) in enumerate(cgr, start=1))))
-
-    @staticmethod
-    def _isotope_map(x, n):
-        return x and f' isotope="{x}"' or ''
-
-    @staticmethod
-    def _multiplicity_map(x, n):
-        if x == 3:
-            return ' radical="divalent3"'
-        elif x == 2:
-            return ' radical="monovalent"'
+    def __convert_structure(self, g):
+        if isinstance(g, MoleculeContainer):
+            bonds = self.__convert_molecule(g)
+        elif isinstance(g, CGRContainer):
+            bonds = self.__convert_cgr(g)
+        elif isinstance(g, QueryContainer):
+            bonds = self.__convert_query(g)
+        elif isinstance(g, QueryCGRContainer):
+            raise TypeError('CGR queries not supported')
         else:
-            return ''
+            raise TypeError('Graph expected')
 
-    _stereo_map = {-1: '><bondStereo>H</bondStereo></bond>', 1: '><bondStereo>W</bondStereo></bond>',
-                   None: '/>'}.__getitem__
-    _charge_map = {-3: ' formalCharge="-3"', -2: ' formalCharge="-2"', -1: ' formalCharge="-1"', 0: '',
-                   1: ' formalCharge="1"', 2: ' formalCharge="2"', 3: ' formalCharge="3"'}.__getitem__
-    _bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', 9: 's', None: '0'}.__getitem__
+        gp = g._plane
+        gc = g._charges
+        gr = g._radicals
+
+        out = ['<atomArray>']
+        for n, atom in g._atoms.items():
+            x, y = gp[n]
+            out.append(f'<atom id="a{n}" elementType="{atom.atomic_symbol}" x2="{x:.4f}" y2="{y:.4f}" mrvMap="{n}"')
+            if gc[n]:
+                out.append(f' formalCharge="{gc[n]}"')
+            if gr[n]:
+                out.append(' radical="monovalent"')
+            if atom.isotope:
+                out.append(f' isotope="{atom.isotope}"')
+            out.append('/>')
+        out.append('</atomArray>')
+        out.extend(bonds)
+        return ''.join(out)
+
+    @classmethod
+    def __convert_molecule(cls, g):
+        out = ['<bondArray>']
+        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
+            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"')
+            # todo: append stereo
+            # if stereo  ><bondStereo>H</bondStereo></bond>
+            out.append('/>')
+        out.append('</bondArray>')
+        return out
+
+    @classmethod
+    def __convert_cgr(cls, g):
+        gpc = g._p_charges
+        gpr = g._p_radicals
+
+        out = ['<bondArray>']
+        dyn = []
+        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
+            if bond.order != bond.p_order:
+                dyn.append((i, j, bond))
+                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="1" queryType="Any"/>')
+            else:
+                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"/>')
+        out.append('</bondArray>')
+        for n, (i, j, bond) in enumerate(dyn, start=1):
+            out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynbond" '
+                       f'fieldData="{bond.order or 0}&gt;{bond.p_order or 0}" '
+                       f'atomRefs="a{i} a{j}" x="0" y="{n / 3:.4f}"/>')
+        n = len(dyn)
+        for n, (m, c) in enumerate(g._charges.items(), start=n + 1):
+            if c != gpc[m]:
+                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynatom" '
+                           f'fieldData="c{gpc[m] - c:+d}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
+        for n, (m, r) in enumerate(g._radicals.items(), start=n + 1):
+            if r != gpr[m]:
+                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynatom" '
+                           f'fieldData="r1" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
+        return out
+
+    @classmethod
+    def __convert_query(cls, g):
+        out = ['<bondArray>']
+        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
+            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"')
+            # todo: append stereo
+            # if stereo  ><bondStereo>H</bondStereo></bond>
+            out.append('/>')
+        out.append('</bondArray>')
+
+        n = 0
+        for n, (m, an) in enumerate(g._neighbors.items(), start=1):
+            if an:
+                an = ",".join(an)
+                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="neighbors" '
+                           f'fieldData="{an}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
+        for n, (m, h) in enumerate(g._hybridization.items(), start=n + 1):
+            if h:
+                h = ",".join(h)
+                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="hybridization" '
+                           f'fieldData="{h}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
+        return out
+
+    __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', None: '0'}
     __finalized = False
 
 
+MRVwrite = MRVWrite
+
+__all__ = ['MRVWrite', 'MRVwrite']
+
 if find_spec('lxml'):
     from lxml.etree import iterparse, QName, tostring
-    __all__ = ['MRVread', 'MRVwrite']
+
+    MRVread = MRVRead
+    __all__.extend(['MRVRead', 'MRVread'])
 else:
     warn('lxml library not installed', ImportWarning)
-    __all__ = ['MRVwrite']
-    del MRVread
+    del MRVRead
