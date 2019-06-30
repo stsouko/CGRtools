@@ -169,12 +169,22 @@ class Aromatize:
         return total
 
     def dearomatize(self):
-        raise NotImplementedError
-        adj = defaultdict(set)  # aromatic skeleton
+        rings = defaultdict(set)  # aromatic skeleton
+        double_bonded = set()
         for n, m_bond in self._bonds.items():
             for m, bond in m_bond.items():
                 if bond.order == 4:
-                    adj[n].add(m)
+                    rings[n].add(m)
+                elif bond.order == 2 and n not in double_bonded:
+                    double_bonded.add(n)
+        atoms = set(rings)
+        double_bonded &= rings.keys()
+        while atoms:
+            if double_bonded:
+                enter = double_bonded.pop()
+                atoms.discard(enter)
+            else:
+                enter = atoms.pop()
 
 
 __all__ = ['Aromatize']
