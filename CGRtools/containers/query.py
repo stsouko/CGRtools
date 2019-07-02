@@ -289,6 +289,26 @@ class QueryContainer(Graph, QuerySmiles):
                 'hybridization': self._hybridization, **super().__getstate__()}
 
     def __setstate__(self, state):
+        if 'node' in state:  # 3.1 compatibility.
+            state['atoms'] = {n: a.atom for n, a in state['node'].items()}
+            state['charges'] = {n: a.charge for n, a in state['node'].items()}
+            state['radicals'] = {n: a.is_radical for n, a in state['node'].items()}
+            state['neighbors'] = {n: a.neighbors for n, a in state['node'].items()}
+            state['hybridization'] = {n: a.hybridization for n, a in state['node'].items()}
+            state['parsed_mapping'] = {}
+            state['bonds'] = bonds = {}
+            for n, m_bond in state['adj'].items():
+                bonds[n] = bn = {}
+                for m, bond in m_bond.items():
+                    if m in bonds:
+                        bn[m] = bonds[m][n]
+                    else:
+                        bn[m] = molecule.Bond(bond.order)
+
+            state['plane'] = {n: a.xy for n, a in state['node'].items()}
+            state['atoms_stereo'] = {}
+            state['bonds_stereo'] = {n: {} for n in state['node']}
+
         super().__setstate__(state)
         self._atoms_stereo = state['atoms_stereo']
         self._bonds_stereo = state['bonds_stereo']

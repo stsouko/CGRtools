@@ -710,16 +710,16 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
-            state['bonds_stereo'] = {}
+            state['bonds_stereo'] = {n: {} for n in state['_node']}
             state['meta'] = state['_BaseContainer__meta']
-        elif 'node' in state:  # 3.0-3.1 compatibility.
-            if 'graph' in state:  # 3.0.10 compatibility.
-                state['meta'] = state['graph']
-            state['atoms'] = {n: Element.from_atomic_number(a.number)(a.isotope if a.common_isotope != a.isotope else
-                                                                      None)
-                              for n, a in state['node'].items()}
+            state['parsed_mapping'] = {}
+        elif 'node' in state:  # 3.1 compatibility.
+            state['atoms'] = {n: a.atom.copy() for n, a in state['node'].items()}
             state['charges'] = {n: a.charge for n, a in state['node'].items()}
-            state['radicals'] = {n: bool(a.multiplicity) for n, a in state['node'].items()}
+            state['radicals'] = {n: a.is_radical for n, a in state['node'].items()}
+            state['plane'] = {n: a.xy for n, a in state['node'].items()}
+            state['parsed_mapping'] = {n: a.parsed_mapping for n, a in state['node'].items() if a.parsed_mapping}
+
             state['bonds'] = bonds = {}
             for n, m_bond in state['adj'].items():
                 bonds[n] = bn = {}
@@ -729,10 +729,9 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
                     else:
                         bn[m] = Bond(bond.order)
 
-            state['plane'] = {n: (a.x, a.y) for n, a in state['node'].items()}
             state['conformers'] = []
             state['atoms_stereo'] = {}
-            state['bonds_stereo'] = {}
+            state['bonds_stereo'] = {n: {} for n in state['node']}
 
         super().__setstate__(state)
         self._conformers = state['conformers']

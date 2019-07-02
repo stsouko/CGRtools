@@ -46,6 +46,8 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
 
     def __setstate__(self, state):
         self._atoms = state['atoms']
+        for n, a in state['atoms'].items():
+            a._attach_to_graph(self, n)
         self._charges = state['charges']
         self._radicals = state['radicals']
         self._plane = state['plane']
