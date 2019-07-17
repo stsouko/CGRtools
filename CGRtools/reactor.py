@@ -163,7 +163,8 @@ class CGRreactor:
         to_delete = {mapping[x] for x in self.__to_delete}
         atoms = {}
         new_atoms = {}
-
+        exist = {}
+        doubles = {}
         if to_delete:
             # if deleted atoms have another path to remain fragment, the path is preserved
             remain = set(mapping.values()).difference(to_delete)
@@ -194,6 +195,8 @@ class CGRreactor:
             if n in mapping:
                 n = mapping[n]
                 atoms[n] = {**structure.atom(n), **atom}
+            elif n in mapping.values():
+                exist[n] = atom
             else:
                 new_atoms[n] = atom
         for n, element in self.__conditional_element.items():
@@ -202,14 +205,23 @@ class CGRreactor:
         for n, atom in atoms.items():
             new.add_atom(atom, n)
         for n, atom in structure.atoms():  # add unmatched atoms
-            if n not in atoms and n not in to_delete:
+            if n not in atoms and n not in to_delete and n not in exist:
                 new.add_atom(atom, n)
+        for n, atom in exist.items():
+            m = max(max(mapping.values()), max(new.atoms_numbers)) + 1
+            doubles[n] = m
+            new.add_atom(atom, m)
         for n, atom in new_atoms.items():
-            mapping[n] = new.add_atom(atom)
+            if n in mapping.values():
+                m = max(max(mapping.values()), max(new.atoms_numbers)) + 1
+                doubles[n] = m
+                mapping[n] = new.add_atom(atom, m)
+            else:
+                mapping[n] = new.add_atom(atom)
 
         for n, m, bond in self.__bond_attrs:  # add patch bonds
-            n = mapping[n]
-            m = mapping[m]
+            n = doubles.get(n, mapping.get(n))
+            m = doubles.get(m, mapping.get(m))
             new.add_bond(n, m, bond)
 
         for n, m_bond in structure._adj.items():
@@ -287,6 +299,8 @@ class Reactor:
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only list of Molecules possible')
         if self.__single:
+            if len(structures) > 1:
+                raise Exception('only one reactant allowed in current template')
             patch = self.__reactor(structures[0], limit, skip_intersection)
             if limit == 1:
                 if patch:
