@@ -217,7 +217,8 @@ class CGRreactor:
                 doubles[n] = m
                 mapping[n] = new.add_atom(atom, m)
             else:
-                mapping[n] = new.add_atom(atom)
+                mapping[n] = new.add_atom(atom, max(max(new.atoms_numbers),
+                                                    max(structure.atoms_numbers)) + 1)
 
         for n, m, bond in self.__bond_attrs:  # add patch bonds
             n = doubles.get(n, mapping.get(n))
