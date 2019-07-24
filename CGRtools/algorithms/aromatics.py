@@ -177,14 +177,40 @@ class Aromatize:
                     rings[n].add(m)
                 elif bond.order == 2 and n not in double_bonded:
                     double_bonded.add(n)
-        atoms = set(rings)
         double_bonded &= rings.keys()
-        while atoms:
-            if double_bonded:
-                enter = double_bonded.pop()
-                atoms.discard(enter)
+
+        if double_bonded:  # start from double bonded if exists
+            atom = next(iter(double_bonded))
+        else:  # select not condensed atom
+            atom = next(n for n, ms in rings.items() if len(ms) == 2)
+
+        stack = [(next_atom, atom, 0, False) for next_atom in rings[atom]]
+        path = []
+        hashed_path = set()
+        size = len(rings)
+        while stack:
+            atom, prev_atom, _, bond = stack.pop()
+            path.append((atom, prev_atom, bond))
+            hashed_path.add(atom)
+
+            if len(hashed_path) == size:
+                yield path
+                if stack:
+                    path = path[:stack[-1][2]]
+                    hashed_path = {x for x, *_ in path}
             else:
-                enter = atoms.pop()
+                for_stack = []
+                for next_atom in rings[atom]:
+                    if next_atom == prev_atom:  # only forward. behind us is the homeland
+                        continue
+                    elif next_atom in hashed_path:  # closures always single-bonded
+                        path.append((next_atom, atom, False))
+                    else:
+                        for_stack.append(next_atom)
+
+                bond = False if atom in double_bonded else not bond
+                for next_atom in for_stack:
+                    stack.append((next_atom, atom, len(path), bond))
 
 
 __all__ = ['Aromatize']
