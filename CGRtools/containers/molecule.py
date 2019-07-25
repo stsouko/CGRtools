@@ -576,7 +576,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
         aromatic rings atoms numbers
         """
         bonds = self._bonds
-        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and bonds[ring[0]][ring[-1]].order == 4
+        return [ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
                 and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
 
     @cached_property

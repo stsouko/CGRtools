@@ -711,9 +711,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         existed or formed aromatic rings atoms numbers
         """
         adj = self._bonds
-        return [ring for ring in self.sssr if len(ring) in (5, 6, 7) and (
+        return [ring for ring in self.sssr if
                 adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
-                adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:])))]
+                adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:]))]
 
     def decompose(self) -> Tuple['molecule.MoleculeContainer', 'molecule.MoleculeContainer']:
         """

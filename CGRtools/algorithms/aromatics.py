@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from itertools import product
 from ..exceptions import InvalidAromaticRing
 
 
@@ -26,7 +27,7 @@ _pyrole_atoms = ('N', 'O', 'S', 'Se', 'P')
 class Aromatize:
     __slots__ = ()
 
-    def dummy_aromatize(self):
+    def dummy_thiele(self):
         """
         convert structure to aromatic form (dummy algorithm. don't detect quinones)
 
@@ -62,7 +63,7 @@ class Aromatize:
             return len(aromatics)
         return 0
 
-    def aromatize(self) -> int:
+    def thiele(self) -> int:
         """
         convert structure to aromatic form
 
@@ -168,7 +169,33 @@ class Aromatize:
             self.flush_cache()
         return total
 
-    def dearomatize(self):
+    def kekule(self):
+        """
+        convert structure to kekule form.
+
+        only one of possible double/single bonds positions will be set.
+        for enumerate bonds positions use `enumerate_kekule`
+        """
+        kekule = next(self.__kekule_full(), None)
+        if kekule:
+            self.__kekule_patch(kekule)
+
+    def enumerate_kekule(self):
+        """
+        enumerate all possible kekule forms of molecule
+        """
+        for form in self.__kekule_full():
+            copy = self.copy()
+            copy._Aromatize__kekule_patch(form)
+            yield copy
+
+    def __kekule_patch(self, patch):
+        bonds = self._bonds
+        for n, m, b in patch:
+            bonds[n][m]._Bond__order = b
+        self.flush_cache()
+
+    def __kekule_full(self):
         rings = defaultdict(set)  # aromatic skeleton
         double_bonded = set()
         for n, m_bond in self._bonds.items():
@@ -177,14 +204,29 @@ class Aromatize:
                     rings[n].add(m)
                 elif bond.order == 2 and n not in double_bonded:
                     double_bonded.add(n)
-        double_bonded &= rings.keys()
+        if not rings:
+            return
 
+        double_bonded &= rings.keys()
+        atoms = set(rings)
+        components = []
+        while atoms:
+            start = atoms.pop()
+            component = {n: rings[n] for n in self.__component(rings, start)}
+            components.append(component)
+            atoms.difference_update(component)
+
+        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys()) for c in components)):
+            yield list(*keks)
+
+    @staticmethod
+    def __kekule_component(rings, double_bonded):
         if double_bonded:  # start from double bonded if exists
             atom = next(iter(double_bonded))
         else:  # select not condensed atom
             atom = next(n for n, ms in rings.items() if len(ms) == 2)
 
-        stack = [(next_atom, atom, 0, False) for next_atom in rings[atom]]
+        stack = [(next_atom, atom, 0, 1) for next_atom in rings[atom]]
         path = []
         hashed_path = set()
         size = len(rings)
@@ -200,17 +242,61 @@ class Aromatize:
                     hashed_path = {x for x, *_ in path}
             else:
                 for_stack = []
+                closures = []
                 for next_atom in rings[atom]:
                     if next_atom == prev_atom:  # only forward. behind us is the homeland
                         continue
                     elif next_atom in hashed_path:  # closures always single-bonded
-                        path.append((next_atom, atom, False))
+                        closures.append(next_atom)
                     else:
                         for_stack.append(next_atom)
 
-                bond = False if atom in double_bonded else not bond
-                for next_atom in for_stack:
-                    stack.append((next_atom, atom, len(path), bond))
+                if closures:
+                    if bond or for_stack:  # check for atom valence
+                        for next_atom in closures:
+                            path.append((next_atom, atom, 1))
+                    else:
+                        if stack:  # closure failed. search new path
+                            path = path[:stack[-1][2]]
+                            hashed_path = {x for x, *_ in path}
+                        continue
+
+                if atom in double_bonded:
+                    if for_stack:
+                        stack.append((for_stack[0], atom, len(path), 1))
+                elif bond == 2:
+                    for next_atom in for_stack:
+                        stack.append((next_atom, atom, len(path), 1))
+                elif len(for_stack) == 1:
+                    next_atom = for_stack[0]
+                    if next_atom in double_bonded:
+                        if stack:  # closure failed. search new path
+                            path = path[:stack[-1][2]]
+                            hashed_path = {x for x, *_ in path}
+                    else:
+                        stack.append((next_atom, atom, len(path), 2))
+                elif for_stack:
+                    if double_bonded.issuperset(for_stack):
+                        if stack:  # closure failed. search new path
+                            path = path[:stack[-1][2]]
+                            hashed_path = {x for x, *_ in path}
+                    else:
+                        for next_atom in for_stack:
+                            if next_atom in double_bonded:
+                                stack.append((next_atom, atom, len(path), 1))
+                            else:
+                                stack.append((next_atom, atom, len(path), 2))
+
+    @staticmethod
+    def __component(bonds, start):
+        seen = {start}
+        queue = [start]
+        while queue:
+            start = queue.pop(0)
+            yield start
+            for i in bonds[start] - seen:
+                queue.append(i)
+                seen.add(i)
 
 
 __all__ = ['Aromatize']
