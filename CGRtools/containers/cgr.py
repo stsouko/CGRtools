@@ -55,7 +55,7 @@ class DynamicBond:
         return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
 
     def __int__(self):
-        return (self.__order or 0) << 4 | self.__p_order
+        return (self.__order or 0) << 4 | (self.__p_order or 0)
 
     @property
     def order(self):
