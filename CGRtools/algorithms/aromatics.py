@@ -256,6 +256,11 @@ class Aromatize:
                         raise InvalidAromaticRing
                     elif closures:
                         path.append((closures[0], atom, 1))
+                        if len(path) == size:  # end reached
+                            yield path
+                            if stack:
+                                path = path[:stack[-1][2]]
+                                hashed_path = {x for x, *_ in path}
                     else:
                         stack.append((for_stack[0], atom, len(path), 1))
                 elif len(closures) + len(for_stack) not in (1, 2):  # valence check
@@ -294,6 +299,11 @@ class Aromatize:
                 elif bond == 2 or atom in double_bonded:  # in condensed rings dead end[s] found
                     for next_atom in closures:
                         path.append((next_atom, atom, 1))  # closures always single-bonded
+                    if len(path) == size:
+                        yield path
+                        if stack:
+                            path = path[:stack[-1][2]]
+                            hashed_path = {x for x, *_ in path}
                 elif stack:  # closure failed. search new path
                     path = path[:stack[-1][2]]
                     hashed_path = {x for x, *_ in path}
