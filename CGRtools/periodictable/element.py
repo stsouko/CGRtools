@@ -28,7 +28,7 @@ from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
 
 
 class Core(ABC):
-    __slots__ = ('__isotope', '_graph', '_map')
+    __slots__ = ('__isotope', '_graph', '_map', '_backward')
 
     def __init__(self, isotope: Optional[int] = None):
         """
@@ -47,6 +47,15 @@ class Core(ABC):
         if self.__isotope:
             return f'{self.__class__.__name__}({self.__isotope})'
         return f'{self.__class__.__name__}()'
+
+    def __getstate__(self):
+        return {'isotope': self.__isotope}
+
+    def __setstate__(self, state):
+        self.__isotope = state['isotope']
+
+    def __hash__(self):
+        return self.__int__()
 
     @property
     @abstractmethod
@@ -118,7 +127,7 @@ class Core(ABC):
     @property
     def hybridization(self):
         try:
-            return self._graph()._hybridizations[self._map]
+            return self._graph()._hybridization[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
@@ -241,6 +250,13 @@ class Element(Core):
         21bit = 9bit | 7bit | 4bit | 1bit
         """
         return (self.isotope or 0) << 12 | self.atomic_number << 5 | self.charge + 4 << 1 | self.is_radical
+
+    def __setstate__(self, state):
+        if 'charge' in state:  # 3.1
+            self._backward = (state['charge'], state['multiplicity'])
+            if isotopes[self.atomic_number - 1] == state['isotope']:
+                state['isotope'] = None
+        super().__setstate__(state)
 
     def valence_rules(self, charge: int, is_radical: bool, valence: int) -> \
             List[Tuple[Set[Tuple[int, 'Element']], Dict[Tuple[int, 'Element'], int], int]]:
@@ -533,3 +549,22 @@ class FrozenDict(Mapping):
 
     def __repr__(self):
         return repr(self.__d)
+
+
+# averaged isotopes. 3.*-compatibility
+isotopes = tuple(map(int, '''  1                                                                   4
+                               7   9                                          11  12  14  16  19  20
+                              23  24                                          27  28  31  32  35  40
+                              39  40  45  48  51  52  55  56  59  59  64  65  70  73  75  79  80  84
+                              85  88  89  91  93  96  98 101 103 106 108 112 115 119 122 128 127 131
+                             133 137 139
+
+                                     140 141 144 145 150 152 157 159 163 165 167 169 173 175
+
+                                         178 181 184 186 190 192 195 197 201 204 207 209 209 210 222 
+                             223 226 227
+
+                                     232 231 238 237 244 243 247 247 251 252 257 258 259 260
+
+                                         261 270 269 270 270 278 281 281 285 278 289 289 293 297 294
+                          '''.split()))
