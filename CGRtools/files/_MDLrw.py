@@ -771,7 +771,7 @@ class MDLWrite:
                              f'M  SDT {i:3d} neighbors\n'
                              f'M  SDD {i:3d}     0.0000{i / 3:10.4f}    DAU   ALL  0       0\n'
                              f'M  SED {i:3d} {",".join(m)}\n')
-        for n, h in g._hybridization.items():
+        for n, h in g._hybridizations.items():
             if h:
                 i = len(props) + 1
                 props.append(f'M  SAL {i:3d}  1 {atoms[n]:3d}\n'

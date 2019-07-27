@@ -24,11 +24,11 @@ from ..periodictable import Element, QueryElement
 
 
 class QueryContainer(Graph, QuerySmiles):
-    __slots__ = ('_neighbors', '_hybridization', '_atoms_stereo', '_bonds_stereo')
+    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo')
 
     def __init__(self):
         self._neighbors = {}
-        self._hybridization = {}
+        self._hybridizations = {}
         self._atoms_stereo = {}
         self._bonds_stereo = {}
         super().__init__()
@@ -82,7 +82,7 @@ class QueryContainer(Graph, QuerySmiles):
 
         _map = super().add_atom(atom, *args, **kwargs)
         self._neighbors[_map] = neighbors
-        self._hybridization[_map] = hybridization
+        self._hybridizations[_map] = hybridization
         self._bonds_stereo[_map] = {}
         return _map
 
@@ -116,7 +116,7 @@ class QueryContainer(Graph, QuerySmiles):
         super().delete_atom(n)
 
         del self._neighbors[n]
-        del self._hybridization[n]
+        del self._hybridizations[n]
 
         sas = self._atoms_stereo
         sbs = self._bonds_stereo
@@ -165,7 +165,7 @@ class QueryContainer(Graph, QuerySmiles):
 
         if copy:
             hn = h._neighbors
-            hh = h._hybridization
+            hh = h._hybridizations
             has = h._atoms_stereo
             hbs = h._bonds_stereo
         else:
@@ -174,7 +174,7 @@ class QueryContainer(Graph, QuerySmiles):
             has = {}
             hbs = {}
 
-        for n, hyb in self._hybridization.items():
+        for n, hyb in self._hybridizations.items():
             m = mg(n, n)
             hn[m] = sn[n]
             hh[m] = hyb
@@ -187,7 +187,7 @@ class QueryContainer(Graph, QuerySmiles):
             return h
 
         self._neighbors = hn
-        self._hybridization = hh
+        self._hybridizations = hh
         self._atoms_stereo = has
         self._bonds_stereo = hbs
         return self
@@ -195,26 +195,26 @@ class QueryContainer(Graph, QuerySmiles):
     def copy(self, *, meta=True) -> 'QueryContainer':
         copy = super().copy(meta=meta)
         copy._neighbors = self._neighbors.copy()
-        copy._hybridization = self._hybridization.copy()
+        copy._hybridizations = self._hybridizations.copy()
         copy._atoms_stereo = self._atoms_stereo.copy()
         copy._bonds_stereo = {n: s.copy() for n, s in self._bonds_stereo.items()}
         return copy
 
-    def substructure(self, atoms, *, meta=False) -> 'QueryContainer':
+    def substructure(self, atoms, **kwargs) -> 'QueryContainer':
         """
-       create substructure containing atoms from atoms list
+        create substructure containing atoms from atoms list
 
-       :param atoms: list of atoms numbers of substructure
-       :param meta: if True metadata will be copied to substructure
-       """
-        sub, atoms = super().substructure(atoms, meta=meta, sub=self.__class__)
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        """
+        sub, atoms = super().substructure(atoms, self.__class__, **kwargs)
         sa = self._atoms
         sb = self._bonds
         sn = self._neighbors
-        sh = self._hybridization
+        sh = self._hybridizations
 
         sub._neighbors = {n: sn[n] for n in atoms}
-        sub._hybridization = {n: sh[n] for n in atoms}
+        sub._hybridizations = {n: sh[n] for n in atoms}
 
         lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
         not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
@@ -238,7 +238,7 @@ class QueryContainer(Graph, QuerySmiles):
             u = super().union(other)
             if isinstance(other, QueryContainer):
                 u._neighbors.update(other._neighbors)
-                u._hybridization.update(other._hybridization)
+                u._hybridizations.update(other._hybridizations)
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
@@ -246,8 +246,8 @@ class QueryContainer(Graph, QuerySmiles):
                     atom._attach_to_graph(u, n)
             else:
                 un = u._neighbors
-                uh = u._hybridization
-                oh = u._hybridization
+                uh = u._hybridizations
+                oh = u._hybridizations
                 for n, m in other._neighbors:
                     un[n] = (m,)
                     uh[n] = (oh[n],)
@@ -286,7 +286,7 @@ class QueryContainer(Graph, QuerySmiles):
 
     def __getstate__(self):
         return {'atoms_stereo': self._atoms_stereo, 'bonds_stereo': self._bonds_stereo, 'neighbors': self._neighbors,
-                'hybridization': self._hybridization, **super().__getstate__()}
+                'hybridizations': self._hybridizations, **super().__getstate__()}
 
     def __setstate__(self, state):
         if 'node' in state:  # 3.1 compatibility.
@@ -313,7 +313,7 @@ class QueryContainer(Graph, QuerySmiles):
         self._atoms_stereo = state['atoms_stereo']
         self._bonds_stereo = state['bonds_stereo']
         self._neighbors = state['neighbors']
-        self._hybridization = state['hybridization']
+        self._hybridizations = state['hybridizations']
 
 
 __all__ = ['QueryContainer']

@@ -127,7 +127,7 @@ class Core(ABC):
     @property
     def hybridization(self):
         try:
-            return self._graph()._hybridization[self._map]
+            return self._graph()._hybridizations[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 

@@ -24,15 +24,15 @@ from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryE
 
 
 class QueryCGRContainer(Graph, QueryCGRSmiles):
-    __slots__ = ('_neighbors', '_hybridization', '_p_neighbors', '_p_hybridization')
+    __slots__ = ('_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
         self._p_charges = {}
         self._p_radicals = {}
         self._neighbors = {}
-        self._hybridization = {}
+        self._hybridizations = {}
         self._p_neighbors = {}
-        self._p_hybridization = {}
+        self._p_hybridizations = {}
         super().__init__()
 
     def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element, int, str], *args,
@@ -133,9 +133,9 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_charges[_map] = p_charge
         self._p_radicals[_map] = p_is_radical
         self._neighbors[_map] = neighbors
-        self._hybridization[_map] = hybridization
+        self._hybridizations[_map] = hybridization
         self._p_neighbors[_map] = p_neighbors
-        self._p_hybridization[_map] = p_hybridization
+        self._p_hybridizations[_map] = p_hybridization
         return _map
 
     def add_bond(self, n, m, bond: Union['cgr.DynamicBond', 'molecule.Bond', int]):
@@ -152,26 +152,26 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         del self._p_charges[n]
         del self._p_radicals[n]
         del self._neighbors[n]
-        del self._hybridization[n]
+        del self._hybridizations[n]
         del self._p_neighbors[n]
-        del self._p_hybridization[n]
+        del self._p_hybridizations[n]
 
     def remap(self, mapping, *, copy=False) -> 'QueryCGRContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         spr = self._p_radicals
         sn = self._neighbors
-        sh = self._hybridization
+        sh = self._hybridizations
         spn = self._p_neighbors
-        sph = self._p_hybridization
+        sph = self._p_hybridizations
 
         if copy:
             hpc = h._p_charges
             hpr = h._p_radicals
             hn = h._neighbors
-            hh = h._hybridization
+            hh = h._hybridizations
             hpn = h._p_neighbors
-            hph = h._p_hybridization
+            hph = h._p_hybridizations
         else:
             hpc = {}
             hpr = {}
@@ -195,43 +195,43 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_charges = hpc
         self._p_radicals = hpr
         self._neighbors = hn
-        self._hybridization = hh
+        self._hybridizations = hh
         self._p_neighbors = hpn
-        self._p_hybridization = hph
+        self._p_hybridizations = hph
         return self
 
     def copy(self, *, meta=True) -> 'QueryCGRContainer':
         copy = super().copy(meta=meta)
         copy._neighbors = self._neighbors.copy()
-        copy._hybridization = self._hybridization.copy()
+        copy._hybridizations = self._hybridizations.copy()
         copy._p_neighbors = self._p_neighbors.copy()
-        copy._p_hybridization = self._p_hybridization.copy()
+        copy._p_hybridizations = self._p_hybridizations.copy()
         copy._p_radicals = self._p_radicals.copy()
         copy._p_charges = self._p_charges.copy()
         return copy
 
-    def substructure(self, atoms, *, meta=False) -> 'QueryCGRContainer':
+    def substructure(self, atoms, **kwargs) -> 'QueryCGRContainer':
         """
-       create substructure containing atoms from atoms list
+        create substructure containing atoms from atoms list
 
-       :param atoms: list of atoms numbers of substructure
-       :param meta: if True metadata will be copied to substructure
-       """
-        sub, atoms = super().substructure(atoms, meta=meta, sub=self.__class__)
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        """
+        sub, atoms = super().substructure(atoms, self.__class__, **kwargs)
         sa = self._atoms
         spc = self._p_charges
         spr = self._p_radicals
         sn = self._neighbors
-        sh = self._hybridization
-        spn = self._neighbors
-        sph = self._hybridization
+        sh = self._hybridizations
+        spn = self._p_neighbors
+        sph = self._p_hybridizations
 
         sub._p_charges = {n: spc[n] for n in atoms}
         sub._p_radicals = {n: spr[n] for n in atoms}
         sub._neighbors = {n: sn[n] for n in atoms}
-        sub._hybridization = {n: sh[n] for n in atoms}
-        sub._neighbors = {n: spn[n] for n in atoms}
-        sub._hybridization = {n: sph[n] for n in atoms}
+        sub._hybridizations = {n: sh[n] for n in atoms}
+        sub._p_neighbors = {n: spn[n] for n in atoms}
+        sub._p_hybridizations = {n: sph[n] for n in atoms}
 
         sub._atoms = ca = {}
         for n in atoms:
@@ -247,9 +247,9 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
             if isinstance(other, QueryCGRContainer):
                 u._neighbors.update(other._neighbors)
-                u._hybridization.update(other._hybridization)
+                u._hybridizations.update(other._hybridizations)
                 u._p_neighbors.update(other._p_neighbors)
-                u._p_hybridization.update(other._p_hybridization)
+                u._p_hybridizations.update(other._p_hybridizations)
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
@@ -257,12 +257,12 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
                     atom._attach_to_graph(u, n)
             else:  # CGRContainer
                 un = u._neighbors
-                uh = u._hybridization
+                uh = u._hybridizations
                 upn = u._p_neighbors
-                uph = u._p_hybridization
-                oh = other._hybridization
+                uph = u._p_hybridizations
+                oh = other._hybridizations
                 opn = other._p_neighbors
-                oph = other._p_hybridization
+                oph = other._p_hybridizations
                 for n, m in other._neighbors.items():
                     un[n] = (m,)
                     uh[n] = (oh[n])
@@ -291,15 +291,15 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
             if isinstance(other, query.QueryContainer):
                 u._neighbors.update(other._neighbors)
-                u._hybridization.update(other._hybridization)
+                u._hybridizations.update(other._hybridizations)
                 u._p_neighbors.update(other._neighbors)
-                u._p_hybridization.update(other._hybridization)
+                u._p_hybridizations.update(other._hybridizations)
             else:  # MoleculeContainer
                 un = u._neighbors
-                uh = u._hybridization
+                uh = u._hybridizations
                 upn = u._p_neighbors
-                uph = u._p_hybridization
-                oh = other._hybridization
+                uph = u._p_hybridizations
+                oh = other._hybridizations
                 for n, m in other._neighbors.items():
                     un[n] = upn[n] = (m,)
                     uh[n] = uph[n] = (oh[n])
@@ -330,15 +330,15 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
     def __getstate__(self):
         return {'p_charges': self._p_charges, 'p_radicals': self._p_radicals, 'neighbors': self._neighbors,
-                'hybridization': self._hybridization, 'p_neighbors': self._p_neighbors,
-                'p_hybridization': self._p_hybridization, **super().__getstate__()}
+                'hybridizations': self._hybridizations, 'p_neighbors': self._p_neighbors,
+                'p_hybridizations': self._p_hybridizations, **super().__getstate__()}
 
     def __setstate__(self, state):
         super().__setstate__(state)
         self._neighbors = state['neighbors']
-        self._hybridization = state['hybridization']
+        self._hybridizations = state['hybridizations']
         self._p_neighbors = state['p_neighbors']
-        self._p_hybridization = state['p_hybridization']
+        self._p_hybridizations = state['p_hybridizations']
         self._p_charges = state['p_charges']
         self._p_radicals = state['p_radicals']
 

@@ -60,12 +60,12 @@ class Bond:
 
 
 class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridization', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
 
     def __init__(self):
         self._conformers = []
         self._neighbors = {}
-        self._hybridization = {}
+        self._hybridizations = {}
         self._hydrogens = {}
         self._atoms_stereo = {}
         self._bonds_stereo = {}
@@ -82,7 +82,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
         _map = super().add_atom(atom, *args, charge=charge, is_radical=is_radical, **kwargs)
         self._neighbors[_map] = 0
-        self._hybridization[_map] = 1
+        self._hybridizations[_map] = 1
         self._bonds_stereo[_map] = {}
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
@@ -116,7 +116,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
         # calc query marks dynamically.
         if self._atoms[n].atomic_number != 1:  # not hydrogen
             self._neighbors[m] += 1
-            self._hybridization[m] = self._calc_hybridization(m)
+            self._hybridizations[m] = self._calc_hybridization(m)
 
             try:  # remove stereo marks on bonded atoms and all its bonds
                 del self._atoms_stereo[m]
@@ -128,7 +128,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
                 sbs[m] = {}  # remove outgoing
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
-            self._hybridization[n] = self._calc_hybridization(n)
+            self._hybridizations[n] = self._calc_hybridization(n)
 
             try:  # remove atom stereo state
                 del self._atoms_stereo[n]
@@ -146,7 +146,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
         super().delete_atom(n)
 
         sn = self._neighbors
-        sh = self._hybridization
+        sh = self._hybridizations
         shg = self._hydrogens
         sas = self._atoms_stereo
         sbs = self._bonds_stereo
@@ -182,7 +182,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
         atoms = self._atoms
         sbs = self._bonds_stereo
-        sh = self._hybridization
+        sh = self._hybridizations
         sn = self._neighbors
 
         self._hydrogens[n] = self._calc_implicit(n)
@@ -223,7 +223,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
         if copy:
             hn = h._neighbors
-            hh = h._hybridization
+            hh = h._hybridizations
             hhg = h._hydrogens
             hc = h._conformers
             has = h._atoms_stereo
@@ -236,7 +236,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
             has = {}
             hbs = {}
 
-        for n, hyb in self._hybridization.items():
+        for n, hyb in self._hybridizations.items():
             m = mg(n, n)
             hn[m] = sn[n]
             hh[m] = hyb
@@ -252,7 +252,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
             return h
 
         self._neighbors = hn
-        self._hybridization = hh
+        self._hybridizations = hh
         self._hydrogens = hhg
         self._conformers = hc
         self._atoms_stereo = has
@@ -262,15 +262,23 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
     def copy(self, *, meta=True) -> 'MoleculeContainer':
         copy = super().copy(meta=meta)
         copy._neighbors = self._neighbors.copy()
-        copy._hybridization = self._hybridization.copy()
+        copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
         copy._atoms_stereo = self._atoms_stereo.copy()
         copy._bonds_stereo = {n: s.copy() for n, s in self._bonds_stereo.items()}
         return copy
 
-    def substructure(self, atoms, *, meta=False, as_query=False):
-        sub, atoms = super().substructure(atoms, meta=meta, sub=query.QueryContainer if as_query else self.__class__)
+    def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
+                                                                                'query.QueryContainer']:
+        """
+        create substructure containing atoms from atoms list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_query: return Query object based on graph substructure
+        """
+        sub, atoms = super().substructure(atoms, query.QueryContainer if as_query else self.__class__, **kwargs)
         sa = self._atoms
         sb = self._bonds
 
@@ -293,9 +301,9 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
                 atom._attach_to_graph(sub, n)
 
             sn = self._neighbors
-            sh = self._hybridization
+            sh = self._hybridizations
             sub._neighbors = {n: (sn[n],) for n in atoms}
-            sub._hybridization = {n: (sh[n],) for n in atoms}
+            sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
             sub._conformers = []
             sub._atoms = ca = {}
@@ -305,11 +313,13 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
             # recalculate query marks
             sub._neighbors = sn = {}
-            sub._hybridization = sh = {}
+            sub._hybridizations = sh = {}
+            sub._hydrogens = shg = {}
             atoms = sub._atoms
             for n, m_bonds in sub._bonds.items():
                 sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
                 sh[n] = sub._calc_hybridization(n)
+                shg[n] = sub._calc_implicit(n)
         return sub
 
     def union(self, other):
@@ -318,7 +328,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
             u._conformers.clear()
 
             u._neighbors.update(other._neighbors)
-            u._hybridization.update(other._hybridization)
+            u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
 
@@ -740,7 +750,7 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}
-        self._hybridization = sh = {}
+        self._hybridizations = sh = {}
         self._hydrogens = shg = {}
         atoms = state['atoms']
         for n, m_bonds in state['bonds'].items():
