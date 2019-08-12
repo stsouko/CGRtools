@@ -226,87 +226,130 @@ class Aromatize:
         else:  # select not condensed atom
             start = next(n for n, ms in rings.items() if len(ms) == 2)
 
-        stack = [(next_atom, start, 0, 1) for next_atom in rings[start]]
+        # (current atom, previous atom, bond between cp atoms, path deep for cutting [None if cut impossible])
+        stack = [(next_atom, start, 1, 0) for next_atom in rings[start]]
         path = []
         hashed_path = set()
         size = sum(len(x) for x in rings.values()) // 2
         while stack:
-            atom, prev_atom, _, bond = stack.pop()
+            atom, prev_atom, bond, _ = stack.pop()
             path.append((atom, prev_atom, bond))
             hashed_path.add(atom)
 
             if len(path) == size:
                 yield path
-                if stack:
-                    path = path[:stack[-1][2]]
-                    hashed_path = {x for x, *_ in path}
-            elif atom != start:  # control loop
-                for_stack = []
-                closures = []
-                for next_atom in rings[atom]:
-                    if next_atom == prev_atom:  # only forward. behind us is the homeland
-                        continue
-                    elif next_atom in hashed_path:  # closure found
-                        closures.append(next_atom)
-                    else:
-                        for_stack.append(next_atom)
+                try:
+                    while stack[-1][-1] is None:
+                        del stack[-1]
+                except IndexError:  # empty stack
+                    break
+                path = path[:stack[-1][-1]]
+                hashed_path = {x for x, *_ in path}
+                continue
+            elif atom == start:  # control loop
+                continue
 
-                if atom in double_bonded:  # quinone has single bonds only
-                    if len(closures) + len(for_stack) != 1:  # valence check
-                        raise InvalidAromaticRing
-                    elif closures:
-                        path.append((closures[0], atom, 1))
-                        if len(path) == size:  # end reached
-                            yield path
-                            if stack:
-                                path = path[:stack[-1][2]]
-                                hashed_path = {x for x, *_ in path}
-                    else:
-                        stack.append((for_stack[0], atom, len(path), 1))
-                elif len(closures) + len(for_stack) not in (1, 2):  # valence check
+            for_stack = []
+            closures = []
+            for next_atom in rings[atom]:
+                if next_atom == prev_atom:  # only forward. behind us is the homeland
+                    continue
+                elif next_atom in hashed_path:  # closure found
+                    closures.append(next_atom)
+                else:
+                    for_stack.append(next_atom)
+
+            if atom in double_bonded:  # quinone has single bonds only
+                if len(closures) + len(for_stack) != 1:  # valence check
                     raise InvalidAromaticRing
-                elif for_stack:
-                    if closures:  # closures always single-bonded
-                        path.append((closures[0], atom, 1))
-
-                    if bond == 2:  # incoming bond is double. outgoing single only possible
-                        for next_atom in for_stack:
-                            if next_atom == start and not double_bonded:
-                                if stack:
-                                    path = path[:stack[-1][2]]
-                                    hashed_path = {x for x, *_ in path}
-                            else:
-                                stack.append((next_atom, atom, len(path), 1))
-                    elif len(for_stack) == 1:
-                        next_atom = for_stack[0]
-                        if next_atom in double_bonded:  # need double bond, but next atom quinone
-                            if stack:
-                                path = path[:stack[-1][2]]
-                                hashed_path = {x for x, *_ in path}
-                        else:
-                            stack.append((next_atom, atom, len(path), 2))
-                    else:
-                        if double_bonded.issuperset(for_stack):
-                            if stack:
-                                path = path[:stack[-1][2]]
-                                hashed_path = {x for x, *_ in path}
-                        else:
-                            for next_atom in for_stack:
-                                if next_atom in double_bonded:  # quinone next from fork
-                                    stack.append((next_atom, atom, len(path), 1))
-                                else:
-                                    stack.append((next_atom, atom, len(path), 2))
-                elif bond == 2 or atom in double_bonded:  # in condensed rings dead end[s] found
-                    for next_atom in closures:
-                        path.append((next_atom, atom, 1))  # closures always single-bonded
-                    if len(path) == size:
+                elif closures:
+                    path.append((closures[0], atom, 1))
+                    if len(path) == size:  # end reached
                         yield path
-                        if stack:
-                            path = path[:stack[-1][2]]
+                        try:
+                            while stack[-1][-1] is None:
+                                del stack[-1]
+                        except IndexError:  # empty stack
+                            break
+                        path = path[:stack[-1][-1]]
+                        hashed_path = {x for x, *_ in path}
+                else:
+                    stack.append((for_stack[0], atom, 1, None))  # cut impossible
+            elif len(closures) + len(for_stack) not in (1, 2):  # valence check
+                raise InvalidAromaticRing
+            elif for_stack:
+                if closures:  # closures always single-bonded
+                    path.append((closures[0], atom, 1))
+
+                if bond == 2:  # incoming bond is double. outgoing single only possible
+                    for next_atom in for_stack:
+                        if next_atom == start and not double_bonded:  # closing on start error
+                            try:
+                                while stack[-1][-1] is None:
+                                    del stack[-1]
+                            except IndexError:  # empty stack
+                                break
+                            else:
+                                path = path[:stack[-1][-1]]
+                                hashed_path = {x for x, *_ in path}
+                                break
+                        else:
+                            stack.append((next_atom, atom, 1, None))
+                elif len(for_stack) == 1:  # easy path grow. next bond double
+                    next_atom = for_stack[0]
+                    if next_atom in double_bonded:  # need double bond, but next atom quinone
+                        try:
+                            while stack[-1][-1] is None:
+                                del stack[-1]
+                        except IndexError:  # empty stack
+                            break
+                        path = path[:stack[-1][-1]]
+                        hashed_path = {x for x, *_ in path}
+                    else:
+                        stack.append((next_atom, atom, 2, None))
+                else:  # fork
+                    next_atom1, next_atom2 = for_stack
+                    if next_atom1 in double_bonded:  # quinone next from fork
+                        if next_atom2 in double_bonded:  # bad path
+                            try:
+                                while stack[-1][-1] is None:
+                                    del stack[-1]
+                            except IndexError:  # empty stack
+                                break
+                            path = path[:stack[-1][-1]]
                             hashed_path = {x for x, *_ in path}
-                elif stack:  # closure failed. search new path
-                    path = path[:stack[-1][2]]
+                        else:
+                            stack.append((next_atom1, atom, 1, None))
+                            stack.append((next_atom2, atom, 2, None))
+                    elif next_atom2 in double_bonded:  # quinone next from fork
+                        stack.append((next_atom1, atom, 2, None))
+                        stack.append((next_atom2, atom, 1, None))
+                    else:
+                        stack.append((next_atom1, atom, 1, None))
+                        stack.append((next_atom2, atom, 2, len(path)))
+                        stack.append((next_atom2, atom, 1, None))
+                        stack.append((next_atom1, atom, 2, None))
+            # closures only
+            elif bond == 2 or atom in double_bonded:  # in condensed rings dead end[s] found
+                for next_atom in closures:
+                    path.append((next_atom, atom, 1))  # closures always single-bonded
+                if len(path) == size:
+                    yield path
+                    try:
+                        while stack[-1][-1] is None:
+                            del stack[-1]
+                    except IndexError:  # empty stack
+                        break
+                    path = path[:stack[-1][-1]]
                     hashed_path = {x for x, *_ in path}
+            elif stack:  # closure failed. search new path
+                try:
+                    while stack[-1][-1] is None:
+                        del stack[-1]
+                except IndexError:  # empty stack
+                    break
+                path = path[:stack[-1][-1]]
+                hashed_path = {x for x, *_ in path}
 
     @staticmethod
     def __component(bonds, start):
