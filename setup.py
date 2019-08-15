@@ -23,7 +23,7 @@ from setuptools import setup
 
 setup(
     name='CGRtools',
-    version='4.0.0',
+    version='4.0.1',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.files.dll', 'CGRtools.periodictable', 'CGRtools.utils'],
     url='https://github.com/cimm-kzn/CGRtools',

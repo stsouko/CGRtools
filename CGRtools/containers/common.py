@@ -289,14 +289,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
         return copy
 
     @abstractmethod
-    def substructure(self, atoms: Iterable[int], *, meta: bool = False, as_query=False, sub=None) -> 'Graph':
-        """
-       create substructure containing atoms from atoms list
-
-       :param atoms: list of atoms numbers of substructure
-       :param meta: if True metadata will be copied to substructure
-       :param as_query: return Query object based on graph substructure
-       """
+    def substructure(self, atoms: Iterable[int], sub: 'Graph', *, meta: bool = False):
         if not atoms:
             raise ValueError('empty atoms list not allowed')
         if set(atoms) - self._atoms.keys():
@@ -344,7 +337,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
             return self.substructure(atoms)
         raise ValueError('full substitution not allowed')
 
-    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False, as_query=True):
+    def augmented_substructure(self, atoms, dante=False, deep=1, **kwargs):
         """
         create substructure containing atoms and their neighbors
 
@@ -353,7 +346,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
             etc up to deep or while new nodes available
         :param deep: number of bonds between atoms and neighbors
         :param meta: copy metadata to each substructure
-        :param as_query: return Query object based on graph substructure
+        :param as_query: return Query object based on graph substructure. for Molecule and CGR only
         """
         atoms = set(atoms)
         if atoms - self._atoms.keys():
@@ -365,9 +358,9 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
                 break
             nodes.append(n)
         if dante:
-            return [self.substructure(a, meta=meta, as_query=as_query) for a in nodes]
+            return [self.substructure(a, **kwargs) for a in nodes]
         else:
-            return self.substructure(nodes[-1], meta=meta, as_query=as_query)
+            return self.substructure(nodes[-1], **kwargs)
 
     def union(self, other: 'Graph') -> 'Graph':
         if self._atoms.keys() & other._atoms.keys():

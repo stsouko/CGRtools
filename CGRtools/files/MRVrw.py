@@ -503,7 +503,7 @@ class MRVWrite:
                 an = ",".join(an)
                 out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="neighbors" '
                            f'fieldData="{an}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
-        for n, (m, h) in enumerate(g._hybridization.items(), start=n + 1):
+        for n, (m, h) in enumerate(g._hybridizations.items(), start=n + 1):
             if h:
                 h = ",".join(h)
                 out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="hybridization" '

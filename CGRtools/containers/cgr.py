@@ -55,7 +55,7 @@ class DynamicBond:
         return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
 
     def __int__(self):
-        return (self.__order or 0) << 4 | self.__p_order
+        return (self.__order or 0) << 4 | (self.__p_order or 0)
 
     @property
     def order(self):
@@ -73,15 +73,15 @@ class DynamicBond:
 
 
 class CGRContainer(Graph, CGRSmiles, DepictCGR):
-    __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridization', '_p_neighbors', '_p_hybridization')
+    __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
         self._p_charges = {}
         self._p_radicals = {}
         self._neighbors = {}
-        self._hybridization = {}
+        self._hybridizations = {}
         self._p_neighbors = {}
-        self._p_hybridization = {}
+        self._p_hybridizations = {}
         super().__init__()
 
     def add_atom(self, atom: Union[DynamicElement, Element, int, str], *args, p_charge: int = 0,
@@ -107,9 +107,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_charges[_map] = p_charge
         self._p_radicals[_map] = p_is_radical
         self._neighbors[_map] = 0
-        self._hybridization[_map] = 1
+        self._hybridizations[_map] = 1
         self._p_neighbors[_map] = 0
-        self._p_hybridization[_map] = 1
+        self._p_hybridizations[_map] = 1
         return _map
 
     def add_bond(self, n, m, bond: Union[DynamicBond, 'molecule.Bond', int]):
@@ -126,8 +126,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
         super().add_bond(n, m, bond)
 
-        sh = self._hybridization
-        sph = self._p_hybridization
+        sh = self._hybridizations
+        sph = self._p_hybridizations
 
         # calc query marks dynamically.
         if self._atoms[n].atomic_number != 1:  # not hydrogen
@@ -192,9 +192,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         atoms = self._atoms
         old_bonds = self._bonds[n]  # save bonds
         sn = self._neighbors
-        sh = self._hybridization
+        sh = self._hybridizations
         spn = self._p_neighbors
-        sph = self._p_hybridization
+        sph = self._p_hybridizations
         sb = self._bonds
         isnt_hydrogen = atoms[n].atomic_number != 1
         super().delete_atom(n)
@@ -249,9 +249,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         super().delete_bond(n, m)
 
         atoms = self._atoms
-        sh = self._hybridization
+        sh = self._hybridizations
         sn = self._neighbors
-        sph = self._p_hybridization
+        sph = self._p_hybridizations
         spn = self._p_neighbors
 
         # neighbors query marks fix. ignore removed hydrogen
@@ -337,17 +337,17 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         mg = mapping.get
         spr = self._p_radicals
         sn = self._neighbors
-        sh = self._hybridization
+        sh = self._hybridizations
         spn = self._p_neighbors
-        sph = self._p_hybridization
+        sph = self._p_hybridizations
 
         if copy:
             hpc = h._p_charges
             hpr = h._p_radicals
             hn = h._neighbors
-            hh = h._hybridization
+            hh = h._hybridizations
             hpn = h._p_neighbors
-            hph = h._p_hybridization
+            hph = h._p_hybridizations
         else:
             hpc = {}
             hpr = {}
@@ -371,23 +371,31 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_charges = hpc
         self._p_radicals = hpr
         self._neighbors = hn
-        self._hybridization = hh
+        self._hybridizations = hh
         self._p_neighbors = hpn
-        self._p_hybridization = hph
+        self._p_hybridizations = hph
         return self
 
     def copy(self, *, meta=True) -> 'CGRContainer':
         copy = super().copy(meta=meta)
         copy._neighbors = self._neighbors.copy()
-        copy._hybridization = self._hybridization.copy()
+        copy._hybridizations = self._hybridizations.copy()
         copy._p_neighbors = self._p_neighbors.copy()
-        copy._p_hybridization = self._p_hybridization.copy()
+        copy._p_hybridizations = self._p_hybridizations.copy()
         copy._p_radicals = self._p_radicals.copy()
         copy._p_charges = self._p_charges.copy()
         return copy
 
-    def substructure(self, atoms, *, meta=False, as_query=False):
-        sub, atoms = super().substructure(atoms, meta=meta, sub=query.QueryCGRContainer if as_query else self.__class__)
+    def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['CGRContainer',
+                                                                                'query.QueryCGRContainer']:
+        """
+        create substructure containing atoms from atoms list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_query: return Query object based on graph substructure
+        """
+        sub, atoms = super().substructure(atoms, query.QueryCGRContainer if as_query else self.__class__, **kwargs)
         sa = self._atoms
         spc = self._p_charges
         spr = self._p_radicals
@@ -403,13 +411,13 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 atom._attach_to_graph(sub, n)
 
             sn = self._neighbors
-            sh = self._hybridization
-            spn = self._neighbors
-            sph = self._hybridization
+            sh = self._hybridizations
+            spn = self._p_neighbors
+            sph = self._p_hybridizations
             sub._neighbors = {n: (sn[n],) for n in atoms}
-            sub._hybridization = {n: (sh[n],) for n in atoms}
-            sub._neighbors = {n: (spn[n],) for n in atoms}
-            sub._hybridization = {n: (sph[n],) for n in atoms}
+            sub._hybridizations = {n: (sh[n],) for n in atoms}
+            sub._p_neighbors = {n: (spn[n],) for n in atoms}
+            sub._p_hybridizations = {n: (sph[n],) for n in atoms}
         else:
             sub._atoms = ca = {}
             for n in atoms:
@@ -418,9 +426,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
             # recalculate query marks
             sub._neighbors = sn = {}
-            sub._hybridization = sh = {}
+            sub._hybridizations = sh = {}
             sub._p_neighbors = spn = {}
-            sub._p_hybridization = sph = {}
+            sub._p_hybridizations = sph = {}
             atoms = sub._atoms
             for n, m_bonds in sub._bonds.items():
                 neighbors = p_neighbors = 0
@@ -468,9 +476,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
             u._neighbors.update(other._neighbors)
-            u._hybridization.update(other._hybridization)
+            u._hybridizations.update(other._hybridizations)
             u._p_neighbors.update(other._p_neighbors)
-            u._p_hybridization.update(other._p_hybridization)
+            u._p_hybridizations.update(other._p_hybridizations)
 
             ub = u._bonds
             for n in other._bonds:
@@ -492,9 +500,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
             u._neighbors.update(other._neighbors)
-            u._hybridization.update(other._hybridization)
+            u._hybridizations.update(other._hybridizations)
             u._p_neighbors.update(other._neighbors)
-            u._p_hybridization.update(other._hybridization)
+            u._p_hybridizations.update(other._hybridizations)
 
             ub = u._bonds
             for n, m_bond in other._bonds.items():
@@ -758,9 +766,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
         # restore query marks
         self._neighbors = sn = {}
-        self._hybridization = sh = {}
+        self._hybridizations = sh = {}
         self._p_neighbors = spn = {}
-        self._p_hybridization = sph = {}
+        self._p_hybridizations = sph = {}
         atoms = state['atoms']
         for n, m_bonds in state['bonds'].items():
             neighbors = p_neighbors = 0
