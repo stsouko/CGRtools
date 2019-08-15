@@ -695,13 +695,13 @@ class MDLWrite:
         gr = g._radicals
         props = []
         out = [f'\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n']
-        for n, a in g._atoms.items():
-            x, y = gp[n]
-            out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[gc[n]]}  0  0  0  0  0'
-                       f'  0  0{n:3d}  0  0\n')
+        for n, (m, a) in enumerate(g._atoms.items(), start=1):
+            x, y = gp[m]
+            out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[gc[m]]}  0  0  0  0  0'
+                       f'  0  0{m:3d}  0  0\n')
             if a.isotope:
                 props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
-            if gr[n]:
+            if gr[m]:
                 props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
         out.extend(bonds)
         out.extend(props)
