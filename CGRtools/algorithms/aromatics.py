@@ -266,6 +266,10 @@ class Aromatize:
                             if stack:
                                 path = path[:stack[-1][-1][-1]]
                                 hashed_path = {x for x, *_ in path}
+                        else:
+                            stack_last = stack[-1]
+                            while stack_last[-1][0] in hashed_path:
+                                del stack_last[-1]
                     else:
                         stack[-1].append((for_stack[0], atom, 1, None))  # cut impossible
                 elif len(closures) + len(for_stack) not in (1, 2):  # valence check
@@ -304,8 +308,8 @@ class Aromatize:
                                 stack[-1].append((next_atom1, atom, 1, None))
                                 stack[-1].append((next_atom2, atom, 2, None))
                         elif next_atom2 in double_bonded:  # quinone next from fork
-                            stack[-1].append((next_atom1, atom, 2, None))
                             stack[-1].append((next_atom2, atom, 1, None))
+                            stack[-1].append((next_atom1, atom, 2, None))
                         else:  # fork
                             opposite = stack[-1].copy()
                             stack[-1].append((next_atom1, atom, 1, None))
@@ -323,6 +327,10 @@ class Aromatize:
                         if stack:
                             path = path[:stack[-1][-1][-1]]
                             hashed_path = {x for x, *_ in path}
+                    else:
+                        stack_last = stack[-1]
+                        while stack_last[-1][0] in hashed_path:
+                            del stack_last[-1]
                 elif stack:  # closure failed. search new path
                     del stack[-1]
                     if stack:
