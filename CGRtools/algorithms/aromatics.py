@@ -197,9 +197,14 @@ class Aromatize:
         self.flush_cache()
 
     def __kekule_full(self):
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+
         rings = defaultdict(set)  # aromatic skeleton
         double_bonded = set()
-        for n, m_bond in self._bonds.items():
+        for n, m_bond in bonds.items():
             for m, bond in m_bond.items():
                 if bond.order == 4:
                     rings[n].add(m)
@@ -209,6 +214,52 @@ class Aromatize:
             return
 
         double_bonded &= rings.keys()
+
+        pyroles = set()
+        for n, ms in rings.items():
+            if len(ms) == 2:
+                an = atoms[n].atomic_number
+                ac = charges[n]
+                if an == 6:  # carbon
+                    if ac == 0:
+                        continue
+                    elif ac == -1:
+                        if radicals[n]:
+                            if len(bonds[n]) == 2:  # anion-radical
+                                double_bonded.add(n)
+                            else:
+                                raise InvalidAromaticRing
+                        else:
+                            pyroles.add(n)
+                    elif ac != 1 or radicals[n]:  # not benzene cation
+                        raise InvalidAromaticRing
+                elif an in (7, 15):
+                    if ac == 0:  # pyrole or pyridine. include radical pyrole
+                        pyroles.add(n)
+                    elif ac == -1:  # pyrole only
+                        if radicals[n]:
+                            raise InvalidAromaticRing
+                        double_bonded.add(n)
+                    elif ac != 1:
+                        raise InvalidAromaticRing
+                    elif radicals[n]:
+                        if len(bonds[n]) != 2:  # not cation-radical pyridine
+                            raise InvalidAromaticRing
+                    else:
+                        if len(bonds[n]) == 2:  # pyrole cation
+                            double_bonded.add(n)
+                        elif len(bonds[n]) != 3:  # not pyridine oxyde
+                            raise InvalidAromaticRing
+                elif an in (8, 16, 24):
+                    if ac == 0 and not radicals[n] or ac == 1 and radicals[n]:
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                else:
+                    raise InvalidAromaticRing(f'only N, P, O, S, Se and C- possible, not: {{{atoms[n].atomic_symbol}}}')
+            elif len(ms) != 3:
+                raise InvalidAromaticRing
+
         atoms = set(rings)
         components = []
         while atoms:
@@ -222,15 +273,15 @@ class Aromatize:
 
     @staticmethod
     def __kekule_component(rings, double_bonded):
+        stack: List[List[Tuple[int, int, int, Optional[int]]]]
         size = sum(len(x) for x in rings.values()) // 2
         if double_bonded:  # start from double bonded if exists
             start = next(iter(double_bonded))
+            stack = [[(next(iter(rings[start])), start, 1, 0)]]
         else:  # select not condensed atom
             start = next(n for n, ms in rings.items() if len(ms) == 2)
-
-        # (current atom, previous atom, bond between cp atoms, path deep for cutting [None if cut impossible])
-        stack: List[List[Tuple[int, int, int, Optional[int]]]] = [[(next_atom, start, 1, 0)]
-                                                                  for next_atom in rings[start]]
+            # (current atom, previous atom, bond between cp atoms, path deep for cutting [None if cut impossible])
+            stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
         path = []
         hashed_path = set()
         while stack:
