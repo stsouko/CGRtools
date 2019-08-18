@@ -180,6 +180,7 @@ class Aromatize:
         kekule = next(self.__kekule_full(), None)
         if kekule:
             self.__kekule_patch(kekule)
+            self.flush_cache()
 
     def enumerate_kekule(self):
         """
@@ -194,7 +195,6 @@ class Aromatize:
         bonds = self._bonds
         for n, m, b in patch:
             bonds[n][m]._Bond__order = b
-        self.flush_cache()
 
     def __kekule_full(self):
         atoms = self._atoms
@@ -208,57 +208,80 @@ class Aromatize:
             for m, bond in m_bond.items():
                 if bond.order == 4:
                     rings[n].add(m)
-                elif bond.order == 2 and n not in double_bonded:
+                elif bond.order == 2:
                     double_bonded.add(n)
         if not rings:
             return
+        elif any(len(ms) not in (2, 3) for ms in rings.values()):
+            raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
 
         double_bonded &= rings.keys()
+        if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
+            raise InvalidAromaticRing('quinone valence error')
+        if any(atoms[n].atomic_number not in (6, 15, 16, 24) or charges[n] for n in double_bonded):
+            raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
 
         pyroles = set()
         for n, ms in rings.items():
-            if len(ms) == 2:
-                an = atoms[n].atomic_number
-                ac = charges[n]
-                if an == 6:  # carbon
-                    if ac == 0:
-                        continue
-                    elif ac == -1:
-                        if radicals[n]:
-                            if len(bonds[n]) == 2:  # anion-radical
-                                double_bonded.add(n)
-                            else:
-                                raise InvalidAromaticRing
-                        else:
-                            pyroles.add(n)
-                    elif ac != 1 or radicals[n]:  # not benzene cation
-                        raise InvalidAromaticRing
-                elif an in (7, 15):
-                    if ac == 0:  # pyrole or pyridine. include radical pyrole
-                        pyroles.add(n)
-                    elif ac == -1:  # pyrole only
-                        if radicals[n]:
-                            raise InvalidAromaticRing
-                        double_bonded.add(n)
-                    elif ac != 1:
-                        raise InvalidAromaticRing
-                    elif radicals[n]:
-                        if len(bonds[n]) != 2:  # not cation-radical pyridine
-                            raise InvalidAromaticRing
-                    else:
-                        if len(bonds[n]) == 2:  # pyrole cation
+            an = atoms[n].atomic_number
+            ac = charges[n]
+            if an == 6:  # carbon
+                if ac == 0:
+                    continue
+                elif ac == -1:
+                    if radicals[n]:
+                        if len(bonds[n]) == 2:  # anion-radical
                             double_bonded.add(n)
-                        elif len(bonds[n]) != 3:  # not pyridine oxyde
+                        else:
                             raise InvalidAromaticRing
-                elif an in (8, 16, 24):
-                    if ac == 0 and not radicals[n] or ac == 1 and radicals[n]:
+                    else:
+                        pyroles.add(n)
+                elif ac != 1 or radicals[n] or len(bonds[n]) != 2:  # not benzene cation
+                    raise InvalidAromaticRing
+            elif an in (7, 15):
+                if ac == 0:  # pyrole or pyridine. include radical pyrole
+                    if radicals[n] and len(bonds[n]) != 2:
+                        raise InvalidAromaticRing
+                    elif len(bonds[n]) == 3:  # pyrole or P-oxyde only possible
+                        double_bonded.add(n)
+                    else:
+                        pyroles.add(n)
+                elif ac == -1:  # pyrole only
+                    if radicals[n] or len(bonds[n]) != 2:
+                        raise InvalidAromaticRing
+                    double_bonded.add(n)
+                elif ac != 1:
+                    raise InvalidAromaticRing
+                elif radicals[n]:
+                    if len(bonds[n]) != 2:  # not cation-radical pyridine
+                        raise InvalidAromaticRing
+                elif len(bonds[n]) == 2:  # pyrole cation
+                    double_bonded.add(n)
+                elif len(bonds[n]) != 3:  # not pyridine oxyde
+                    raise InvalidAromaticRing
+            elif an == 8:  # furan
+                if len(bonds[n]) == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
+                    double_bonded.add(n)
+                else:
+                    raise InvalidAromaticRing
+            elif an in (16, 24):  # thiophene or sulphoxyde or sulphone
+                if n not in double_bonded:
+                    if len(bonds[n]) == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
                         double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing
+            elif an == 5:  # boron
+                if ac == 0:
+                    if len(bonds[n]) == 3 and not radicals[n] or len(bonds[n]) == 2:
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                elif ac in (-1, 1) and len(bonds[n]) == 2 and not radicals[n]:
+                    double_bonded.add(n)
                 else:
-                    raise InvalidAromaticRing(f'only N, P, O, S, Se and C- possible, not: {{{atoms[n].atomic_symbol}}}')
-            elif len(ms) != 3:
-                raise InvalidAromaticRing
+                    raise InvalidAromaticRing
+            else:
+                raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se possible, not: {atoms[n].atomic_symbol}')
 
         atoms = set(rings)
         components = []
@@ -268,7 +291,8 @@ class Aromatize:
             components.append(component)
             atoms.difference_update(component)
 
-        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys()) for c in components)):
+        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
+                              for c in components)):
             yield list(*keks)
 
     @staticmethod
