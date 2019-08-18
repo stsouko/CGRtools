@@ -222,61 +222,71 @@ class Aromatize:
             raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
 
         pyroles = set()
-        for n, ms in rings.items():
+        for n in rings:
             an = atoms[n].atomic_number
             ac = charges[n]
+            ab = len(bonds[n])
             if an == 6:  # carbon
                 if ac == 0:
-                    continue
-                elif ac == -1:
+                    if ab not in (2, 3):
+                        raise InvalidAromaticRing
+                elif ac in (-1, 1):
                     if radicals[n]:
-                        if len(bonds[n]) == 2:  # anion-radical
+                        if ab == 2:
                             double_bonded.add(n)
                         else:
                             raise InvalidAromaticRing
-                    else:
+                    elif ab == 3:
+                        double_bonded.add(n)
+                    elif ab == 2:  # benzene an[cat]ion or pyrole
                         pyroles.add(n)
-                elif ac != 1 or radicals[n] or len(bonds[n]) != 2:  # not benzene cation
+                    else:
+                        raise InvalidAromaticRing
+                else:
                     raise InvalidAromaticRing
             elif an in (7, 15):
                 if ac == 0:  # pyrole or pyridine. include radical pyrole
-                    if radicals[n] and len(bonds[n]) != 2:
-                        raise InvalidAromaticRing
-                    elif len(bonds[n]) == 3:  # pyrole or P-oxyde only possible
+                    if radicals[n]:
+                        if ab != 2:
+                            raise InvalidAromaticRing
                         double_bonded.add(n)
-                    else:
+                    elif ab == 3:  # pyrole or P-oxyde only possible
+                        double_bonded.add(n)
+                    elif ab == 2:
                         pyroles.add(n)
+                    else:
+                        raise InvalidAromaticRing
                 elif ac == -1:  # pyrole only
-                    if radicals[n] or len(bonds[n]) != 2:
+                    if ab != 2 or radicals[n]:
                         raise InvalidAromaticRing
                     double_bonded.add(n)
                 elif ac != 1:
                     raise InvalidAromaticRing
                 elif radicals[n]:
-                    if len(bonds[n]) != 2:  # not cation-radical pyridine
+                    if ab != 2:  # not cation-radical pyridine
                         raise InvalidAromaticRing
-                elif len(bonds[n]) == 2:  # pyrole cation
+                elif ab == 2:  # pyrole cation
                     double_bonded.add(n)
-                elif len(bonds[n]) != 3:  # not pyridine oxyde
+                elif ab != 3:  # not pyridine oxyde
                     raise InvalidAromaticRing
             elif an == 8:  # furan
-                if len(bonds[n]) == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
+                if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
                     double_bonded.add(n)
                 else:
                     raise InvalidAromaticRing
-            elif an in (16, 24):  # thiophene or sulphoxyde or sulphone
+            elif an in (16, 24):  # thiophene [not sulphoxyde or sulphone]
                 if n not in double_bonded:
-                    if len(bonds[n]) == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
+                    if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
                         double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing
             elif an == 5:  # boron
                 if ac == 0:
-                    if len(bonds[n]) == 3 and not radicals[n] or len(bonds[n]) == 2:
+                    if ab == 3 and not radicals[n] or ab == 2:
                         double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing
-                elif ac in (-1, 1) and len(bonds[n]) == 2 and not radicals[n]:
+                elif ac in (-1, 1) and ab == 2 and not radicals[n]:
                     double_bonded.add(n)
                 else:
                     raise InvalidAromaticRing
