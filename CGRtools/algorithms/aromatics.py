@@ -212,14 +212,20 @@ class Aromatize:
 
         rings = defaultdict(set)  # aromatic skeleton
         double_bonded = set()
+        triple_bonded = set()
         for n, m_bond in bonds.items():
             for m, bond in m_bond.items():
-                if bond.order == 4:
+                bo = bond.order
+                if bo == 4:
                     rings[n].add(m)
-                elif bond.order == 2:
+                elif bo == 2:
                     double_bonded.add(n)
+                elif bo == 3:
+                    triple_bonded.add(n)
         if not rings:
             return
+        elif not triple_bonded.isdisjoint(rings):
+            raise InvalidAromaticRing('triple bonds connected to rings')
         elif any(len(ms) not in (2, 3) for ms in rings.values()):
             raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
 
