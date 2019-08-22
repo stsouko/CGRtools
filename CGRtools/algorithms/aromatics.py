@@ -193,8 +193,16 @@ class Aromatize:
 
     def __kekule_patch(self, patch):
         bonds = self._bonds
+        sh = self._hybridizations
+        shg = self._hydrogens
+        atoms = set()
         for n, m, b in patch:
             bonds[n][m]._Bond__order = b
+            atoms.add(n)
+            atoms.add(m)
+        for n in atoms:
+            sh[n] = self._calc_hybridization(n)
+            shg[n] = self._calc_implicit(n)
 
     def __kekule_full(self):
         atoms = self._atoms
