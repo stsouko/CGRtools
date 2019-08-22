@@ -303,7 +303,7 @@ class Aromatize:
 
         for keks in product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
                               for c in components)):
-            yield list(*keks)
+            yield [x for x in keks for x in x]
 
     @staticmethod
     def __kekule_component(rings, double_bonded, pyroles):
@@ -348,18 +348,15 @@ class Aromatize:
                     if bond == 2:  # finish should be single bonded
                         if double_bonded:  # ok
                             stack[-1].insert(0, (loop, atom, 1, None))
-                            if not for_stack:
-                                continue
                         else:
                             del stack[-1]
                             if stack:
                                 path = path[:stack[-1][-1][-1]]
                                 hashed_path = {x for x, *_ in path}
                             continue
-                    elif atom in double_bonded:  # we on quinone atom. finish should be single bonded
-                        stack[-1].insert(0, (loop, atom, 1, None))
                     elif double_bonded:  # we in quinone ring. finish should be single bonded
-                        if for_stack:  # need path for storing double bond
+                        # side-path for storing double bond or atom is quinone or pyrole
+                        if for_stack or atom in double_bonded or atom in pyroles:
                             stack[-1].insert(0, (loop, atom, 1, None))
                         else:
                             del stack[-1]
@@ -369,8 +366,6 @@ class Aromatize:
                             continue
                     else:  # finish should be double bonded
                         stack[-1].insert(0, (loop, atom, 2, None))
-                        if not for_stack:
-                            continue
                         bond = 2  # grow should be single bonded
 
                 if bond == 2 or atom in double_bonded:  # double in - single out. quinone has two single bonds
@@ -379,18 +374,28 @@ class Aromatize:
                         stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
                     for next_atom in for_stack:
                         stack[-1].append((next_atom, atom, 1, None))
-                elif len(for_stack) == 1:  # easy path grow. next bond double
+                elif len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
                     next_atom = for_stack[0]
                     if next_atom in double_bonded:  # need double bond, but next atom quinone
-                        del stack[-1]
-                        if stack:
-                            path = path[:stack[-1][-1][-1]]
-                            hashed_path = {x for x, *_ in path}
+                        if atom in pyroles:
+                            stack[-1].append((next_atom, atom, 1, None))
+                        else:
+                            del stack[-1]
+                            if stack:
+                                path = path[:stack[-1][-1][-1]]
+                                hashed_path = {x for x, *_ in path}
                     else:
-                        stack[-1].append((next_atom, atom, 2, None))
-                        for next_atom in closures:
-                            path.append((next_atom, atom, 1))  # closures always single-bonded
-                            stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
+                        if atom in pyroles:  # try pyrole and pyridine
+                            opposite = stack[-1].copy()
+                            opposite.append((next_atom, atom, 1, None))
+                            stack[-1].append((next_atom, atom, 2, len(path)))
+                            stack.append(opposite)
+                        else:
+                            stack[-1].append((next_atom, atom, 2, None))
+                            if closures:
+                                next_atom = closures[0]
+                                path.append((next_atom, atom, 1))  # closures always single-bonded
+                                stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
                 elif for_stack:  # fork
                     next_atom1, next_atom2 = for_stack
                     if next_atom1 in double_bonded:  # quinone next from fork
@@ -412,7 +417,7 @@ class Aromatize:
                         opposite.append((next_atom2, atom, 1, None))
                         opposite.append((next_atom1, atom, 2, None))
                         stack.append(opposite)
-                elif closures:  # need double bond, but closure should be single bonded
+                elif closures and atom not in pyroles:  # need double bond, but closure should be single bonded
                     del stack[-1]
                     if stack:
                         path = path[:stack[-1][-1][-1]]
