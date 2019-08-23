@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_args_method, cached_property
+from CachedMethods import cached_args_method, cached_property, class_cached_property
 from collections import defaultdict
 from typing import List, Union
 from . import cgr, query  # cyclic imports resolve
@@ -61,6 +61,7 @@ class Bond:
 
 class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
+    __class_cache__ = {}
 
     def __init__(self):
         self._conformers = []
@@ -697,6 +698,18 @@ class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
                 elif hybridization == 1:
                     hybridization = 2
         return hybridization
+
+    @class_cached_property
+    def _standardize_compiled_rules(self):
+        rules = []
+        for atoms, bonds, atom_fix, bonds_fix in self._standardize_rules():
+            q = query.QueryContainer()
+            for a in atoms:
+                q.add_atom(**a)
+            for n, m, b in bonds:
+                q.add_bond(n, m, b)
+            rules.append((q, atom_fix, bonds_fix))
+        return rules
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, 'bonds_stereo': self._bonds_stereo,

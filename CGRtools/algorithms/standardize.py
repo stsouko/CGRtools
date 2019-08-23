@@ -23,41 +23,43 @@ from ..attributes import QueryAtom, Bond
 
 
 class Standardize:
+    __slots__ = ()
+
     def standardize(self):
         """
         standardize functional groups
-
-        :return: number of found groups
         """
-        self.reset_query_marks()
-        seen = set()
         total = 0
-        for n, atom in self.atoms():
-            if n in seen:
-                continue
-            for k, center in central.items():
-                if center != atom:
-                    continue
-                shell = tuple((bond, self._node[m]) for m, bond in self._adj[n].items())
-                for shell_query, shell_patch, atom_patch in query_patch[k]:
-                    if shell_query != shell:
-                        continue
-                    total += 1
-                    for attr_name, attr_value in atom_patch.items():
-                        setattr(atom, attr_name, attr_value)
-                    for (bond_patch, atom_patch), (bond, atom) in zip(shell_patch, shell):
-                        bond.update(bond_patch)
-                        for attr_name, attr_value in atom_patch.items():
-                            setattr(atom, attr_name, attr_value)
-                    seen.add(n)
-                    seen.update(self._adj[n])
+        for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
+            while True:
+                try:
+                    mapping = next(pattern.get_mapping(self))
+                except StopIteration:
                     break
-                else:
-                    continue
-                break
+
         if total:
             self.flush_cache()
-        return total
+
+    @staticmethod
+    def _standardize_rules():
+        rules = []
+        # 1. Nitro
+        #
+        #       O          O-
+        #      //         /
+        #  A - N  >> A - N+
+        #      \\        \\
+        #       O         O
+        #
+        # (symbol, charge, radical, neighbors, hybridization)
+        # (atom1, atom2, bond order)
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 3}, {'atom': 'O'}, {'atom': 'O'}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        return rules
 
 
 def _prepare(q, p):
