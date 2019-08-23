@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
+from typing import List
 
 
 class SSSR:
@@ -29,29 +30,38 @@ class SSSR:
     __slots__ = ()
 
     @cached_property
-    def sssr(self):
-        adj = self._bonds
-        if len(adj) < 3:
-            return []
+    def sssr(self) -> List[List[int]]:
+        """
+        Smallest Set of Smallest Rings
 
-        atoms = {x for x, y in adj.items() if y}  # ignore isolated atoms
-        terminals = {x for x, y in adj.items() if len(y) == 1}
-        if terminals:
-            bubble = terminals
-            while True:
-                bubble = {y for x in bubble for y in adj[x].keys() - terminals if len(adj[y].keys() - terminals) < 2}
-                if not bubble:
-                    break
-                terminals.update(bubble)
-            atoms.difference_update(terminals)  # skip not-cycle chains
+        :return rings atoms numbers
+        """
+        # ignore isolated atoms. optimization.
+        return self._sssr({n: set(ms) for n, ms in self._bonds.items() if ms})
 
-        if not atoms:
-            return []
+    @classmethod
+    def _sssr(cls, bonds):
+        while True:  # skip not-cycle chains
+            try:
+                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
+            except StopIteration:
+                break
+            for m in bonds.pop(n):
+                bonds[m].discard(n)
 
-        n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
+        if len(bonds) >= 3:
+            terminated, n_sssr = cls.__bfs(bonds)
+            if n_sssr:
+                return cls.__pid(terminated, n_sssr)
+        return []
+
+    @staticmethod
+    def __bfs(bonds):
+        n_sssr = sum(len(x) for x in bonds.values()) // 2 - len(bonds) + 1
+        atoms = set(bonds)
         terminated = {}
         tail = atoms.pop()
-        next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
+        next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
 
         while True:
             next_front = set()
@@ -60,7 +70,7 @@ class SSSR:
             for broom in stack.values():
                 tail = broom[0][-1]
                 next_front.add(tail)
-                neighbors = adj[tail].keys() & atoms
+                neighbors = bonds[tail] & atoms
                 if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
@@ -106,11 +116,11 @@ class SSSR:
             elif not next_stack:
                 n_sssr += 1
                 tail = atoms.pop()
-                next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
+                next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
+        return terminated, n_sssr
 
-        if not n_sssr:
-            return []
-
+    @staticmethod
+    def __pid(terminated, n_sssr):
         pid1 = {}
         pid2 = {}
         for j, paths in terminated.items():
