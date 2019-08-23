@@ -24,6 +24,7 @@ from .common import Graph
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
+from ..algorithms.standardize import Standardize
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
@@ -59,7 +60,7 @@ class Bond:
         return copy
 
 
-class MoleculeContainer(Graph, Aromatize, MoleculeSmiles, DepictMolecule):
+class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
     __class_cache__ = {}
 
