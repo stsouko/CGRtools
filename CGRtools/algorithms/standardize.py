@@ -17,7 +17,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import permutations, repeat
 
 
 class Standardize:
@@ -27,122 +26,88 @@ class Standardize:
         """
         standardize functional groups
         """
-        total = 0
+        atom_map = {'charge': self._charges, 'radical': self._radicals, 'hybridization': self._hybridizations}
+        bonds = self._bonds
+        seen = set()
         for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
-            while True:
-                try:
-                    mapping = next(pattern.get_mapping(self))
-                except StopIteration:
-                    break
+            for mapping in pattern.get_mapping(self):
+                n = mapping[1]
+                if n in seen:  # automorphism filter
+                    continue
+                seen.add(n)
 
-        if total:
+                for n, fix in atom_fix.items():
+                    n = mapping[n]
+                    for key, value in fix.items():
+                        atom_map[key][n] = value
+                for n, m, b in bonds_fix:
+                    bonds[mapping[n]][mapping[m]]._Bond__order = b
+        if seen:
             self.flush_cache()
 
     @staticmethod
     def _standardize_rules():
         rules = []
-        # 1. Nitro
+        # Nitro
         #
-        #       O          O-
-        #      //         /
-        #  A - N  >> A - N+
-        #      \\        \\
-        #       O         O
+        #   O          O-
+        #  //         /
+        #  N  >> C - N+
+        #  \\        \\
+        #   O         O
         #
-        # (symbol, charge, radical, neighbors, hybridization)
-        # (atom1, atom2, bond order)
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 3}, {'atom': 'O'}, {'atom': 'O'}, {'atom': 'C'})
-        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1}}
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O'}, {'atom': 'O'})
+        bonds = ((1, 2, 2), (1, 3, 2))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Aromatic N-Oxide
+        #
+        #  : N :  >>  : N+ :
+        #    \\          \
+        #     O           O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O'})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        #  N- - N+ # N  >>  N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2},
+                 {'atom': 'N', 'charge': -1, 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 3))
+        atom_fix = {2: {'charge': 0, 'hybridization': 2}, 3: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide ChemAxoned
+        #
+        #  N+ # N = N-  >>  N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
+                 {'atom': 'N', 'charge': -1, 'neighbors': 1})
+        bonds = ((1, 2, 3), (1, 3, 2))
+        atom_fix = {1: {'charge': 1}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Diazo
+        #
+        #  C- - N+ # N  >>  C = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2}, {'atom': 'N', 'neighbors': 1},
+                 {'atom': 'C', 'charge': -1, 'hybridization': 1})
+        bonds = ((1, 2, 3), (1, 3, 1))
+        atom_fix = {2: {'charge': -1, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         return rules
-
-
-def _prepare(q, p):
-    d = len(q) - len(p) + 1
-    if d:
-        p.extend([({}, {})] * d)
-    doubles = []
-    for q, p, c in zip(permutations(q), permutations(p[1:]), repeat(p[0])):
-        if q in doubles:
-            continue
-        doubles.append(q)
-        yield q, p, c
-
-
-# 1. Nitro
-#
-#       O          O-
-#      //         /
-#  A - N  >> A - N+
-#      \\        \\
-#       O         O
-#
-# a = QueryAtom()
-# o = QueryAtom()
-# n33 = QueryAtom()
-# o.update(element='O')
-# n33.update(element='N', neighbors=3, hybridization=3)
-# central['N3;3'] = n33
-# query_patch['N3;3'].extend(_prepare([(b2, o), (b2, o), (b1, a)],
-#                                     [{'charge': 1, '_hybridization': 2},
-#                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
-#
-
-# 2. Aromatic N-Oxide
-#
-#  A : N : A  >>  A : N+ : A
-#      \\             |
-#       O             O-
-#
-# n34 = QueryAtom()
-# n34.update(element='N', neighbors=3, hybridization=4)
-# central['N3;4'] = n34
-# query_patch['N3;4'].extend(_prepare([(b2, o), (b4, a), (b4, a)],
-#                                     [{'charge': 1},
-#                                      ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
-
-
-# 3. Azide
-#
-#  N- - N+ # N  >>  N = N+ = N-
-#
-# nn21 = QueryAtom()
-# np23 = QueryAtom()
-# n1_ = QueryAtom()
-# nn21.update(element='N', charge=-1, neighbors=2, hybridization=1)
-# np23.update(element='N', charge=1, neighbors=2, hybridization=3)
-# n1_.update(element='N', neighbors=1)
-# central['N+2;3'] = np23
-# query_patch['N+2;3'].extend(_prepare([(b1, nn21), (b3, n1_)],
-#                                      [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
-#                                       ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
-
-
-# 3.1. Azide ChemAxoned
-#
-#  N+ # N = N-  >>  N = N+ = N-
-#
-# n23 = QueryAtom()
-# nn12 = QueryAtom()
-# n23.update(element='N', neighbors=2, hybridization=3)
-# nn12.update(element='N', charge=-1, neighbors=1, hybridization=2)
-# central['N2;3'] = n23
-# query_patch['N2;3'].extend(_prepare([(b3, np23), (b2, nn12)],
-#                                     [{'charge': 1}, ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 4. Diazo
-#
-#  C- - N+ # N  >>  C = N+ = N-
-#
-# cn_1 = QueryAtom()
-# cn_1.update(element='C', charge=-1, hybridization=1)
-# query_patch['N+2;3'].extend(_prepare([(b1, cn_1), (b3, n1_)],
-#                                      [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
-#                                       ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 
 # 5. Diazonium
