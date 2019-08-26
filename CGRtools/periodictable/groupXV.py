@@ -53,7 +53,15 @@ class N(Element, PeriodII, GroupXV):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'))),  # O-NO2
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'))),  # N-NO2
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'))),  # C-NO2
-                (0, True, 0, ((2, 'O'),)))  # *NO
+                (0, False, 0, ((2, 'O'), (2, 'N'), (1, 'C'))),  # C-N(=O)=N
+                (0, False, 0, ((2, 'C'), (2, 'O'), (1, 'O'))),  # O-N(=O)=C
+                (0, False, 0, ((2, 'C'), (2, 'O'), (1, 'C'))),  # C-N(=O)=C
+                (0, True, 0, ((2, 'O'),)),  # *NO
+                (0, False, 0, ((2, 'N'), (2, 'N'))),  # N=N=N
+                (0, False, 0, ((1, 'N'), (3, 'N'))),  # N-N#N
+                (0, False, 0, ((2, 'C'), (3, 'N'))),  # C=N#N
+                (0, False, 0, ((2, 'O'), (3, 'C'))),  # C#N=O
+                (0, False, 0, ((2, 'N'), (3, 'N'))))  # N=N#N
 
 
 class P(Element, PeriodIII, GroupXV):
@@ -77,7 +85,8 @@ class P(Element, PeriodIII, GroupXV):
 
     @property
     def _valences_exceptions(self):
-        return (-1, False, 2, ()), (1, False, 4, ())
+        return ((-1, False, 2, ()), (1, False, 4, (),),
+                (-1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))))  # Phosphonium ylide
 
 
 class As(Element, PeriodIV, GroupXV):
