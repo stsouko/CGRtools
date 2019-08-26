@@ -111,7 +111,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
     def meta(self):
         return self._meta
 
-    @property
+    @cached_property
     def connected_components(self):
         if not self._atoms:
             return []
