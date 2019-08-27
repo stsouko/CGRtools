@@ -45,7 +45,8 @@ class O(Element, PeriodII, GroupXVI):
 
     @property
     def _valences_exceptions(self):
-        return (-1, False, 1, ()), (0, True, 1, ()), (1, False, 0, ((3, 'C'),))
+        return ((-1, False, 1, ()), (-2, False, 0, ()),
+                (0, True, 1, ()), (1, False, 0, ((3, 'C'),)), (1, False, 0, ((2, 'O'), (1, 'O'))))
 
 
 class S(Element, PeriodIII, GroupXVI):
@@ -69,17 +70,33 @@ class S(Element, PeriodIII, GroupXVI):
 
     @property
     def _valences_exceptions(self):
-        return ((-1, False, 1, ()),
+        return ((-1, False, 1, ()), (-2, False, 0, ()),
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'))),
 
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'))),
+                (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'S'))),
                 (0, False, 0, ((2, 'O'), (1, 'Cl'), (1, 'Cl'))),
+                (0, False, 0, ((2, 'O'), (1, 'Br'), (1, 'Br'))),
                 (0, False, 0, ((2, 'O'), (1, 'C'), (1, 'C'))),
+                (0, False, 0, ((2, 'O'), (1, 'C'), (1, 'Cl'))),
+                (0, False, 0, ((2, 'O'), (1, 'C'), (1, 'O'))),
+                (0, False, 0, ((2, 'O'), (1, 'C'), (1, 'N'))),
+                (0, False, 0, ((2, 'O'), (1, 'N'), (1, 'N'))),
+
+                (0, False, 0, ((1, 'N'), (1, 'F'), (1, 'F'), (1, 'F'))),
+
+                (1, False, 0, ((2, 'O'), (1, 'C'), (1, 'C'), (1, 'C'))),
 
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'), (1, 'N'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'), (1, 'O'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'), (1, 'C'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'), (1, 'Cl'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'Cl'), (1, 'Cl'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'), (1, 'Cl'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'), (1, 'F'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'), (1, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'S'))),  # [S2O3]2-
