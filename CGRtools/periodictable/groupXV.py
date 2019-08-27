@@ -44,24 +44,7 @@ class N(Element, PeriodII, GroupXV):
 
     @property
     def _valences_exceptions(self):
-        return ((-1, False, 2, ()), (1, False, 4, ()),
-                (0, False, 1, ((2, 'O'), (1, 'C'), (1, 'C'))),  # O=[NH](C)C
-                (0, False, 1, ((2, 'O'), (1, 'C'), (1, 'O'))),  # O=[NH](C)O
-                (0, False, 1, ((2, 'O'), (1, 'C'), (1, 'N'))),  # O=[NH](C)N
-                (0, False, 1, ((2, 'O'), (2, 'C'))),  # O=[NH]=C
-                (0, False, 0, ((2, 'O'), (2, 'O'))),  # NO2
-                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'))),  # O-NO2
-                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'N'))),  # N-NO2
-                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'C'))),  # C-NO2
-                (0, False, 0, ((2, 'O'), (2, 'N'), (1, 'C'))),  # C-N(=O)=N
-                (0, False, 0, ((2, 'C'), (2, 'O'), (1, 'O'))),  # O-N(=O)=C
-                (0, False, 0, ((2, 'C'), (2, 'O'), (1, 'C'))),  # C-N(=O)=C
-                (0, True, 0, ((2, 'O'),)),  # *NO
-                (0, False, 0, ((2, 'N'), (2, 'N'))),  # N=N=N
-                (0, False, 0, ((1, 'N'), (3, 'N'))),  # N-N#N
-                (0, False, 0, ((2, 'C'), (3, 'N'))),  # C=N#N
-                (0, False, 0, ((2, 'O'), (3, 'C'))),  # C#N=O
-                (0, False, 0, ((2, 'N'), (3, 'N'))))  # N=N#N
+        return (-1, False, 2, ()), (1, False, 4, ()), (0, True, 0, ((2, 'O'),))  # *NO
 
 
 class P(Element, PeriodIII, GroupXV):
@@ -86,7 +69,7 @@ class P(Element, PeriodIII, GroupXV):
     @property
     def _valences_exceptions(self):
         return ((-1, False, 2, ()), (1, False, 4, (),),
-                (-1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))))  # Phosphonium ylide
+                (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
 
 class As(Element, PeriodIV, GroupXV):

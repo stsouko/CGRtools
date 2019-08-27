@@ -67,7 +67,7 @@ class Mg(Element, PeriodIII, GroupII):
 
     @property
     def _valences_exceptions(self):
-        return (2, False, 0, ()),
+        return (2, False, 0, ()), (1, False, 0, ((1, 'C'),)), (1, False, 0, ((1, 'O'),))
 
 
 class Ca(Element, PeriodIV, GroupII):

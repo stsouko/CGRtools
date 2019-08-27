@@ -47,9 +47,12 @@ class Cr(Element, PeriodIV, GroupVI):
         return ((2, False, 0, ()), (3, False, 0, ()),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),  # CrO2
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # CrF4
+                (0, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))),  # CrC4
 
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'))),
-                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))))
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'Cl'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'Cl'), (1, 'Cl'))))
 
 
 class Mo(Element, PeriodV, GroupVI):

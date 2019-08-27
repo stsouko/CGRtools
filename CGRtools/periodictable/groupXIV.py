@@ -44,7 +44,7 @@ class C(Element, PeriodII, GroupXIV):
 
     @property
     def _valences_exceptions(self):
-        return (-1, False, 0, ((3, 'O'),)), (0, True, 2, ()), (1, False, 3, ()), (-1, False, 3, ())
+        return (0, True, 2, ()), (1, False, 3, ()), (-1, False, 3, ())
 
 
 class Si(Element, PeriodIII, GroupXIV):
@@ -68,8 +68,7 @@ class Si(Element, PeriodIII, GroupXIV):
 
     @property
     def _valences_exceptions(self):
-        return ((-2, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
-                (1, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'))))
+        return (-2, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
 
 
 class Ge(Element, PeriodIV, GroupXIV):
