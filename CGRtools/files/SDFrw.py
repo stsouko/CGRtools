@@ -23,17 +23,16 @@ from logging import warning
 from subprocess import check_output
 from sys import platform
 from traceback import format_exc
-from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, prepare_meta
+from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
 
 
-class SDFread(CGRread, WithMixin, MDLread):
+class SDFRead(MDLRead):
     """
     MDL SDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, indexable=False, **kwargs):
+    def __init__(self, *args, indexable=False, **kwargs):
         """
         :param indexable: if True:
             supported methods seek, tell, object size and subscription, it only works when dealing with a real file
@@ -44,7 +43,6 @@ class SDFread(CGRread, WithMixin, MDLread):
             records with errors are skipped
         """
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -108,7 +106,7 @@ class SDFread(CGRread, WithMixin, MDLread):
 
             elif line.startswith("$$$$"):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
                     try:
                         yield self._convert_structure(record)
                     except ValueError:
@@ -134,9 +132,9 @@ class SDFread(CGRread, WithMixin, MDLread):
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLread(line)
+                        parser = MOLRead(line)
                     elif 'V3000' in line:
-                        parser = EMOLread()
+                        parser = EMOLRead()
                     else:
                         raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -145,7 +143,7 @@ class SDFread(CGRread, WithMixin, MDLread):
                     yield None
 
         if record:  # True for MOL file only.
-            record['meta'] = prepare_meta(meta)
+            record['meta'] = self._prepare_meta(meta)
             try:
                 yield self._convert_structure(record)
             except ValueError:
@@ -153,27 +151,25 @@ class SDFread(CGRread, WithMixin, MDLread):
                 yield None
 
 
-class SDFwrite(MOLwrite, WithMixin):
+class SDFWrite(MDLWrite):
     """
     MDL SDF files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
-
     def write(self, data):
         """
         write single molecule into file
         """
-        m = self._convert_structure(data)
-        self._file.write(self._format_mol(*m))
-        self._file.write('M  END\n')
+        self._file.write(self._convert_structure(data))
 
         for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')
         self._file.write('$$$$\n')
 
 
-__all__ = ['SDFread', 'SDFwrite']
+SDFread = SDFRead
+SDFwrite = SDFWrite
+
+
+__all__ = ['SDFRead', 'SDFWrite', 'SDFread', 'SDFwrite']

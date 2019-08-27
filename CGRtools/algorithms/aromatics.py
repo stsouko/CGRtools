@@ -17,239 +17,347 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import repeat
-from ..periodictable import C
+from itertools import product
+from typing import List, Tuple, Optional
+from ..exceptions import InvalidAromaticRing
+
+
+_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P')
 
 
 class Aromatize:
-    def aromatize(self):
+    __slots__ = ()
+
+    def thiele(self):
         """
         convert structure to aromatic form
-
-        :return: number of processed rings
         """
-        rings = [x for x in self.sssr if 4 < len(x) < 7]
+        bonds = self._bonds
+        sh = self._hybridizations
+
+        rings = defaultdict(set)  # aromatic? skeleton. include quinones
+        for ring in self.sssr:
+            if len(ring) in (5, 6, 7) and all(sh[n] == 2 for n in ring):
+                n, *_, m = ring
+                rings[n].add(m)
+                rings[m].add(n)
+                for n, m in zip(ring, ring[1:]):
+                    rings[n].add(m)
+                    rings[m].add(n)
         if not rings:
-            return 0
-        total = 0
-        while True:
-            c = self._quinonize(rings, 'order')
-            if c:
-                total += c
-            elif total:
-                break
+            return
 
-            c = self._aromatize(rings, 'order')
-            if not c:
-                break
-            total += c
+        double_bonded = [n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())]
+        if double_bonded:  # delete quinones
+            for n in double_bonded:
+                for m in rings.pop(n):
+                    rings[m].discard(n)
+            while True:
+                try:
+                    n = next(n for n, ms in rings.items() if len(ms) == 1)
+                except StopIteration:
+                    break
+                m = rings.pop(n).pop()
+                pm = rings.pop(m)
+                pm.discard(n)
+                for x in pm:
+                    rings[x].discard(m)
+        if not rings:
+            return
 
-        if total:
+        rings = self._sssr(rings)  # search rings again
+        if not rings:
+            return
+
+        seen = set()
+        for ring in rings:
+            seen.update(ring)
+            n, *_, m = ring
+            bonds[n][m]._Bond__order = 4
+            for n, m in zip(ring, ring[1:]):
+                bonds[n][m]._Bond__order = 4
+        for n in seen:
+            sh[n] = 4
+
+        self.flush_cache()
+
+    def kekule(self):
+        """
+        convert structure to kekule form.
+
+        only one of possible double/single bonds positions will be set.
+        for enumerate bonds positions use `enumerate_kekule`
+        """
+        kekule = next(self.__kekule_full(), None)
+        if kekule:
+            self.__kekule_patch(kekule)
             self.flush_cache()
-        return total
 
-    def _quinonize(self, rings, bond):
-        rings = rings.copy()
-        init = len(rings)
-        old = 0
-        new = len(rings)
-        while new != old:
-            old = new
-            found = []
-            for n, r in enumerate(rings):
-                if len(r) == 6:
-                    r1, r2, r3, r4, r5, r6 = r
-                    key = (self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                           self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond])
-                    if 4 not in key:
-                        continue
+    def enumerate_kekule(self):
+        """
+        enumerate all possible kekule forms of molecule
+        """
+        for form in self.__kekule_full():
+            copy = self.copy()
+            copy._Aromatize__kekule_patch(form)
+            yield copy
 
-                    doubles = tuple(y for y, x in enumerate(r) if len(self._adj[x]) == 3 and
-                                    next(attr[bond] for a, attr in self._adj[x].items() if a not in r) == 2)
-                    if not doubles:
-                        continue
+    def __kekule_patch(self, patch):
+        bonds = self._bonds
+        sh = self._hybridizations
+        shg = self._hydrogens
+        atoms = set()
+        for n, m, b in patch:
+            bonds[n][m]._Bond__order = b
+            atoms.add(n)
+            atoms.add(m)
+        for n in atoms:
+            sh[n] = self._calc_hybridization(n)
+            shg[n] = self._calc_implicit(n)
 
-                    if len(doubles) == 6:
-                        self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 1
-                        self._adj[r4][r5][bond] = self._adj[r5][r6][bond] = self._adj[r6][r1][bond] = 1
-                        found.append(n)
+    def __kekule_full(self):
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+
+        rings = defaultdict(set)  # aromatic skeleton
+        double_bonded = set()
+        triple_bonded = set()
+        for n, m_bond in bonds.items():
+            for m, bond in m_bond.items():
+                bo = bond.order
+                if bo == 4:
+                    rings[n].add(m)
+                elif bo == 2:
+                    double_bonded.add(n)
+                elif bo == 3:
+                    triple_bonded.add(n)
+        if not rings:
+            return
+        elif not triple_bonded.isdisjoint(rings):
+            raise InvalidAromaticRing('triple bonds connected to rings')
+        elif any(len(ms) not in (2, 3) for ms in rings.values()):
+            raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
+
+        double_bonded &= rings.keys()
+        if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
+            raise InvalidAromaticRing('quinone valence error')
+        if any(atoms[n].atomic_number not in (6, 15, 16, 24) or charges[n] for n in double_bonded):
+            raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
+
+        pyroles = set()
+        for n in rings:
+            an = atoms[n].atomic_number
+            ac = charges[n]
+            ab = len(bonds[n])
+            if an == 6:  # carbon
+                if ac == 0:
+                    if ab not in (2, 3):
+                        raise InvalidAromaticRing
+                elif ac in (-1, 1):
+                    if radicals[n]:
+                        if ab == 2:
+                            double_bonded.add(n)
+                        else:
+                            raise InvalidAromaticRing
+                    elif ab == 3:
+                        double_bonded.add(n)
+                    elif ab == 2:  # benzene an[cat]ion or pyrole
+                        pyroles.add(n)
                     else:
-                        if key in _quinone_pattern.get(doubles, {}):
-                            dear = _quinone_fix.get(doubles)
-                            self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond], \
-                                self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond] = dear
-                            found.append(n)
-                elif len(r) == 5:
-                    r1, r2, r3, r4, r5 = r
-                    key = (self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                           self._adj[r4][r5][bond], self._adj[r5][r1][bond])
-                    if 4 not in key:
+                        raise InvalidAromaticRing
+                else:
+                    raise InvalidAromaticRing
+            elif an in (7, 15):
+                if ac == 0:  # pyrole or pyridine. include radical pyrole
+                    if radicals[n]:
+                        if ab != 2:
+                            raise InvalidAromaticRing
+                        double_bonded.add(n)
+                    elif ab == 3:  # pyrole or P-oxyde only possible
+                        double_bonded.add(n)
+                    elif ab == 2:
+                        pyroles.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                elif ac == -1:  # pyrole only
+                    if ab != 2 or radicals[n]:
+                        raise InvalidAromaticRing
+                    double_bonded.add(n)
+                elif ac != 1:
+                    raise InvalidAromaticRing
+                elif radicals[n]:
+                    if ab != 2:  # not cation-radical pyridine
+                        raise InvalidAromaticRing
+                elif ab == 2:  # pyrole cation
+                    double_bonded.add(n)
+                elif ab != 3:  # not pyridine oxyde
+                    raise InvalidAromaticRing
+            elif an == 8:  # furan
+                if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
+                    double_bonded.add(n)
+                else:
+                    raise InvalidAromaticRing
+            elif an in (16, 24):  # thiophene [not sulphoxyde or sulphone]
+                if n not in double_bonded:
+                    if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+            elif an == 5:  # boron
+                if ac == 0:
+                    if ab == 3 and not radicals[n] or ab == 2:
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                elif ac in (-1, 1) and ab == 2 and not radicals[n]:
+                    double_bonded.add(n)
+                else:
+                    raise InvalidAromaticRing
+            else:
+                raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se possible, not: {atoms[n].atomic_symbol}')
+
+        atoms = set(rings)
+        components = []
+        while atoms:
+            start = atoms.pop()
+            component = {n: rings[n] for n in self.__component(rings, start)}
+            components.append(component)
+            atoms.difference_update(component)
+
+        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
+                              for c in components)):
+            yield [x for x in keks for x in x]
+
+    @staticmethod
+    def __kekule_component(rings, double_bonded, pyroles):
+        # (current atom, previous atom, bond between cp atoms, path deep for cutting [None if cut impossible])
+        stack: List[List[Tuple[int, int, int, Optional[int]]]]
+        if double_bonded:  # start from double bonded if exists
+            start = next(iter(double_bonded))
+            stack = [[(next(iter(rings[start])), start, 1, 0)]]
+        else:  # select not pyrole not condensed atom
+            start = next(n for n, ms in rings.items() if len(ms) == 2 and n not in pyroles)
+            stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
+
+        size = sum(len(x) for x in rings.values()) // 2
+        path = []
+        hashed_path = set()
+        while stack:
+            atom, prev_atom, bond, _ = stack[-1].pop()
+            path.append((atom, prev_atom, bond))
+            hashed_path.add(atom)
+
+            if len(path) == size:
+                yield path
+                del stack[-1]
+                if stack:
+                    path = path[:stack[-1][-1][-1]]
+                    hashed_path = {x for x, *_ in path}
+            elif atom != start:  # we finished. next step is final closure
+                for_stack = []
+                closures = []
+                loop = 0
+                for next_atom in rings[atom]:
+                    if next_atom == prev_atom:  # only forward. behind us is the homeland
                         continue
+                    elif next_atom == start:
+                        loop = next_atom
+                    elif next_atom in hashed_path:  # closure found
+                        closures.append(next_atom)
+                    else:
+                        for_stack.append(next_atom)
 
-                    positions = _pyrole_pattern.get(key)
-                    if positions is None:
-                        continue
+                if loop:  # we found starting point.
+                    if bond == 2:  # finish should be single bonded
+                        if double_bonded:  # ok
+                            stack[-1].insert(0, (loop, atom, 1, None))
+                        else:
+                            del stack[-1]
+                            if stack:
+                                path = path[:stack[-1][-1][-1]]
+                                hashed_path = {x for x, *_ in path}
+                            continue
+                    elif double_bonded:  # we in quinone ring. finish should be single bonded
+                        # side-path for storing double bond or atom is quinone or pyrole
+                        if for_stack or atom in double_bonded or atom in pyroles:
+                            stack[-1].insert(0, (loop, atom, 1, None))
+                        else:
+                            del stack[-1]
+                            if stack:
+                                path = path[:stack[-1][-1][-1]]
+                                hashed_path = {x for x, *_ in path}
+                            continue
+                    else:  # finish should be double bonded
+                        stack[-1].insert(0, (loop, atom, 2, None))
+                        bond = 2  # grow should be single bonded
 
-                    for m, pos in enumerate(positions):
-                        if self._node[r[pos]]._atom in _pyrole_atoms:
-                            dear = _pyrole_fix[key][m]
-                            self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond], \
-                                self._adj[r4][r5][bond], self._adj[r5][r1][bond] = dear
-                            found.append(n)
+                if bond == 2 or atom in double_bonded:  # double in - single out. quinone has two single bonds
+                    for next_atom in closures:
+                        path.append((next_atom, atom, 1))  # closures always single-bonded
+                        stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
+                    for next_atom in for_stack:
+                        stack[-1].append((next_atom, atom, 1, None))
+                elif len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
+                    next_atom = for_stack[0]
+                    if next_atom in double_bonded:  # need double bond, but next atom quinone
+                        if atom in pyroles:
+                            stack[-1].append((next_atom, atom, 1, None))
+                        else:
+                            del stack[-1]
+                            if stack:
+                                path = path[:stack[-1][-1][-1]]
+                                hashed_path = {x for x, *_ in path}
+                    else:
+                        if atom in pyroles:  # try pyrole and pyridine
+                            opposite = stack[-1].copy()
+                            opposite.append((next_atom, atom, 1, None))
+                            stack[-1].append((next_atom, atom, 2, len(path)))
+                            stack.append(opposite)
+                        else:
+                            stack[-1].append((next_atom, atom, 2, None))
+                            if closures:
+                                next_atom = closures[0]
+                                path.append((next_atom, atom, 1))  # closures always single-bonded
+                                stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
+                elif for_stack:  # fork
+                    next_atom1, next_atom2 = for_stack
+                    if next_atom1 in double_bonded:  # quinone next from fork
+                        if next_atom2 in double_bonded:  # bad path
+                            del stack[-1]
+                            if stack:
+                                path = path[:stack[-1][-1][-1]]
+                                hashed_path = {x for x, *_ in path}
+                        else:
+                            stack[-1].append((next_atom1, atom, 1, None))
+                            stack[-1].append((next_atom2, atom, 2, None))
+                    elif next_atom2 in double_bonded:  # quinone next from fork
+                        stack[-1].append((next_atom2, atom, 1, None))
+                        stack[-1].append((next_atom1, atom, 2, None))
+                    else:  # new path
+                        opposite = stack[-1].copy()
+                        stack[-1].append((next_atom1, atom, 1, None))
+                        stack[-1].append((next_atom2, atom, 2, len(path)))
+                        opposite.append((next_atom2, atom, 1, None))
+                        opposite.append((next_atom1, atom, 2, None))
+                        stack.append(opposite)
+                elif closures and atom not in pyroles:  # need double bond, but closure should be single bonded
+                    del stack[-1]
+                    if stack:
+                        path = path[:stack[-1][-1][-1]]
+                        hashed_path = {x for x, *_ in path}
 
-            for n in found[::-1]:
-                del rings[n]
-            new = len(rings)
-        return init - old
-
-    def _aromatize(self, rings, bond):
-        rings = rings.copy()
-        init = len(rings)
-        old = 0
-        new = len(rings)
-        while new != old:
-            old = new
-            found = []
-            for n, r in enumerate(rings):
-                if len(r) == 6:
-                    r1, r2, r3, r4, r5, r6 = r
-                    if (self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                            self._adj[r4][r5][bond], self._adj[r5][r6][bond], self._adj[r6][r1][bond]) in _benzene:
-                        self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 4
-                        self._adj[r4][r5][bond] = self._adj[r5][r6][bond] = self._adj[r6][r1][bond] = 4
-                        found.append(n)
-                elif len(r) == 5:
-                    r1, r2, r3, r4, r5 = r
-                    position = _pyrole.get((self._adj[r1][r2][bond], self._adj[r2][r3][bond], self._adj[r3][r4][bond],
-                                            self._adj[r4][r5][bond], self._adj[r5][r1][bond]))
-
-                    if position is not None and self._node[r[position]]._atom in _pyrole_atoms:
-                        self._adj[r1][r2][bond] = self._adj[r2][r3][bond] = self._adj[r3][r4][bond] = 4
-                        self._adj[r4][r5][bond] = self._adj[r5][r1][bond] = 4
-                        found.append(n)
-
-            for n in found[::-1]:
-                del rings[n]
-            new = len(rings)
-        return init - old
-
-
-def _clock(a):
-    yield a
-    for _ in range(1, len(a)):
-        a = a[1:] + a[:1]
-        yield a
-
-
-_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P', C(-1))
-_benzene = set()
-_pyrole_pattern = defaultdict(list)
-_pyrole_fix = defaultdict(list)
-_pyrole = {}
-_quinone_pattern = {}
-_quinone_fix = {}
-
-
-_benzene.update(_clock((1, 2, 1, 2, 1, 2)))
-_benzene.update(_clock((1, 2, 1, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 1, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 1, 2, 4, 4)))
-_benzene.update(_clock((1, 2, 1, 4, 4, 2)))
-_benzene.update(_clock((1, 2, 1, 4, 1, 4)))
-_benzene.update(_clock((1, 2, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 1, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 1, 4, 4, 4)))
-_benzene.update(_clock((1, 2, 4, 4, 4, 2)))
-_benzene.update(_clock((1, 4, 1, 4, 1, 4)))
-_benzene.update(_clock((4, 2, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 2, 4, 4)))
-_benzene.update(_clock((1, 4, 4, 2, 4, 2)))
-_benzene.update(_clock((1, 2, 4, 4, 1, 4)))
-_benzene.update(_clock((1, 4, 4, 2, 1, 4)))
-_benzene.update(_clock((1, 2, 4, 4, 4, 4)))
-_benzene.update(_clock((1, 4, 4, 4, 4, 2)))
-_benzene.update(_clock((1, 4, 4, 4, 4, 4)))
-_benzene.update(_clock((4, 2, 4, 4, 4, 4)))
-
-_ind = (0, 4, 3, 2, 1)
-_pyrole.update(zip(_clock((1, 2, 1, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 1, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 1, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 4, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 1, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 4, 2, 1)), _ind))
-_pyrole.update(zip(_clock((1, 2, 4, 4, 1)), _ind))
-_pyrole.update(zip(_clock((1, 4, 4, 4, 1)), _ind))
-# fixes after quinonize
-_pyrole.update(zip(_clock((4, 2, 4, 4, 4)), _ind))
-_pyrole.update(zip(_clock((4, 4, 4, 2, 4)), _ind))
-_pyrole.update(zip(_clock((4, 2, 4, 2, 4)), _ind))
-_pyrole.update(zip(_clock((4, 4, 2, 4, 4)), _ind))
-
-_ind = ((0, 1), (0, 5), (4, 5), (3, 4), (2, 3), (1, 2))  # o-quinones
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((4, 4, 4, 2, 4, 4)),
-                 _clock((4, 4, 4, 4, 2, 4)),
-                 _clock((4, 4, 2, 4, 4, 4)),
-                 _clock((4, 4, 2, 4, 2, 4)),
-                 _clock((4, 4, 4, 1, 2, 4)),
-                 _clock((4, 4, 2, 1, 4, 4)),
-                 _clock((4, 4, 2, 1, 2, 4)),
-
-                 _clock((1, 4, 4, 4, 4, 4)),
-                 _clock((1, 4, 4, 2, 4, 4)),
-                 _clock((1, 4, 4, 4, 2, 4)),
-                 _clock((1, 4, 2, 4, 4, 4)),
-                 _clock((1, 4, 2, 4, 2, 4)),
-                 _clock((1, 4, 4, 1, 2, 4)),
-                 _clock((1, 4, 2, 1, 4, 4)),
-                 _clock((1, 4, 2, 1, 2, 4)),
-
-                 _clock((1, 1, 4, 4, 4, 4)),
-                 _clock((1, 4, 4, 4, 4, 1))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 1, 2, 1, 2, 1))))
-
-_ind = ((0, 1, 2, 3), (0, 1, 2, 5), (0, 1, 4, 5), (0, 3, 4, 5), (2, 3, 4, 5), (1, 2, 3, 4))  # 1,2,3,4-quinones
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((1, 4, 1, 4, 4, 4)),
-                 _clock((1, 4, 1, 4, 2, 4))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 1, 1, 1, 2, 1))))
-
-_ind = ((0, 3), (2, 5), (1, 4))  # p-quinones
-for i, *p in zip(_ind, repeat((4, 4, 4, 4, 4, 4)),
-                 _clock((4, 2, 4, 4, 4, 4)),
-                 _clock((4, 2, 4, 4, 2, 4))
-                 ):
-    _quinone_pattern[i] = set(p)
-
-_quinone_fix.update(zip(_ind, _clock((1, 2, 1, 1, 2, 1))))
-
-# pyroles condensed with quinones fixes
-_ind = (0, 4, 3, 2, 1)
-
-for i, *p in zip(_ind,
-                 zip(_clock((4, 1, 4, 4, 4)), _clock((1, 1, 1, 2, 1))),
-                 zip(_clock((4, 4, 4, 1, 4)), _clock((1, 2, 1, 1, 1))),
-                 zip(_clock((4, 1, 4, 2, 4)), _clock((1, 1, 1, 2, 1))),
-                 zip(_clock((4, 2, 4, 1, 4)), _clock((1, 2, 1, 1, 1))),
-                 zip(_clock((4, 1, 4, 1, 4)), repeat((1, 1, 1, 1, 1)))
-                 ):
-    for x, y in p:
-        _pyrole_pattern[x].append(i)
-        _pyrole_fix[x].append(y)
-
-_pyrole_pattern = dict(_pyrole_pattern)
-_pyrole_fix = dict(_pyrole_fix)
-
-
-del x, y, i, p, _ind
+    @staticmethod
+    def __component(bonds, start):
+        seen = {start}
+        queue = [start]
+        while queue:
+            start = queue.pop(0)
+            yield start
+            for i in bonds[start] - seen:
+                queue.append(i)
+                seen.add(i)
 
 
 __all__ = ['Aromatize']

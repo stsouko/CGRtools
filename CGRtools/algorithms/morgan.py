@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,15 +17,17 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_property
 from collections import Counter
 from functools import reduce
 from itertools import count
 from logging import warning
 from operator import mul, itemgetter
-from ..cache import cached_property
 
 
 class Morgan:
+    __slots__ = ()
+
     @cached_property
     def atoms_order(self):
         """
@@ -32,19 +35,21 @@ class Morgan:
 
         :return: dict of atom-weight pairs
         """
-        if not len(self):  # for empty containers
+        atoms = self._atoms
+        bonds = self._bonds
+        if not len(atoms):  # for empty containers
             return {}
-        elif len(self) == 1:  # optimize single atom containers
-            return dict.fromkeys(self, 2)
+        elif len(atoms) == 1:  # optimize single atom containers
+            return dict.fromkeys(atoms, 2)
 
-        params = {n: (int(node), tuple(sorted(int(edge) for edge in self._adj[n].values())))
-                  for n, node in self.atoms()}
+        params = {n: (int(node), tuple(sorted(int(edge) for edge in bonds[n].values())))
+                  for n, node in atoms.items()}
         newlevels = {}
         countprime = iter(primes)
         weights = {x: newlevels.get(y) or newlevels.setdefault(y, next(countprime))
                    for x, y in sorted(params.items(), key=itemgetter(1))}
 
-        tries = len(self) * 4
+        tries = len(atoms) * 4
 
         numb = len(set(weights.values()))
         stab = 0
@@ -55,13 +60,13 @@ class Morgan:
             countprime = iter(primes)
 
             # weights[n] ** 2 NEED for differentiation of molecules like A-B or any other complete graphs.
-            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in self._adj.items()}
+            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in bonds.items()}
 
             weights = {x: (neweights.get(y) or neweights.setdefault(y, next(countprime)))
                        for x, y in sorted(tmp.items(), key=itemgetter(1))}
 
             numb = len(set(weights.values()))
-            if numb == len(self):  # each atom now unique
+            if numb == len(atoms):  # each atom now unique
                 break
             elif numb == oldnumb:
                 x = Counter(weights.values())

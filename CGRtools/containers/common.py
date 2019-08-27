@@ -16,113 +16,67 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from abc import ABC
-from networkx import connected_components, Graph, relabel_nodes
-from networkx.classes.function import frozen
-from ..algorithms import Isomorphism, SSSR, Union
-from ..cache import cached_property, cached_args_method
-from ..periodictable import elements_list
+from abc import ABC, abstractmethod
+from CachedMethods import cached_property, cached_args_method
+from typing import Dict, Optional, Tuple, Iterable
+from ..algorithms.isomorphism import Isomorphism
+from ..algorithms.morgan import Morgan
+from ..algorithms.sssr import SSSR
 
 
-class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
-    __slots__ = ('graph', '_node', '_adj')
+class Graph(Isomorphism, SSSR, Morgan, ABC):
+    __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
+                 '_radicals')
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         """
         Empty data object initialization or conversion from another object type
         """
-        super().__init__(*args, **kwargs)
-
-    def __dir__(self):
-        return [] or super().__dir__()
+        self._atoms = {}
+        self._charges = {}
+        self._radicals = {}
+        self._plane = {}
+        self._bonds = {}
+        self._meta = {}
+        self._parsed_mapping = {}
 
     def __getstate__(self):
-        return {'meta': self.graph, 'node': self._node, 'adj': self._adj}
+        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane,
+                'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals}
 
     def __setstate__(self, state):
-        if 'graph' in state:  # 3.0.10 compatibility.
-            state['meta'] = state['graph']
-        self.graph = state['meta']
-        self._node = state['node']
-        self._adj = state['adj']
+        self._atoms = state['atoms']
+        for n, a in state['atoms'].items():
+            a._attach_to_graph(self, n)
+        self._charges = state['charges']
+        self._radicals = state['radicals']
+        self._plane = state['plane']
+        self._bonds = state['bonds']
+        self._meta = state['meta']
+        self._parsed_mapping = state['parsed_mapping']
+
+    def __len__(self):
+        return len(self._atoms)
+
+    def __iter__(self):
+        return iter(self._atoms)
 
     def atom(self, n):
-        return self._node[n]
+        return self._atoms[n]
 
-    def bond(self, n, m):
-        return self._adj[n][m]
-
-    @property
-    def meta(self):
-        return self.graph
-
-    @cached_property
-    def atoms_numbers(self):
-        return list(self._node)
+    def atoms(self):
+        """
+        iterate over all atoms
+        """
+        return iter(self._atoms.items())
 
     @cached_property
     def atoms_count(self):
-        return len(self)
+        return len(self._atoms)
 
     @cached_property
-    def bonds_count(self):
-        return self.size()
-
-    def add_atom(self, atom, _map=None):
-        """
-        new atom addition
-        """
-        if _map is None:
-            _map = max(self, default=0) + 1
-        elif _map in self._node:
-            raise KeyError('atom with same number exists')
-
-        attr_dict = self.node_attr_dict_factory()
-        if isinstance(atom, str):
-            attr_dict.element = atom
-        elif isinstance(atom, int):
-            attr_dict.element = elements_list[atom - 1]
-        else:
-            attr_dict.update(atom)
-
-        self._adj[_map] = self.adjlist_inner_dict_factory()
-        self._node[_map] = attr_dict
-        self.flush_cache()
-        return _map
-
-    def add_bond(self, atom1, atom2, bond):
-        """
-        implementation of bond addition
-        """
-        if atom1 == atom2:
-            raise KeyError('atom loops impossible')
-        if atom1 not in self._node or atom2 not in self._node:
-            raise KeyError('atoms not found')
-        if atom1 in self._adj[atom2]:
-            raise KeyError('atoms already bonded')
-
-        attr_dict = self.edge_attr_dict_factory()
-        if isinstance(bond, int):
-            attr_dict.order = bond
-        else:
-            attr_dict.update(bond)
-
-        self._adj[atom1][atom2] = self._adj[atom2][atom1] = attr_dict
-        self.flush_cache()
-
-    def delete_atom(self, n):
-        """
-        implementation of atom removing
-        """
-        self.remove_node(n)
-        self.flush_cache()
-
-    def delete_bond(self, n, m):
-        """
-        implementation of bond removing
-        """
-        self.remove_edge(n, m)
-        self.flush_cache()
+    def atoms_numbers(self):
+        return list(self._atoms)
 
     @cached_args_method
     def environment(self, atom):
@@ -132,67 +86,237 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         :param atom: number
         :return: list
         """
-        return tuple((bond, self._node[n]) for n, bond in self._adj[atom].items())
+        atoms = self._atoms
+        return tuple((bond, atoms[n]) for n, bond in self._bonds[atom].items())
 
-    def substructure(self, atoms, meta=False, as_view=True):
-        """
-        create substructure containing atoms from nbunch list
+    def bond(self, n, m):
+        return self._bonds[n][m]
 
-        :param atoms: list of atoms numbers of substructure
-        :param meta: if True metadata will be copied to substructure
-        :param as_view: If True, the returned graph-view provides a read-only view
-            of the original structure scaffold without actually copying any data.
+    def bonds(self):
         """
-        s = self.subgraph(atoms)
-        if as_view:
-            s.add_atom = s.add_bond = s.delete_atom = s.delete_bond = frozen  # more informative exception
-            return s
-        s = s.copy()
-        if not meta:
-            s.graph.clear()
-        return s
+        iterate other all bonds
+        """
+        seen = set()
+        for n, m_bond in self._bonds.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    yield n, m, bond
 
-    def augmented_substructure(self, atoms, dante=False, deep=1, meta=False, as_view=True):
-        """
-        create substructure containing atoms and their neighbors
+    @cached_property
+    def bonds_count(self):
+        return sum(len(x) for x in self._bonds.values()) // 2
 
-        :param atoms: list of core atoms in graph
-        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
-            etc up to deep or while new nodes available
-        :param deep: number of bonds between atoms and neighbors
-        :param meta: copy metadata to each substructure
-        :param as_view: If True, the returned graph-view provides a read-only view
-            of the original graph without actually copying any data
-        """
-        nodes = [set(atoms)]
-        for i in range(deep):
-            n = {y for x in nodes[-1] for y in self._adj[x]} | nodes[-1]
-            if n in nodes:
-                break
-            nodes.append(n)
-        if dante:
-            return [self.substructure(a, meta, as_view) for a in nodes]
-        else:
-            return self.substructure(nodes[-1], meta, as_view)
+    @property
+    def meta(self):
+        return self._meta
 
     @cached_property
     def connected_components(self):
-        return [list(x) for x in connected_components(self)]
+        if not self._atoms:
+            return []
+        atoms = set(self._atoms)
+        components = []
+        while atoms:
+            start = atoms.pop()
+            component = list(self.__component(start))
+            components.append(component)
+            atoms.difference_update(component)
+        return components
 
-    def split(self, meta=False):
+    @property
+    def connected_components_count(self):
+        return len(self.connected_components)
+
+    @abstractmethod
+    def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
+                 is_radical: bool = False, xy: Tuple[float, float] = (0., 0.)) -> int:
         """
-        split disconnected structure to connected substructures
-
-        :param meta: copy metadata to each substructure
-        :return: list of substructures
+        new atom addition
         """
-        return [self.substructure(c, meta, False) for c in connected_components(self)]
+        if _map is None:
+            _map = max(self._atoms, default=0) + 1
+        elif not isinstance(_map, int):
+            raise TypeError('mapping should be integer')
+        elif _map in self._atoms:
+            raise ValueError('atom with same number exists')
 
-    def remap(self, mapping, copy=False):
-        return relabel_nodes(self, mapping, copy)
+        if not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
+            raise TypeError('XY should be tuple with 2 float')
+        if not isinstance(charge, int):
+            raise TypeError('formal charge should be int in range [-4, 4]')
+        if charge > 4 or charge < -4:
+            raise ValueError('formal charge should be in range [-4, 4]')
+        if not isinstance(is_radical, bool):
+            raise TypeError('radical state should be bool')
 
-    def flush_cache(self):
+        self._atoms[_map] = atom
+        self._charges[_map] = charge
+        self._radicals[_map] = is_radical
+        self._plane[_map] = xy
+        self._bonds[_map] = {}
+        atom._attach_to_graph(self, _map)
         self.__dict__.clear()
+        return _map
+
+    @abstractmethod
+    def add_bond(self, n: int, m: int, bond):
+        """
+        new bond addition
+        """
+        if n == m:
+            raise KeyError('atom loops impossible')
+        if n not in self._bonds or m not in self._bonds:
+            raise KeyError('atoms not found')
+        if n in self._bonds[m]:
+            raise KeyError('atoms already bonded')
+
+        self._bonds[n][m] = self._bonds[m][n] = bond
+        self.__dict__.clear()
+
+    @abstractmethod
+    def delete_atom(self, n: int):
+        """
+        implementation of atom removing
+        """
+        del self._atoms[n]
+        del self._charges[n]
+        del self._radicals[n]
+        del self._plane[n]
+        sb = self._bonds
+        for m in sb.pop(n):
+            del sb[m][n]
+        try:
+            del self._parsed_mapping[n]
+        except KeyError:
+            pass
+        self.__dict__.clear()
+
+    def delete_bond(self, n: int, m: int):
+        """
+        implementation of bond removing
+        """
+        del self._bonds[n][m]
+        del self._bonds[m][n]
+        self.__dict__.clear()
+
+    @abstractmethod
+    def remap(self, mapping: Dict[int, int], *, copy: bool = False):
+        if len(mapping) != len(set(mapping.values())):
+            raise ValueError('mapping overlap')
+
+        mg = mapping.get
+        sp = self._plane
+        sc = self._charges
+        sr = self._radicals
+
+        if copy:
+            h = self.__class__()
+            h._meta.update(self._meta)
+            hb = h._bonds
+            ha = h._atoms
+            hc = h._charges
+            hr = h._radicals
+            hp = h._plane
+            hm = h._parsed_mapping
+            for n, atom in self._atoms.items():
+                m = mg(n, n)
+                hc[m] = sc[n]
+                hr[m] = sr[n]
+                hp[m] = sp[n]
+                ha[m] = atom = atom.copy()
+                atom._attach_to_graph(h, m)
+        else:
+            hb = {}
+            ha = {}
+            hc = {}
+            hr = {}
+            hp = {}
+            hm = {}
+            for n, atom in self._atoms.items():
+                m = mg(n, n)
+                hc[m] = sc[n]
+                hr[m] = sr[n]
+                hp[m] = sp[n]
+                ha[m] = atom
+                atom._change_map(m)  # change mapping number
+            self._atoms = ha
+            self._charges = hc
+            self._radicals = hr
+            self._plane = hp
+
+        for n, m_bond in self._bonds.items():
+            hb[mg(n, n)] = {mg(m, m): b for m, b in m_bond.items()}
+
+        for n, m in self._parsed_mapping.items():
+            hm[mg(n, n)] = m
+
+        if copy:
+            return h
+
+        self._bonds = hb
+        self._parsed_mapping = hm
+        return self
+
+    @abstractmethod
+    def copy(self, *, meta: bool = True):
+        """
+        copy of graph
+
+        :param meta: include metadata
+        """
+        copy = object.__new__(self.__class__)
+        copy.__dict__ = {}
+        copy._meta = self._meta.copy() if meta else {}
+
+        copy._charges = self._charges.copy()
+        copy._radicals = self._radicals.copy()
+        copy._plane = self._plane.copy()
+        copy._parsed_mapping = self._parsed_mapping.copy()
+
+        copy._bonds = cb = {n: {} for n in self._bonds}
+        seen = set()
+        for n, m_bond in self._bonds.items():
+            seen.add(n)
+            for m, bond in m_bond.items():
+                if m not in seen:
+                    cb[n][m] = cb[m][n] = bond.copy()
+
+        copy._atoms = ca = {}
+        for n, atom in self._atoms.items():
+            ca[n] = atom = atom.copy()
+            atom._attach_to_graph(copy, n)
+        return copy
+
+    @abstractmethod
+    def substructure(self, atoms: Iterable[int], sub: 'Graph', *, meta: bool = False):
+        if not atoms:
+            raise ValueError('empty atoms list not allowed')
+        if set(atoms) - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        atoms = tuple(n for n in self._atoms if n in atoms)  # save original order
+        sub = object.__new__(sub)
+
+        sc = self._charges
+        sr = self._radicals
+        sp = self._plane
+        sb = self._bonds
+
+        sub._meta = self._meta.copy() if meta else {}
+        sub._charges = {n: sc[n] for n in atoms}
+        sub._radicals = {n: sr[n] for n in atoms}
+        sub._plane = {n: sp[n] for n in atoms}
+        sub._parsed_mapping = {n: m for n, m in self._parsed_mapping.items() if n in atoms}
+
+        sub._bonds = cb = {n: {} for n in atoms}
+        seen = set()
+        for n in atoms:
+            seen.add(n)
+            for m, bond in sb[n].items():
+                if m not in seen and m in atoms:
+                    cb[n][m] = cb[m][n] = bond.copy()
+
+        return sub, atoms
 
     def __and__(self, other):
         """
@@ -205,33 +329,85 @@ class BaseContainer(Graph, Isomorphism, SSSR, Union, ABC):
         other nodes excluded substructure of graph
         :return graph or None
         """
-        n = self._node.keys() - set(other)
-        if n:
-            return self.substructure(n)
+        atoms = set(other)
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        atoms = self._atoms.keys() - atoms
+        if atoms:
+            return self.substructure(atoms)
+        raise ValueError('full substitution not allowed')
 
-    def atoms(self):
+    def augmented_substructure(self, atoms, dante=False, deep=1, **kwargs):
         """
-        iterate over all atoms
-        """
-        return iter(self._node.items())
+        create substructure containing atoms and their neighbors
 
-    def bonds(self):
+        :param atoms: list of core atoms in graph
+        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
+            etc up to deep or while new nodes available
+        :param deep: number of bonds between atoms and neighbors
+        :param meta: copy metadata to each substructure
+        :param as_query: return Query object based on graph substructure. for Molecule and CGR only
         """
-        iterate other all bonds
+        atoms = set(atoms)
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        nodes = [atoms]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+        if dante:
+            return [self.substructure(a, **kwargs) for a in nodes]
+        else:
+            return self.substructure(nodes[-1], **kwargs)
+
+    def union(self, other: 'Graph') -> 'Graph':
+        if self._atoms.keys() & other._atoms.keys():
+            raise KeyError('mapping of graphs is not disjoint')
+
+        u = self.copy(meta=False)
+        u._charges.update(other._charges)
+        u._radicals.update(other._radicals)
+        u._plane.update(other._plane)
+        u._parsed_mapping.update(other._parsed_mapping)
+        return u
+
+    def __or__(self, other):
         """
-        seen = set()
-        for n, m_bond in self._adj.items():
-            seen.add(n)
-            for m, bond in m_bond.items():
-                if m not in seen:
-                    yield n, m, bond
+        G | H is union of graphs
+        """
+        return self.union(other)
+
+    def split(self, meta=False):
+        """
+        split disconnected structure to connected substructures
+
+        :param meta: copy metadata to each substructure
+        :return: list of substructures
+        """
+        return [self.substructure(c, meta=meta) for c in self.connected_components]
+
+    def flush_cache(self):
+        self.__dict__.clear()
+
+    def __component(self, start):
+        bonds = self._bonds
+        seen = {start}
+        queue = [start]
+        while queue:
+            start = queue.pop(0)
+            yield start
+            for i in bonds[start].keys() - seen:
+                queue.append(i)
+                seen.add(i)
 
     @staticmethod
     def _get_subclass(name):
         """
         need for cyclic import solving
         """
-        return next(x for x in BaseContainer.__subclasses__() if x.__name__ == name)
+        return next(x for x in Graph.__subclasses__() if x.__name__ == name)
 
 
-__all__ = ['BaseContainer']
+__all__ = ['Graph']

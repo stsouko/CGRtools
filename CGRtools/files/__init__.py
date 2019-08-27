@@ -26,4 +26,4 @@ from .SDFrw import *
 from .SMILESrw import *
 
 
-__all__ = [x for x in locals() if x.endswith(('read', 'write'))]
+__all__ = [x for x in locals() if x.endswith(('Read', 'Write'))]
