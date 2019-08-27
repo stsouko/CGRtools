@@ -70,14 +70,13 @@ class SSSR:
                 bonds[m].discard(n)
         return bonds
 
-    def _closures(self):
-        adj = self._adj
-        atoms = self.skin_atoms_set
-        n_sssr = sum(1 for x in atoms for _ in adj[x].keys() & atoms) // 2 - len(atoms) + 1
-
-        tail = atoms.pop()
-        next_stack = {x: [((tail, x), ())] for x in adj[tail].keys() & atoms}
+    @staticmethod
+    def __bfs(bonds):
+        n_sssr = sum(len(x) for x in bonds.values()) // 2 - len(bonds) + 1
+        atoms = set(bonds)
         terminated = {}
+        tail = atoms.pop()
+        next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
 
         while True:
             next_front = set()
@@ -85,7 +84,7 @@ class SSSR:
             stack, next_stack = next_stack, {}
             for tail, broom in stack.items():
                 next_front.add(tail)
-                neighbors = adj[tail].keys() & atoms
+                neighbors = bonds[tail] & atoms
                 if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
@@ -129,71 +128,7 @@ class SSSR:
             elif not next_stack:
                 n_sssr += 1
                 tail = atoms.pop()
-                next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
-        return terminated, n_sssr
-
-    @staticmethod
-    def __bfs(bonds):
-        n_sssr = sum(len(x) for x in bonds.values()) // 2 - len(bonds) + 1
-        atoms = set(bonds)
-        terminated = {}
-        tail = atoms.pop()
-        next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
-
-        while True:
-            next_front = set()
-            found_odd = set()
-            stack, next_stack = next_stack, {}
-            for broom in stack.values():
-                tail = broom[0][-1]
-                next_front.add(tail)
-                neighbors = bonds[tail] & atoms
-                if len(neighbors) == 1:
-                    n = neighbors.pop()
-                    if n in found_odd:
-                        continue
-                    next_broom = [branch + [n] for branch in broom]
-                    if n in stack:  # odd rings
-                        found_odd.add(tail)
-                        if n in next_stack:
-                            next_stack[n].extend(next_broom)
-                        else:
-                            stack[n].extend(next_broom)  # not visited
-                            terminated[n] = stack[n]
-                    elif n in next_stack:  # even rings
-                        next_stack[n].extend(next_broom)
-                        if n not in terminated:
-                            terminated[n] = next_stack[n]
-                    else:
-                        next_stack[n] = next_broom
-                elif neighbors:
-                    for n in neighbors:
-                        if n in found_odd:
-                            continue
-                        next_broom = [[tail, n]]
-                        for branch in broom:
-                            next_broom.append(branch + [n])
-                        if n in stack:  # odd rings
-                            found_odd.add(tail)
-                            if n in next_stack:
-                                next_stack[n].extend(next_broom)
-                            else:
-                                stack[n].extend(next_broom)  # not visited
-                                terminated[n] = stack[n]
-                        elif n in next_stack:  # even rings
-                            next_stack[n].extend(next_broom)
-                            if n not in terminated:
-                                terminated[n] = next_stack[n]
-                        else:
-                            next_stack[n] = next_broom
-
-            atoms.difference_update(next_front)
-            if not atoms:
-                break
-            elif not next_stack:
-                n_sssr += 1
-                tail = atoms.pop()
-                next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
+                next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
         return terminated, n_sssr
 
     @staticmethod
