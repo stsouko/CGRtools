@@ -16,8 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Set, List
-from ..cache import cached_property
+from CachedMethods import cached_property
+from typing import Set, List, Dict, Union, Any
 
 
 class SSSR:
@@ -27,27 +27,48 @@ class SSSR:
         Proceedings of the National Academy of Sciences of the United States of America, 106(41), 17355–17358.
         http://doi.org/10.1073/pnas.0813040106
     """
-    @cached_property
-    def skin_atoms_set(self) -> Set[int]:
-        adj = self._adj
-        if len(adj) < 3:
-            return set()
-
-        atoms = {x for x, y in adj.items() if y}  # ignore isolated atoms
-        terminals = {x for x, y in adj.items() if len(y) == 1}
-        if terminals:
-            bubble = terminals
-            while True:
-                bubble = {y for x in bubble for y in adj[x].keys() - terminals if len(adj[y].keys() - terminals) < 2}
-                if not bubble:
-                    break
-                terminals.update(bubble)
-            atoms.difference_update(terminals)  # skip not-cycle chains
-        return atoms
+    __slots__ = ()
 
     @cached_property
     def skin_atoms(self) -> List[int]:
-        return list(self.skin_atoms_set)
+        """
+        atoms of rings and rings linkers [without terminal atoms]
+        """
+        return list(self.__shave(self._bonds))
+
+    @cached_property
+    def sssr(self) -> List[List[int]]:
+        """
+        Smallest Set of Smallest Rings
+
+        :return rings atoms numbers
+        """
+        # ignore isolated atoms. optimization.
+        return self._sssr(self._bonds)
+
+    @classmethod
+    def _sssr(cls, bonds: Dict[int, Union[List[int], Set[int], Dict[int, Any]]]) -> List[List[int]]:
+        """
+        Smallest Set of Smallest Rings of any adjacency matrix
+        """
+        bonds = cls.__shave(bonds)
+        if bonds:
+            terminated, n_sssr = cls.__bfs(bonds)
+            if n_sssr:
+                return cls.__pid(terminated, n_sssr)
+        return []
+
+    @staticmethod
+    def __shave(bonds):
+        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
+        while True:  # skip not-cycle chains
+            try:
+                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
+            except StopIteration:
+                break
+            for m in bonds.pop(n):
+                bonds[m].discard(n)
+        return bonds
 
     def _closures(self):
         adj = self._adj
@@ -111,15 +132,72 @@ class SSSR:
                 next_stack = {x: [[tail, x]] for x in adj[tail].keys() & atoms}
         return terminated, n_sssr
 
-    @cached_property
-    def sssr(self):
-        if not self.skin_atoms_set:
-            return []
+    @staticmethod
+    def __bfs(bonds):
+        n_sssr = sum(len(x) for x in bonds.values()) // 2 - len(bonds) + 1
+        atoms = set(bonds)
+        terminated = {}
+        tail = atoms.pop()
+        next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
 
-        terminated, n_sssr = self._closures()
-        if not n_sssr:
-            return []
+        while True:
+            next_front = set()
+            found_odd = set()
+            stack, next_stack = next_stack, {}
+            for broom in stack.values():
+                tail = broom[0][-1]
+                next_front.add(tail)
+                neighbors = bonds[tail] & atoms
+                if len(neighbors) == 1:
+                    n = neighbors.pop()
+                    if n in found_odd:
+                        continue
+                    next_broom = [branch + [n] for branch in broom]
+                    if n in stack:  # odd rings
+                        found_odd.add(tail)
+                        if n in next_stack:
+                            next_stack[n].extend(next_broom)
+                        else:
+                            stack[n].extend(next_broom)  # not visited
+                            terminated[n] = stack[n]
+                    elif n in next_stack:  # even rings
+                        next_stack[n].extend(next_broom)
+                        if n not in terminated:
+                            terminated[n] = next_stack[n]
+                    else:
+                        next_stack[n] = next_broom
+                elif neighbors:
+                    for n in neighbors:
+                        if n in found_odd:
+                            continue
+                        next_broom = [[tail, n]]
+                        for branch in broom:
+                            next_broom.append(branch + [n])
+                        if n in stack:  # odd rings
+                            found_odd.add(tail)
+                            if n in next_stack:
+                                next_stack[n].extend(next_broom)
+                            else:
+                                stack[n].extend(next_broom)  # not visited
+                                terminated[n] = stack[n]
+                        elif n in next_stack:  # even rings
+                            next_stack[n].extend(next_broom)
+                            if n not in terminated:
+                                terminated[n] = next_stack[n]
+                        else:
+                            next_stack[n] = next_broom
 
+            atoms.difference_update(next_front)
+            if not atoms:
+                break
+            elif not next_stack:
+                n_sssr += 1
+                tail = atoms.pop()
+                next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
+        return terminated, n_sssr
+
+    @staticmethod
+    def __pid(terminated, n_sssr):
         pid1 = {}
         pid2 = {}
         for j, paths in terminated.items():
