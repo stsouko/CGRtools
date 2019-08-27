@@ -43,7 +43,7 @@ class Zn(Element, PeriodIV, GroupXII):
 
     @property
     def _valences_exceptions(self):
-        return ((2, False, 0, ()),
+        return ((2, False, 0, ()), (1, False, 0, ((1, 'C'),)),
                 (-2, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))),  # Zn[(OH)4]2-
                 (-2, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))),  # Zn[(CN)4]2-
                 (-2, False, 0, ((1, 'N'), (1, 'N'), (1, 'N'), (1, 'N'))),  # Zn[(NCS)4]2-

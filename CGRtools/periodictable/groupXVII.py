@@ -44,7 +44,7 @@ class F(Element, PeriodII, GroupXVII):
 
     @property
     def _valences_exceptions(self):
-        return ()
+        return (-1, False, 0, ()),
 
 
 class Cl(Element, PeriodIII, GroupXVII):
