@@ -20,6 +20,7 @@ from CachedMethods import cached_args_method, cached_property, class_cached_prop
 from collections import defaultdict
 from typing import List, Union, Tuple
 from . import cgr, query  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
@@ -27,37 +28,6 @@ from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
-
-
-class Bond:
-    __slots__ = ('__order',)
-
-    def __init__(self, order):
-        if not isinstance(order, int):
-            raise TypeError('invalid order value')
-        if order not in (1, 4, 2, 3, 8):
-            raise ValueError('order should be from [1, 2, 3, 4, 8]')
-        self.__order = order
-
-    def __eq__(self, other):
-        if isinstance(other, Bond):
-            return self.__order == other.order
-        return False
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.__order})'
-
-    def __int__(self):
-        return self.__order
-
-    @property
-    def order(self):
-        return self.__order
-
-    def copy(self):
-        copy = object.__new__(self.__class__)
-        copy._Bond__order = self.__order
-        return copy
 
 
 class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
@@ -387,7 +357,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
@@ -396,7 +366,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is formed bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
                         bonds.append((n, m, bond))
             for n in common:
@@ -414,7 +384,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
-                        bond = object.__new__(cgr.DynamicBond)
+                        bond = object.__new__(DynamicBond)
                         bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
                         bonds.append((n, m, bond))
         elif isinstance(other, cgr.CGRContainer):
@@ -435,7 +405,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
@@ -445,7 +415,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                         if m in common:  # bond to common atoms is formed bond
                             order = bond.p_order
                             if order:  # skip broken bond. X>None => None>None
-                                bond = object.__new__(cgr.DynamicBond)
+                                bond = object.__new__(DynamicBond)
                                 bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
                                 bonds.append((n, m, bond))
                         else:
@@ -466,7 +436,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n], p_is_radical=opr[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
-                        bond = object.__new__(cgr.DynamicBond)
+                        bond = object.__new__(DynamicBond)
                         bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
                         bonds.append((n, m, bond))
         else:

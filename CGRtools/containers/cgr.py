@@ -21,55 +21,12 @@ from CachedMethods import cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple
 from . import cgr_query as query, molecule  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.depict import DepictCGR
 from ..algorithms.smiles import CGRSmiles
 from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
-
-
-class DynamicBond:
-    __slots__ = ('__order', '__p_order')
-
-    def __init__(self, order=None, p_order=None):
-        if order is None:
-            if not isinstance(p_order, int):
-                raise TypeError('p_order should be int type')
-        elif not isinstance(order, int):
-            raise TypeError('order should be int type or None')
-        elif p_order is not None and not isinstance(p_order, int):
-            raise TypeError('p_order should be int type or None')
-
-        if order not in (1, 4, 2, 3, None, 8) or p_order not in (1, 4, 2, 3, None, 8):
-            raise ValueError('order or p_order should be from [1, 2, 3, 4, 8]')
-
-        self.__order = order
-        self.__p_order = p_order
-
-    def __eq__(self, other):
-        if isinstance(other, DynamicBond):
-            return self.__order == other.order and self.__p_order == other.p_order
-        return False
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
-
-    def __int__(self):
-        return (self.__order or 0) << 4 | (self.__p_order or 0)
-
-    @property
-    def order(self):
-        return self.__order
-
-    @property
-    def p_order(self):
-        return self.__p_order
-
-    def copy(self):
-        copy = object.__new__(self.__class__)
-        copy._DynamicBond__order = self.__order
-        copy._DynamicBond__p_order = self.__p_order
-        return copy
 
 
 class CGRContainer(Graph, CGRSmiles, DepictCGR):
@@ -112,11 +69,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_hybridizations[_map] = 1
         return _map
 
-    def add_bond(self, n, m, bond: Union[DynamicBond, 'molecule.Bond', int]):
+    def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
         if isinstance(bond, DynamicBond):
             order = bond.order
             p_order = bond.p_order
-        elif isinstance(bond, molecule.Bond):
+        elif isinstance(bond, Bond):
             order = p_order = bond.order
             bond = object.__new__(DynamicBond)
             bond._DynamicBond__order = bond._DynamicBond__p_order = order

@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from collections.abc import Mapping
-from typing import Optional, Tuple, Dict, Set, List
+from typing import Optional, Tuple, Dict, Set, List, Type
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
 
@@ -217,7 +217,7 @@ class Element(Core):
             raise IsNotConnectedAtom
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['Element']:
         """
         get Element class by its symbol
         """
@@ -228,7 +228,7 @@ class Element(Core):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['Element']:
         """
         get Element class by its number
         """
@@ -351,7 +351,7 @@ class DynamicElement(Core, Dynamic):
         return self.__class__.__name__[7:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['DynamicElement']:
         """
         get DynamicElement class by its symbol
         """
@@ -362,7 +362,7 @@ class DynamicElement(Core, Dynamic):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['DynamicElement']:
         """
         get DynamicElement class by its number
         """
@@ -396,7 +396,7 @@ class QueryElement(Core):
         return self.__class__.__name__[5:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['QueryElement']:
         """
         get Element class by its symbol
         """
@@ -407,7 +407,7 @@ class QueryElement(Core):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['QueryElement']:
         """
         get Element class by its number
         """
@@ -466,7 +466,7 @@ class DynamicQueryElement(Core, Dynamic):
         return self.__class__.__name__[12:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['DynamicQueryElement']:
         """
         get Element class by its symbol
         """
@@ -477,7 +477,7 @@ class DynamicQueryElement(Core, Dynamic):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['DynamicQueryElement']:
         """
         get Element class by its number
         """

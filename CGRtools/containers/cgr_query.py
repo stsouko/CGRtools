@@ -18,6 +18,7 @@
 #
 from typing import List, Union, Tuple
 from . import cgr, molecule, query  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.smiles import QueryCGRSmiles
 from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement
@@ -138,13 +139,13 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_hybridizations[_map] = p_hybridization
         return _map
 
-    def add_bond(self, n, m, bond: Union['cgr.DynamicBond', 'molecule.Bond', int]):
-        if not isinstance(bond, cgr.DynamicBond):
-            if isinstance(bond, molecule.Bond):
-                bond = object.__new__(cgr.DynamicBond)
+    def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
+        if not isinstance(bond, DynamicBond):
+            if isinstance(bond, Bond):
+                bond = object.__new__(DynamicBond)
                 bond._DynamicBond__order = bond._DynamicBond__p_order = bond.order
             else:
-                bond = cgr.DynamicBond(bond)
+                bond = DynamicBond(bond)
         super().add_bond(n, m, bond)
 
     def delete_atom(self, n):
@@ -317,7 +318,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
                 seen.add(n)
                 for m, bond in m_bond.items():
                     if m not in seen:
-                        ub[n][m] = ub[m][n] = bc = object.__new__(cgr.DynamicBond)
+                        ub[n][m] = ub[m][n] = bc = object.__new__(DynamicBond)
                         bc._DynamicBond__order = bc._DynamicBond__p_order = bond.order
             return u
         else:

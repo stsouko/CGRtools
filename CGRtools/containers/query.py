@@ -18,6 +18,7 @@
 #
 from typing import List, Tuple, Union
 from . import cgr, molecule  # cyclic imports resolve
+from .bonds import Bond
 from .common import Graph
 from ..algorithms.smiles import QuerySmiles
 from ..periodictable import Element, QueryElement
@@ -86,9 +87,9 @@ class QueryContainer(Graph, QuerySmiles):
         self._bonds_stereo[_map] = {}
         return _map
 
-    def add_bond(self, n, m, bond: Union['molecule.Bond', int]):
-        if not isinstance(bond, molecule.Bond):
-            bond = molecule.Bond(bond)
+    def add_bond(self, n, m, bond: Union[Bond, int]):
+        if not isinstance(bond, Bond):
+            bond = Bond(bond)
         super().add_bond(n, m, bond)
 
         sbs = self._bonds_stereo
@@ -303,7 +304,7 @@ class QueryContainer(Graph, QuerySmiles):
                     if m in bonds:
                         bn[m] = bonds[m][n]
                     else:
-                        bn[m] = molecule.Bond(bond.order)
+                        bn[m] = Bond(bond.order)
 
             state['plane'] = {n: a.xy for n, a in state['node'].items()}
             state['atoms_stereo'] = {}

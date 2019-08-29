@@ -18,10 +18,12 @@
 #
 from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
-from typing import Dict, Optional, Tuple, Iterable
+from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List
+from .bonds import Bond, DynamicBond
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
+from ..periodictable.element import Core
 
 
 class Graph(Isomorphism, SSSR, Morgan, ABC):
@@ -32,13 +34,13 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
         """
         Empty data object initialization or conversion from another object type
         """
-        self._atoms = {}
-        self._charges = {}
-        self._radicals = {}
-        self._plane = {}
-        self._bonds = {}
+        self._atoms: Dict[int, Core] = {}
+        self._charges: Dict[int, int] = {}
+        self._radicals: Dict[int, bool] = {}
+        self._plane: Dict[int, Tuple[float, float]] = {}
+        self._bonds: Dict[int, Dict[int, Union[Bond, DynamicBond]]] = {}
         self._meta = {}
-        self._parsed_mapping = {}
+        self._parsed_mapping: Dict[int, int] = {}
 
     def __getstate__(self):
         return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane,
@@ -61,38 +63,37 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
     def __iter__(self):
         return iter(self._atoms)
 
-    def atom(self, n):
+    def atom(self, n: int) -> Core:
         return self._atoms[n]
 
-    def atoms(self):
+    def atoms(self) -> Iterator[Tuple[int, Core]]:
         """
         iterate over all atoms
         """
         return iter(self._atoms.items())
 
     @cached_property
-    def atoms_count(self):
+    def atoms_count(self) -> int:
         return len(self._atoms)
 
     @cached_property
-    def atoms_numbers(self):
-        return list(self._atoms)
+    def atoms_numbers(self) -> Tuple[int]:
+        return tuple(self._atoms)
 
     @cached_args_method
-    def environment(self, atom):
+    def environment(self, atom: int) -> Tuple[Tuple[Union[Bond, DynamicBond], Core], ...]:
         """
         pairs of (bond, atom) connected to atom
 
         :param atom: number
-        :return: list
         """
         atoms = self._atoms
         return tuple((bond, atoms[n]) for n, bond in self._bonds[atom].items())
 
-    def bond(self, n, m):
+    def bond(self, n: int, m: int) -> Union[Bond, DynamicBond]:
         return self._bonds[n][m]
 
-    def bonds(self):
+    def bonds(self) -> Iterator[Tuple[int, int, Union[Bond, DynamicBond]]]:
         """
         iterate other all bonds
         """
@@ -104,28 +105,28 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
                     yield n, m, bond
 
     @cached_property
-    def bonds_count(self):
+    def bonds_count(self) -> int:
         return sum(len(x) for x in self._bonds.values()) // 2
 
     @property
-    def meta(self):
+    def meta(self) -> Dict:
         return self._meta
 
     @cached_property
-    def connected_components(self):
+    def connected_components(self) -> Tuple[Tuple[int, ...], ...]:
         if not self._atoms:
-            return []
+            return ()
         atoms = set(self._atoms)
         components = []
         while atoms:
             start = atoms.pop()
-            component = list(self.__component(start))
+            component = tuple(self.__component(start))
             components.append(component)
             atoms.difference_update(component)
-        return components
+        return tuple(components)
 
     @property
-    def connected_components_count(self):
+    def connected_components_count(self) -> int:
         return len(self.connected_components)
 
     @abstractmethod
@@ -337,30 +338,29 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
             return self.substructure(atoms)
         raise ValueError('full substitution not allowed')
 
-    def augmented_substructure(self, atoms, dante=False, deep=1, **kwargs):
+    def augmented_substructure(self, atoms: Iterable[int], deep: int = 1, **kwargs) -> 'Graph':
         """
         create substructure containing atoms and their neighbors
 
         :param atoms: list of core atoms in graph
-        :param dante: if True return list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
-            etc up to deep or while new nodes available
         :param deep: number of bonds between atoms and neighbors
         :param meta: copy metadata to each substructure
         :param as_query: return Query object based on graph substructure. for Molecule and CGR only
         """
-        atoms = set(atoms)
-        if atoms - self._atoms.keys():
-            raise ValueError('invalid atom numbers')
-        nodes = [atoms]
-        for i in range(deep):
-            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
-            if n in nodes:
-                break
-            nodes.append(n)
-        if dante:
-            return [self.substructure(a, **kwargs) for a in nodes]
-        else:
-            return self.substructure(nodes[-1], **kwargs)
+        return self.substructure(self.__augmented_substructure(atoms, deep)[-1], **kwargs)
+
+    def augmented_substructures(self, atoms: Iterable[int], deep: int = 1, **kwargs) -> List['Graph']:
+        """
+        create list of substructures containing atoms and their neighbors
+
+        :param atoms: list of core atoms in graph
+        :param deep: number of bonds between atoms and neighbors
+        :param meta: copy metadata to each substructure
+        :param as_query: return Query object based on graph substructure. for Molecule and CGR only
+        :return: list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
+            etc up to deep or while new nodes available
+        """
+        return [self.substructure(a, **kwargs) for a in self.__augmented_substructure(atoms, deep)]
 
     def union(self, other: 'Graph') -> 'Graph':
         if self._atoms.keys() & other._atoms.keys():
@@ -379,7 +379,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
         """
         return self.union(other)
 
-    def split(self, meta=False):
+    def split(self, meta: bool = False) -> List['Graph']:
         """
         split disconnected structure to connected substructures
 
@@ -402,12 +402,17 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
                 queue.append(i)
                 seen.add(i)
 
-    @staticmethod
-    def _get_subclass(name):
-        """
-        need for cyclic import solving
-        """
-        return next(x for x in Graph.__subclasses__() if x.__name__ == name)
+    def __augmented_substructure(self, atoms, deep):
+        atoms = set(atoms)
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        nodes = [atoms]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+        return nodes
 
 
 __all__ = ['Graph']
