@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict
 from . import cgr, molecule  # cyclic imports resolve
 from .bonds import Bond
 from .common import Graph
@@ -28,15 +28,15 @@ class QueryContainer(Graph, QuerySmiles):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo')
 
     def __init__(self):
-        self._neighbors = {}
-        self._hybridizations = {}
-        self._atoms_stereo = {}
-        self._bonds_stereo = {}
+        self._neighbors: Dict[int, Tuple[int, ...]] = {}
+        self._hybridizations: Dict[int, Tuple[int, ...]] = {}
+        self._atoms_stereo: Dict[int, int] = {}
+        self._bonds_stereo: Dict[int, Dict[int, int]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,
-                 neighbors: Union[int, List[int], Tuple[int], None] = None,
-                 hybridization: Union[int, List[int], Tuple[int], None] = None, **kwargs):
+                 neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
+                 hybridization: Union[int, List[int], Tuple[int, ...], None] = None, **kwargs):
         if neighbors is None:
             neighbors = ()
         if isinstance(neighbors, int):
@@ -193,8 +193,8 @@ class QueryContainer(Graph, QuerySmiles):
         self._bonds_stereo = hbs
         return self
 
-    def copy(self, *, meta=True) -> 'QueryContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'QueryContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._atoms_stereo = self._atoms_stereo.copy()
@@ -280,7 +280,7 @@ class QueryContainer(Graph, QuerySmiles):
         else:
             raise TypeError('Graph expected')
 
-    def get_mapping(self, other):
+    def get_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer']):
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
             return super().get_mapping(other)
         raise TypeError('MoleculeContainer or QueryContainer expected')

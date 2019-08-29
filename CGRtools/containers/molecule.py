@@ -18,7 +18,7 @@
 #
 from CachedMethods import cached_args_method, cached_property, class_cached_property
 from collections import defaultdict
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
@@ -35,12 +35,12 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
     __class_cache__ = {}
 
     def __init__(self):
-        self._conformers = []
-        self._neighbors = {}
-        self._hybridizations = {}
-        self._hydrogens = {}
-        self._atoms_stereo = {}
-        self._bonds_stereo = {}
+        self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
+        self._neighbors: Dict[int, int] = {}
+        self._hybridizations: Dict[int, int] = {}
+        self._hydrogens: Dict[int, Optional[int]] = {}
+        self._atoms_stereo: Dict[int, int] = {}
+        self._bonds_stereo: Dict[int, Dict[int, int]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -452,7 +452,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         """
         return self.compose(other)
 
-    def get_mapping(self, other):
+    def get_mapping(self, other: 'MoleculeContainer'):
         if isinstance(other, MoleculeContainer):
             return super().get_mapping(other)
         raise TypeError('MoleculeContainer expected')
@@ -611,7 +611,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         return tuple(tetra)
 
     @cached_args_method
-    def _explicit_hydrogens(self, n) -> int:
+    def _explicit_hydrogens(self, n: int) -> int:
         """
         number of explicit hydrogen atoms connected to atom.
 
@@ -621,10 +621,10 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
 
     @cached_args_method
-    def _total_hydrogens(self, n) -> int:
+    def _total_hydrogens(self, n: int) -> int:
         return self._hydrogens[n] + self._explicit_hydrogens(n)
 
-    def _calc_implicit(self, n):
+    def _calc_implicit(self, n: int) -> Optional[int]:
         atoms = self._atoms
         atom = atoms[n]
         if atom.atomic_number != 1:
@@ -648,7 +648,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     return h
         return 0
 
-    def _calc_hybridization(self, n):
+    def _calc_hybridization(self, n: int) -> int:
         atoms = self._atoms
         hybridization = 1
         for m, bond in self._bonds[n].items():

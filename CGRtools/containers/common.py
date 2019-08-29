@@ -18,7 +18,7 @@
 #
 from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
-from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List
+from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.morgan import Morgan
@@ -77,7 +77,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
         return len(self._atoms)
 
     @cached_property
-    def atoms_numbers(self) -> Tuple[int]:
+    def atoms_numbers(self) -> Tuple[int, ...]:
         return tuple(self._atoms)
 
     @cached_args_method
@@ -290,7 +290,7 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
         return copy
 
     @abstractmethod
-    def substructure(self, atoms: Iterable[int], sub: 'Graph', *, meta: bool = False):
+    def substructure(self, atoms: Iterable[int], sub: Type['Graph'], *, meta: bool = False):
         if not atoms:
             raise ValueError('empty atoms list not allowed')
         if set(atoms) - self._atoms.keys():
