@@ -17,7 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from typing import List
+from itertools import chain
+from typing import Set, List, Dict, Union, Any, Tuple
 
 
 class SSSR:
@@ -30,17 +31,38 @@ class SSSR:
     __slots__ = ()
 
     @cached_property
-    def sssr(self) -> List[List[int]]:
+    def skin_atoms(self) -> Tuple[int, ...]:
+        """
+        atoms of rings and rings linkers [without terminal atoms]
+        """
+        return tuple(self.__shave(self._bonds))
+
+    @cached_property
+    def sssr(self) -> Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings
 
         :return rings atoms numbers
         """
         # ignore isolated atoms. optimization.
-        return self._sssr({n: set(ms) for n, ms in self._bonds.items() if ms})
+        return self._sssr(self._bonds)
 
     @classmethod
-    def _sssr(cls, bonds):
+    def _sssr(cls, bonds: Dict[int, Union[List[int], Set[int], Tuple[int, ...], Dict[int, Any]]]) -> \
+            Tuple[Tuple[int, ...], ...]:
+        """
+        Smallest Set of Smallest Rings of any adjacency matrix
+        """
+        bonds = cls.__shave(bonds)
+        if bonds:
+            terminated, n_sssr = cls.__bfs(bonds)
+            if n_sssr:
+                return cls.__pid(terminated, n_sssr)
+        return ()
+
+    @staticmethod
+    def __shave(bonds):
+        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
         while True:  # skip not-cycle chains
             try:
                 n = next(n for n, ms in bonds.items() if len(ms) <= 1)
@@ -48,12 +70,7 @@ class SSSR:
                 break
             for m in bonds.pop(n):
                 bonds[m].discard(n)
-
-        if len(bonds) >= 3:
-            terminated, n_sssr = cls.__bfs(bonds)
-            if n_sssr:
-                return cls.__pid(terminated, n_sssr)
-        return []
+        return bonds
 
     @staticmethod
     def __bfs(bonds):
@@ -61,21 +78,20 @@ class SSSR:
         atoms = set(bonds)
         terminated = {}
         tail = atoms.pop()
-        next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
+        next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
 
         while True:
             next_front = set()
             found_odd = set()
             stack, next_stack = next_stack, {}
-            for broom in stack.values():
-                tail = broom[0][-1]
+            for tail, broom in stack.items():
                 next_front.add(tail)
                 neighbors = bonds[tail] & atoms
                 if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
                         continue
-                    next_broom = [branch + [n] for branch in broom]
+                    next_broom = [((*path, n), ticks) for path, ticks in broom]
                     if n in stack:  # odd rings
                         found_odd.add(tail)
                         if n in next_stack:
@@ -93,9 +109,7 @@ class SSSR:
                     for n in neighbors:
                         if n in found_odd:
                             continue
-                        next_broom = [[tail, n]]
-                        for branch in broom:
-                            next_broom.append(branch + [n])
+                        next_broom = [((*path, n), (*ticks, len(path) - 1)) for path, ticks in broom]
                         if n in stack:  # odd rings
                             found_odd.add(tail)
                             if n in next_stack:
@@ -116,32 +130,33 @@ class SSSR:
             elif not next_stack:
                 n_sssr += 1
                 tail = atoms.pop()
-                next_stack = {x: [[tail, x]] for x in bonds[tail] & atoms}
+                next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
         return terminated, n_sssr
 
     @staticmethod
     def __pid(terminated, n_sssr):
         pid1 = {}
         pid2 = {}
-        for j, paths in terminated.items():
-            for path in paths:
-                i = path[0]
-                k = (i, j)
-                if k in pid1:
-                    ls = len(pid1[k][0])
-                    lp = len(path)
-                    if lp == ls:
-                        pid1[k].append(path)
-                    elif ls - lp == 1:
-                        pid2[k], pid1[k] = pid1[k], [path]
-                    elif lp - ls == 1:
-                        pid2[k].append(path)
-                    elif lp < ls:
+        for j, paths_ticks in terminated.items():
+            for paths, ticks in paths_ticks:
+                for path in chain((paths,), (paths[x:] for x in ticks)):
+                    i = path[0]
+                    k = (i, j)
+                    if k in pid1:
+                        ls = len(pid1[k][0])
+                        lp = len(path)
+                        if lp == ls:
+                            pid1[k].append(path)
+                        elif ls - lp == 1:
+                            pid2[k], pid1[k] = pid1[k], [path]
+                        elif lp - ls == 1:
+                            pid2[k].append(path)
+                        elif lp < ls:
+                            pid1[k] = [path]
+                            pid2[k] = []
+                    else:
                         pid1[k] = [path]
                         pid2[k] = []
-                else:
-                    pid1[k] = [path]
-                    pid2[k] = []
 
         c_set = []
         for k, p1ij in pid1.items():
@@ -171,7 +186,7 @@ class SSSR:
                     if ck not in c_sssr:
                         c_sssr[ck] = c
                         if len(c_sssr) == n_sssr:
-                            return list(c_sssr.values())
+                            return tuple(c_sssr.values())
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
                     if c1[1] == c2[1] or c1[-2] == c2[-2]:
@@ -181,7 +196,7 @@ class SSSR:
                     if ck not in c_sssr:
                         c_sssr[ck] = c
                         if len(c_sssr) == n_sssr:
-                            return list(c_sssr.values())
+                            return tuple(c_sssr.values())
 
 
 __all__ = ['SSSR']
