@@ -21,6 +21,7 @@ from collections.abc import Iterable
 from itertools import chain
 from functools import reduce
 from operator import or_
+from typing import Tuple, Dict, Iterable as TIterable, Optional
 from .cgr import CGRContainer
 from .common import Graph
 from .molecule import MoleculeContainer
@@ -38,7 +39,8 @@ class ReactionContainer(DepictReaction):
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '__dict__')
 
-    def __init__(self, reactants=(), products=(), reagents=(), meta=None):
+    def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
+                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None):
         """
         new empty or filled reaction object creation
 
@@ -89,26 +91,26 @@ class ReactionContainer(DepictReaction):
         self.__meta = state['meta']
 
     @property
-    def reactants(self):
+    def reactants(self) -> Tuple[Graph, ...]:
         """reactants list. see products"""
         return self.__reactants
 
     @property
-    def reagents(self):
+    def reagents(self) -> Tuple[Graph, ...]:
         """reagents list. see products"""
         return self.__reagents
 
     @property
-    def products(self):
+    def products(self) -> Tuple[Graph, ...]:
         """list of CGRs or/and Molecules in products side"""
         return self.__products
 
     @property
-    def meta(self):
+    def meta(self) -> Dict:
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
 
-    def copy(self):
+    def copy(self) -> 'ReactionContainer':
         """
         get copy of object
 
@@ -118,7 +120,7 @@ class ReactionContainer(DepictReaction):
                               products=(x.copy() for x in self.__products),
                               reactants=(x.copy() for x in self.__reactants))
 
-    def implicify_hydrogens(self):
+    def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogens if possible
 
@@ -132,7 +134,7 @@ class ReactionContainer(DepictReaction):
             self.flush_cache()
         return total
 
-    def explicify_hydrogens(self):
+    def explicify_hydrogens(self) -> int:
         """
         add explicit hydrogens to atoms
 
@@ -146,36 +148,47 @@ class ReactionContainer(DepictReaction):
             self.flush_cache()
         return total
 
-    def aromatize(self):
+    def thiele(self):
         """
         convert structures to aromatic form. works only for Molecules
-
-        :return: number of processed rings
         """
-        total = 0
+        total = False
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'aromatize'):
-                total += m.aromatize()
+            if hasattr(m, 'thiele'):
+                m.thiele()
+                if not total:
+                    total = True
         if total:
             self.flush_cache()
-        return total
+
+    def kekule(self):
+        """
+        convert structures to kekule form. works only for Molecules
+        """
+        total = False
+        for m in chain(self.__reagents, self.__reactants, self.__products):
+            if hasattr(m, 'kekule'):
+                m.kekule()
+                if not total:
+                    total = True
+        if total:
+            self.flush_cache()
 
     def standardize(self):
         """
-        standardize functional groups and convert structures to aromatic form. works only for Molecules
-
-        :return: number of processed molecules
+        standardize functional groups. works only for Molecules
         """
-        total = 0
+        total = False
         for m in chain(self.__reagents, self.__reactants, self.__products):
             if hasattr(m, 'standardize'):
-                total += m.standardize()
+                m.standardize()
+                if not total:
+                    total = True
         if total:
             self.flush_cache()
-        return total
 
     @cached_method
-    def compose(self):
+    def compose(self) -> CGRContainer:
         """
         get CGR of reaction
 
