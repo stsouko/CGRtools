@@ -714,14 +714,15 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         return [(n, m) for n, m, bond in self.bonds() if bond.order != bond.p_order]
 
     @cached_property
-    def aromatic_rings(self) -> List[List[int]]:
+    def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
         """
         existed or formed aromatic rings atoms numbers
         """
         adj = self._bonds
-        return [ring for ring in self.sssr if
-                adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
-                adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:]))]
+        return tuple(ring for ring in self.sssr if
+                     adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
+                     adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:]))
+                     )
 
     def decompose(self) -> Tuple['molecule.MoleculeContainer', 'molecule.MoleculeContainer']:
         """
