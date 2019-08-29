@@ -65,11 +65,11 @@ class Core(ABC):
         """
 
     @property
-    def isotope(self):
+    def isotope(self) -> Optional[int]:
         return self.__isotope
 
     @property
-    def atomic_mass(self):
+    def atomic_mass(self) -> float:
         mass = self.isotopes_masses
         if self.__isotope is None:
             return sum(x * mass[i] for i, x in self.isotopes_distribution.items())
@@ -90,28 +90,28 @@ class Core(ABC):
         """
 
     @property
-    def charge(self):
+    def charge(self) -> int:
         try:
             return self._graph()._charges[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def is_radical(self):
+    def is_radical(self) -> bool:
         try:
             return self._graph()._radicals[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def x(self):
+    def x(self) -> float:
         try:
             return self._graph()._plane[self._map][0]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def y(self):
+    def y(self) -> float:
         try:
             return self._graph()._plane[self._map][1]
         except AttributeError:
@@ -131,7 +131,7 @@ class Core(ABC):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    def copy(self):
+    def copy(self) -> 'Core':
         """
         detached from graph copy of element
         """
@@ -159,14 +159,14 @@ class Core(ABC):
 
 class Dynamic:
     @property
-    def p_charge(self):
+    def p_charge(self) -> int:
         try:
             return self._graph()._p_charges[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def p_is_radical(self):
+    def p_is_radical(self) -> bool:
         try:
             return self._graph()._p_radicals[self._map]
         except AttributeError:
@@ -192,25 +192,25 @@ class Element(Core):
     __class_cache__ = {}
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__
 
     @property
-    def implicit_hydrogens(self):
+    def implicit_hydrogens(self) -> Optional[int]:
         try:
             return self._graph()._hydrogens[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def explicit_hydrogens(self):
+    def explicit_hydrogens(self) -> int:
         try:
             return self._graph()._explicit_hydrogens(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def total_hydrogens(self):
+    def total_hydrogens(self) -> int:
         try:
             return self._graph()._total_hydrogens(self._map)
         except AttributeError:
@@ -347,7 +347,7 @@ class DynamicElement(Core, Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[7:]
 
     @classmethod
@@ -392,7 +392,7 @@ class QueryElement(Core):
     __slots__ = ()
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[5:]
 
     @classmethod
@@ -462,7 +462,7 @@ class DynamicQueryElement(Core, Dynamic):
     __slots__ = ()
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[12:]
 
     @classmethod
