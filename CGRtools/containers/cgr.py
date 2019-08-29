@@ -376,8 +376,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_hybridizations = hph
         return self
 
-    def copy(self, *, meta=True) -> 'CGRContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'CGRContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._p_neighbors = self._p_neighbors.copy()

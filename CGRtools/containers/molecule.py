@@ -261,8 +261,8 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         self._bonds_stereo = hbs
         return self
 
-    def copy(self, *, meta=True) -> 'MoleculeContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'MoleculeContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
@@ -358,12 +358,9 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         else:
             raise TypeError('Graph expected')
 
-    def compose(self, other):
+    def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
         compose 2 graphs to CGR
-
-        :param other: Molecule or CGR Container
-        :return: CGRContainer
         """
         sa = self._atoms
         sc = self._charges
@@ -490,7 +487,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             return super().get_mapping(other)
         raise TypeError('MoleculeContainer expected')
 
-    def implicify_hydrogens(self):
+    def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogen if possible
 
@@ -530,7 +527,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             self.delete_atom(n)
         return len(to_remove)
 
-    def explicify_hydrogens(self):
+    def explicify_hydrogens(self) -> int:
         """
         add explicit hydrogens to atoms
 
@@ -546,7 +543,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             self.add_bond(n, self.add_atom('H'), 1)
         return len(to_add)
 
-    def check_valence(self):
+    def check_valence(self) -> List[int]:
         """
         check valences of all atoms
 
@@ -592,7 +589,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:]))]
 
     @cached_property
-    def cumulenes(self) -> List[List[int]]:
+    def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
         """
         alkenes, allenes and cumulenes atoms numbers
         """
@@ -610,23 +607,23 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 if b_sum > 4:
                     raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
         if not adj:
-            return []
+            return ()
 
         terminals = {x for x, y in adj.items() if len(y) == 1}
         cumulenes = []
         while terminals:
             m = terminals.pop()
             path = [m]
-            cumulenes.append(path)
             while m not in terminals:
                 n, m = m, adj[m].pop()
                 adj[m].discard(n)
                 path.append(m)
             terminals.discard(m)
-        return cumulenes
+            cumulenes.append(tuple(path))
+        return tuple(cumulenes)
 
     @cached_property
-    def tetrahedrons(self) -> List[int]:
+    def tetrahedrons(self) -> Tuple[int, ...]:
         """
         carbon sp3 atoms numbers
         """
@@ -641,7 +638,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
                 elif all(x.order == 1 for x in env.values()):
                     tetra.append(n)
-        return tetra
+        return tuple(tetra)
 
     @cached_args_method
     def _explicit_hydrogens(self, n) -> int:
