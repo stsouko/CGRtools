@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Dict
 from . import cgr, molecule, query  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.smiles import QueryCGRSmiles
 from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement
@@ -27,20 +28,20 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
     __slots__ = ('_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
-        self._p_charges = {}
-        self._p_radicals = {}
-        self._neighbors = {}
-        self._hybridizations = {}
-        self._p_neighbors = {}
-        self._p_hybridizations = {}
+        self._p_charges: Dict[int, int] = {}
+        self._p_radicals: Dict[int, bool] = {}
+        self._neighbors: Dict[int, Tuple[int, ...]] = {}
+        self._hybridizations: Dict[int, Tuple[int, ...]] = {}
+        self._p_neighbors: Dict[int, Tuple[int, ...]] = {}
+        self._p_hybridizations: Dict[int, Tuple[int, ...]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element, int, str], *args,
                  p_charge: int = 0, p_is_radical: bool = False,
-                 neighbors: Union[int, List[int], Tuple[int], None] = None,
-                 hybridization: Union[int, List[int], Tuple[int], None] = None,
-                 p_neighbors: Union[int, List[int], Tuple[int], None] = None,
-                 p_hybridization: Union[int, List[int], Tuple[int], None] = None, **kwargs):
+                 neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
+                 hybridization: Union[int, List[int], Tuple[int, ...], None] = None,
+                 p_neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
+                 p_hybridization: Union[int, List[int], Tuple[int, ...], None] = None, **kwargs):
         if neighbors is None:
             neighbors = ()
         elif isinstance(neighbors, int):
@@ -138,13 +139,13 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_hybridizations[_map] = p_hybridization
         return _map
 
-    def add_bond(self, n, m, bond: Union['cgr.DynamicBond', 'molecule.Bond', int]):
-        if not isinstance(bond, cgr.DynamicBond):
-            if isinstance(bond, molecule.Bond):
-                bond = object.__new__(cgr.DynamicBond)
+    def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
+        if not isinstance(bond, DynamicBond):
+            if isinstance(bond, Bond):
+                bond = object.__new__(DynamicBond)
                 bond._DynamicBond__order = bond._DynamicBond__p_order = bond.order
             else:
-                bond = cgr.DynamicBond(bond)
+                bond = DynamicBond(bond)
         super().add_bond(n, m, bond)
 
     def delete_atom(self, n):
@@ -200,8 +201,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_hybridizations = hph
         return self
 
-    def copy(self, *, meta=True) -> 'QueryCGRContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'QueryCGRContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._p_neighbors = self._p_neighbors.copy()
@@ -317,13 +318,13 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
                 seen.add(n)
                 for m, bond in m_bond.items():
                     if m not in seen:
-                        ub[n][m] = ub[m][n] = bc = object.__new__(cgr.DynamicBond)
+                        ub[n][m] = ub[m][n] = bc = object.__new__(DynamicBond)
                         bc._DynamicBond__order = bc._DynamicBond__p_order = bond.order
             return u
         else:
             raise TypeError('Graph expected')
 
-    def get_mapping(self, other):
+    def get_mapping(self, other: Union['QueryCGRContainer', 'cgr.CGRContainer']):
         if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
             return super().get_mapping(other)
         raise TypeError('CGRContainer or QueryCGRContainer expected')

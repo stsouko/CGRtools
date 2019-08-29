@@ -19,8 +19,9 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Dict, Optional
 from . import cgr_query as query, molecule  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.depict import DepictCGR
 from ..algorithms.smiles import CGRSmiles
@@ -28,60 +29,16 @@ from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
 
-class DynamicBond:
-    __slots__ = ('__order', '__p_order')
-
-    def __init__(self, order=None, p_order=None):
-        if order is None:
-            if not isinstance(p_order, int):
-                raise TypeError('p_order should be int type')
-        elif not isinstance(order, int):
-            raise TypeError('order should be int type or None')
-        elif p_order is not None and not isinstance(p_order, int):
-            raise TypeError('p_order should be int type or None')
-
-        if order not in (1, 4, 2, 3, None, 8) or p_order not in (1, 4, 2, 3, None, 8):
-            raise ValueError('order or p_order should be from [1, 2, 3, 4, 8]')
-
-        self.__order = order
-        self.__p_order = p_order
-
-    def __eq__(self, other):
-        if isinstance(other, DynamicBond):
-            return self.__order == other.order and self.__p_order == other.p_order
-        return False
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
-
-    def __int__(self):
-        return (self.__order or 0) << 4 | (self.__p_order or 0)
-
-    @property
-    def order(self):
-        return self.__order
-
-    @property
-    def p_order(self):
-        return self.__p_order
-
-    def copy(self):
-        copy = object.__new__(self.__class__)
-        copy._DynamicBond__order = self.__order
-        copy._DynamicBond__p_order = self.__p_order
-        return copy
-
-
 class CGRContainer(Graph, CGRSmiles, DepictCGR):
     __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
-        self._p_charges = {}
-        self._p_radicals = {}
-        self._neighbors = {}
-        self._hybridizations = {}
-        self._p_neighbors = {}
-        self._p_hybridizations = {}
+        self._p_charges: Dict[int, int] = {}
+        self._p_radicals: Dict[int, bool] = {}
+        self._neighbors: Dict[int, int] = {}
+        self._hybridizations: Dict[int, int] = {}
+        self._p_neighbors: Dict[int, int] = {}
+        self._p_hybridizations: Dict[int, int] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[DynamicElement, Element, int, str], *args, p_charge: int = 0,
@@ -112,11 +69,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_hybridizations[_map] = 1
         return _map
 
-    def add_bond(self, n, m, bond: Union[DynamicBond, 'molecule.Bond', int]):
+    def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
         if isinstance(bond, DynamicBond):
             order = bond.order
             p_order = bond.p_order
-        elif isinstance(bond, molecule.Bond):
+        elif isinstance(bond, Bond):
             order = p_order = bond.order
             bond = object.__new__(DynamicBond)
             bond._DynamicBond__order = bond._DynamicBond__p_order = order
@@ -376,8 +333,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_hybridizations = hph
         return self
 
-    def copy(self, *, meta=True) -> 'CGRContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'CGRContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._p_neighbors = self._p_neighbors.copy()
@@ -518,7 +475,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         else:
             raise TypeError('Graph expected')
 
-    def compose(self, other):
+    def compose(self, other: Union['molecule.MoleculeContainer', 'CGRContainer']) -> 'CGRContainer':
         """
         compose 2 graphs to CGR
 
@@ -534,7 +491,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         sb = self._bonds
 
         bonds = []
-        adj = defaultdict(lambda: defaultdict(lambda: [None, None]))
+        adj: Dict[int, Dict[int, List[Optional[int]]]] = defaultdict(lambda: defaultdict(lambda: [None, None]))
         h = self.__class__()  # subclasses support
         atoms = h._atoms
 
@@ -651,13 +608,13 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         """
         return self.compose(other)
 
-    def get_mapping(self, other):
+    def get_mapping(self, other: 'CGRContainer'):
         if isinstance(other, CGRContainer):
             return super().get_mapping(other)
         raise TypeError('CGRContainer expected')
 
     @cached_property
-    def centers_list(self) -> List[List[int]]:
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
         """ get a list of lists of atoms of reaction centers
         """
         radicals = self._radicals
@@ -681,15 +638,14 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             n = center.pop()
             if n in adj:
                 c = set(plain_bfs(adj, n))
-                out.append(list(c))
+                out.append(tuple(c))
                 center.difference_update(c)
             else:
-                out.append([n])
-
-        return out
+                out.append((n,))
+        return tuple(out)
 
     @cached_property
-    def center_atoms(self) -> List[int]:
+    def center_atoms(self) -> Tuple[int, ...]:
         """ get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
         """
         radicals = self._radicals
@@ -705,13 +661,13 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             if any(bond.order != bond.p_order for bond in m_bond.values()):
                 center.add(n)
 
-        return list(center)
+        return tuple(center)
 
     @cached_property
-    def center_bonds(self) -> List[Tuple[int, int]]:
+    def center_bonds(self) -> Tuple[Tuple[int, int], ...]:
         """ get list of bonds of reaction center (bonds with dynamic orders).
         """
-        return [(n, m) for n, m, bond in self.bonds() if bond.order != bond.p_order]
+        return tuple((n, m) for n, m, bond in self.bonds() if bond.order != bond.p_order)
 
     @cached_property
     def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:

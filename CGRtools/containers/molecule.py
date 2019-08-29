@@ -18,8 +18,9 @@
 #
 from CachedMethods import cached_args_method, cached_property, class_cached_property
 from collections import defaultdict
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
@@ -29,48 +30,17 @@ from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class Bond:
-    __slots__ = ('__order',)
-
-    def __init__(self, order):
-        if not isinstance(order, int):
-            raise TypeError('invalid order value')
-        if order not in (1, 4, 2, 3, 8):
-            raise ValueError('order should be from [1, 2, 3, 4, 8]')
-        self.__order = order
-
-    def __eq__(self, other):
-        if isinstance(other, Bond):
-            return self.__order == other.order
-        return False
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.__order})'
-
-    def __int__(self):
-        return self.__order
-
-    @property
-    def order(self):
-        return self.__order
-
-    def copy(self):
-        copy = object.__new__(self.__class__)
-        copy._Bond__order = self.__order
-        return copy
-
-
 class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
     __class_cache__ = {}
 
     def __init__(self):
-        self._conformers = []
-        self._neighbors = {}
-        self._hybridizations = {}
-        self._hydrogens = {}
-        self._atoms_stereo = {}
-        self._bonds_stereo = {}
+        self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
+        self._neighbors: Dict[int, int] = {}
+        self._hybridizations: Dict[int, int] = {}
+        self._hydrogens: Dict[int, Optional[int]] = {}
+        self._atoms_stereo: Dict[int, int] = {}
+        self._bonds_stereo: Dict[int, Dict[int, int]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -261,8 +231,8 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         self._bonds_stereo = hbs
         return self
 
-    def copy(self, *, meta=True) -> 'MoleculeContainer':
-        copy = super().copy(meta=meta)
+    def copy(self, **kwargs) -> 'MoleculeContainer':
+        copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
@@ -358,12 +328,9 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         else:
             raise TypeError('Graph expected')
 
-    def compose(self, other):
+    def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
         compose 2 graphs to CGR
-
-        :param other: Molecule or CGR Container
-        :return: CGRContainer
         """
         sa = self._atoms
         sc = self._charges
@@ -390,7 +357,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
@@ -399,7 +366,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is formed bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
                         bonds.append((n, m, bond))
             for n in common:
@@ -417,7 +384,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
-                        bond = object.__new__(cgr.DynamicBond)
+                        bond = object.__new__(DynamicBond)
                         bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
                         bonds.append((n, m, bond))
         elif isinstance(other, cgr.CGRContainer):
@@ -438,7 +405,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
                             order = bond.order
-                            bond = object.__new__(cgr.DynamicBond)
+                            bond = object.__new__(DynamicBond)
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
@@ -448,7 +415,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                         if m in common:  # bond to common atoms is formed bond
                             order = bond.p_order
                             if order:  # skip broken bond. X>None => None>None
-                                bond = object.__new__(cgr.DynamicBond)
+                                bond = object.__new__(DynamicBond)
                                 bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
                                 bonds.append((n, m, bond))
                         else:
@@ -469,7 +436,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n], p_is_radical=opr[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
-                        bond = object.__new__(cgr.DynamicBond)
+                        bond = object.__new__(DynamicBond)
                         bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
                         bonds.append((n, m, bond))
         else:
@@ -485,12 +452,12 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         """
         return self.compose(other)
 
-    def get_mapping(self, other):
+    def get_mapping(self, other: 'MoleculeContainer'):
         if isinstance(other, MoleculeContainer):
             return super().get_mapping(other)
         raise TypeError('MoleculeContainer expected')
 
-    def implicify_hydrogens(self):
+    def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogen if possible
 
@@ -530,7 +497,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             self.delete_atom(n)
         return len(to_remove)
 
-    def explicify_hydrogens(self):
+    def explicify_hydrogens(self) -> int:
         """
         add explicit hydrogens to atoms
 
@@ -546,7 +513,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             self.add_bond(n, self.add_atom('H'), 1)
         return len(to_add)
 
-    def check_valence(self):
+    def check_valence(self) -> List[int]:
         """
         check valences of all atoms
 
@@ -592,7 +559,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                      and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:])))
 
     @cached_property
-    def cumulenes(self) -> List[List[int]]:
+    def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
         """
         alkenes, allenes and cumulenes atoms numbers
         """
@@ -610,23 +577,23 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 if b_sum > 4:
                     raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
         if not adj:
-            return []
+            return ()
 
         terminals = {x for x, y in adj.items() if len(y) == 1}
         cumulenes = []
         while terminals:
             m = terminals.pop()
             path = [m]
-            cumulenes.append(path)
             while m not in terminals:
                 n, m = m, adj[m].pop()
                 adj[m].discard(n)
                 path.append(m)
             terminals.discard(m)
-        return cumulenes
+            cumulenes.append(tuple(path))
+        return tuple(cumulenes)
 
     @cached_property
-    def tetrahedrons(self) -> List[int]:
+    def tetrahedrons(self) -> Tuple[int, ...]:
         """
         carbon sp3 atoms numbers
         """
@@ -641,10 +608,10 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
                 elif all(x.order == 1 for x in env.values()):
                     tetra.append(n)
-        return tetra
+        return tuple(tetra)
 
     @cached_args_method
-    def _explicit_hydrogens(self, n) -> int:
+    def _explicit_hydrogens(self, n: int) -> int:
         """
         number of explicit hydrogen atoms connected to atom.
 
@@ -654,10 +621,10 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
 
     @cached_args_method
-    def _total_hydrogens(self, n) -> int:
+    def _total_hydrogens(self, n: int) -> int:
         return self._hydrogens[n] + self._explicit_hydrogens(n)
 
-    def _calc_implicit(self, n):
+    def _calc_implicit(self, n: int) -> Optional[int]:
         atoms = self._atoms
         atom = atoms[n]
         if atom.atomic_number != 1:
@@ -681,7 +648,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                     return h
         return 0
 
-    def _calc_hybridization(self, n):
+    def _calc_hybridization(self, n: int) -> int:
         atoms = self._atoms
         hybridization = 1
         for m, bond in self._bonds[n].items():

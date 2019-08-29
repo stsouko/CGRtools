@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from collections.abc import Mapping
-from typing import Optional, Tuple, Dict, Set, List
+from typing import Optional, Tuple, Dict, Set, List, Type
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
 
@@ -65,11 +65,11 @@ class Core(ABC):
         """
 
     @property
-    def isotope(self):
+    def isotope(self) -> Optional[int]:
         return self.__isotope
 
     @property
-    def atomic_mass(self):
+    def atomic_mass(self) -> float:
         mass = self.isotopes_masses
         if self.__isotope is None:
             return sum(x * mass[i] for i, x in self.isotopes_distribution.items())
@@ -90,28 +90,28 @@ class Core(ABC):
         """
 
     @property
-    def charge(self):
+    def charge(self) -> int:
         try:
             return self._graph()._charges[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def is_radical(self):
+    def is_radical(self) -> bool:
         try:
             return self._graph()._radicals[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def x(self):
+    def x(self) -> float:
         try:
             return self._graph()._plane[self._map][0]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def y(self):
+    def y(self) -> float:
         try:
             return self._graph()._plane[self._map][1]
         except AttributeError:
@@ -131,7 +131,7 @@ class Core(ABC):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    def copy(self):
+    def copy(self) -> 'Core':
         """
         detached from graph copy of element
         """
@@ -159,14 +159,14 @@ class Core(ABC):
 
 class Dynamic:
     @property
-    def p_charge(self):
+    def p_charge(self) -> int:
         try:
             return self._graph()._p_charges[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def p_is_radical(self):
+    def p_is_radical(self) -> bool:
         try:
             return self._graph()._p_radicals[self._map]
         except AttributeError:
@@ -192,32 +192,32 @@ class Element(Core):
     __class_cache__ = {}
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__
 
     @property
-    def implicit_hydrogens(self):
+    def implicit_hydrogens(self) -> Optional[int]:
         try:
             return self._graph()._hydrogens[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def explicit_hydrogens(self):
+    def explicit_hydrogens(self) -> int:
         try:
             return self._graph()._explicit_hydrogens(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def total_hydrogens(self):
+    def total_hydrogens(self) -> int:
         try:
             return self._graph()._total_hydrogens(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['Element']:
         """
         get Element class by its symbol
         """
@@ -228,7 +228,7 @@ class Element(Core):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['Element']:
         """
         get Element class by its number
         """
@@ -347,11 +347,11 @@ class DynamicElement(Core, Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[7:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['DynamicElement']:
         """
         get DynamicElement class by its symbol
         """
@@ -362,7 +362,7 @@ class DynamicElement(Core, Dynamic):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['DynamicElement']:
         """
         get DynamicElement class by its number
         """
@@ -392,11 +392,11 @@ class QueryElement(Core):
     __slots__ = ()
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[5:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['QueryElement']:
         """
         get Element class by its symbol
         """
@@ -407,7 +407,7 @@ class QueryElement(Core):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['QueryElement']:
         """
         get Element class by its number
         """
@@ -462,11 +462,11 @@ class DynamicQueryElement(Core, Dynamic):
     __slots__ = ()
 
     @property
-    def atomic_symbol(self):
+    def atomic_symbol(self) -> str:
         return self.__class__.__name__[12:]
 
     @classmethod
-    def from_symbol(cls, symbol):
+    def from_symbol(cls, symbol: str) -> Type['DynamicQueryElement']:
         """
         get Element class by its symbol
         """
@@ -477,7 +477,7 @@ class DynamicQueryElement(Core, Dynamic):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number):
+    def from_atomic_number(cls, number: int) -> Type['DynamicQueryElement']:
         """
         get Element class by its number
         """
