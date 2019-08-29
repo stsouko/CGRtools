@@ -17,7 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from typing import Set, List, Dict, Union, Any
+from itertools import chain
+from typing import Set, List, Dict, Union, Any, Tuple
 
 
 class SSSR:
@@ -30,14 +31,14 @@ class SSSR:
     __slots__ = ()
 
     @cached_property
-    def skin_atoms(self) -> List[int]:
+    def skin_atoms(self) -> Tuple[int, ...]:
         """
         atoms of rings and rings linkers [without terminal atoms]
         """
-        return list(self.__shave(self._bonds))
+        return tuple(self.__shave(self._bonds))
 
     @cached_property
-    def sssr(self) -> List[List[int]]:
+    def sssr(self) -> Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings
 
@@ -47,7 +48,8 @@ class SSSR:
         return self._sssr(self._bonds)
 
     @classmethod
-    def _sssr(cls, bonds: Dict[int, Union[List[int], Set[int], Dict[int, Any]]]) -> List[List[int]]:
+    def _sssr(cls, bonds: Dict[int, Union[List[int], Set[int], Tuple[int, ...], Dict[int, Any]]]) -> \
+            Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings of any adjacency matrix
         """
@@ -56,7 +58,7 @@ class SSSR:
             terminated, n_sssr = cls.__bfs(bonds)
             if n_sssr:
                 return cls.__pid(terminated, n_sssr)
-        return []
+        return ()
 
     @staticmethod
     def __shave(bonds):
@@ -135,25 +137,26 @@ class SSSR:
     def __pid(terminated, n_sssr):
         pid1 = {}
         pid2 = {}
-        for j, paths in terminated.items():
-            for path in paths:
-                i = path[0]
-                k = (i, j)
-                if k in pid1:
-                    ls = len(pid1[k][0])
-                    lp = len(path)
-                    if lp == ls:
-                        pid1[k].append(path)
-                    elif ls - lp == 1:
-                        pid2[k], pid1[k] = pid1[k], [path]
-                    elif lp - ls == 1:
-                        pid2[k].append(path)
-                    elif lp < ls:
+        for j, paths_ticks in terminated.items():
+            for paths, ticks in paths_ticks:
+                for path in chain((paths,), (paths[x:] for x in ticks)):
+                    i = path[0]
+                    k = (i, j)
+                    if k in pid1:
+                        ls = len(pid1[k][0])
+                        lp = len(path)
+                        if lp == ls:
+                            pid1[k].append(path)
+                        elif ls - lp == 1:
+                            pid2[k], pid1[k] = pid1[k], [path]
+                        elif lp - ls == 1:
+                            pid2[k].append(path)
+                        elif lp < ls:
+                            pid1[k] = [path]
+                            pid2[k] = []
+                    else:
                         pid1[k] = [path]
                         pid2[k] = []
-                else:
-                    pid1[k] = [path]
-                    pid2[k] = []
 
         c_set = []
         for k, p1ij in pid1.items():
@@ -183,7 +186,7 @@ class SSSR:
                     if ck not in c_sssr:
                         c_sssr[ck] = c
                         if len(c_sssr) == n_sssr:
-                            return list(c_sssr.values())
+                            return tuple(c_sssr.values())
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
                     if c1[1] == c2[1] or c1[-2] == c2[-2]:
@@ -193,7 +196,7 @@ class SSSR:
                     if ck not in c_sssr:
                         c_sssr[ck] = c
                         if len(c_sssr) == n_sssr:
-                            return list(c_sssr.values())
+                            return tuple(c_sssr.values())
 
 
 __all__ = ['SSSR']
