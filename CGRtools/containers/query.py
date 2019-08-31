@@ -248,8 +248,8 @@ class QueryContainer(Graph, QuerySmiles):
             else:
                 un = u._neighbors
                 uh = u._hybridizations
-                oh = u._hybridizations
-                for n, m in other._neighbors:
+                oh = other._hybridizations
+                for n, m in other._neighbors.items():
                     un[n] = (m,)
                     uh[n] = (oh[n],)
 
@@ -295,7 +295,7 @@ class QueryContainer(Graph, QuerySmiles):
             state['charges'] = {n: a.charge for n, a in state['node'].items()}
             state['radicals'] = {n: a.is_radical for n, a in state['node'].items()}
             state['neighbors'] = {n: a.neighbors for n, a in state['node'].items()}
-            state['hybridization'] = {n: a.hybridization for n, a in state['node'].items()}
+            state['hybridizations'] = {n: a.hybridization for n, a in state['node'].items()}
             state['parsed_mapping'] = {}
             state['bonds'] = bonds = {}
             for n, m_bond in state['adj'].items():
