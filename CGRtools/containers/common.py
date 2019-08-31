@@ -63,8 +63,14 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
     def __iter__(self):
         return iter(self._atoms)
 
+    def __contains__(self, n: int):
+        return n in self._atoms
+
     def atom(self, n: int) -> Core:
         return self._atoms[n]
+
+    def has_atom(self, n: int) -> bool:
+        return n in self._atoms
 
     def atoms(self) -> Iterator[Tuple[int, Core]]:
         """
@@ -92,6 +98,10 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
 
     def bond(self, n: int, m: int) -> Union[Bond, DynamicBond]:
         return self._bonds[n][m]
+
+    def has_bond(self, n: int, m: int) -> bool:
+        self._bonds[n]  # check if atom exists
+        return n in self._bonds[m]
 
     def bonds(self) -> Iterator[Tuple[int, int, Union[Bond, DynamicBond]]]:
         """

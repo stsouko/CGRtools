@@ -280,9 +280,9 @@ class QueryContainer(Graph, QuerySmiles):
         else:
             raise TypeError('Graph expected')
 
-    def get_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer']):
+    def get_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer'], **kwargs):
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
-            return super().get_mapping(other)
+            return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
 
     def __getstate__(self):

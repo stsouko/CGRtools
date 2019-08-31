@@ -452,9 +452,9 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         """
         return self.compose(other)
 
-    def get_mapping(self, other: 'MoleculeContainer'):
+    def get_mapping(self, other: 'MoleculeContainer', **kwargs):
         if isinstance(other, MoleculeContainer):
-            return super().get_mapping(other)
+            return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer expected')
 
     def implicify_hydrogens(self) -> int:

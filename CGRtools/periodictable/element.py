@@ -118,6 +118,13 @@ class Core(ABC):
             raise IsNotConnectedAtom
 
     @property
+    def xy(self) -> Tuple[float, float]:
+        try:
+            return self._graph()._plane[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
     def neighbors(self):
         try:
             return self._graph()._neighbors[self._map]

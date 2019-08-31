@@ -25,7 +25,7 @@ from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryE
 
 
 class QueryCGRContainer(Graph, QueryCGRSmiles):
-    __slots__ = ('_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
+    __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
         self._p_charges: Dict[int, int] = {}
@@ -118,7 +118,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         if not isinstance(atom, DynamicQueryElement):
             if isinstance(atom, (Element, QueryElement, DynamicElement)):
                 atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-            if isinstance(atom, str):
+            elif isinstance(atom, str):
                 atom = DynamicQueryElement.from_symbol(atom)()
             elif isinstance(atom, int):
                 atom = DynamicQueryElement.from_atomic_number(atom)()
@@ -266,7 +266,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
                 oph = other._p_hybridizations
                 for n, m in other._neighbors.items():
                     un[n] = (m,)
-                    uh[n] = (oh[n])
+                    uh[n] = (oh[n],)
                     upn[n] = (opn[n],)
                     uph[n] = (oph[n],)
 
@@ -303,7 +303,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
                 oh = other._hybridizations
                 for n, m in other._neighbors.items():
                     un[n] = upn[n] = (m,)
-                    uh[n] = uph[n] = (oh[n])
+                    uh[n] = uph[n] = (oh[n],)
 
             ua = u._atoms
             for n, atom in other._atoms.items():
@@ -324,9 +324,9 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         else:
             raise TypeError('Graph expected')
 
-    def get_mapping(self, other: Union['QueryCGRContainer', 'cgr.CGRContainer']):
+    def get_mapping(self, other: Union['QueryCGRContainer', 'cgr.CGRContainer'], **kwargs):
         if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
-            return super().get_mapping(other)
+            return super().get_mapping(other, **kwargs)
         raise TypeError('CGRContainer or QueryCGRContainer expected')
 
     def __getstate__(self):

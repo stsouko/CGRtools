@@ -20,7 +20,7 @@ from abc import abstractmethod
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import permutations, product
-from typing import Dict
+from typing import Dict, Iterator
 
 
 class Isomorphism:
@@ -65,10 +65,11 @@ class Isomorphism:
         return True
 
     @abstractmethod
-    def get_mapping(self, other) -> Dict[int, int]:
+    def get_mapping(self, other, *, automorphism_filter: bool = True) -> Iterator[Dict[int, int]]:
         """
         get self to other substructure mapping generator
         """
+        seen = set()
         components, closures = self.__compiled_query
         for candidates in permutations(other.connected_components, len(components)):
             for match in product(*(self.__get_mapping(order, closures, other, component)
@@ -76,6 +77,11 @@ class Isomorphism:
                 mapping = match[0]
                 for m in match[1:]:
                     mapping.update(m)
+                if automorphism_filter:
+                    atoms = frozenset(mapping.values())
+                    if atoms in seen:
+                        continue
+                    seen.add(atoms)
                 yield mapping
 
     @staticmethod

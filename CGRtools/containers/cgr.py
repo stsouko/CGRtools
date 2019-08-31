@@ -608,9 +608,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         """
         return self.compose(other)
 
-    def get_mapping(self, other: 'CGRContainer'):
+    def get_mapping(self, other: 'CGRContainer', **kwargs):
         if isinstance(other, CGRContainer):
-            return super().get_mapping(other)
+            return super().get_mapping(other, **kwargs)
         raise TypeError('CGRContainer expected')
 
     @cached_property
