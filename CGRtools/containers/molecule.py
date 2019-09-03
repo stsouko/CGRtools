@@ -89,32 +89,31 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         if self._atoms[n].atomic_number != 1:  # not hydrogen
             self._neighbors[m] += 1
             self._hybridizations[m] = self._calc_hybridization(m)
-
-            try:  # remove stereo marks on bonded atoms and all its bonds
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]  # remove incoming
-                sbs[m] = {}  # remove outgoing
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
             self._hybridizations[n] = self._calc_hybridization(n)
 
-            try:  # remove atom stereo state
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        # remove stereo marks on bonded atoms and all its bonds
+        try:
+            del self._atoms_stereo[n]
+        except KeyError:
+            pass
+        try:
+            del self._atoms_stereo[m]
+        except KeyError:
+            pass
+        if sbs[n]:
+            for x in sbs[n]:
+                del sbs[x][n]
+            sbs[n] = {}
+        if sbs[m]:
+            for x in sbs[m]:
+                del sbs[x][m]
+            sbs[m] = {}
 
     def delete_atom(self, n):
         old_bonds = self._bonds[n]  # save bonds
-        atoms = self._atoms
-        isnt_hydrogen = atoms[n].atomic_number != 1
+        isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
 
         sn = self._neighbors
@@ -128,63 +127,60 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         del shg[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        for m in old_bonds:
-            shg[m] = self._calc_implicit(m)
-
-        if isnt_hydrogen:  # neighbors query marks fix. ignore removed hydrogen
+        if isnt_hydrogen:
             for m in old_bonds:
                 sh[m] = self._calc_hybridization(m)
                 sn[m] -= 1
 
-            # remove stereo marks on deleted atoms and all its neighbors
-            try:
-                del sas[n]
+        try:  # remove stereo marks on deleted atom
+            del sas[n]
+        except KeyError:
+            pass
+        for m in old_bonds:
+            shg[m] = self._calc_implicit(m)
+            try:  # remove stereo marks on deleted atom neighbors
+                del sas[m]
             except KeyError:
                 pass
-            for m in sbs.pop(n):
-                del sbs[m][n]
-                try:
-                    del sas[m]
-                except KeyError:
-                    pass
+
+        # remove stereo marks on deleted atom bonds
+        for m in sbs.pop(n):
+            del sbs[m][n]
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        atoms = self._atoms
         sbs = self._bonds_stereo
-        sh = self._hybridizations
-        sn = self._neighbors
 
         self._hydrogens[n] = self._calc_implicit(n)
         self._hydrogens[m] = self._calc_implicit(m)
 
         # neighbors query marks fix. ignore removed hydrogen
-        if atoms[n].atomic_number != 1:
-            sh[m] = self._calc_hybridization(m)
-            sn[m] -= 1
-            # remove stereo marks on unbonded atoms and all its bonds
-            try:
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]
-                sbs[m] = {}
-        if atoms[m].atomic_number != 1:
-            sh[n] = self._calc_hybridization(n)
-            sn[n] -= 1
+        if self._atoms[n].atomic_number != 1:
+            self._hybridizations[m] = self._calc_hybridization(m)
+            self._neighbors[m] -= 1
+        if self._atoms[m].atomic_number != 1:
+            self._hybridizations[n] = self._calc_hybridization(n)
+            self._neighbors[n] -= 1
 
-            try:
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        # remove stereo marks on unbonded atoms and all its bonds
+        try:
+            del self._atoms_stereo[n]
+        except KeyError:
+            pass
+        try:
+            del self._atoms_stereo[m]
+        except KeyError:
+            pass
+        if sbs[n]:
+            for x in sbs[n]:
+                del sbs[x][n]
+            sbs[n] = {}
+        if sbs[m]:
+            for x in sbs[m]:
+                del sbs[x][m]
+            sbs[m] = {}
 
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
