@@ -93,7 +93,7 @@ class Depict:
         return self.depict()
 
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
-                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': False,
+                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
                       'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8'}
 
 
@@ -118,7 +118,7 @@ class DepictMolecule(Depict):
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
             elif order == 3:
-                dx, dy = rotate_vector(0, triple_space, mx - nx, my - ny)
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
@@ -644,15 +644,19 @@ class DepictQuery(Depict):
             nx, ny = plane[n]
             mx, my = plane[m]
             ny, my = -ny, -my
-            # need for watch
-            if order in (1, 4):
+            if order == 1:
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+            elif order == 4:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
             elif order == 2:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
             elif order == 3:
-                dx, dy = rotate_vector(0, triple_space, mx - nx, my - ny)
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
@@ -669,10 +673,10 @@ class DepictQuery(Depict):
         font = self._render_config['font']
         font2 = .2 * font
         font3 = .3 * font
-        font35 = .35 * font
-        font5 = .5 * font
+        font4 = .4 * font
         font6 = .6 * font
         font7 = .7 * font
+        font8 = .8 * font
 
         svg = []
         mask = []
@@ -686,34 +690,35 @@ class DepictQuery(Depict):
             symbol = atom.atomic_symbol
             if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
                 svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
-                svg.append(f'      <text x="{x - font35:.2f}" y="{font35 + y:.2f}" '
+                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
                            f'font-size="{font:.2f}">{symbol}</text>')
                 if mapping:
-                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font7:.2f}" '
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
                                 f'text-anchor="end">{n}</text>')
 
                 if atom.charge:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
                                f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
                                f'{"↑" if atom.is_radical else ""}</text>')
                 elif atom.is_radical:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
                                f'font-size="{font6:.2f}">↑</text>')
                 svg.append('    </g>')
-                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
+                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
             elif mapping:
-                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle">{n}</text>')
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+                            f'text-anchor="end">{n}</text>')
 
             level = 1
             if atom.neighbors:
                 level = 1.6
                 nn = [str(x) for x in atom.neighbors]
-                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font7:.2f}" '
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
                               f'text-anchor="start">{"".join(nn)}</text>')
 
             if atom.hybridization:
                 hh = [_render_hybridization[x] for x in atom.hybridization]
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font7:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
                                 f'text-anchor="start">{"".join(hh)}</text>')
         hybs = True
         if nghbrs:
@@ -740,12 +745,12 @@ class DepictQuery(Depict):
 _render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
 _render_charge = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
 _render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
-                -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
-                -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
-                0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
-                1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
-                2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
-                3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
+                    -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
+                    -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
+                    0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
+                    1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
+                    2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
+                    3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
 
 
 __all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery']
