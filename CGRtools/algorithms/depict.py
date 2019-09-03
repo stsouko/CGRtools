@@ -632,6 +632,7 @@ class DepictCGR(Depict):
 
 
 class DepictQuery(Depict):
+    __slots__ = ()
 
     def _render_bonds(self):
         svg = []
@@ -720,16 +721,14 @@ class DepictQuery(Depict):
                 hh = [_render_hybridization[x] for x in atom.hybridization]
                 hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
                                 f'text-anchor="start">{"".join(hh)}</text>')
-        hybs = True
         if nghbrs:
             svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(nghbrs)
             if hbrdztns:
                 svg.extend(hbrdztns)
-                hybs = False
             svg.append('    </g>')
 
-        if hbrdztns and hybs:
+        elif hbrdztns:
             svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(hbrdztns)
             svg.append('    </g>')
