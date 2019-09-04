@@ -129,6 +129,7 @@ class Stereo:
                 s = _pyramid_sign(order[-1], *order[:3])
             if s:
                 self._atoms_stereo[n] = s > 0
+                self.flush_cache()
         else:  # only tetrahedrons supported
             raise NotChiral
 
@@ -141,7 +142,7 @@ class Stereo:
             grouped_stereo = defaultdict(list)
             morgan_update = {}
 
-            for n, s in atoms_stereo.items():
+            for n in atoms_stereo:
                 grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
             for group in grouped_stereo.values():
                 if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
@@ -154,20 +155,6 @@ class Stereo:
 
         return {n for n, env in self.__tetrahedrons.items()
                 if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
-
-    def _chiral_bonds(self):
-        ...
-
-        # for (n, m), (n1, m1, n2, m2) in self.__cumulenes.items():
-        #    if n2 and morgan[n1] == morgan[n2]:
-        #        continue
-        #    if m2 and morgan[m1] == morgan[m2]:
-        #        continue
-        #    chiral_atoms.add(n)
-        #    chiral_atoms.add(m)
-
-        #    morgan = self._morgan(self._sorted_primed({**morgan,
-        #                                               **{m: -n for n, m in enumerate(chiral_atoms, start=1)}}))
 
     def _translate_tetrahedron_stereo(self, n, env):
         order = self.__tetrahedrons[n]

@@ -21,7 +21,7 @@ from itertools import count
 from logging import warning
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..containers.cgr import DynamicBond
-from ..exceptions import MappingError
+from ..exceptions import MappingError, NotChiral, IsChiral
 from ..periodictable import Element, DynamicElement, QueryElement
 
 
@@ -154,6 +154,21 @@ class CGRRead:
             g.add_bond(mapping[n], mapping[m], b)
         if any(a['z'] for a in molecule['atoms']):
             g._conformers.append({mapping[n]: (a['x'], a['y'], a['z']) for n, a in enumerate(molecule['atoms'])})
+
+        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
+        old_stereo = 0
+        while len(stereo) != old_stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for n, m, s in stereo:
+                try:
+                    g.add_wedge(n, m, s)
+                except NotChiral:
+                    fail_stereo.append((n, m, s))
+                except IsChiral:
+                    warning(f'wedge {{{n}, {m}}} on already chiral atom')
+            stereo = fail_stereo
+
         return g
 
     @staticmethod

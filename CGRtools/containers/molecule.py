@@ -26,11 +26,12 @@ from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
+from ..algorithms.stereo import Stereo
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
+class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, Stereo, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
