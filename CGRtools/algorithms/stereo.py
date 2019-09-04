@@ -19,7 +19,7 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
-from ..exceptions import InvalidAtomNumber, InvalidWedgeMark, InvalidStereoCenter
+#from ..exceptions import InvalidAtomNumber, InvalidWedgeMark, InvalidStereoCenter
 
 
 def _pyramid_sign(n, u, v, w):
@@ -128,27 +128,51 @@ class Stereo:
 
     @cached_property
     def chiral_atoms(self):
+        bonds = self._bonds
         morgan = self.atoms_order
-        chiral_atoms = {n: env for n, env in self.__tetrahedrons.items()
-                        if len(set(morgan[x] for x in env)) == len(env)}
-        chiral_atoms.update({n: env for n, (*_, n1, m1, n2, m2) in self.__allenes.items()
-                             if env[2] != e})
+        atoms_stereo = self._atoms_stereo
+        tetra = self.__tetrahedrons
 
-    def __chiral_order(self):
-        morgan = self.atoms_order
-        equal_atoms = defaultdict(list)
-        for n in self._atoms:
-            equal_atoms[morgan[n]].append(n)
-        stereo_atoms = []
-        for e in equal_atoms.values():
-            if len(e) == 2:  # only two equal atoms can give new stereo center
-                for n in e:
-                    ...
+        grouped_stereo = defaultdict(list)
+        for n, s in atoms_stereo.items():
+            grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
 
-    def _translate_atom_stereo(self, n, u, v, w, *args):
-        t = self.__tetrahedrons
-        a = self.__allenes
-        if n in self._stereo
+        morgan_update = {}
+        for group in grouped_stereo.values():
+            if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
+                if group[0] in tetra:  # tetrahedron stereo
+                    s = [n for n in group if self._translate_tetrahedron_stereo(n, sorted(bonds[n], key=morgan.get))]
+                    if 0 < len(s) < len(group):  # RS pair required
+                        for n in s:
+                            morgan_update[n] = -morgan[n]
+
+        morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
+
+        chiral_atoms = {n for n, env in tetra.items()
+                        if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
+
+        #for (n, m), (n1, m1, n2, m2) in self.__cumulenes.items():
+        #    if n2 and morgan[n1] == morgan[n2]:
+        #        continue
+        #    if m2 and morgan[m1] == morgan[m2]:
+        #        continue
+        #    chiral_atoms.add(n)
+        #    chiral_atoms.add(m)
+
+        #    morgan = self._morgan(self._sorted_primed({**morgan,
+        #                                               **{m: -n for n, m in enumerate(chiral_atoms, start=1)}}))
+        return chiral_atoms
+
+    def _translate_tetrahedron_stereo(self, n, env):
+        order = self.__tetrahedrons[n]
+        if len(order) != len(env):
+            raise ValueError('invalid atoms list')
+        s = self._atoms_stereo[n]
+
+        translate = tuple(order.index(x) + 1 for x in env[:3])
+        if _tetrahedron_translate[translate]:
+            return not s
+        return s
 
     @cached_property
     def __tetrahedrons(self):
@@ -167,53 +191,26 @@ class Stereo:
         return tetrahedrons
 
     @cached_property
-    def __allenes(self):
-        # 3           4
-        #  \         /
-        #   1=x=K=x=2
-        #  /         \
-        # 5[None]     6[None]
-        allenes = {}
-        for path in self.cumulenes:
-            lp = len(path)
-            if lp % 2:
-                alkene = self.__cumulene_filter(path)
-                if alkene:
-                    allenes[path[lp // 2]] = alkene
-        return allenes
-
-    def __alkenes(self):
-        # 3             4
-        #  \           /
-        #   1=x=K=K=x=2
-        #  /           \
-        # 5[None]       6[None]
-        alkenes = {}
-        for path in self.cumulenes:
-            lp = len(path)
-            if not lp % 2:
-                alkene = self.__cumulene_filter(path)
-                if alkene:
-                    alkenes[(path[lp // 2 - 1], path[lp // 2])] = alkene
-        return alkenes
-
-    def __cumulene_filter(self, path):
-        # 3      4 or 3      6
-        #  \    /      \    /
-        #   1==2        1==2
-        #  /    \      /    \
-        # 5      6    5      4
-        adj = self._bonds
+    def __cumulenes(self):
+        # 5       4
+        #  \     /
+        #   2---3
+        #  /     \
+        # 1       6
+        bonds = self._bonds
         atoms = self._atoms
-        n, m = path[0], path[-1]
-        n1, m1 = path[1], path[-2]
+        cumulenes = {}
+        for path in self.cumulenes:
+            n, m = path[0], path[-1]
+            n1, m1 = path[1], path[-2]
 
-        nn = [x for x in adj[n] if x != n1 and atoms[x].element != 'H']
-        mn = [x for x in adj[m] if x != m1 and atoms[x].element != 'H']
-        if nn and mn:
-            sn = nn[1] if len(nn) == 2 else None
-            sm = mn[1] if len(mn) == 2 else None
-            return n, m, nn[0], mn[0], sn, sm
+            nn = [x for x in bonds[n] if x != n1 and atoms[x].atomic_number != 1]
+            mn = [x for x in bonds[m] if x != m1 and atoms[x].atomic_number != 1]
+            if nn and mn:
+                sn = nn[1] if len(nn) == 2 else None
+                sm = mn[1] if len(mn) == 2 else None
+                cumulenes[(n, m)] = (nn[0], mn[0], sn, sm)
+        return cumulenes
 
     def __atropoisomers(self):
         #     ___
@@ -275,17 +272,21 @@ class Stereo:
 #   /
 #  /
 # 1
-_tetrahedron_translate = {(1, 2, 3): 1, (2, 3, 1): 1, (3, 1, 2): 1, (1, 3, 2): -1, (2, 1, 3): -1, (3, 2, 1): -1,
-                          (1, 4, 2): 1, (4, 2, 1): 1, (2, 1, 4): 1, (1, 2, 4): -1, (2, 4, 1): -1, (4, 1, 2): -1,
-                          (1, 3, 4): 1, (3, 4, 1): 1, (4, 1, 3): 1, (1, 4, 3): -1, (4, 3, 1): -1, (3, 1, 4): -1,
-                          (2, 4, 3): 1, (4, 3, 2): 1, (3, 2, 4): 1, (2, 3, 4): -1, (3, 4, 2): -1, (4, 2, 3): -1}
-# 5     4
-#  \    |
+_tetrahedron_translate = {(1, 2, 3): False, (2, 3, 1): False, (3, 1, 2): False,
+                          (1, 3, 2): True, (2, 1, 3): True, (3, 2, 1): True,
+                          (1, 4, 2): False, (4, 2, 1): False, (2, 1, 4): False,
+                          (1, 2, 4): True, (2, 4, 1): True, (4, 1, 2): True,
+                          (1, 3, 4): False, (3, 4, 1): False, (4, 1, 3): False,
+                          (1, 4, 3): True, (4, 3, 1): True, (3, 1, 4): True,
+                          (2, 4, 3): False, (4, 3, 2): False, (3, 2, 4): False,
+                          (2, 3, 4): True, (3, 4, 2): True, (4, 2, 3): True}
+# 5       4
+#  \     /
 #   2---3
-#  /    |
-# 1     6
-_alkene_translate = {(1, 2, 3, 4): 1, (4, 3, 2, 1): 1, (1, 2, 3, 6): -1, (6, 3, 2, 1): -1,
-                     (5, 2, 3, 6): 1, (6, 3, 2, 5): 1, (5, 2, 3, 4): -1, (4, 3, 2, 5): -1}
+#  /     \
+# 1       6
+_alkene_translate = {(1, 2, 3, 4): False, (4, 3, 2, 1): False, (1, 2, 3, 6): True, (6, 3, 2, 1): True,
+                     (5, 2, 3, 6): False, (6, 3, 2, 5): False, (5, 2, 3, 4): True, (4, 3, 2, 5): True}
 
 
 __all__ = ['Stereo']
