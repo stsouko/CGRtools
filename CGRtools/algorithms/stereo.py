@@ -19,7 +19,7 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
-#from ..exceptions import InvalidAtomNumber, InvalidWedgeMark, InvalidStereoCenter
+from ..exceptions import AtomNotFound, NotChiral, IsChiral
 
 
 def _pyramid_sign(n, u, v, w):
@@ -112,46 +112,53 @@ def _dihedral_sign(n, u, v, w):
 
 class Stereo:
     def add_wedge(self, n, m, mark):
-        try:
-            if self._bonds[n][m].order not in (1, 4):
-                raise InvalidWedgeMark((n, m))
-        except KeyError:
-            raise InvalidAtomNumber((n, m))
+        if n not in self._atoms:
+            raise AtomNotFound
+        if n in self._atoms_stereo:
+            raise IsChiral
 
-        if n in self.__tetrahedrons:
-            env = self.__tetrahedrons[n]
+        plane = self._plane
+        if n in self._chiral_atoms:
+            if m not in self._bonds[n]:
+                raise AtomNotFound
 
-        elif n in self.__allenes:
-            ...
-        else:
-            raise InvalidStereoCenter(n)
+            order = [(*plane[x], mark if x == m else 0) for x in self.__tetrahedrons[n]]
+            if len(order) == 3:
+                s = _pyramid_sign((*plane[n], 0), *order)
+            else:
+                s = _pyramid_sign(order[-1], *order[:3])
+            if s:
+                self._atoms_stereo[n] = s > 0
+        else:  # only tetrahedrons supported
+            raise NotChiral
 
     @cached_property
-    def chiral_atoms(self):
+    def _chiral_atoms(self):
         bonds = self._bonds
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
-        tetra = self.__tetrahedrons
+        if atoms_stereo:
+            grouped_stereo = defaultdict(list)
+            morgan_update = {}
 
-        grouped_stereo = defaultdict(list)
-        for n, s in atoms_stereo.items():
-            grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
-
-        morgan_update = {}
-        for group in grouped_stereo.values():
-            if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
-                if group[0] in tetra:  # tetrahedron stereo
+            for n, s in atoms_stereo.items():
+                grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
+            for group in grouped_stereo.values():
+                if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
                     s = [n for n in group if self._translate_tetrahedron_stereo(n, sorted(bonds[n], key=morgan.get))]
                     if 0 < len(s) < len(group):  # RS pair required
                         for n in s:
                             morgan_update[n] = -morgan[n]
+            if morgan_update:
+                morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
 
-        morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
+        return {n for n, env in self.__tetrahedrons.items()
+                if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
 
-        chiral_atoms = {n for n, env in tetra.items()
-                        if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
+    def _chiral_bonds(self):
+        ...
 
-        #for (n, m), (n1, m1, n2, m2) in self.__cumulenes.items():
+        # for (n, m), (n1, m1, n2, m2) in self.__cumulenes.items():
         #    if n2 and morgan[n1] == morgan[n2]:
         #        continue
         #    if m2 and morgan[m1] == morgan[m2]:
@@ -161,7 +168,6 @@ class Stereo:
 
         #    morgan = self._morgan(self._sorted_primed({**morgan,
         #                                               **{m: -n for n, m in enumerate(chiral_atoms, start=1)}}))
-        return chiral_atoms
 
     def _translate_tetrahedron_stereo(self, n, env):
         order = self.__tetrahedrons[n]
@@ -217,26 +223,26 @@ class Stereo:
         #    |   |
         # 7--3   5--9
         #     \ /
-        #      1[K]
+        #      1[n]
         #      |
-        #      2[K]
+        #      2[m]
         #     / \
         # 8--4   6--10
         #    |___|
         #
-        adj = self._bonds
+        bonds = self._bonds
         if len(self.sssr) < 2:
             return {}
         aromatic = self.aromatic_rings
         if len(aromatic) < 2:
             return {}
 
-        reduced_aromatic = [[x for x in x if len(adj[x]) == 3] for x in aromatic]  # remove :[CH]: atoms
+        reduced_aromatic = [[x for x in x if len(bonds[x]) == 3] for x in aromatic]  # remove :[CH]: atoms
         connections = {}
         for rings in combinations(range(len(aromatic)), 2):
             ring1, ring2 = rings
             for n, m in product(reduced_aromatic[ring1], reduced_aromatic[ring2]):
-                if n in adj[m]:
+                if n in bonds[m]:
                     if rings in connections:  # remove condensed rings or twice-bonded rings
                         del connections[rings]
                         break  # skip rings
@@ -245,23 +251,23 @@ class Stereo:
         atropos = {}
         for (ring1, ring2), (n, m) in connections.items():
             # neighbors of connection atoms in rings
-            r1n, r1m = (x for x in adj[n] if x != m)
-            r2n, r2m = (x for x in adj[m] if x != n)
+            a3, a5 = (x for x in bonds[n] if x != m)
+            a4, a6 = (x for x in bonds[m] if x != n)
             # substituents of neighbors
-            nr1n = next((x for x in adj[r1n] if x not in aromatic[ring1]), None)
-            nr1m = next((x for x in adj[r1m] if x not in aromatic[ring1]), None)
-            nr2n = next((x for x in adj[r2n] if x not in aromatic[ring2]), None)
-            nr2m = next((x for x in adj[r2m] if x not in aromatic[ring2]), None)
+            a7 = next((x for x in bonds[a3] if x not in aromatic[ring1]), None)
+            a9 = next((x for x in bonds[a5] if x not in aromatic[ring1]), None)
+            a8 = next((x for x in bonds[a4] if x not in aromatic[ring2]), None)
+            a10 = next((x for x in bonds[a6] if x not in aromatic[ring2]), None)
 
             # skip rings without substituents
             # todo: rings bounded with chain
-            if nr1n is None and (nr1m is None or nr2n is None or nr2m is None):
+            if not a7 and (not a9 or not a8 or not a10):
                 continue
-            elif nr1m is None and (nr2n is None or nr2m is None):
+            elif not a9 and (not a8 or not a10):
                 continue
-            elif nr2n is None and nr2m is None:
+            elif not a8 and not a10:
                 continue
-            atropos[(n, m)] = (n, m, r1n, r2n, r1m, r2m, nr1n, nr2n, nr1m, nr2m)
+            atropos[(n, m)] = (a3, a4, a5, a6, a7, a8, a9, a10)
         return atropos
 
 

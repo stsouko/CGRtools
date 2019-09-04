@@ -30,9 +30,21 @@ class MappingError(ValueError):
     """
 
 
-class InvalidFileType(TypeError):
+class AtomNotFound(KeyError):
     """
-    bad files parsing
+    bad atom number
+    """
+
+
+class NotChiral(KeyError):
+    """
+    bad atom number
+    """
+
+
+class IsChiral(KeyError):
+    """
+    bad atom number
     """
 
 
