@@ -17,19 +17,17 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 # from networkx.drawing.layout import kamada_kawai_layout
-from random import uniform
-from itertools import combinations, chain
-from numpy import dot, linalg, zeros
 from math import hypot, pi, atan2, cos, sin
+from numpy import linalg, dot
+from random import uniform
 
 
-def rotate_vector(x1, y1, x2, y2, for_angle=None):
+def rotate_vector(x1, y1, x2, y2, alpha=.0):
     """
     rotate x,y vector over x2-x1, y2-y1 angle
     """
-    alpha = 0
-    if for_angle:
-        alpha = for_angle / 2
+    if alpha:
+        alpha = alpha / 2
     angle = atan2(y2, x2) + alpha
     cos_rad = cos(angle)
     sin_rad = sin(angle)
@@ -56,46 +54,8 @@ class Calculate2D:
         atoms = self._atoms
         bonds = self._bonds
 
-        s = len(atoms)
-        matrix_of_force_fields = zeros((2, s))
+        force_fields = {k: (0, 0) for k in atoms}
         dist = {}
-        # length forces
-        for n, m_bond in bonds.items():
-            dist[n] = {}
-            for m in m_bond:
-                dist[n][m] = .825
-
-        # angle forces
-        for n, m_bond in bonds.items():
-            if len(m_bond) == 2:  # single-single or single-double bonds has angle = 120, other 180
-                (m1, b1), (m2, b2) = m_bond.items()
-                dist[m1][m2] = dist[m2][m1] = 1.43 if b1.order + b2.order in (2, 3) else 1.7  # +.05
-            elif len(m_bond) == 3:
-                m1, m2, m3 = m_bond
-                dist[m1][m2] = dist[m1][m3] = dist[m2][m3] = dist[m3][m2] = dist[m2][m1] = dist[m3][m1] = 1.43
-            elif len(m_bond) == 4:
-                #    1
-                #
-                # 2  X  4
-                #
-                #    3
-                m1, m2, m3, m4 = m_bond
-                dist[m1][m2] = dist[m1][m4] = dist[m2][m1] = dist[m2][m3] = 1.17
-                dist[m3][m2] = dist[m3][m4] = dist[m4][m1] = dist[m4][m3] = 1.17
-                dist[m1][m3] = dist[m3][m1] = dist[m2][m4] = dist[m4][m2] = 1.7  # +.05
-
-        # cycle forces
-        for r in self.sssr:
-            if len(r) == 6:
-                #    6
-                #
-                # 1     5
-                #
-                # 2     4
-                #
-                #    3
-                m1, m2, m3, m4, m5, m6 = r
-                dist[m1][m4] = dist[m4][m1] = dist[m2][m5] = dist[m5][m2] = dist[m3][m6] = dist[m6][m3] = 1.7  # +.05
 
         # distance forces
         for n, m, bond in self.bonds():
@@ -103,60 +63,52 @@ class Calculate2D:
             mx, my = plane[m]
             x, y = mx - nx, my - ny
             distance = hypot(x, y)
-            difference = dist[n][m] - distance
-            matrix_of_force_fields[0][n - 1], matrix_of_force_fields[1][n - 1] = \
-                rotate_vector(0, difference, x, y)
-
-        m, n = n, m
-        nx, ny = plane[n]
-        mx, my = plane[m]
-        x, y = mx - nx, my - ny
-        distance = hypot(x, y)
-        difference = dist[n][m] - distance
-        matrix_of_force_fields[0][n - 1], matrix_of_force_fields[1][n - 1] = \
-            rotate_vector(0, -difference, x, y)
+            difference = normal_distance - distance
+            d = normal_distance/distance - 1
+            dx, dy = force_fields[n]
+            force_fields[n] = (dx + mx*d, dy + my*d)
+            dx, dy = force_fields[m]
+            force_fields[m] = (dx - mx*d, dy - my*d)
 
         # angle forces
         for n, m_bond in bonds.items():
             angles = []
-            neighbors = list(m_bond.keys())
+            neighbors = list(m_bond)
             if len(m_bond) == 2:
-                for i, p in enumerate(neighbors):
-                    try:
-                        angles.append((p, n, neighbors[i + 1]))
-                    except:
-                        pass
-            elif len(m_bond) > 2:
-                for i, p in enumerate(neighbors):
-                    try:
-                        angles.append((p, n, neighbors[i + 1]))
-                    except:
-                        angles.append((neighbors[-1], n, neighbors[0]))
+                angles.append((neighbors[0], n, neighbors[1], False))
+            elif len(m_bond) == 4:
+                angles.append((neighbors[0], n, neighbors[2], 2*pi))
+                angles.append((neighbors[1], n, neighbors[3], 2*pi))
+                angles.append((neighbors[-1], n, neighbors[0], pi))
+                for v, w in zip(neighbors, neighbors[1:]):
+                    angles.append((v, n, w, pi))
+            elif len(m_bond) in (3, 5, 6, 7):
+                ll = len(m_bond)
+                angles.append((neighbors[-1], n, neighbors[0], 4*pi/ll))
+                for v, w in zip(neighbors, neighbors[1:]):
+                    angles.append((v, n, w, 4*pi/ll))
 
-            for a, b, c in angles:
+            for a, b, c, ang in angles:
                 ax, ay = plane[a]
                 bx, by = plane[b]
                 cx, cy = plane[c]
                 abx, aby = bx - ax, by - ay
                 bcx, bcy = cx - bx, cy - by
                 this_angle = calculate_angle((abx, aby), (bcx, bcy))
+                if ang:
+                    optimal_angle = ang
+                else:
+                    optimal_angle = normal_angles[bonds[a][b].order][bonds[b][c].order]
 
-                Vangle = 1 * (this_angle - normal_angles[bonds[a][b].order][bonds[b][c].order]) ** 2
-                dx, dy = rotate_vector(Vangle, 0, abx, aby, for_angle=this_angle)
-                kx, ky = matrix_of_force_fields[0][n - 1], matrix_of_force_fields[1][n - 1]
-                matrix_of_force_fields[0][n - 1], matrix_of_force_fields[1][n - 1] = dx + kx, dy + ky
-
-        if force:
-            pos = None
-        else:
-            pos = {n: (plane[n][0] or uniform(0, .01), plane[n][1] or uniform(0, .01)) for n, atom in atoms()}
-
-        for n, xy in kamada_kawai_layout(self, dist=dict(dist), pos=pos, scale=scale).items():
-            x, y = plane[n]
+                force = 1 * (this_angle - optimal_angle) ** 2
+                dx, dy = rotate_vector(force, 0, abx, aby, alpha=this_angle)
+                kx, ky = force_fields[b]
+                force_fields[b] = (dx + kx, dy + ky)
 
         self.flush_cache()
 
 
+normal_distance = .825
 normal_angles = {1: {1: 2/3*pi, 2: 2/3*pi, 3: 2*pi},
                  2: {1: 2/3*pi, 2: 2*pi, 3: 2*pi},
                  3: {1: 2*pi, 2: 2*pi, 3: 2*pi}}
