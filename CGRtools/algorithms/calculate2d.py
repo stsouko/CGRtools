@@ -16,10 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-# from networkx.drawing.layout import kamada_kawai_layout
 from math import hypot, pi, atan2, cos, sin
 from numpy import linalg, dot
-from random import uniform
 
 
 def rotate_vector(x1, y1, x2, y2, alpha=.0):
@@ -43,7 +41,7 @@ def calculate_angle(v1, v2):
 
 
 class Calculate2D:
-    def calculate2d(self, force=False, scale=1):
+    def calculate2d(self):
         """
         recalculate 2d coordinates. currently rings can be calculated badly.
 
@@ -54,8 +52,8 @@ class Calculate2D:
         atoms = self._atoms
         bonds = self._bonds
 
-        force_fields = {k: (0, 0) for k in atoms}
         dist = {}
+        self.force_fields = ff = {k: (0, 0) for k in atoms}
 
         # distance forces
         for n, m, bond in self.bonds():
@@ -65,10 +63,10 @@ class Calculate2D:
             distance = hypot(x, y)
             difference = normal_distance - distance
             d = normal_distance/distance - 1
-            dx, dy = force_fields[n]
-            force_fields[n] = (dx + mx*d, dy + my*d)
-            dx, dy = force_fields[m]
-            force_fields[m] = (dx - mx*d, dy - my*d)
+            dx, dy = ff[n]
+            ff[n] = (dx + mx*d, dy + my*d)
+            dx, dy = ff[m]
+            ff[m] = (dx - mx*d, dy - my*d)
 
         # angle forces
         for n, m_bond in bonds.items():
@@ -94,18 +92,34 @@ class Calculate2D:
                 cx, cy = plane[c]
                 abx, aby = bx - ax, by - ay
                 bcx, bcy = cx - bx, cy - by
-                this_angle = calculate_angle((abx, aby), (bcx, bcy))
+                current_angle = calculate_angle((abx, aby), (bcx, bcy))
                 if ang:
                     optimal_angle = ang
                 else:
                     optimal_angle = normal_angles[bonds[a][b].order][bonds[b][c].order]
 
-                force = 1 * (this_angle - optimal_angle) ** 2
-                dx, dy = rotate_vector(force, 0, abx, aby, alpha=this_angle)
-                kx, ky = force_fields[b]
-                force_fields[b] = (dx + kx, dy + ky)
+                force = 1 * (current_angle - optimal_angle) ** 2
+                dx, dy = rotate_vector(force, 0, abx, aby, alpha=current_angle)
+                kx, ky = ff[b]
+                ff[b] = (dx + kx, dy + ky)
 
         self.flush_cache()
+
+    def clean2d(self):
+        atoms = self._atoms
+        plane = self.plane
+        ff = self.force_fields
+        force_it = True
+        while force_it:
+            for atom in atoms:
+                atomx, atomy = plane[atom]
+                fx, fy = ff[atom]
+                if hypot(fx, fy) > .05:
+                    pass
+                else:
+                    force_it = False
+
+    force_fields = None
 
 
 normal_distance = .825
