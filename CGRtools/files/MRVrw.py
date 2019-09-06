@@ -207,8 +207,8 @@ class MRVRead(CGRRead):
                               'charge': int(atom.get('@formalCharge', 0)),
                               'is_radical': '@radical' in atom,
                               'mapping': int(atom.get('@mrvMap', 0)),
-                              'x': float(atom['@x3'] if '@x3' in atom else atom['@x2']),
-                              'y': float(atom['@y3'] if '@y3' in atom else atom['@y2']),
+                              'x': float(atom['@x3'] if '@x3' in atom else atom['@x2'] / 2),
+                              'y': float(atom['@y3'] if '@y3' in atom else atom['@y2'] / 2),
                               'z': float(atom['@z3'] if '@z3' in atom else 0.)})
                 if '@mrvQueryProps' in atom:
                     if atom['@mrvQueryProps'][0] == 'L':
@@ -228,16 +228,19 @@ class MRVRead(CGRRead):
                         raise ValueError('unsupported atom query')
         else:
             atom = data['atomArray']
-            for n, (_id, e, x, y) in enumerate(zip(atom['@atomID'].split(),
-                                                   atom['@elementType'].split(),
-                                                   (atom['@x3'] if '@x3' in atom else atom['@x2']).split(),
-                                                   (atom['@y3'] if '@y3' in atom else atom['@y2']).split())):
+            for n, (_id, e) in enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split())):
                 atom_map[_id] = n
-                atoms.append({'element': e, 'charge': 0, 'x': float(x), 'y': float(y), 'z': 0., 'mapping': 0,
-                              'isotope': None, 'is_radical': False})
+                atoms.append({'element': e, 'charge': 0, 'mapping': 0, 'isotope': None, 'is_radical': False})
             if '@z3' in atom:
-                for a, x in zip(atoms, atom['@z3'].split()):
-                    a['z'] = float(x)
+                for a, x, y, z in zip(atoms, atom['@x3'].split(), atom['@y3'].split(), atom['@z3'].split()):
+                    a['x'] = float(x)
+                    a['y'] = float(y)
+                    a['z'] = float(z)
+            else:
+                for a, x, y in zip(atoms, atom['@x2'].split(), atom['@y2'].split()):
+                    a['x'] = float(x) / 2
+                    a['y'] = float(y) / 2
+                    a['z'] = 0.
             if '@isotope' in atom:
                 for a, x in zip(atoms, atom['@isotope'].split()):
                     if x != '0':
@@ -435,7 +438,8 @@ class MRVWrite:
         out = ['<atomArray>']
         for n, atom in g._atoms.items():
             x, y = gp[n]
-            out.append(f'<atom id="a{n}" elementType="{atom.atomic_symbol}" x2="{x:.4f}" y2="{y:.4f}" mrvMap="{n}"')
+            out.append(f'<atom id="a{n}" elementType="{atom.atomic_symbol}" '
+                       f'x2="{x * 2:.4f}" y2="{y * 2:.4f}" mrvMap="{n}"')
             if gc[n]:
                 out.append(f' formalCharge="{gc[n]}"')
             if gr[n]:
@@ -449,17 +453,25 @@ class MRVWrite:
 
     @classmethod
     def __convert_molecule(cls, g):
+        bonds = g._bonds
+        stereo_map = cls.__stereo_map
+        bond_map = cls.__bond_map
+        wedge = defaultdict(set)
         out = ['<bondArray>']
-        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
-            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"')
-            # todo: append stereo
-            # if stereo  ><bondStereo>H</bondStereo></bond>
-            out.append('/>')
+        for n, (i, j, s) in enumerate(g._wedge_map, start=1):
+            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bonds[i][j].order]}">'
+                       f'<bondStereo>{stereo_map[s]}</bondStereo></bond>')
+            wedge[i].add(j)
+            wedge[j].add(i)
+        for n, (i, j, bond) in enumerate(g.bonds(), start=len(out)):
+            if j not in wedge[i]:
+                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bond.order]}"/>')
         out.append('</bondArray>')
         return out
 
     @classmethod
     def __convert_cgr(cls, g):
+        bond_map = cls.__bond_map
         gpc = g._p_charges
         gpr = g._p_radicals
 
@@ -470,7 +482,7 @@ class MRVWrite:
                 dyn.append((i, j, bond))
                 out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="1" queryType="Any"/>')
             else:
-                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"/>')
+                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bond.order]}"/>')
         out.append('</bondArray>')
         for n, (i, j, bond) in enumerate(dyn, start=1):
             out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynbond" '
@@ -489,13 +501,7 @@ class MRVWrite:
 
     @classmethod
     def __convert_query(cls, g):
-        out = ['<bondArray>']
-        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
-            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{cls.__bond_map[bond.order]}"')
-            # todo: append stereo
-            # if stereo  ><bondStereo>H</bondStereo></bond>
-            out.append('/>')
-        out.append('</bondArray>')
+        out = cls.__convert_molecule(g)
 
         n = 0
         for n, (m, an) in enumerate(g._neighbors.items(), start=1):
@@ -511,6 +517,7 @@ class MRVWrite:
         return out
 
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', None: '0'}
+    __stereo_map = {-1: 'H', 1: 'W'}
     __finalized = False
 
 
