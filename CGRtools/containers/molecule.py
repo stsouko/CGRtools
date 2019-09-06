@@ -26,12 +26,12 @@ from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
-from ..algorithms.stereo import Stereo
+from ..algorithms.stereo import MoleculeStereo
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, Stereo, DepictMolecule):
+class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeStereo, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
@@ -90,7 +90,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, Stereo, D
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
             self._hybridizations[n] = self._calc_hybridization(n)
-        # todo: recalculate stereo
+        self._fix_stereo()
 
     def delete_atom(self, n):
         old_bonds = self._bonds[n]  # save bonds
@@ -113,8 +113,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, Stereo, D
 
         for m in old_bonds:
             shg[m] = self._calc_implicit(m)
-
-        # todo: recalc stereo
+        self._fix_stereo()
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
@@ -130,8 +129,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, Stereo, D
         if self._atoms[m].atomic_number != 1:
             self._hybridizations[n] = self._calc_hybridization(n)
             self._neighbors[n] -= 1
-
-        # todo: recalc stereo
+        self._fix_stereo()
 
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)

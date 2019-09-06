@@ -21,10 +21,11 @@ from . import cgr, molecule  # cyclic imports resolve
 from .bonds import Bond
 from .common import Graph
 from ..algorithms.smiles import QuerySmiles
+from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement
 
 
-class QueryContainer(Graph, QuerySmiles):
+class QueryContainer(Graph, QuerySmiles, QueryStereo):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):

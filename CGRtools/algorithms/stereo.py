@@ -19,6 +19,7 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
+from logging import info
 from ..exceptions import AtomNotFound, NotChiral, IsChiral
 
 
@@ -111,7 +112,63 @@ def _dihedral_sign(n, u, v, w):
 
 
 class Stereo:
-    def add_wedge(self, n, m, mark):
+    __slots__ = ()
+
+    @cached_property
+    def _wedge_map(self):
+        plane = self._plane
+        wedge = []
+        for n, s in self._atoms_stereo.items():
+            order = sorted(self._tetrahedrons[n], key=self.atoms_order.get)
+            s = self._translate_tetrahedron_stereo(n, order)
+            # need recalculation if XY changed
+            if len(order) == 3:
+                v = _pyramid_sign((*plane[n], 0),
+                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
+            else:
+                v = _pyramid_sign((*plane[order[3]], 0),
+                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
+            if not v:
+                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
+            v = v > 0
+            if s:
+                wedge.append((n, order[0], 1 if v else -1))
+            else:
+                wedge.append((n, order[0], -1 if v else 1))
+        return tuple(wedge)
+
+    def _translate_tetrahedron_stereo(self, n, env):
+        order = self._tetrahedrons[n]
+        if len(order) != len(env):
+            raise ValueError('invalid atoms list')
+        s = self._atoms_stereo[n]
+
+        translate = tuple(order.index(x) + 1 for x in env[:3])
+        if _tetrahedron_translate[translate]:
+            return not s
+        return s
+
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n in self.tetrahedrons:
+            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            if len(env) in (3, 4):
+                tetrahedrons[n] = env
+        return tetrahedrons
+
+
+class MoleculeStereo(Stereo):
+    __slots__ = ()
+
+    def add_wedge(self, n: int, m: int, mark: bool):
         if n not in self._atoms:
             raise AtomNotFound
         if n in self._atoms_stereo:
@@ -122,7 +179,7 @@ class Stereo:
             if m not in self._bonds[n]:
                 raise AtomNotFound
 
-            order = [(*plane[x], mark if x == m else 0) for x in self.__tetrahedrons[n]]
+            order = [(*plane[x], mark if x == m else 0) for x in self._tetrahedrons[n]]
             if len(order) == 3:
                 s = _pyramid_sign((*plane[n], 0), *order)
             else:
@@ -132,6 +189,46 @@ class Stereo:
                 self.flush_cache()
         else:  # only tetrahedrons supported
             raise NotChiral
+
+    def add_atom_stereo(self, n, env, mark: bool):
+        if n not in self._atoms:
+            raise AtomNotFound
+        if n in self._atoms_stereo:
+            raise IsChiral
+        if len(env) != len(set(env)):
+            raise ValueError('invalid environment')
+        if not isinstance(mark, bool):
+            raise TypeError('stereo mark should be bool')
+
+        if n in self._chiral_atoms:
+            if set(env) != set(self._bonds[n]):
+                raise AtomNotFound
+
+            translate = tuple(env.index(x) + 1 for x in self._tetrahedrons[n][:3])
+            if _tetrahedron_translate[translate]:
+                mark = not mark
+
+            self._atoms_stereo[n] = mark
+            self.flush_cache()
+        else:  # only tetrahedrons supported
+            raise NotChiral
+
+    def _fix_stereo(self):
+        if self._atoms_stereo:
+            stereo = self._atoms_stereo
+            self._atoms_stereo = new_stereo = {}
+            old_stereo = 0
+            while len(stereo) != old_stereo:
+                old_stereo = len(stereo)
+                failed_stereo = {}
+                chiral = self._chiral_atoms
+                self.__dict__.clear()
+                for n, s in stereo.items():
+                    if n in chiral:
+                        new_stereo[n] = s
+                    else:
+                        failed_stereo[n] = s
+                stereo = failed_stereo
 
     @cached_property
     def _chiral_atoms(self):
@@ -153,36 +250,15 @@ class Stereo:
             if morgan_update:
                 morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
 
-        return {n for n, env in self.__tetrahedrons.items()
+        return {n for n, env in self._tetrahedrons.items()
                 if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
 
-    def _translate_tetrahedron_stereo(self, n, env):
-        order = self.__tetrahedrons[n]
-        if len(order) != len(env):
-            raise ValueError('invalid atoms list')
-        s = self._atoms_stereo[n]
 
-        translate = tuple(order.index(x) + 1 for x in env[:3])
-        if _tetrahedron_translate[translate]:
-            return not s
-        return s
+class QueryStereo(Stereo):
+    __slots__ = ()
 
-    @cached_property
-    def __tetrahedrons(self):
-        #    2
-        #    |
-        # 1--K--3
-        #    |
-        #    4?
-        atoms = self._atoms
-        bonds = self._bonds
-        tetrahedrons = {}
-        for n in self.tetrahedrons:
-            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
-            if len(env) in (3, 4):
-                tetrahedrons[n] = env
-        return tetrahedrons
 
+class NotUsed:
     @cached_property
     def __cumulenes(self):
         # 5       4
@@ -282,4 +358,4 @@ _alkene_translate = {(1, 2, 3, 4): False, (4, 3, 2, 1): False, (1, 2, 3, 6): Tru
                      (5, 2, 3, 6): False, (6, 3, 2, 5): False, (5, 2, 3, 4): True, (4, 3, 2, 5): True}
 
 
-__all__ = ['Stereo']
+__all__ = ['MoleculeStereo', 'QueryStereo']
