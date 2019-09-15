@@ -20,13 +20,14 @@ from typing import List, Tuple, Union, Dict
 from . import cgr, molecule  # cyclic imports resolve
 from .bonds import Bond
 from .common import Graph
+from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement
 
 
-class QueryContainer(Graph, QuerySmiles, QueryStereo):
-    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
+class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
+    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo')
 
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}

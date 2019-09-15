@@ -93,8 +93,8 @@ class Depict:
         return self.depict()
 
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
-                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': False,
-                      'mapping_color': '#788CFF', 'bond_width': .03}
+                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
+                      'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8'}
 
 
 class DepictMolecule(Depict):
@@ -118,7 +118,7 @@ class DepictMolecule(Depict):
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
             elif order == 3:
-                dx, dy = rotate_vector(0, triple_space, mx - nx, my - ny)
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
@@ -213,7 +213,8 @@ class DepictMolecule(Depict):
                            f'font-size="{font:.2f}">{symbol}{h}</text>')
                 if charges[n]:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{charge_str[charges[n]]}{"↑" if radicals[n] else ""}</text>')
+                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{"↑" if radicals[n] else ""}'
+                               f'</text>')
                 elif radicals[n]:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
                                f'font-size="{font6:.2f}">↑</text>')
@@ -612,10 +613,10 @@ class DepictCGR(Depict):
 
                 if charges[n] != p_charges[n]:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{p_charge_str[charges[n]][p_charges[n]]}{r}</text>')
+                               f'font-size="{font6:.2f}">{_render_p_charge[charges[n]][p_charges[n]]}{r}</text>')
                 if charges[n]:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{charge_str[charges[n]]}{r}</text>')
+                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{r}</text>')
                 elif r:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
                                f'font-size="{font6:.2f}">{r}</text>')
@@ -630,14 +631,125 @@ class DepictCGR(Depict):
     _render_config = {'broken_color': 'red', 'formed_color': 'green', **Depict._render_config, 'aromatic_space': .14}
 
 
-charge_str = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
-p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
-                -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
-                -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
-                0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
-                1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
-                2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
-                3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
+class DepictQuery(Depict):
+    __slots__ = ()
+
+    def _render_bonds(self):
+        svg = []
+        plane = self._plane
+        double_space = self._render_config['double_space']
+        triple_space = self._render_config['triple_space']
+        dash1, dash2 = self._render_config['dashes']
+        for n, m, bond in self.bonds():
+            order = bond.order
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            ny, my = -ny, -my
+            if order == 1:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+            elif order == 4:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
+            elif order == 2:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
+            elif order == 3:
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
+            else:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
+        return svg
+
+    def _render_atoms(self):
+        plane = self._plane
+        mapping = self._render_config['mapping']
+        carbon = self._render_config['carbon']
+        atoms_colors = self._render_config['atoms_colors']
+        font = self._render_config['font']
+        font2 = .2 * font
+        font3 = .3 * font
+        font4 = .4 * font
+        font6 = .6 * font
+        font7 = .7 * font
+        font8 = .8 * font
+
+        svg = []
+        mask = []
+        maps = []
+        nghbrs = []
+        hbrdztns = []
+        for n, atom in self._atoms.items():
+            x, y = plane[n]
+            y = -y
+            single = not self._bonds[n]
+            symbol = atom.atomic_symbol
+            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
+                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
+                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
+                           f'font-size="{font:.2f}">{symbol}</text>')
+                if mapping:
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+                                f'text-anchor="end">{n}</text>')
+
+                if atom.charge:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
+                               f'{"↑" if atom.is_radical else ""}</text>')
+                elif atom.is_radical:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">↑</text>')
+                svg.append('    </g>')
+                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
+            elif mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+                            f'text-anchor="end">{n}</text>')
+
+            level = 1
+            if atom.neighbors:
+                level = 1.6
+                nn = [str(x) for x in atom.neighbors]
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
+                              f'text-anchor="start">{"".join(nn)}</text>')
+
+            if atom.hybridization:
+                hh = [_render_hybridization[x] for x in atom.hybridization]
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
+                                f'text-anchor="start">{"".join(hh)}</text>')
+        if nghbrs:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(nghbrs)
+            if hbrdztns:
+                svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        elif hbrdztns:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        if mapping:
+            svg.append(f'    <g fill="{self._render_config["mapping_color"]}" font-size="{font7:.2f}">')
+            svg.extend(maps)
+            svg.append('    </g>')
+
+        return svg, mask
 
 
-__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR']
+_render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
+_render_charge = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
+_render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
+                    -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
+                    -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
+                    0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
+                    1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
+                    2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
+                    3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
+
+
+__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery']
