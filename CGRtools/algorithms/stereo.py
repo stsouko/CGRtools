@@ -159,9 +159,7 @@ class Stereo:
         bonds = self._bonds
         tetrahedrons = {}
         for n in self.tetrahedrons:
-            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
-            if len(env) in (3, 4):
-                tetrahedrons[n] = env
+            tetrahedrons[n] = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
         return tetrahedrons
 
 
@@ -179,11 +177,14 @@ class MoleculeStereo(Stereo):
             if m not in self._bonds[n]:
                 raise AtomNotFound
 
-            order = [(*plane[x], mark if x == m else 0) for x in self._tetrahedrons[n]]
-            if len(order) == 3:
-                s = _pyramid_sign((*plane[n], 0), *order)
+            if self._atoms[m].atomic_number == 1:
+                s = _pyramid_sign((*plane[m], mark), *((*plane[x], 0) for x in self._tetrahedrons[n]))
             else:
-                s = _pyramid_sign(order[-1], *order[:3])
+                order = [(*plane[x], mark if x == m else 0) for x in self._tetrahedrons[n]]
+                if len(order) == 3:
+                    s = _pyramid_sign((*plane[n], 0), *order)
+                else:
+                    s = _pyramid_sign(order[-1], *order[:3])
             if s:
                 self._atoms_stereo[n] = s > 0
                 self.flush_cache()
@@ -235,6 +236,7 @@ class MoleculeStereo(Stereo):
         bonds = self._bonds
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
+        explicit = {n for n, a in self._atoms.items() if a.atomic_number == 1}
         if atoms_stereo:
             grouped_stereo = defaultdict(list)
             morgan_update = {}
@@ -243,7 +245,8 @@ class MoleculeStereo(Stereo):
                 grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
             for group in grouped_stereo.values():
                 if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
-                    s = [n for n in group if self._translate_tetrahedron_stereo(n, sorted(bonds[n], key=morgan.get))]
+                    s = [n for n in group
+                         if self._translate_tetrahedron_stereo(n, sorted(bonds[n].keys() - explicit, key=morgan.get))]
                     if 0 < len(s) < len(group):  # RS pair required
                         for n in s:
                             morgan_update[n] = -morgan[n]
