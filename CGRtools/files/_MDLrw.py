@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from base64 import urlsafe_b64encode
+from collections import defaultdict
 from csv import reader
 from logging import warning
 from io import StringIO, TextIOWrapper
@@ -708,10 +709,21 @@ class MDLWrite:
         out.append('M  END\n')
         return ''.join(out)
 
-    @staticmethod
-    def __convert_molecule(g):
+    @classmethod
+    def __convert_molecule(cls, g):
+        bonds = g._bonds
+        stereo_map = cls.__stereo_map
         atoms = {m: n for n, m in enumerate(g._atoms, start=1)}
-        return [f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n' for n, m, b in g.bonds()]
+        wedge = defaultdict(set)
+        out = []
+        for n, m, s in g._wedge_map:
+            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {stereo_map[s]}  0  0  0\n')
+            wedge[n].add(m)
+            wedge[m].add(n)
+        for n, m, b in g.bonds():
+            if m not in wedge[n]:
+                out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n')
+        return out
 
     @staticmethod
     def __convert_cgr(g):
@@ -758,10 +770,20 @@ class MDLWrite:
         bonds.extend(props)
         return bonds
 
-    @staticmethod
-    def __convert_query(g):
+    @classmethod
+    def __convert_query(cls, g):
+        bonds = g._bonds
+        stereo_map = cls.__stereo_map
         atoms = {m: n for n, m in enumerate(g._atoms, start=1)}
-        bonds = [f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n' for n, m, b in g.bonds()]
+        wedge = defaultdict(set)
+        out = []
+        for n, m, s in g._wedge_map:
+            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {stereo_map[s]}  0  0  0\n')
+            wedge[n].add(m)
+            wedge[m].add(n)
+        for n, m, b in g.bonds():
+            if m not in wedge[n]:
+                out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n')
         props = []
 
         for n, m in g._neighbors.items():
@@ -782,12 +804,12 @@ class MDLWrite:
         iterator = iter(range(1, len(props) + 1))
         for first in iterator:
             dat = list(chain((first,), islice(iterator, 7)))
-            bonds.append(f'M  STY  {len(dat)}')
-            bonds.extend(f'{x:4d} DAT' for x in dat)
-            bonds.append('\n')
+            out.append(f'M  STY  {len(dat)}')
+            out.extend(f'{x:4d} DAT' for x in dat)
+            out.append('\n')
 
-        bonds.extend(props)
-        return bonds
+        out.extend(props)
+        return out
 
     __stereo_map = {-1: '6', 1: '1', None: '0'}
     __charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}

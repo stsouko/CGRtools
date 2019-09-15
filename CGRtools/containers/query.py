@@ -22,17 +22,17 @@ from .bonds import Bond
 from .common import Graph
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
+from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement
 
 
-class QueryContainer(Graph, QuerySmiles, DepictQuery):
-    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo')
+class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
+    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}
         self._hybridizations: Dict[int, Tuple[int, ...]] = {}
         self._atoms_stereo: Dict[int, int] = {}
-        self._bonds_stereo: Dict[int, Dict[int, int]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,
@@ -85,7 +85,6 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
         _map = super().add_atom(atom, *args, **kwargs)
         self._neighbors[_map] = neighbors
         self._hybridizations[_map] = hybridization
-        self._bonds_stereo[_map] = {}
         return _map
 
     def add_bond(self, n, m, bond: Union[Bond, int]):
@@ -93,94 +92,62 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
             bond = Bond(bond)
         super().add_bond(n, m, bond)
 
-        sbs = self._bonds_stereo
-        if self._atoms[n].atomic_number != 1:  # not hydrogen
-            try:  # remove stereo marks on bonded atoms and all its bonds
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]  # remove incoming
-                sbs[m] = {}  # remove outgoing
-        if self._atoms[m].atomic_number != 1:  # not hydrogen
-            try:  # remove atom stereo state
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        try:  # remove stereo marks on bonded atoms and all its bonds
+            del self._atoms_stereo[m]
+        except KeyError:
+            pass
+        try:  # remove atom stereo state
+            del self._atoms_stereo[n]
+        except KeyError:
+            pass
 
     def delete_atom(self, n):
-        isnt_hydrogen = self._atoms[n].atomic_number != 1
+        old_bonds = self._bonds[n]  # save bonds
         super().delete_atom(n)
 
         del self._neighbors[n]
         del self._hybridizations[n]
 
         sas = self._atoms_stereo
-        sbs = self._bonds_stereo
-        if isnt_hydrogen:
-            # remove stereo marks on deleted atoms and all its neighbors
+        try:
+            del sas[n]
+        except KeyError:
+            pass
+        for m in old_bonds:
             try:
-                del sas[n]
+                del sas[m]
             except KeyError:
                 pass
-            for m in sbs.pop(n):
-                del sbs[m][n]
-                try:
-                    del sas[m]
-                except KeyError:
-                    pass
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
-        sbs = self._bonds_stereo
-
-        if self._atoms[n].atomic_number != 1:
-            # remove stereo marks on unbonded atoms and all its bonds
-            try:
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]
-                sbs[m] = {}
-        if self._atoms[m].atomic_number != 1:
-            try:
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        try:
+            del self._atoms_stereo[m]
+        except KeyError:
+            pass
+        try:
+            del self._atoms_stereo[n]
+        except KeyError:
+            pass
 
     def remap(self, mapping, *, copy=False) -> 'QueryContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         sn = self._neighbors
-        sbs = self._bonds_stereo
 
         if copy:
             hn = h._neighbors
             hh = h._hybridizations
             has = h._atoms_stereo
-            hbs = h._bonds_stereo
         else:
             hn = {}
             hh = {}
             has = {}
-            hbs = {}
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
             hn[m] = sn[n]
             hh[m] = hyb
-            hbs[m] = {mg(x, x): s for x, s in sbs[n].items()}
 
         for n, stereo in self._atoms_stereo.items():
             has[mg(n, n)] = stereo
@@ -191,7 +158,6 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
         self._neighbors = hn
         self._hybridizations = hh
         self._atoms_stereo = has
-        self._bonds_stereo = hbs
         return self
 
     def copy(self, **kwargs) -> 'QueryContainer':
@@ -199,7 +165,6 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._atoms_stereo = self._atoms_stereo.copy()
-        copy._bonds_stereo = {n: s.copy() for n, s in self._bonds_stereo.items()}
         return copy
 
     def substructure(self, atoms, **kwargs) -> 'QueryContainer':
@@ -221,13 +186,6 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
         lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
         not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
         sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
-        sub._bonds_stereo = cbs = {n: {} for n in atoms}
-        for n, m_stereo in self._bonds_stereo.items():
-            if n in not_skin:
-                ns = cbs[n]
-                for m, s in m_stereo.items():
-                    if m in not_skin:
-                        ns[m] = s
 
         sub._atoms = ca = {}
         for n in atoms:
@@ -270,9 +228,6 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
                         ub[n][m] = ub[m][n] = bond.copy()
 
             u._atoms_stereo.update(other._atoms_stereo)
-            us = u._bonds_stereo
-            for n, m_stereo in other._bonds_stereo.items():
-                us[n] = m_stereo.copy()
             return u
         elif isinstance(other, cgr.CGRContainer):
             raise TypeError('QueryContainer and CGRContainer unite impossible')
@@ -287,7 +242,7 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
         raise TypeError('MoleculeContainer or QueryContainer expected')
 
     def __getstate__(self):
-        return {'atoms_stereo': self._atoms_stereo, 'bonds_stereo': self._bonds_stereo, 'neighbors': self._neighbors,
+        return {'atoms_stereo': self._atoms_stereo, 'neighbors': self._neighbors,
                 'hybridizations': self._hybridizations, **super().__getstate__()}
 
     def __setstate__(self, state):
@@ -309,11 +264,9 @@ class QueryContainer(Graph, QuerySmiles, DepictQuery):
 
             state['plane'] = {n: a.xy for n, a in state['node'].items()}
             state['atoms_stereo'] = {}
-            state['bonds_stereo'] = {n: {} for n in state['node']}
 
         super().__setstate__(state)
         self._atoms_stereo = state['atoms_stereo']
-        self._bonds_stereo = state['bonds_stereo']
         self._neighbors = state['neighbors']
         self._hybridizations = state['hybridizations']
 

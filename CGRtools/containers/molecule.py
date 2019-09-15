@@ -26,12 +26,13 @@ from ..algorithms.aromatics import Aromatize
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
+from ..algorithms.stereo import MoleculeStereo
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo', '_hydrogens')
+class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeStereo, DepictMolecule):
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
     def __init__(self):
@@ -40,7 +41,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, int] = {}
-        self._bonds_stereo: Dict[int, Dict[int, int]] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -55,7 +55,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         _map = super().add_atom(atom, *args, charge=charge, is_radical=is_radical, **kwargs)
         self._neighbors[_map] = 0
         self._hybridizations[_map] = 1
-        self._bonds_stereo[_map] = {}
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         if atom.atomic_number != 1:
@@ -80,7 +79,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
 
         super().add_bond(n, m, bond)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
-        sbs = self._bonds_stereo
 
         self._hydrogens[n] = self._calc_implicit(n)
         self._hydrogens[m] = self._calc_implicit(m)
@@ -89,109 +87,55 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         if self._atoms[n].atomic_number != 1:  # not hydrogen
             self._neighbors[m] += 1
             self._hybridizations[m] = self._calc_hybridization(m)
-
-            try:  # remove stereo marks on bonded atoms and all its bonds
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]  # remove incoming
-                sbs[m] = {}  # remove outgoing
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
             self._hybridizations[n] = self._calc_hybridization(n)
-
-            try:  # remove atom stereo state
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        self._fix_stereo()
 
     def delete_atom(self, n):
         old_bonds = self._bonds[n]  # save bonds
-        atoms = self._atoms
-        isnt_hydrogen = atoms[n].atomic_number != 1
+        isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
 
         sn = self._neighbors
         sh = self._hybridizations
         shg = self._hydrogens
-        sas = self._atoms_stereo
-        sbs = self._bonds_stereo
 
         del sn[n]
         del sh[n]
         del shg[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        for m in old_bonds:
-            shg[m] = self._calc_implicit(m)
-
-        if isnt_hydrogen:  # neighbors query marks fix. ignore removed hydrogen
+        if isnt_hydrogen:
             for m in old_bonds:
                 sh[m] = self._calc_hybridization(m)
                 sn[m] -= 1
 
-            # remove stereo marks on deleted atoms and all its neighbors
-            try:
-                del sas[n]
-            except KeyError:
-                pass
-            for m in sbs.pop(n):
-                del sbs[m][n]
-                try:
-                    del sas[m]
-                except KeyError:
-                    pass
+        for m in old_bonds:
+            shg[m] = self._calc_implicit(m)
+        self._fix_stereo()
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        atoms = self._atoms
-        sbs = self._bonds_stereo
-        sh = self._hybridizations
-        sn = self._neighbors
-
         self._hydrogens[n] = self._calc_implicit(n)
         self._hydrogens[m] = self._calc_implicit(m)
 
         # neighbors query marks fix. ignore removed hydrogen
-        if atoms[n].atomic_number != 1:
-            sh[m] = self._calc_hybridization(m)
-            sn[m] -= 1
-            # remove stereo marks on unbonded atoms and all its bonds
-            try:
-                del self._atoms_stereo[m]
-            except KeyError:
-                pass
-            if sbs[m]:
-                for x in sbs[m]:
-                    del sbs[x][m]
-                sbs[m] = {}
-        if atoms[m].atomic_number != 1:
-            sh[n] = self._calc_hybridization(n)
-            sn[n] -= 1
-
-            try:
-                del self._atoms_stereo[n]
-            except KeyError:
-                pass
-            if sbs[n]:
-                for x in sbs[n]:
-                    del sbs[x][n]
-                sbs[n] = {}
+        if self._atoms[n].atomic_number != 1:
+            self._hybridizations[m] = self._calc_hybridization(m)
+            self._neighbors[m] -= 1
+        if self._atoms[m].atomic_number != 1:
+            self._hybridizations[n] = self._calc_hybridization(n)
+            self._neighbors[n] -= 1
+        self._fix_stereo()
 
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         sn = self._neighbors
         shg = self._hydrogens
-        sbs = self._bonds_stereo
 
         if copy:
             hn = h._neighbors
@@ -199,21 +143,18 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             hhg = h._hydrogens
             hc = h._conformers
             has = h._atoms_stereo
-            hbs = h._bonds_stereo
         else:
             hn = {}
             hh = {}
             hhg = {}
             hc = []
             has = {}
-            hbs = {}
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
             hn[m] = sn[n]
             hh[m] = hyb
             hhg[m] = shg[n]
-            hbs[m] = {mg(x, x): s for x, s in sbs[n].items()}
 
         hc.extend({mg(n, n): x for n, x in c.items()} for c in self._conformers)
 
@@ -228,7 +169,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         self._hydrogens = hhg
         self._conformers = hc
         self._atoms_stereo = has
-        self._bonds_stereo = hbs
         return self
 
     def copy(self, **kwargs) -> 'MoleculeContainer':
@@ -238,7 +178,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
         copy._atoms_stereo = self._atoms_stereo.copy()
-        copy._bonds_stereo = {n: s.copy() for n, s in self._bonds_stereo.items()}
         return copy
 
     def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
@@ -254,18 +193,10 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         sa = self._atoms
         sb = self._bonds
 
-        lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
-        not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
-        sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
-        sub._bonds_stereo = cbs = {n: {} for n in atoms}
-        for n, m_stereo in self._bonds_stereo.items():
-            if n in not_skin:
-                ns = cbs[n]
-                for m, s in m_stereo.items():
-                    if m in not_skin:
-                        ns[m] = s
-
         if as_query:
+            lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
+            not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
+            sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n]
@@ -277,6 +208,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
+            # todo: recalc stereo
             sub._conformers = []
             sub._atoms = ca = {}
             for n in atoms:
@@ -313,10 +245,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
                 for m, bond in m_bond.items():
                     if m not in seen:
                         ub[n][m] = ub[m][n] = bond.copy()
-
-            us = u._bonds_stereo
-            for n, m_stereo in other._bonds_stereo.items():
-                us[n] = m_stereo.copy()
 
             ua = u._atoms
             for n, atom in other._atoms.items():
@@ -680,8 +608,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
         return rules
 
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, 'bonds_stereo': self._bonds_stereo,
-                **super().__getstate__()}
+        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
 
     def __setstate__(self, state):
         if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
@@ -701,7 +628,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
-            state['bonds_stereo'] = {n: {} for n in state['_node']}
             state['meta'] = state['_BaseContainer__meta']
             state['parsed_mapping'] = {}
         elif 'node' in state:  # 3.1 compatibility.
@@ -722,12 +648,10 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, DepictMol
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
-            state['bonds_stereo'] = {n: {} for n in state['node']}
 
         super().__setstate__(state)
         self._conformers = state['conformers']
         self._atoms_stereo = state['atoms_stereo']
-        self._bonds_stereo = state['bonds_stereo']
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}
