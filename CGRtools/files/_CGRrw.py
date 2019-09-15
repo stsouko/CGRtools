@@ -18,7 +18,7 @@
 #
 from collections import defaultdict
 from itertools import count
-from logging import warning
+from logging import warning, info
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..containers.cgr import DynamicBond
 from ..exceptions import MappingError, NotChiral, IsChiral
@@ -166,7 +166,7 @@ class CGRRead:
                 except NotChiral:
                     fail_stereo.append((n, m, s))
                 except IsChiral:
-                    warning(f'wedge {{{n}, {m}}} on already chiral atom')
+                    info(f'wedge {{{n}, {m}}} on already chiral atom')
             stereo = fail_stereo
 
         return g

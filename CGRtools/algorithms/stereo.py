@@ -159,7 +159,9 @@ class Stereo:
         bonds = self._bonds
         tetrahedrons = {}
         for n in self.tetrahedrons:
-            tetrahedrons[n] = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            if len(env) in (3, 4):
+                tetrahedrons[n] = env
         return tetrahedrons
 
 
