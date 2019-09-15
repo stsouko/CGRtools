@@ -27,7 +27,7 @@ from ..periodictable import Element, QueryElement
 
 
 class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
-    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_bonds_stereo')
+    __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}
