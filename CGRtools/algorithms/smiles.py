@@ -76,7 +76,7 @@ class Smiles:
 
             # modified NX dfs with cycle detection
             stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=weights)))]
-            visited = {start: [None]}  # predecessors for stereo. atom: (visited[atom], *edges[atom])
+            visited = {start: []}  # predecessors for stereo. atom: (visited[atom], *edges[atom])
             disconnected = set()
             edges = defaultdict(list)
             tokens = defaultdict(list)
@@ -173,28 +173,33 @@ class MoleculeSmiles(Smiles):
 
     def _format_atom(self, n, adjacency):
         atom = self._atoms[n]
+        charge = self._charges[n]
+        ih = self._hydrogens[n]
         if atom.isotope:
             smi = [str(atom.isotope), atom.atomic_symbol]
         else:
             smi = [atom.atomic_symbol]
 
-        # todo: stereo
-        # smi.append()
-        if atom.charge:
-            h = atom.implicit_hydrogens
-            if h == 1:
+        if n in self._atoms_stereo:
+            if ih:
                 smi.append('H')
-            elif h:
-                smi.append(f'H{h}')
-            smi.append(charge_str[atom.charge])
-        elif atom.is_radical:
-            h = atom.implicit_hydrogens
-            if h == 1:
+            else:
+                env = adjacency[n]
+                smi.append('@@' if self._translate_tetrahedron_stereo(n, env[3:] + env[:3]) else '@')
+        elif charge:
+            if ih == 1:
                 smi.append('H')
-            elif h:
-                smi.append(f'H{h}')
-        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P') and atom.implicit_hydrogens:
+            elif ih:
+                smi.append(f'H{ih}')
+            smi.append(charge_str[charge])
+        elif self._radicals[n]:
+            if ih == 1:
+                smi.append('H')
+            elif ih:
+                smi.append(f'H{ih}')
+        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P') and ih:
             smi.append('H')
+        elif atom.atomic_symbol not in organic_set:
 
         if len(smi) != 1 or atom.atomic_symbol not in organic_set:
             smi.insert(0, '[')

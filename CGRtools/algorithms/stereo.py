@@ -235,10 +235,9 @@ class MoleculeStereo(Stereo):
 
     @cached_property
     def _chiral_atoms(self):
-        bonds = self._bonds
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
-        explicit = {n for n, a in self._atoms.items() if a.atomic_number == 1}
+        tetrahedrons = self._tetrahedrons
         if atoms_stereo:
             grouped_stereo = defaultdict(list)
             morgan_update = {}
@@ -248,7 +247,7 @@ class MoleculeStereo(Stereo):
             for group in grouped_stereo.values():
                 if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
                     s = [n for n in group
-                         if self._translate_tetrahedron_stereo(n, sorted(bonds[n].keys() - explicit, key=morgan.get))]
+                         if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
                     if 0 < len(s) < len(group):  # RS pair required
                         for n in s:
                             morgan_update[n] = -morgan[n]
