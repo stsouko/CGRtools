@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, cached_args_method, cached_property
+from CachedMethods import cached_method, cached_property
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count
@@ -27,7 +27,6 @@ charge_str = {-3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '++', 3: '+3'}
 order_str = {1: '', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
 organic_set = {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-stereo_str = {1: '@', -1: '@@'}
 dyn_order_str = {(None, 1): "[.>-]", (None, 2): "[.>=]", (None, 3): "[.>#]", (None, 4): "[.>:]", (None, 8): "[.>~]",
                  (1, None): "[->.]", (1, 1): "", (1, 2): "[->=]", (1, 3): "[->#]", (1, 4): "[->:]", (1, 8): "[->~]",
                  (2, None): "[=>.]", (2, 1): "[=>-]", (2, 2): "=", (2, 3): "[=>#]", (2, 4): "[=>:]", (2, 8): "[=>~]",
@@ -56,7 +55,7 @@ class Smiles:
     def __format__(self, format_spec):
         if format_spec == "ac":
             return self._smiles(self.atoms_order.get, asymmetric_closures=True)
-        return self._smiles(self.atoms_order.get)
+        return str(self)
 
     def __eq__(self, other):
         return str(self) == str(other)
