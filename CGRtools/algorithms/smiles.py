@@ -77,6 +77,7 @@ class Smiles:
         string = []
         if asymmetric_closures:
             visited_bond = set()
+
         while True:
             start = min(atoms_set, key=weights)
 
