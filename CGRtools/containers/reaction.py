@@ -216,12 +216,12 @@ class ReactionContainer(DepictReaction):
         """
         return self.compose()
 
-    def calculate2d(self):
+    def clean2d(self):
         """
         recalculate 2d coordinates
         """
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            m.calculate2d()
+            m.clean2d()
         self.fix_positions()
 
     def fix_positions(self):
