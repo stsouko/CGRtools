@@ -21,7 +21,7 @@ from operator import or_
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
-class CGRpreparer:
+class CGRPreparer:
     def __init__(self, cgr_type='0'):
         """
         CGR creation
@@ -160,4 +160,4 @@ class CGRpreparer:
         return reduce(or_, data) if data else MoleculeContainer()
 
 
-__all__ = ['CGRpreparer']
+__all__ = ['CGRPreparer']

@@ -19,9 +19,10 @@
 """
 Data classes
 """
-from .cgr import *
 from .molecule import *
+from .cgr import *
 from .query import *
+from .cgr_query import *
 from .reaction import *
 
 

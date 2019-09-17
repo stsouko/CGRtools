@@ -16,13 +16,3 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .aromatics import *
-from .calculate2d import *
-from .compose import *
-from .depict import *
-from .isomorphism import *
-from .morgan import *
-from .sssr import *
-from .standardize import *
-from .strings import *
-from .union import *
