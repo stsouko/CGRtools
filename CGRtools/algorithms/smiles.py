@@ -48,7 +48,7 @@ dyn_radical_str = {(True, True): "*", (True, False): "*>n", (False, True): "n>*"
 
 class Smiles:
     __slots__ = ()
-
+    short = False
     @cached_method
     def __str__(self):
         return self._smiles(self.atoms_order.get)
@@ -63,6 +63,11 @@ class Smiles:
     @cached_method
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
+
+    def __format__(self, format_spec):
+        if format_spec == "short":
+            self.short = True
+        return self._smiles(self.atoms_order.get)
 
     def _smiles(self, weights):
         bonds = self._bonds
@@ -140,13 +145,19 @@ class Smiles:
                     visited[token].extend(n for n, _ in tokens[token])
                 if token in edges:
                     visited[token].extend(edges[token])
-
+            if self.short:
+                visited_bond = set()
             for token in smiles:
-                if token in visited:  # atoms
+                if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, visited))
                     if token in tokens:
                         for m, c in tokens[token]:
-                            string.append(self._format_bond(token, m, visited))
+                            if self.short:
+                                if (token, m) not in visited_bond:
+                                    string.append(self._format_bond(token, m, visited))
+                                    visited_bond.add((m, token))
+                            else:
+                                string.append(self._format_bond(token, m, visited))
                             string.append(str(casted_cycles[c]))
                 elif token in ('(', ')'):
                     string.append(token)
