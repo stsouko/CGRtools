@@ -48,9 +48,14 @@ dyn_radical_str = {(True, True): "*", (True, False): "*>n", (False, True): "n>*"
 
 class Smiles:
     __slots__ = ()
-    short = False
+
     @cached_method
     def __str__(self):
+        return self._smiles(self.atoms_order.get)
+
+    def __format__(self, format_spec):
+        if format_spec == "ac":
+            return self._smiles(self.atoms_order.get, asymmetric_closures=True)
         return self._smiles(self.atoms_order.get)
 
     def __eq__(self, other):
@@ -64,12 +69,7 @@ class Smiles:
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    def __format__(self, format_spec):
-        if format_spec == "short":
-            self.short = True
-        return self._smiles(self.atoms_order.get)
-
-    def _smiles(self, weights):
+    def _smiles(self, weights, asymmetric_closures=False):
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
@@ -145,14 +145,14 @@ class Smiles:
                     visited[token].extend(n for n, _ in tokens[token])
                 if token in edges:
                     visited[token].extend(edges[token])
-            if self.short:
+            if asymmetric_closures:
                 visited_bond = set()
             for token in smiles:
                 if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, visited))
                     if token in tokens:
                         for m, c in tokens[token]:
-                            if self.short:
+                            if asymmetric_closures:
                                 if (token, m) not in visited_bond:
                                     string.append(self._format_bond(token, m, visited))
                                     visited_bond.add((m, token))
