@@ -69,7 +69,7 @@ class Smiles:
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    def _smiles(self, weights, asymmetric_closures=False):
+    def _smiles(self, weights, *, asymmetric_closures=False):
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
