@@ -20,7 +20,7 @@ from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
 from logging import info
-from ..exceptions import AtomNotFound, NotChiral, IsChiral
+from ..exceptions import AtomNotFound, NotChiral, IsChiral, ValenceError
 
 
 def _pyramid_sign(n, u, v, w):
@@ -154,22 +154,6 @@ class Stereo:
             return not s
         return s
 
-    @cached_property
-    def _tetrahedrons(self):
-        #    2
-        #    |
-        # 1--K--3
-        #    |
-        #    4?
-        atoms = self._atoms
-        bonds = self._bonds
-        tetrahedrons = {}
-        for n in self.tetrahedrons:
-            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
-            if len(env) in (3, 4):
-                tetrahedrons[n] = env
-        return tetrahedrons
-
 
 class MoleculeStereo(Stereo):
     __slots__ = ()
@@ -222,6 +206,22 @@ class MoleculeStereo(Stereo):
         else:  # only tetrahedrons supported
             raise NotChiral
 
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n in self.tetrahedrons:
+            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            if len(env) in (3, 4):
+                tetrahedrons[n] = env
+        return tetrahedrons
+
     def _fix_stereo(self):
         if self._atoms_stereo:
             stereo = self._atoms_stereo
@@ -266,6 +266,28 @@ class MoleculeStereo(Stereo):
 
 class QueryStereo(Stereo):
     __slots__ = ()
+
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n, atom in atoms.items():
+            if atom.atomic_number == 6 and not self._charges[n]:
+                env = bonds[n]
+                b_sum = sum(x.order for x in env.values())
+                if b_sum > 4:
+                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
+                if all(x.order == 1 for x in env.values()):
+                    env = tuple(x for x in env if atoms[x].atomic_number != 1)
+                    if len(env) in (3, 4):
+                        tetrahedrons[n] = env
+        return tetrahedrons
 
 
 class NotUsed:
