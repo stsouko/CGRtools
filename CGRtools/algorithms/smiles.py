@@ -75,7 +75,8 @@ class Smiles:
         cycles = count()
         casted_cycles = {}
         string = []
-
+        if asymmetric_closures:
+            visited_bond = set()
         while True:
             start = min(atoms_set, key=weights)
 
@@ -145,8 +146,6 @@ class Smiles:
                     visited[token].extend(n for n, _ in tokens[token])
                 if token in edges:
                     visited[token].extend(edges[token])
-            if asymmetric_closures:
-                visited_bond = set()
             for token in smiles:
                 if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, visited))
