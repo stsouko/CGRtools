@@ -139,7 +139,13 @@ class Stereo:
 
     def _translate_tetrahedron_stereo(self, n, env):
         order = self._tetrahedrons[n]
-        if len(order) != len(env):
+        if len(order) == 3:
+            if len(env) == 4:
+                atoms = self._atoms
+                order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
+            elif len(env) != 3:
+                raise ValueError('invalid atoms list')
+        elif len(env) != 4:
             raise ValueError('invalid atoms list')
         s = self._atoms_stereo[n]
 

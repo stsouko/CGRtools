@@ -180,28 +180,39 @@ class MoleculeSmiles(Smiles):
         else:
             smi = [atom.atomic_symbol]
 
-        if n in self._atoms_stereo:
+        if n in self._atoms_stereo:  # carbon only
+            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
             if ih:
                 smi.append('H')
-            else:
-                env = adjacency[n]
-                smi.append('@@' if self._translate_tetrahedron_stereo(n, env[3:] + env[:3]) else '@')
+            smi.insert(0, '[')
+            smi.append(']')
         elif charge:
             if ih == 1:
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
             smi.append(charge_str[charge])
+            smi.insert(0, '[')
+            smi.append(']')
         elif self._radicals[n]:
             if ih == 1:
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
-        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P') and ih:
-            smi.append('H')
+            smi.insert(0, '[')
+            smi.append(']')
+        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P'):  # heterocycles
+            if ih == 1:
+                smi.append('H]')
+                smi.insert(0, '[')
+            elif ih:
+                smi.append(f'H{ih}]')
+                smi.insert(0, '[')
         elif atom.atomic_symbol not in organic_set:
-
-        if len(smi) != 1 or atom.atomic_symbol not in organic_set:
+            if ih == 1:
+                smi.append('H')
+            elif ih:
+                smi.append(f'H{ih}')
             smi.insert(0, '[')
             smi.append(']')
         return ''.join(smi)
@@ -215,15 +226,19 @@ class CGRSmiles(Smiles):
 
     def _format_atom(self, n, adjacency):
         atom = self._atoms[n]
+        charge = self._charges[n]
+        is_radical = self._radicals[n]
+        p_charge = self._p_charges[n]
+        p_is_radical = self._p_radicals[n]
         if atom.isotope:
             smi = [str(atom.isotope), atom.atomic_symbol]
         else:
             smi = [atom.atomic_symbol]
 
-        if atom.charge or atom.p_charge:
-            smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
-        if atom.is_radical or atom.p_is_radical:
-            smi.append(dyn_radical_str[(atom.is_radical, atom.p_is_radical)])
+        if charge or p_charge:
+            smi.append(dyn_charge_str[(charge, p_charge)])
+        if is_radical or p_is_radical:
+            smi.append(dyn_radical_str[(is_radical, p_is_radical)])
 
         if len(smi) != 1 or atom.atomic_symbol not in organic_set:
             smi.insert(0, '[')
@@ -240,39 +255,46 @@ class QuerySmiles(Smiles):
 
     def _format_atom(self, n, adjacency):
         atom = self._atoms[n]
+        charge = self._charges[n]
+        hybridization = self._hybridizations[n]
+        neighbors = self._neighbors[n]
+
         if atom.isotope:
             smi = ['[', str(atom.isotope), atom.atomic_symbol]
         else:
             smi = ['[', atom.atomic_symbol]
 
-        if len(atom.hybridization) > 1:
+        if n in self._atoms_stereo:  # carbon only
+            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
+
+        if len(hybridization) > 1:
             smi.append(';')
-            smi.append(''.join(hybridization_str[x] for x in atom.hybridization))
-            if len(atom.neighbors) > 1:
-                smi.append(''.join(str(x) for x in atom.neighbors))
-            elif atom.neighbors:
-                smi.append(str(atom.neighbors[0]))
+            smi.append(''.join(hybridization_str[x] for x in hybridization))
+            if len(neighbors) > 1:
+                smi.append(''.join(str(x) for x in neighbors))
+            elif neighbors:
+                smi.append(str(neighbors[0]))
             smi.append(';')
-        elif atom.hybridization:
+        elif hybridization:
             smi.append(';')
-            smi.append(hybridization_str[atom.hybridization[0]])
-            if len(atom.neighbors) > 1:
-                smi.append(''.join(str(x) for x in atom.neighbors))
-            elif atom.neighbors:
-                smi.append(str(atom.neighbors[0]))
+            smi.append(hybridization_str[hybridization[0]])
+            if len(neighbors) > 1:
+                smi.append(''.join(str(x) for x in neighbors))
+            elif neighbors:
+                smi.append(str(neighbors[0]))
             smi.append(';')
-        elif len(atom.neighbors) > 1:
+        elif len(neighbors) > 1:
             smi.append(';')
-            smi.append(''.join(str(x) for x in atom.neighbors))
+            smi.append(''.join(str(x) for x in neighbors))
             smi.append(';')
-        elif atom.neighbors:
+        elif neighbors:
             smi.append(';')
-            smi.append(str(atom.neighbors[0]))
+            smi.append(str(neighbors[0]))
             smi.append(';')
 
-        if atom.charge:
-            smi.append(charge_str[atom.charge])
-        if atom.is_radical:
+        if charge:
+            smi.append(charge_str[charge])
+        if self._radicals[n]:
             smi.append('*')
 
         smi.append(']')
@@ -287,56 +309,65 @@ class QueryCGRSmiles(Smiles):
 
     def _format_atom(self, n, adjacency):
         atom = self._atoms[n]
+        charge = self._charges[n]
+        hybridization = self._hybridizations[n]
+        neighbors = self._neighbors[n]
+        is_radical = self._radicals[n]
+        p_charge = self._p_charges[n]
+        p_hybridization = self._p_hybridizations[n]
+        p_neighbors = self._p_neighbors[n]
+        p_is_radical = self._p_radicals[n]
+
         if atom.isotope:
             smi = ['[', str(atom.isotope), atom.atomic_symbol]
         else:
             smi = ['[', atom.atomic_symbol]
 
-        if len(atom.hybridization) > 1:
+        if len(hybridization) > 1:
             smi.append(';')
-            smi.append(''.join(hybridization_str[x] for x in atom.hybridization))
+            smi.append(''.join(hybridization_str[x] for x in hybridization))
             smi.append('>')
-            smi.append(''.join(hybridization_str[x] for x in atom.p_hybridization))
-            if len(atom.neighbors) > 1:
-                smi.append(''.join(str(x) for x in atom.neighbors))
+            smi.append(''.join(hybridization_str[x] for x in p_hybridization))
+            if len(neighbors) > 1:
+                smi.append(''.join(str(x) for x in neighbors))
                 smi.append('>')
-                smi.append(''.join(str(x) for x in atom.p_neighbors))
-            elif atom.neighbors:
-                smi.append(str(atom.neighbors[0]))
+                smi.append(''.join(str(x) for x in p_neighbors))
+            elif neighbors:
+                smi.append(str(neighbors[0]))
                 smi.append('>')
-                smi.append(str(atom.p_neighbors[0]))
+                smi.append(str(p_neighbors[0]))
             smi.append(';')
-        elif atom.hybridization:
+        elif hybridization:
             smi.append(';')
-            smi.append(hybridization_str[atom.hybridization[0]])
+            smi.append(hybridization_str[hybridization[0]])
             smi.append('>')
-            smi.append(hybridization_str[atom.p_hybridization[0]])
-            if len(atom.neighbors) > 1:
-                smi.append(''.join(str(x) for x in atom.neighbors))
+            smi.append(hybridization_str[p_hybridization[0]])
+            if len(neighbors) > 1:
+                smi.append(''.join(str(x) for x in neighbors))
                 smi.append('>')
-                smi.append(''.join(str(x) for x in atom.p_neighbors))
-            elif atom.neighbors:
-                smi.append(str(atom.neighbors[0]))
+                smi.append(''.join(str(x) for x in p_neighbors))
+            elif neighbors:
+                smi.append(str(neighbors[0]))
                 smi.append('>')
-                smi.append(str(atom.p_neighbors[0]))
+                smi.append(str(p_neighbors[0]))
             smi.append(';')
-        elif len(atom.neighbors) > 1:
+        elif len(neighbors) > 1:
             smi.append(';')
-            smi.append(''.join(str(x) for x in atom.neighbors))
+            smi.append(''.join(str(x) for x in neighbors))
             smi.append('>')
-            smi.append(''.join(str(x) for x in atom.p_neighbors))
+            smi.append(''.join(str(x) for x in p_neighbors))
             smi.append(';')
-        elif atom.neighbors:
+        elif neighbors:
             smi.append(';')
-            smi.append(str(atom.neighbors[0]))
+            smi.append(str(neighbors[0]))
             smi.append('>')
-            smi.append(str(atom.p_neighbors[0]))
+            smi.append(str(p_neighbors[0]))
             smi.append(';')
 
-        if atom.charge or atom.p_charge:
-            smi.append(dyn_charge_str[(atom.charge, atom.p_charge)])
-        if atom.is_radical or atom.p_is_radical:
-            smi.append(dyn_radical_str[(atom.is_radical, atom.p_is_radical)])
+        if charge or p_charge:
+            smi.append(dyn_charge_str[(charge, p_charge)])
+        if is_radical or p_is_radical:
+            smi.append(dyn_radical_str[(is_radical, p_is_radical)])
 
         smi.append(']')
         return ''.join(smi)
