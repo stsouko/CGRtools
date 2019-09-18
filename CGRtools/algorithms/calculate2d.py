@@ -16,28 +16,23 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from math import hypot, pi, atan2, cos, sin
-from numpy import linalg, dot
+from math import hypot, pi, atan2, cos, sin, acos
 
 
-def rotate_vector(x1, y1, x2, y2, alpha=.0):
-    """
-    rotate x,y vector over x2-x1, y2-y1 angle
-    """
-    if alpha:
-        alpha = alpha / 2
-    angle = atan2(y2, x2) + alpha
+def rotate_vector(x1, y1, angle):
     cos_rad = cos(angle)
     sin_rad = sin(angle)
-    return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
+    return cos_rad * x1 + sin_rad * y1, sin_rad * x1 - cos_rad * y1
 
 
 def calculate_angle(v1, v2):
-    '''
+    """
     :params v1, v2: input vectors
     :return: angle between vectors v1, v2 in radians
-    '''
-    return atan2(linalg.det([v1, v2]), dot(v1, v2))
+    """
+    x1, y1 = v1
+    x2, y2 = v2
+    return abs(atan2(y1, x1) - atan2(y2, x2))
 
 
 def dist_force(n, m):
@@ -52,15 +47,6 @@ def dist_force(n, m):
     return x * elong, y * elong
 
 
-def ang_force(x, y, current_ang, optimal_ang):
-    """
-    :param x, y: vector
-    :return: force of angle
-    """
-    force = 1 * (current_ang - optimal_ang) ** 2
-    return rotate_vector(force, 0, x, y, alpha=current_ang)
-
-
 class Calculate2D:
     __slots__ = ()
 
@@ -68,6 +54,7 @@ class Calculate2D:
         plane = self._plane
         atoms = self._atoms
         bonds = self._bonds
+        sssr = self.sssr
 
         force_fields = {k: (0, 0) for k in atoms}
 
@@ -80,12 +67,18 @@ class Calculate2D:
             force_fields[m] = (x - dx, y - dy)
 
         # angle forces
+        angles = []
         for n, m_bond in bonds.items():
-            angles = []
             neighbors = list(m_bond)
             ln = len(m_bond)
+            cycle_angle = [pi / 2 - pi / len(cycle) for cycle in sssr if n in cycle]
             if ln == 2:
-                angles.append((neighbors[0], n, neighbors[1], False))
+                a = neighbors[0]
+                c = neighbors[1]
+                ange = normal_angles[bonds[a][n].order][bonds[n][c].order]
+                if cycle_angle:
+                    ange = cycle_angle[0]
+                angles.append((a, n, c, ange))
             elif ln == 4:
                 angles.append((neighbors[0], n, neighbors[2], 2*pi))
                 angles.append((neighbors[1], n, neighbors[3], 2*pi))
@@ -93,38 +86,43 @@ class Calculate2D:
                 for v, w in zip(neighbors, neighbors[1:]):
                     angles.append((v, n, w, pi))
             elif ln != 1:
-                ln = len(m_bond)
-                angles.append((neighbors[-1], n, neighbors[0], 4*pi/ln))
+                ange = 4*pi/ln
+                if cycle_angle:
+                    ange = cycle_angle[0]
+                angles.append((neighbors[-1], n, neighbors[0], ange))
                 for v, w in zip(neighbors, neighbors[1:]):
-                    angles.append((v, n, w, 4*pi/ln))
+                    angles.append((v, n, w, ange))
 
-            for a, b, c, ang in angles:
-                ax, ay = plane[a]
-                bx, by = plane[b]
-                cx, cy = plane[c]
-                abx, aby = bx - ax, by - ay
-                bcx, bcy = cx - bx, cy - by
-                angle = pi - calculate_angle((abx, aby), (bcx, bcy))
-                if ang:
-                    optimal_angle = ang
-                else:
-                    optimal_angle = normal_angles[bonds[a][b].order][bonds[b][c].order]
+        #
+        # a
+        # |
+        # b---c
+        #
+        for a, b, c, opt in angles:
+            ax, ay = plane[a]
+            bx, by = plane[b]
+            cx, cy = plane[c]
+            bax, bay = ax - bx, ay - by
+            bcx, bcy = cx - bx, cy - by
+            angle_ba = atan2(bay, bax)
+            angle_bc = atan2(bcy, bcx)
+            angle = acos((bax*bcx + bay*bcy) / (hypot(bay, bax) * hypot(bcy, bcx)))
+            angle_biss = (angle_bc + angle_ba) / 2
+            print('angle', angle, angle_biss, angle_ba, angle_bc)
 
-                if angle < .01:
-                    dx, dy = rotate_vector(0.2, .0, abx, aby)
-                    fax, fay = force_fields[a]
-                    force_fields[a] = fax + dx, fay + dy
-                    fcx, fcy = force_fields[c]
-                    force_fields[a] = fcx - dx, fcy - dy
-                    # cx, cy = cx + dx, cy + dy
-                    # plane[c] = (cx, cy)
-                    # bcx, bcy = cx - bx, cy - by
-                    # angle = pi - calculate_angle((abx, aby), (bcx, bcy))
+            # if angle < .01:
+            #     dx, dy = rotate_vector(0.2, .0, abx, aby)
+            #     fax, fay = force_fields[a]
+            #     force_fields[a] = fax + dx, fay + dy
+            #     fcx, fcy = force_fields[c]
+            #     force_fields[a] = fcx - dx, fcy - dy
 
-                dx, dy = ang_force(abx, aby, angle, optimal_angle)
-                kx, ky = force_fields[b]
-                force_fields[b] = (dx + kx, dy + ky)
-        self.flush_cache()
+            dx, dy = rotate_vector(1 * (angle - opt) ** 2, 0, angle_biss)
+            print(dx, dy, 1 * (angle - opt) ** 2)
+            kx, ky = force_fields[b]
+            # if b == 2:
+            #     print(dx + kx, dy + ky)
+            force_fields[b] = (kx - dx, ky - dy)
         return force_fields
 
     def clean2d(self):
@@ -133,19 +131,19 @@ class Calculate2D:
         :return: None
         """
         plane = self._plane
-        t = .2
-        stack = 1
-        while stack:
-            stack = 0
+        for x in range(1):
             forces = self.__get_forces()
+            print(forces, '\n')
             for atom, v in forces.items():
-                x2, y2 = v
-                if hypot(x2, y2) > .05:
-                    stack = 1
-                x2, y2 = x2 * t, y2 * t
                 x1, y1 = plane[atom]
+                x2, y2 = v
+                force = hypot(x2, y2)
+                ratio = .2 / force
+                if ratio < 1:
+                    x2, y2 = x2 * ratio, y2 * ratio
                 plane[atom] = (x1 + x2, y1 + y2)
-            self._plane = plane
+            # if steps >= 100:
+            #     break
 
 
 normal_distance = .825
