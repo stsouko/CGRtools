@@ -26,7 +26,7 @@ from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement
 
 
-class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
+class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):
