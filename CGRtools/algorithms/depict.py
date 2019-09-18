@@ -17,11 +17,12 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_method
 from collections import defaultdict
+from functools import partial
 from math import atan2, sin, cos, hypot
 from uuid import uuid4
-from ..cache import cached_method
-from ..periodictable import cpk
+from ..periodictable.cpk import cpk
 
 
 def rotate_vector(x1, y1, x2, y2):
@@ -35,11 +36,13 @@ def rotate_vector(x1, y1, x2, y2):
 
 
 class Depict:
+    __slots__ = ()
+
     def depict(self, *, embedding=False):
-        min_x = min(x.x for x in self._atoms.values())
-        max_x = max(x.x for x in self._atoms.values())
-        min_y = min(x.y for x in self._atoms.values())
-        max_y = max(x.y for x in self._atoms.values())
+        min_x = min(x for x, _ in self._plane.values())
+        max_x = max(x for x, _ in self._plane.values())
+        min_y = min(y for _, y in self._plane.values())
+        max_y = max(y for _, y in self._plane.values())
 
         bonds = self._render_bonds()
         atoms, masks = self._render_atoms()
@@ -47,10 +50,12 @@ class Depict:
         if embedding:
             return atoms, bonds, masks, max_x, max_y
 
-        width = max_x - min_x + 2.5 * self._render_font
-        height = max_y - min_y + 2.5 * self._render_font
-        viewbox_x = min_x - 1.25 * self._render_font
-        viewbox_y = -max_y - 1.25 * self._render_font
+        font = self._render_config['font']
+        font125 = 1.25 * font
+        width = max_x - min_x + 3.0 * font
+        height = max_y - min_y + 2.5 * font
+        viewbox_x = min_x - font125
+        viewbox_y = -max_y - font125
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
@@ -60,21 +65,23 @@ class Depict:
             if masks:
                 uid = str(uuid4())
                 svg.append(f'  <defs>\n    <mask id="mask-{uid}">\n'
-                           f'      <rect x="{min_x - 1.25 * self._render_font:.2f}" '
-                           f'y="{-max_y - 1.25 * self._render_font:.2f}" '
-                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
+                           f'      <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
+                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
                 svg.extend(masks)
-                svg.append(f'    </mask>\n  </defs>\n  <g fill="none" stroke="{self._render_bonds_color}" '
-                           f'stroke-width=".03"  mask="url(#mask-{uid})">')
+                svg.append(f'      </g>\n    </mask>\n  </defs>\n  <g fill="none" '
+                           f'stroke="{self._render_config["bond_color"]}" '
+                           f'stroke-width="{self._render_config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
+                if len(bonds) == 1:  # SVG BUG adhoc
+                    svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
+                               f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
-                svg.append(f'  <g fill="none" stroke="{self._render_bonds_color}" stroke-width=".03">')
-            svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
-                       f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
+                svg.append(f'  <g fill="none" stroke="{self._render_config["bond_color"]}" '
+                           f'stroke-width="{self._render_config["bond_width"]:.2f}">')
             svg.extend(bonds)
             svg.append('  </g>')
 
         if atoms:
-            svg.append('  <g font-family="sans-serif">')
+            svg.append('  <g font-family="monospace">')
             svg.extend(atoms)
             svg.append('  </g>')
 
@@ -85,57 +92,61 @@ class Depict:
     def _repr_svg_(self):
         return self.depict()
 
-    _render_carbon = False
-    _render_atoms_colors = cpk
-    _render_bonds_color = 'black'
-    _render_font = .4
-    _render_sup_font = .75 * _render_font
-    _render_up_font = -.5 * _render_font
-    _render_double_space = .04
-    _render_triple_space = .07
-    _render_aromatic_space = .08
-    _render_dashes = (.2, .1)
+    _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
+                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
+                      'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8'}
 
 
 class DepictMolecule(Depict):
+    __slots__ = ()
+
     def _render_bonds(self):
         svg = []
-        nodes = self._atoms
+        plane = self._plane
+        double_space = self._render_config['double_space']
+        triple_space = self._render_config['triple_space']
+        dash1, dash2 = self._render_config['dashes']
         for n, m, bond in self.bonds():
-            n, m = nodes[n], nodes[m]
-            nx, ny, mx, my = n.x, n.y, m.x, m.y
-            if bond.order in (1, 4):
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-            elif bond.order == 2:
-                dx, dy = rotate_vector(0, self._render_double_space, mx - nx, my - ny)
-                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
-                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
-            elif bond.order == 3:
-                dx, dy = rotate_vector(0, self._render_triple_space, mx - nx, my - ny)
-                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
+            order = bond.order
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            ny, my = -ny, -my
+            if order in (1, 4):
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+            elif order == 2:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
+            elif order == 3:
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
             else:
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
 
         for ring in self.aromatic_rings:
-            c_x = sum(nodes[x].x for x in ring) / len(ring)
-            c_y = sum(nodes[y].y for y in ring) / len(ring)
+            cx = sum(plane[n][0] for n in ring) / len(ring)
+            cy = sum(plane[n][1] for n in ring) / len(ring)
 
             for n, m in zip(ring, ring[1:]):
-                n, m = nodes[n], nodes[m]
-                aromatic = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+                nx, ny = plane[n]
+                mx, my = plane[m]
+                aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy)
                 if aromatic:
                     svg.append(aromatic)
 
-            n, m = nodes[ring[-1]], nodes[ring[0]]
-            aromatic = self.__render_aromatic_bond(n.x, n.y, m.x, m.y, c_x, c_y)
+            nx, ny = plane[ring[-1]]
+            mx, my = plane[ring[0]]
+            aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy)
             if aromatic:
                 svg.append(aromatic)
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
+        aromatic_space = self._render_config['aromatic_space']
+        dash1, dash2 = self._render_config['dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -143,14 +154,14 @@ class DepictMolecule(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
 
-        if self._render_aromatic_space / cr_y < .65:
+        if aromatic_space / cr_y < .65:
             if cr_y > 0:
-                ar_y = br_y = self._render_aromatic_space
+                ar_y = br_y = aromatic_space
             else:
-                ar_y = br_y = -self._render_aromatic_space
+                ar_y = br_y = -aromatic_space
 
-            ar_x = self._render_aromatic_space * cr_x / abs(cr_y)
-            br_x = ((abs(cr_y) - self._render_aromatic_space) * mr_x + self._render_aromatic_space * cr_x) / abs(cr_y)
+            ar_x = aromatic_space * cr_x / abs(cr_y)
+            br_x = ((abs(cr_y) - aromatic_space) * mr_x + aromatic_space * cr_x) / abs(cr_y)
 
             # backward reorienting
             an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
@@ -159,38 +170,71 @@ class DepictMolecule(Depict):
             b_x, b_y = bn_x + n_x, bn_y + n_y
 
             return f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" ' \
-                f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>'
+                f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>'
 
     def _render_atoms(self):
-        svg = []
-        mask = []
-        for n, atom in self.atoms():
-            single = not self._bonds[n]
-            if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity or \
-                    atom.isotope != atom.common_isotope:
-                x_shift = -shifts[atom.element] * self._render_font
-                y_shift = .35 * self._render_font
-                radius = -1.5 * x_shift
-                svg.append(f'    <g fill="{self._render_atoms_colors[atom.element]}">')
-                svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
-                           f'font-size="{self._render_font:.2f}">{atom.element}</text>')
-                if atom.charge:
-                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
-                if atom.multiplicity:
-                    svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">'
-                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
-                if atom.isotope != atom.common_isotope:
-                    svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
-                svg.append('    </g>')
-                mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
+        bonds = self._bonds
+        plane = self._plane
+        hydrogens = self._hydrogens
+        charges = self._charges
+        radicals = self._radicals
 
+        mapping = self._render_config['mapping']
+        carbon = self._render_config['carbon']
+        atoms_colors = self._render_config['atoms_colors']
+        font = self._render_config['font']
+        font2 = .2 * font
+        font3 = .3 * font
+        font5 = .5 * font
+        font6 = .6 * font
+        font8 = .8 * font
+
+        svg = []
+        maps = []
+        mask = []
+        for n, atom in self._atoms.items():
+            x, y = plane[n]
+            y = -y
+            symbol = atom.atomic_symbol
+            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope:
+                h = hydrogens[n]
+                if h == 1:
+                    h = 'H'
+                elif h:
+                    h = f'H<tspan  dy="{font5:.2f}" font-size="{font8:.2f}">{h}</tspan>'
+                else:
+                    h = ''
+                if mapping:
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font8:.2f}" '
+                                f'text-anchor="end">{n}</text>')
+
+                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font3:.2f}" '
+                           f'font-size="{font:.2f}">{symbol}{h}</text>')
+                if charges[n]:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{"↑" if radicals[n] else ""}'
+                               f'</text>')
+                elif radicals[n]:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                               f'font-size="{font6:.2f}">↑</text>')
+                if atom.isotope:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="-{font2:.2f}" '
+                               f'font-size="{font6:.2f}" text-anchor="end">{atom.isotope}</text>')
+                svg.append('    </g>')
+                mask.append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
+            elif mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle">{n}</text>')
+        if mapping:
+            svg.append(f'    <g fill="{self._render_config["mapping_color"]}" font-size="{font8:.2f}">')
+            svg.extend(maps)
+            svg.append('    </g>')
         return svg, mask
 
 
 class DepictReaction:
+    __slots__ = ()
+
     def depict(self):
         if not self._arrow:
             self.fix_positions()
@@ -211,10 +255,13 @@ class DepictReaction:
                 if max_y > r_max_y:
                     r_max_y = max_y
 
-        width = r_max_x + 2.5 * self._render_font
-        height = r_max_y + 2.5 * self._render_font
-        viewbox_x = -1.25 * self._render_font
-        viewbox_y = -r_max_y - 1.25 * self._render_font
+        config = Depict._render_config
+        font = config['font']
+        font125 = 1.25 * font
+        width = r_max_x + 3.0 * font
+        height = r_max_y + 2.5 * font
+        viewbox_x = -font125
+        viewbox_y = -r_max_y - font125
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
@@ -226,27 +273,28 @@ class DepictReaction:
             if r_masks:
                 uid = str(uuid4())
                 svg.append(f'    <mask id="mask-{uid}">\n'
-                           f'      <rect x="{-1.25 * self._render_font:.2f}" '
-                           f'y="{-r_max_y - 1.25 * self._render_font:.2f}" '
-                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
+                           f'      <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
+                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
                 svg.extend(r_masks)
-                svg.append('    </mask>\n  </defs>\n'
+                svg.append('      </g>\n    </mask>\n  </defs>\n'
                            f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
-                           f'  <g fill="none" stroke="{self._render_bonds_color}" '
-                           f'stroke-width=".03" mask="url(#mask-{uid})">')
+                           f'  <g fill="none" stroke="{config["bond_color"]}" '
+                           f'stroke-width="{config["bond_width"]:.2f}" mask="url(#mask-{uid})">')
+                if len(r_bonds) == 1:  # SVG BUG adhoc
+                    svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
+                               f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
                 svg.append('  </defs>')
                 svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
-                svg.append(f'  <g fill="none" stroke="{self._render_bonds_color}" stroke-width=".03">')
-            svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
-                       f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
+                svg.append(f'  <g fill="none" stroke="{config["bonds_color"]}" '
+                           f'stroke-width="{config["bond_width"]:.2f}">')
             svg.extend(r_bonds)
             svg.append('  </g>')
 
         if r_atoms:
-            svg.append('  <g font-family="sans-serif">')
+            svg.append('  <g font-family="monospace">')
             svg.extend(r_atoms)
             svg.append('  </g>')
 
@@ -257,370 +305,252 @@ class DepictReaction:
     def _repr_svg_(self):
         return self.depict()
 
-    _render_font = .4
-    _render_bonds_color = 'black'
-
-class DepictQuery(Depict):
-
-    def _render_bonds(self):
-        svg = []
-        nodes = self._atoms
-        for n, m, bond in self.bonds():
-            n, m = nodes[n], nodes[m]
-            nx, ny, mx, my = n.x, n.y, m.x, m.y
-            if bond.order == 1:
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-            elif bond.order == 4:
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my+0.5:.2f}"/>'\
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
-            elif bond.order == 2:
-                dx, dy = rotate_vector(0, self._render_double_space, mx - nx, my - ny)
-                svg.append(
-                    f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
-                svg.append(
-                    f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
-            elif bond.order == 3:
-                dx, dy = rotate_vector(0, self._render_triple_space, mx - nx, my - ny)
-                svg.append(
-                    f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>')
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
-                svg.append(
-                    f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
-            else:
-                svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
-        return svg
-
-    def _render_atoms(self):
-        svg = []
-        mask = []
-        for n, atom in self.atoms():
-            single = not self._bonds[n]
-            x_shift = -shifts[atom.element[0]] * self._render_font
-            y_shift = .35 * self._render_font
-
-            if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity:
-
-                radius = -1.5 * x_shift
-                svg.append(f'    <g fill="{self._render_atoms_colors[atom.element[0]]}">')
-                svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
-                           f'font-size="{self._render_font:.2f}">{atom.element[0]}</text>')
-
-                if atom.charge:
-                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
-                if atom.multiplicity:
-                    svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">'
-                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
-
-                mask.append(f'      <circle cx="{atom.x:.2f}" cy="{-atom.y:.2f}" r="{radius:.2f}" fill="black"/>')
-                svg.append('    </g>')
-
-            if atom.neighbors:
-                svg.append(f'    <g fill="#5D8AA8">')
-                reduction = []
-                start_i = 0
-                z = atom.neighbors[0]
-                for i, neighbor in enumerate(atom.neighbors[1:]):
-                    end_i = i
-                    if z + 1 == neighbor:
-                        z = neighbor
-                    else:
-                        if start_i == end_i:
-                            reduction.append(str(atom.neighbors[start_i]))
-                            start_i = end_i + 1
-                        else:
-                            reduction.append((str(atom.neighbors[start_i]) + '-' + str(atom.neighbors[end_i])))
-                            start_i = end_i + 1
-                        z = neighbor
-                    if atom.neighbors[end_i + 1] == atom.neighbors[-1]:
-                        if start_i == end_i:
-                            reduction.append(str(atom.neighbors[start_i]))
-                            start_i = end_i + 1
-                        else:
-                            reduction.append((str(atom.neighbors[start_i]) + '-' + str(atom.neighbors[end_i])))
-                            start_i = end_i + 1
-                for x in reduction:
-                    svg.append(f'      <text x="{atom.x - x_shift - 0.2:.2f}" y="{-y_shift - atom.y + 0.5:.2f}" 'f'font-size="{self._render_sup_font:.2f}">{x}</text>')
-                svg.append('    </g>')
-
-            if atom.hybridization:
-                svg.append(f'    <g fill="#5D8AA8">')
-                for hyb in atom.hybridization:
-                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y + 0.5:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{str(_render_hybridization_str[hyb])}</text>')
-                svg.append('    </g>')
-
-        return svg, mask
-
 
 class DepictCGR(Depict):
     def _render_bonds(self):
         svg = []
-        nodes = self._atoms
-        _ar_bond_colors = defaultdict(dict)
+        plane = self._plane
+        config = self._render_config
+        double_space = config['double_space']
+        triple_space = config['triple_space']
+        dash1, dash2 = config['dashes']
+        broken = config['broken_color']
+        formed = config['formed_color']
+
+        ar_bond_colors = defaultdict(dict)
         for n, m, bond in self.bonds():
             order, p_order = bond.order, bond.p_order
-            na, ma = nodes[n], nodes[m]
-            nx, ny, mx, my = na.x, na.y, ma.x, ma.y
-            rv = lambda s: rotate_vector(0, s, mx - nx, my - ny)
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            ny, my = -ny, -my
+            rv = partial(rotate_vector, 0, x2=mx - nx, y2=ny - my)
             if order == 1:
                 if p_order == 1:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 elif p_order == 4:
-                    _ar_bond_colors[n][m] = 'green'
-                    _ar_bond_colors[m][n] = 'green'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = formed
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 elif p_order == 2:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 3:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
-                               f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order is None:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="red"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
                 else:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my - dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my - dy:.2f}" stroke-dasharray="{dash1:.2f} '
+                               f'{dash2:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
             elif order == 4:
                 if p_order == 4:
-                    _ar_bond_colors[n][m] = 'black'
-                    _ar_bond_colors[m][n] = 'black'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 elif p_order == 1:
-                    _ar_bond_colors[n][m] = 'red'
-                    _ar_bond_colors[m][n] = 'red'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = broken
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 elif p_order == 2:
-                    _ar_bond_colors[n][m] = 'red'
-                    _ar_bond_colors[m][n] = 'red'
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'      <line x1="{nx + dx:.2f}" y1="{-ny + dx:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'      <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = broken
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 3:
-                    _ar_bond_colors[n][m] = 'red'
-                    _ar_bond_colors[m][n] = 'red'
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"  stroke="green"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = broken
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"  stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order is None:
-                    _ar_bond_colors[n][m] = 'red'
-                    _ar_bond_colors[m][n] = 'red'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="red"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = broken
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
                 else:
-                    _ar_bond_colors[n][m] = 'black'
-                    _ar_bond_colors[m][n] = 'black'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
             elif order == 2:
                 if p_order == 2:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
                 elif p_order == 1:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
                 elif p_order == 4:
-                    _ar_bond_colors[n][m] = 'green'
-                    _ar_bond_colors[m][n] = 'green'
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = formed
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
                 elif p_order == 3:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order is None:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
-                elif p_order == 5:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
-                               f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
+                else:
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke-dasharray="{dash1:.2f} '
+                               f'{dash2:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
             elif order == 3:
                 if p_order == 3:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
                 elif p_order == 1:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" 'f'stroke="red"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" 'f'stroke="{broken}"/>')
                 elif p_order == 4:
-                    _ar_bond_colors[n][m] = 'green'
-                    _ar_bond_colors[m][n] = 'green'
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" '
-                               f'y2="{-my + dy:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" '
-                               f'y2="{-my - dy:.2f}" stroke="red"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = formed
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" '
+                               f'y2="{my + dy:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" '
+                               f'y2="{my - dy:.2f}" stroke="{broken}"/>')
                 elif p_order == 2:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
                 elif p_order is None:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
-                               f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" '
+                               f'x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
                 else:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" x2="{mx + 3 * dx:.2f}" '
-                               f'y2="{-my + 3 * dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx - 3 * dx:.2f}" y1="{-ny - 3 * dy:.2f}" x2="{mx - 3 * dx:.2f}" '
-                               f'y2="{-my - 3 * dy:.2f}" stroke="red"/>')
+                    dx, dy = rv(double_space)
+                    dx3 = 3 * dx
+                    dy3 = 3 * dy
+                    svg.append(f'    <line x1="{nx + dx3:.2f}" y1="{ny + dy3:.2f}" x2="{mx + dx3:.2f}" '
+                               f'y2="{my + dy3:.2f}" stroke-dasharray="{dash1:.2f} '
+                               f'{dash2:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx3:.2f}" y1="{ny - dy3:.2f}" x2="{mx - dx3:.2f}" '
+                               f'y2="{my - dy3:.2f}" stroke="{broken}"/>')
             elif order is None:
                 if p_order == 1:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="green"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
                 elif p_order == 4:
-                    _ar_bond_colors[n][m] = 'green'
-                    _ar_bond_colors[m][n] = 'green'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="green"/>')
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = formed
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
                 elif p_order == 2:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" x2="{mx + dx:.2f}" '
-                               f'y2="{-my + dy:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" x2="{mx - dx:.2f}" '
-                               f'y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" '
+                               f'y2="{my + dy:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" '
+                               f'y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 3:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
-                               f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" '
+                               f'x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 else:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="green"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{formed}"/>')
             else:
                 if p_order == 5:
-                    svg.append(f'      <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}"/>')
+                    svg.append(f'      <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
                 elif p_order == 1:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}"stroke="red"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(double_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 4:
-                    _ar_bond_colors[n][m] = 'black'
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               'stroke="green"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
                 elif p_order == 2:
-                    dx, dy = rv(self._render_triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}"/>'
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" '
-                               f'x2="{mx:.2f}" y2="{-my:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(triple_space)
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 3:
-                    dx, dy = rv(self._render_double_space)
-                    svg.append(f'    <line x1="{nx + 3 * dx:.2f}" y1="{-ny + 3 * dy:.2f}" '
-                               f'x2="{mx + 3 * dx:.2f}" y2="{-my + 3 * dy:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="red"/>\n'
-                               f'    <line x1="{nx + dx:.2f}" y1="{-ny + dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{-my + dy:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - dx:.2f}" y1="{-ny - dy:.2f}" '
-                               f'x2="{mx - dx:.2f}" y2="{-my - dy:.2f}" stroke="green"/>\n'
-                               f'    <line x1="{nx - 3 * dx:.2f}" y1="{-ny - 3 * dy:.2f}" '
-                               f'x2="{mx - 3 * dx:.2f}" y2="{-my - 3 * dy:.2f}" stroke="green"/>')
+                    dx, dy = rv(double_space)
+                    dx3 = 3 * dx
+                    dy3 = 3 * dy
+                    svg.append(f'    <line x1="{nx + dx3:.2f}" y1="{ny + dy3:.2f}" '
+                               f'x2="{mx + dx3:.2f}" y2="{my + dy3:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" '
+                               f'x2="{mx + dx:.2f}" y2="{my + dy:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" '
+                               f'x2="{mx - dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx - dx3:.2f}" y1="{ny - dy3:.2f}" '
+                               f'x2="{mx - dx3:.2f}" y2="{my - dy3:.2f}" stroke="{formed}"/>')
                 else:
-                    svg.append(f'    <line x1="{nx:.2f}" y1="{-ny:.2f}" x2="{mx:.2f}" y2="{-my:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} '
-                               f'{self._render_dashes[1]:.2f}" stroke="red"/>')
+                    svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
 
         for ring in self.aromatic_rings:
-            c_x = sum(nodes[x].x for x in ring) / len(ring)
-            c_y = sum(nodes[y].y for y in ring) / len(ring)
+            cx = sum(plane[x][0] for x in ring) / len(ring)
+            cy = sum(plane[x][1] for x in ring) / len(ring)
 
             for n, m in zip(ring, ring[1:]):
-                na, ma = nodes[n], nodes[m]
-                aromatic = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+                nx, ny = plane[n]
+                mx, my = plane[m]
+                aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy, ar_bond_colors[n].get(m))
                 if aromatic:
-                    a_x, a_y, b_x, b_y = aromatic
-
-                    svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                               f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
-                               f'stroke="{_ar_bond_colors[n][m]}"/>')
+                    svg.append(aromatic)
 
             n, m = ring[-1], ring[0]
-            na, ma = nodes[n], nodes[m]
-            aromatic = self.__render_aromatic_bond(na.x, na.y, ma.x, ma.y, c_x, c_y)
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy, ar_bond_colors[n].get(m))
             if aromatic:
-                a_x, a_y, b_x, b_y = aromatic
-
-                svg.append(f'    <line x1="{a_x:.2f}" y1="{-a_y:.2f}" x2="{b_x:.2f}" y2="{-b_y:.2f}" '
-                           f'stroke-dasharray="{self._render_dashes[0]:.2f} {self._render_dashes[1]:.2f}" '
-                           f'stroke="{_ar_bond_colors[n][m]}"/>')
-
+                svg.append(aromatic)
         return svg
 
-    def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
+    def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
+        aromatic_space = self._render_config['aromatic_space']
+        dash1, dash2 = self._render_config['dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -628,82 +558,198 @@ class DepictCGR(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, mn_y)
 
-        if self._render_aromatic_space / cr_y < .65:
+        if aromatic_space / cr_y < .65:
             if cr_y > 0:
-                ar_y = br_y = self._render_aromatic_space
+                ar_y = br_y = aromatic_space
             else:
-                ar_y = br_y = -self._render_aromatic_space
+                ar_y = br_y = -aromatic_space
 
-            ar_x = self._render_aromatic_space * cr_x / abs(cr_y)
-            br_x = ((abs(cr_y) - self._render_aromatic_space) * mr_x + self._render_aromatic_space * cr_x) / abs(cr_y)
+            ar_x = aromatic_space * cr_x / abs(cr_y)
+            br_x = ((abs(cr_y) - aromatic_space) * mr_x + aromatic_space * cr_x) / abs(cr_y)
 
             # backward reorienting
             an_x, an_y = rotate_vector(ar_x, ar_y, mn_x, -mn_y)
             bn_x, bn_y = rotate_vector(br_x, br_y, mn_x, -mn_y)
-
-            return an_x + n_x, an_y + n_y, bn_x + n_x, bn_y + n_y
+            if color:
+                return f'    <line x1="{an_x + n_x:.2f}" y1="{-an_y - n_y:.2f}"' \
+                    f' x2="{bn_x + n_x:.2f}" y2="{-bn_y - n_y:.2f}" ' \
+                    f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{color}"/>'
+            return f'    <line x1="{an_x + n_x:.2f}" y1="{-an_y - n_y:.2f}"' \
+                f' x2="{bn_x + n_x:.2f}" y2="{-bn_y - n_y:.2f}" stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>'
 
     def _render_atoms(self):
+        bonds = self._bonds
+        plane = self._plane
+        charges = self._charges
+        p_charges = self._p_charges
+        radicals = self._radicals
+        p_radicals = self._p_radicals
+
+        carbon = self._render_config['carbon']
+        atoms_colors = self._render_config['atoms_colors']
+        font = self._render_config['font']
+        font2 = .2 * font
+        font3 = .3 * font
+        font5 = .5 * font
+        font6 = .6 * font
+
         svg = []
         mask = []
-        for n, atom in self.atoms():
-            single = not self._bonds[n]
-            if single or atom.element != 'C' or self._render_carbon or atom.charge or atom.multiplicity or \
-                    atom.isotope != atom.common_isotope:
-                x_shift = -shifts[atom.element] * self._render_font
-                y_shift = .35 * self._render_font
-                radius = -1.5 * x_shift
-                svg.append(f'    <g fill="{self._render_atoms_colors[atom.element]}">')
-                svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{y_shift - atom.y:.2f}" '
-                           f'font-size="{self._render_font:.2f}" '
-                           f'>{atom.element}</text>')
-                if atom.charge != atom.p_charge:
-                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">'
-                               f'{_render_p_charge_str[atom.charge][atom.p_charge]}</text>')
-                elif atom.charge:
-                    svg.append(f'      <text x="{atom.x - x_shift:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{_render_charge_str[atom.charge]}</text>')
-                if atom.multiplicity:
-                    svg.append(f'      <text x="{atom.x + x_shift:.2f}" y="{self._render_up_font - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">'
-                               f'{_render_multiplicity_str[atom.multiplicity]}</text>')
-                if atom.isotope != atom.common_isotope:
-                    svg.append(f'      <text x="{atom.x - self._render_font:.2f}" y="{-y_shift - atom.y:.2f}" '
-                               f'font-size="{self._render_sup_font:.2f}">{atom.isotope}</text>')
+        for n, atom in self._atoms.items():
+            x, y = plane[n]
+            y = -y
+            symbol = atom.atomic_symbol
+            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope:
+                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font3:.2f}" '
+                           f'font-size="{font:.2f}">{symbol}</text>')
+
+                if radicals[n]:
+                    r = '↑' if p_radicals[n] else '↑↓'
+                elif p_radicals[n]:
+                    r = '↓↑'
+                else:
+                    r = ''
+
+                if charges[n] != p_charges[n]:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_p_charge[charges[n]][p_charges[n]]}{r}</text>')
+                if charges[n]:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{r}</text>')
+                elif r:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
+                               f'font-size="{font6:.2f}">{r}</text>')
+
+                if atom.isotope:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="-{font2:.2f}" '
+                               f'font-size="{font6:.2f}" text-anchor="end">{atom.isotope}</text>')
                 svg.append('    </g>')
-                mask.append(f'      <circle cx="{atom.x}" cy="{-atom.y}" r="{radius}" fill="black"/>')
+                mask.append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
         return svg, mask
 
-    _render_aromatic_space = .14
+    _render_config = {'broken_color': 'red', 'formed_color': 'green', **Depict._render_config, 'aromatic_space': .14}
 
 
-shifts = {'H': .35, 'He': .35, 'Li': .35, 'Be': .35, 'B': .35, 'C': .35, 'N': .35, 'O': .35,
-          'F': .35, 'Ne': .35, 'Na': .35, 'Mg': .35, 'Al': .35, 'Si': .35, 'P': .35, 'S': .35,
-          'Cl': .35, 'Ar': .35, 'K': .35, 'Ca': .35, 'Sc': .35, 'Ti': .35, 'V': .35, 'Cr': .35,
-          'Mn': .35, 'Fe': .35, 'Co': .35, 'Ni': .35, 'Cu': .35, 'Zn': .35, 'Ga': .35, 'Ge': .35,
-          'As': .35, 'Se': .35, 'Br': .35, 'Kr': .35, 'Rb': .35, 'Sr': .35, 'Y': .35, 'Zr': .35,
-          'Nb': .35, 'Mo': .35, 'Tc': .35, 'Ru': .35, 'Rh': .35, 'Pd': .35, 'Ag': .35, 'Cd': .35,
-          'In': .35, 'Sn': .35, 'Sb': .35, 'Te': .35, 'I': .35, 'Xe': .35, 'Cs': .35, 'Ba': .35,
-          'La': .35, 'Ce': .35, 'Pr': .35, 'Nd': .35, 'Pm': .35, 'Sm': .35, 'Eu': .35, 'Gd': .35,
-          'Tb': .35, 'Dy': .35, 'Ho': .35, 'Er': .35, 'Tm': .35, 'Yb': .35, 'Lu': .35, 'Hf': .35,
-          'Ta': .35, 'W': .35, 'Re': .35, 'Os': .35, 'Ir': .35, 'Pt': .35, 'Au': .35, 'Hg': .35,
-          'Tl': .35, 'Pb': .35, 'Bi': .35, 'Po': .35, 'At': .35, 'Rn': .35, 'Fr': .35, 'Ra': .35,
-          'Ac': .35, 'Th': .35, 'Pa': .35, 'U': .35, 'Np': .35, 'Pu': .35, 'Am': .35, 'Cm': .35,
-          'Bk': .35, 'Cf': .35, 'Es': .35, 'Fm': .35, 'Md': .35, 'No': .35, 'Lr': .35, 'Rf': .35,
-          'Db': .35, 'Sg': .35, 'Bh': .35, 'Hs': .35, 'Mt': .35, 'Ds': .35, 'Rg': .35, 'Cn': .35,
-          'Nh': .35, 'Fl': .35, 'Mc': .35, 'Lv': .35, 'Ts': .35, 'Og': .35}
+class DepictQuery(Depict):
+    __slots__ = ()
 
-_render_charge_str = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
-_render_hybridization_str = {1: 's', 2: 'd', 3: 't', 4: 'a'}
+    def _render_bonds(self):
+        svg = []
+        plane = self._plane
+        double_space = self._render_config['double_space']
+        triple_space = self._render_config['triple_space']
+        dash1, dash2 = self._render_config['dashes']
+        for n, m, bond in self.bonds():
+            order = bond.order
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            ny, my = -ny, -my
+            if order == 1:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+            elif order == 4:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
+            elif order == 2:
+                dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
+            elif order == 3:
+                dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
+                svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny + dy:.2f}" x2="{mx + dx:.2f}" y2="{my + dy:.2f}"/>')
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
+                svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny - dy:.2f}" x2="{mx - dx:.2f}" y2="{my - dy:.2f}"/>')
+            else:
+                svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
+                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
+        return svg
 
-_render_p_charge_str = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
-                        -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
-                        -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
-                        0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
-                        1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
-                        2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
-                        3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
-_render_multiplicity_str = {1: '↑↓', 2: '↑', 3: '↑↑'}
+    def _render_atoms(self):
+        plane = self._plane
+        mapping = self._render_config['mapping']
+        carbon = self._render_config['carbon']
+        atoms_colors = self._render_config['atoms_colors']
+        font = self._render_config['font']
+        font2 = .2 * font
+        font3 = .3 * font
+        font4 = .4 * font
+        font6 = .6 * font
+        font7 = .7 * font
+        font8 = .8 * font
+
+        svg = []
+        mask = []
+        maps = []
+        nghbrs = []
+        hbrdztns = []
+        for n, atom in self._atoms.items():
+            x, y = plane[n]
+            y = -y
+            single = not self._bonds[n]
+            symbol = atom.atomic_symbol
+            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
+                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
+                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
+                           f'font-size="{font:.2f}">{symbol}</text>')
+                if mapping:
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+                                f'text-anchor="end">{n}</text>')
+
+                if atom.charge:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
+                               f'{"↑" if atom.is_radical else ""}</text>')
+                elif atom.is_radical:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">↑</text>')
+                svg.append('    </g>')
+                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
+            elif mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+                            f'text-anchor="end">{n}</text>')
+
+            level = 1
+            if atom.neighbors:
+                level = 1.6
+                nn = [str(x) for x in atom.neighbors]
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
+                              f'text-anchor="start">{"".join(nn)}</text>')
+
+            if atom.hybridization:
+                hh = [_render_hybridization[x] for x in atom.hybridization]
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
+                                f'text-anchor="start">{"".join(hh)}</text>')
+        if nghbrs:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(nghbrs)
+            if hbrdztns:
+                svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        elif hbrdztns:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        if mapping:
+            svg.append(f'    <g fill="{self._render_config["mapping_color"]}" font-size="{font7:.2f}">')
+            svg.extend(maps)
+            svg.append('    </g>')
+
+        return svg, mask
+
+
+_render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
+_render_charge = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
+_render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
+                    -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
+                    -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
+                    0: {-3: '0»-3', -2: '0»-2', -1: '0»-', 1: '0»+', 2: '0»2', 3: '0»3'},
+                    1: {-3: '+»-3', -2: '+»-2', -1: '+»-', 0: '+»0', 2: '+»2', 3: '+»3'},
+                    2: {-3: '2»-3', -2: '2»-2', -1: '2»-', 0: '2»0', 1: '2»+', 3: '2»3'},
+                    3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
+
 
 __all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery']

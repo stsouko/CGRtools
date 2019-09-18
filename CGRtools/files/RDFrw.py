@@ -26,19 +26,18 @@ from subprocess import check_output
 from sys import platform
 from time import strftime
 from traceback import format_exc
-from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, RXNread, ERXNread, prepare_meta
-from ..containers.common import BaseContainer
-from ..exceptions import InvalidFileType
+from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
+from ..containers import ReactionContainer
+from ..containers.common import Graph
 
 
-class RDFread(CGRread, WithMixin, MDLread):
+class RDFRead(MDLRead):
     """
     MDL RDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, indexable=False, **kwargs):
+    def __init__(self, *args, indexable=False, **kwargs):
         """
         :param indexable: if True:
             supported methods seek, tell, object size and subscription, it only works when dealing with a real file
@@ -49,7 +48,6 @@ class RDFread(CGRread, WithMixin, MDLread):
             records with errors are skipped
         """
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -123,7 +121,7 @@ class RDFread(CGRread, WithMixin, MDLread):
             is_reaction = meta = None
             yield True
         else:
-            raise InvalidFileType
+            raise ValueError('invalid file')
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
@@ -140,7 +138,7 @@ class RDFread(CGRread, WithMixin, MDLread):
                     yield None
             elif line.startswith('$RFMT'):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
@@ -160,7 +158,7 @@ class RDFread(CGRread, WithMixin, MDLread):
                 meta = defaultdict(list)
             elif line.startswith('$MFMT'):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
@@ -192,14 +190,14 @@ class RDFread(CGRread, WithMixin, MDLread):
                 try:
                     if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
-                            parser = ERXNread(line, self._ignore)
+                            parser = ERXNRead(line, self._ignore)
                         else:
-                            parser = RXNread(line, self._ignore)
+                            parser = RXNRead(line, self._ignore)
                     else:
                         if 'V2000' in line:
-                            parser = MOLread(line)
+                            parser = MOLRead(line)
                         elif 'V3000' in line:
-                            parser = EMOLread()
+                            parser = EMOLRead()
                         else:
                             raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -207,7 +205,7 @@ class RDFread(CGRread, WithMixin, MDLread):
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
                     yield None
         if record:
-            record['meta'] = prepare_meta(meta)
+            record['meta'] = self._prepare_meta(meta)
             try:
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
@@ -217,16 +215,12 @@ class RDFread(CGRread, WithMixin, MDLread):
     __already_seeked = False
 
 
-class RDFwrite(MOLwrite, WithMixin):
+class RDFWrite(MDLWrite):
     """
     MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
-
     def write(self, data):
         """
         write single molecule or reaction into file
@@ -236,22 +230,26 @@ class RDFwrite(MOLwrite, WithMixin):
         self.write = self.__write
 
     def __write(self, data):
-        if isinstance(data, BaseContainer):
+        if isinstance(data, Graph):
             m = self._convert_structure(data)
             self._file.write('$MFMT\n')
-            self._file.write(self._format_mol(*m['structure']))
-            self._file.write('M  END\n')
-        else:
+            self._file.write(m)
+        elif isinstance(data, ReactionContainer):
             self._file.write('$RFMT\n$RXN\n\n\n\n'
                              f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)
                 self._file.write('$MOL\n')
-                self._file.write(self._format_mol(*m))
-                self._file.write('M  END\n')
+                self._file.write(m)
+        else:
+            raise TypeError('Graph or Reaction object expected')
 
         for k, v in data.meta.items():
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
 
-__all__ = ['RDFread', 'RDFwrite']
+RDFread = RDFRead
+RDFwrite = RDFWrite
+
+
+__all__ = ['RDFRead', 'RDFWrite', 'RDFread', 'RDFwrite']

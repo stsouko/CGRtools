@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
-#  Copyright 2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm
 #  Copyright 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 #  This file is part of CGRtools.
 #
@@ -19,10 +18,9 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 """
-CGRtools main module. Contains CGR reactor and preparer
+CGRtools main module. Contains CGR preparer
 """
 from .preparer import *
-from .reactor import *
 
 
-__all__ = ['CGRpreparer', 'CGRreactor', 'Reactor']
+__all__ = ['CGRPreparer']
