@@ -53,8 +53,28 @@ class Smiles:
         return self._smiles(self.atoms_order.get)
 
     def __format__(self, format_spec):
-        if format_spec == "ac":
-            return self._smiles(self.atoms_order.get, asymmetric_closures=True)
+        """
+        signature generation options
+
+        :param format_spec: string with keys:
+            a - generate asymmetric closures
+            !s - disable stereo marks
+            !h - disable hybridization marks in queries
+            !n - disable neighbors marks in queries
+
+            combining possible. order independent. another key ignored
+        """
+        if format_spec:
+            kwargs = {}
+            if 'a' in format_spec:
+                kwargs['asymmetric_closures'] = True
+            if '!s' in format_spec:
+                kwargs['stereo'] = False
+            if '!h' in format_spec:
+                kwargs['hybridization'] = False
+            if '!n' in format_spec:
+                kwargs['neighbors'] = False
+            return self._smiles(self.atoms_order.get, **kwargs)
         return str(self)
 
     def __eq__(self, other):
@@ -68,7 +88,7 @@ class Smiles:
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    def _smiles(self, weights, *, asymmetric_closures=False):
+    def _smiles(self, weights, *, asymmetric_closures=False, **kwargs):
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
@@ -148,20 +168,20 @@ class Smiles:
                     visited[token].extend(edges[token])
             for token in smiles:
                 if isinstance(token, int):  # atoms
-                    string.append(self._format_atom(token, visited))
+                    string.append(self._format_atom(token, adjacency=visited, **kwargs))
                     if token in tokens:
                         for m, c in tokens[token]:
                             if asymmetric_closures:
                                 if (token, m) not in visited_bond:
-                                    string.append(self._format_bond(token, m, visited))
+                                    string.append(self._format_bond(token, m, adjacency=visited, **kwargs))
                                     visited_bond.add((m, token))
                             else:
-                                string.append(self._format_bond(token, m, visited))
+                                string.append(self._format_bond(token, m, adjacency=visited, **kwargs))
                             string.append(str(casted_cycles[c]))
                 elif token in ('(', ')'):
                     string.append(token)
                 else:  # bonds
-                    string.append(self._format_bond(*token, visited))
+                    string.append(self._format_bond(*token, adjacency=visited, **kwargs))
 
             atoms_set.difference_update(visited)
             if atoms_set:
@@ -181,7 +201,7 @@ class MoleculeSmiles(Smiles):
             aromatics.update(ring)
         return aromatics
 
-    def _format_atom(self, n, adjacency):
+    def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
@@ -190,8 +210,8 @@ class MoleculeSmiles(Smiles):
         else:
             smi = [atom.atomic_symbol]
 
-        if n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
+        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
+            smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
             if ih:
                 smi.append('H')
             smi.insert(0, '[')
@@ -227,14 +247,14 @@ class MoleculeSmiles(Smiles):
             smi.append(']')
         return ''.join(smi)
 
-    def _format_bond(self, n, m, adjacency):
+    def _format_bond(self, n, m, **kwargs):
         return order_str[self._bonds[n][m].order]
 
 
 class CGRSmiles(Smiles):
     __slots__ = ()
 
-    def _format_atom(self, n, adjacency):
+    def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         is_radical = self._radicals[n]
@@ -255,7 +275,7 @@ class CGRSmiles(Smiles):
             smi.append(']')
         return ''.join(smi)
 
-    def _format_bond(self, n, m, adjacency):
+    def _format_bond(self, n, m, **kwargs):
         bond = self._bonds[n][m]
         return dyn_order_str[(bond.order, bond.p_order)]
 
@@ -263,7 +283,7 @@ class CGRSmiles(Smiles):
 class QuerySmiles(Smiles):
     __slots__ = ()
 
-    def _format_atom(self, n, adjacency):
+    def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         hybridization = self._hybridizations[n]
@@ -274,32 +294,18 @@ class QuerySmiles(Smiles):
         else:
             smi = ['[', atom.atomic_symbol]
 
-        if n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
+        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
+            smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
 
-        if len(hybridization) > 1:
+        if kwargs.get('hybridization', True) and hybridization:
             smi.append(';')
             smi.append(''.join(hybridization_str[x] for x in hybridization))
-            if len(neighbors) > 1:
+            if kwargs.get('neighbors', True) and neighbors:
                 smi.append(''.join(str(x) for x in neighbors))
-            elif neighbors:
-                smi.append(str(neighbors[0]))
             smi.append(';')
-        elif hybridization:
-            smi.append(';')
-            smi.append(hybridization_str[hybridization[0]])
-            if len(neighbors) > 1:
-                smi.append(''.join(str(x) for x in neighbors))
-            elif neighbors:
-                smi.append(str(neighbors[0]))
-            smi.append(';')
-        elif len(neighbors) > 1:
+        elif kwargs.get('neighbors', True) and neighbors:
             smi.append(';')
             smi.append(''.join(str(x) for x in neighbors))
-            smi.append(';')
-        elif neighbors:
-            smi.append(';')
-            smi.append(str(neighbors[0]))
             smi.append(';')
 
         if charge:
@@ -310,14 +316,14 @@ class QuerySmiles(Smiles):
         smi.append(']')
         return ''.join(smi)
 
-    def _format_bond(self, n, m, adjacency):
+    def _format_bond(self, n, m, **kwargs):
         return order_str[self._bonds[n][m].order]
 
 
 class QueryCGRSmiles(Smiles):
     __slots__ = ()
 
-    def _format_atom(self, n, adjacency):
+    def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         hybridization = self._hybridizations[n]
@@ -333,45 +339,21 @@ class QueryCGRSmiles(Smiles):
         else:
             smi = ['[', atom.atomic_symbol]
 
-        if len(hybridization) > 1:
+        if kwargs.get('hybridization', True) and hybridization:
             smi.append(';')
             smi.append(''.join(hybridization_str[x] for x in hybridization))
             smi.append('>')
             smi.append(''.join(hybridization_str[x] for x in p_hybridization))
-            if len(neighbors) > 1:
+            if kwargs.get('neighbors', True) and neighbors:
                 smi.append(''.join(str(x) for x in neighbors))
                 smi.append('>')
                 smi.append(''.join(str(x) for x in p_neighbors))
-            elif neighbors:
-                smi.append(str(neighbors[0]))
-                smi.append('>')
-                smi.append(str(p_neighbors[0]))
             smi.append(';')
-        elif hybridization:
-            smi.append(';')
-            smi.append(hybridization_str[hybridization[0]])
-            smi.append('>')
-            smi.append(hybridization_str[p_hybridization[0]])
-            if len(neighbors) > 1:
-                smi.append(''.join(str(x) for x in neighbors))
-                smi.append('>')
-                smi.append(''.join(str(x) for x in p_neighbors))
-            elif neighbors:
-                smi.append(str(neighbors[0]))
-                smi.append('>')
-                smi.append(str(p_neighbors[0]))
-            smi.append(';')
-        elif len(neighbors) > 1:
+        elif kwargs.get('neighbors', True) and neighbors:
             smi.append(';')
             smi.append(''.join(str(x) for x in neighbors))
             smi.append('>')
             smi.append(''.join(str(x) for x in p_neighbors))
-            smi.append(';')
-        elif neighbors:
-            smi.append(';')
-            smi.append(str(neighbors[0]))
-            smi.append('>')
-            smi.append(str(p_neighbors[0]))
             smi.append(';')
 
         if charge or p_charge:
@@ -382,7 +364,7 @@ class QueryCGRSmiles(Smiles):
         smi.append(']')
         return ''.join(smi)
 
-    def _format_bond(self, n, m, adjacency):
+    def _format_bond(self, n, m, **kwargs):
         bond = self._bonds[n][m]
         return dyn_order_str[(bond.order, bond.p_order)]
 
