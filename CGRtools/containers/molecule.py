@@ -40,7 +40,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         self._neighbors: Dict[int, int] = {}
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
-        self._atoms_stereo: Dict[int, int] = {}
+        self._atoms_stereo: Dict[int, bool] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -529,7 +529,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         bonds = self._bonds
         tetra = []
         for n, atom in atoms.items():
-            if atom.atomic_number == 6:
+            if atom.atomic_number == 6 and not self._charges[n]:
                 env = bonds[n]
                 b_sum = sum(x.order for x in env.values())
                 if b_sum > 4:

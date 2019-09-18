@@ -32,7 +32,7 @@ class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}
         self._hybridizations: Dict[int, Tuple[int, ...]] = {}
-        self._atoms_stereo: Dict[int, int] = {}
+        self._atoms_stereo: Dict[int, bool] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,

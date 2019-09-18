@@ -20,7 +20,7 @@ from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
 from logging import info
-from ..exceptions import AtomNotFound, NotChiral, IsChiral
+from ..exceptions import AtomNotFound, NotChiral, IsChiral, ValenceError
 
 
 def _pyramid_sign(n, u, v, w):
@@ -139,7 +139,13 @@ class Stereo:
 
     def _translate_tetrahedron_stereo(self, n, env):
         order = self._tetrahedrons[n]
-        if len(order) != len(env):
+        if len(order) == 3:
+            if len(env) == 4:
+                atoms = self._atoms
+                order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
+            elif len(env) != 3:
+                raise ValueError('invalid atoms list')
+        elif len(env) != 4:
             raise ValueError('invalid atoms list')
         s = self._atoms_stereo[n]
 
@@ -147,22 +153,6 @@ class Stereo:
         if _tetrahedron_translate[translate]:
             return not s
         return s
-
-    @cached_property
-    def _tetrahedrons(self):
-        #    2
-        #    |
-        # 1--K--3
-        #    |
-        #    4?
-        atoms = self._atoms
-        bonds = self._bonds
-        tetrahedrons = {}
-        for n in self.tetrahedrons:
-            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
-            if len(env) in (3, 4):
-                tetrahedrons[n] = env
-        return tetrahedrons
 
 
 class MoleculeStereo(Stereo):
@@ -216,6 +206,22 @@ class MoleculeStereo(Stereo):
         else:  # only tetrahedrons supported
             raise NotChiral
 
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n in self.tetrahedrons:
+            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            if len(env) in (3, 4):
+                tetrahedrons[n] = env
+        return tetrahedrons
+
     def _fix_stereo(self):
         if self._atoms_stereo:
             stereo = self._atoms_stereo
@@ -235,10 +241,9 @@ class MoleculeStereo(Stereo):
 
     @cached_property
     def _chiral_atoms(self):
-        bonds = self._bonds
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
-        explicit = {n for n, a in self._atoms.items() if a.atomic_number == 1}
+        tetrahedrons = self._tetrahedrons
         if atoms_stereo:
             grouped_stereo = defaultdict(list)
             morgan_update = {}
@@ -248,7 +253,7 @@ class MoleculeStereo(Stereo):
             for group in grouped_stereo.values():
                 if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
                     s = [n for n in group
-                         if self._translate_tetrahedron_stereo(n, sorted(bonds[n].keys() - explicit, key=morgan.get))]
+                         if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
                     if 0 < len(s) < len(group):  # RS pair required
                         for n in s:
                             morgan_update[n] = -morgan[n]
@@ -261,6 +266,28 @@ class MoleculeStereo(Stereo):
 
 class QueryStereo(Stereo):
     __slots__ = ()
+
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n, atom in atoms.items():
+            if atom.atomic_number == 6 and not self._charges[n]:
+                env = bonds[n]
+                b_sum = sum(x.order for x in env.values())
+                if b_sum > 4:
+                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
+                if all(x.order == 1 for x in env.values()):
+                    env = tuple(x for x in env if atoms[x].atomic_number != 1)
+                    if len(env) in (3, 4):
+                        tetrahedrons[n] = env
+        return tetrahedrons
 
 
 class NotUsed:
