@@ -24,6 +24,7 @@ from ..algorithms.calculate2d import Calculate2D
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
+from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
@@ -101,8 +102,11 @@ class Graph(Isomorphism, SSSR, Morgan, Calculate2D, ABC):
         return self._bonds[n][m]
 
     def has_bond(self, n: int, m: int) -> bool:
-        self._bonds[n]  # check if atom exists
-        return n in self._bonds[m]
+        try:
+            self._bonds[n]  # check if atom exists
+            return n in self._bonds[m]
+        except KeyError:
+            raise AtomNotFound
 
     def bonds(self) -> Iterator[Tuple[int, int, Union[Bond, DynamicBond]]]:
         """
@@ -177,11 +181,11 @@ class Graph(Isomorphism, SSSR, Morgan, Calculate2D, ABC):
         new bond addition
         """
         if n == m:
-            raise KeyError('atom loops impossible')
+            raise ValueError('atom loops impossible')
         if n not in self._bonds or m not in self._bonds:
-            raise KeyError('atoms not found')
+            raise AtomNotFound('atoms not found')
         if n in self._bonds[m]:
-            raise KeyError('atoms already bonded')
+            raise ValueError('atoms already bonded')
 
         self._bonds[n][m] = self._bonds[m][n] = bond
         self.__dict__.clear()
@@ -278,7 +282,6 @@ class Graph(Isomorphism, SSSR, Morgan, Calculate2D, ABC):
         :param meta: include metadata
         """
         copy = object.__new__(self.__class__)
-        copy.__dict__ = {}
         copy._meta = self._meta.copy() if meta else {}
 
         copy._charges = self._charges.copy()
@@ -375,7 +378,7 @@ class Graph(Isomorphism, SSSR, Morgan, Calculate2D, ABC):
 
     def union(self, other: 'Graph') -> 'Graph':
         if self._atoms.keys() & other._atoms.keys():
-            raise KeyError('mapping of graphs is not disjoint')
+            raise ValueError('mapping of graphs is not disjoint')
 
         u = self.copy(meta=False)
         u._charges.update(other._charges)

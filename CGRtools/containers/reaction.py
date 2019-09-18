@@ -89,6 +89,7 @@ class ReactionContainer(DepictReaction):
         self.__products = state['products']
         self.__reagents = state['reagents']
         self.__meta = state['meta']
+        self._arrow = None
 
     @property
     def reactants(self) -> Tuple[Graph, ...]:

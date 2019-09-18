@@ -29,7 +29,6 @@ from traceback import format_exc
 from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
 from ..containers import ReactionContainer
 from ..containers.common import Graph
-from ..exceptions import InvalidFileType
 
 
 class RDFRead(MDLRead):
@@ -122,7 +121,7 @@ class RDFRead(MDLRead):
             is_reaction = meta = None
             yield True
         else:
-            raise InvalidFileType
+            raise ValueError('invalid file')
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
