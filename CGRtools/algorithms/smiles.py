@@ -145,7 +145,10 @@ class Smiles:
                         smiles.append(child)
                 elif closure:  # end of side chain
                     stack.pop()
-                    smiles.append(')')
+                    if smiles[-2] == '(':
+                        smiles.pop(-2)
+                    else:
+                        smiles.append(')')
                     stack[closure - 1][2].extend(smiles)
                 elif len(stack) > 2:
                     stack.pop()
@@ -177,7 +180,8 @@ class Smiles:
                                     visited_bond.add((m, token))
                             else:
                                 string.append(self._format_bond(token, m, adjacency=visited, **kwargs))
-                            string.append(str(casted_cycles[c]))
+                            c = casted_cycles[c]
+                            string.append(str(c) if c < 10 else f'%{c}')
                 elif token in ('(', ')'):
                     string.append(token)
                 else:  # bonds
