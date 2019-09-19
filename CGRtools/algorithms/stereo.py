@@ -114,6 +114,23 @@ def _dihedral_sign(n, u, v, w):
 class Stereo:
     __slots__ = ()
 
+    def get_mapping(self, other, **kwargs):
+        stereo = self._atoms_stereo
+        if stereo:
+            tetrahedrons = self._tetrahedrons
+            for mapping in super().get_mapping(other, **kwargs):
+                for n in stereo.keys() & mapping.keys():
+                    m = mapping[n]
+                    if m not in other._atoms_stereo:  # self stereo atom not stereo in other
+                        break
+                    # translate stereo mark in other in order of self tetrahedron
+                    if stereo[n] != other._translate_tetrahedron_stereo(m, [mapping[x] for x in tetrahedrons[n]]):
+                        break
+                else:
+                    yield mapping
+        else:
+            yield from super().get_mapping(other, **kwargs)
+
     @cached_property
     def _wedge_map(self):
         plane = self._plane
@@ -145,7 +162,7 @@ class Stereo:
                 order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
             elif len(env) != 3:
                 raise ValueError('invalid atoms list')
-        elif len(env) != 4:
+        elif len(env) not in (3, 4):
             raise ValueError('invalid atoms list')
         s = self._atoms_stereo[n]
 

@@ -31,7 +31,7 @@ from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeStereo, DepictMolecule):
+class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
