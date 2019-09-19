@@ -162,7 +162,7 @@ class Stereo:
                 order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
             elif len(env) != 3:
                 raise ValueError('invalid atoms list')
-        elif len(env) != 4:
+        elif len(env) not in (3, 4):
             raise ValueError('invalid atoms list')
         s = self._atoms_stereo[n]
 
