@@ -21,18 +21,6 @@ from math import hypot, pi, acos
 from ..algorithms.depict import rotate_vector
 
 
-def hypot2(x ,y):
-    """
-    x and y are zeroes so hypot(x, y) is zeroes
-    :param x, y: vector x, y
-    :return: vectors len
-    """
-    lnm = hypot(x, y)
-    if not lnm:
-        lnm = .01
-    return lnm
-
-
 class Calculate2D:
     __slots__ = ()
 
@@ -44,24 +32,39 @@ class Calculate2D:
         for n, m_bond in bonds.items():
             neighbors = list(m_bond)
             ln = len(m_bond)
-            cycle_angle = [pi / 2 - pi / len(cycle) for cycle in sssr if n in cycle]
+            cycle_angle = None
+            for cycle in sssr:
+                lc = len(cycle)
+                if n in cycle:
+                    if lc == 3:
+                        cycle_angle = pi / 3
+                    elif lc == 4:
+                        cycle_angle = pi / 2
+                    else:
+                        cycle_angle = [pi / 2 - pi / len(cycle) for cycle in sssr if n in cycle][0]
             if ln == 2:
                 a = neighbors[0]
                 c = neighbors[1]
                 ange = normal_angles[bonds[a][n].order][bonds[n][c].order]
                 if cycle_angle:
-                    ange = cycle_angle[0]
+                    ange = cycle_angle
                 angles.append((a, n, c, ange))
             elif ln == 4:
-                angles.append((neighbors[0], n, neighbors[2], 2 * pi))
-                angles.append((neighbors[1], n, neighbors[3], 2 * pi))
-                angles.append((neighbors[-1], n, neighbors[0], pi))
-                for v, w in zip(neighbors, neighbors[1:]):
-                    angles.append((v, n, w, pi))
+                print(m_bond)
+                print(neighbors)
+                angles.append((neighbors[0], n, neighbors[-1], pi))
+                angles.append((neighbors[1], n, neighbors[2], pi))
+                angles.append((neighbors[0], n, neighbors[2], pi / 2))
+                angles.append((neighbors[2], n, neighbors[3], pi / 2))
+                angles.append((neighbors[3], n, neighbors[1], pi / 2))
+                angles.append((neighbors[1], n, neighbors[0], pi / 2))
+                print(angles)
+                # for v, w in zip(neighbors, neighbors[1:]):
+                #     angles.append((v, n, w, pi / 2))
             elif ln != 1:
-                ange = 4 * pi / ln
+                ange = 2 * pi / ln
                 if cycle_angle:
-                    ange = cycle_angle[0]
+                    ange = cycle_angle
                 angles.append((neighbors[-1], n, neighbors[0], ange))
                 for v, w in zip(neighbors, neighbors[1:]):
                     angles.append((v, n, w, ange))
@@ -71,6 +74,11 @@ class Calculate2D:
         plane = self._plane
         atoms = self._atoms
 
+        # for hypot(x, y)
+        for n, (x, y) in plane.items():
+            if not x and not y:
+                plane[n] = (.0001, .0001)
+
         force_fields = {k: (0, 0) for k in atoms}
 
         # distance forces
@@ -78,8 +86,7 @@ class Calculate2D:
             nx, ny = plane[n]
             mx, my = plane[m]
             x, y = nx - mx, ny - my
-            # x,y = 0,0 then hypot(y, x) = 0
-            elong = normal_distance / hypot2(y, x) / 2 - .5
+            elong = normal_distance / hypot(y, x) / 2 - .5
             dx, dy = x * elong, y * elong
             x, y = force_fields[n]
             force_fields[n] = (x + dx, y + dy)
@@ -99,7 +106,7 @@ class Calculate2D:
             bax, bay = ax - bx, ay - by
             bcx, bcy = cx - bx, cy - by
 
-            l_ba, l_bc = hypot2(bay, bax), hypot2(bcy, bcx)
+            l_ba, l_bc = hypot(bay, bax), hypot(bcy, bcx)
             bax /= l_ba
             bay /= l_ba
             bcx /= l_bc
@@ -107,8 +114,7 @@ class Calculate2D:
 
             bis_x = bax + bcx
             bis_y = bay + bcy
-            bis_l = hypot2(bis_y, bis_x)
-
+            bis_l = hypot(bis_y, bis_x)
             angle = acos(bax * bcx + bay * bcy)
             if angle < .01:
                 dx, dy = rotate_vector(0, .2, bcx, bcy)
@@ -135,9 +141,10 @@ class Calculate2D:
         stack = 1
         steps = 1
         while stack:
+        # for x in range(1):
             stack = 0
             forces = self.__get_forces()
-            force = max(hypot2(x, y) for x, y in forces.values())
+            force = max(hypot(x, y) for x, y in forces.values())
             ratio = .2 / force
             if ratio > 1:
                 ratio = 1
@@ -153,8 +160,9 @@ class Calculate2D:
 
 
 normal_distance = .825
-normal_angles = {1: {1: 2/3*pi, 2: 2/3*pi, 3: 2*pi},
-                 2: {1: 2/3*pi, 2: 2*pi, 3: 2*pi},
-                 3: {1: 2*pi, 2: 2*pi, 3: 2*pi}}
+normal_angles = {1: {1: 2/3*pi, 2: 2/3*pi, 3: pi, 4: pi},
+                 2: {1: 2/3*pi, 2: pi, 3: pi, 4: pi},
+                 3: {1: pi, 2: pi, 3: pi, 4: pi},
+                 4: {1: pi, 2: pi, 3: pi, 4: pi}}
 
 __all__ = ['Calculate2D']
