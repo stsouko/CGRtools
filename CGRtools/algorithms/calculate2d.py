@@ -16,57 +16,30 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from math import hypot, pi, atan2, cos, sin, acos
+from CachedMethods import cached_property
+from math import hypot, pi, acos
+from ..algorithms.depict import rotate_vector
 
 
-def rotate_vector(x1, y1, angle):
-    cos_rad = cos(angle)
-    sin_rad = sin(angle)
-    return cos_rad * x1 + sin_rad * y1, sin_rad * x1 - cos_rad * y1
-
-
-def calculate_angle(v1, v2):
+def hypot2(x ,y):
     """
-    :params v1, v2: input vectors
-    :return: angle between vectors v1, v2 in radians
+    x and y are zeroes so hypot(x, y) is zeroes
+    :param x, y: vector x, y
+    :return: vectors len
     """
-    x1, y1 = v1
-    x2, y2 = v2
-    return abs(atan2(y1, x1) - atan2(y2, x2))
-
-
-def dist_force(n, m):
-    """
-    :param n, m: atoms n and m
-    :return: force of distance
-    """
-    nx, ny = n
-    mx, my = m
-    x, y = nx - mx, ny - my
-    elong = normal_distance / hypot(x, y) - 1
-    return x * elong, y * elong
+    lnm = hypot(x, y)
+    if not lnm:
+        lnm = .01
+    return lnm
 
 
 class Calculate2D:
     __slots__ = ()
 
-    def __get_forces(self):
-        plane = self._plane
-        atoms = self._atoms
+    @cached_property
+    def __angles(self):
         bonds = self._bonds
         sssr = self.sssr
-
-        force_fields = {k: (0, 0) for k in atoms}
-
-        # distance forces
-        for n, m, bond in self.bonds():
-            dx, dy = dist_force(plane[n], plane[m])
-            x, y = force_fields[n]
-            force_fields[n] = (x + dx, y + dy)
-            x, y = force_fields[m]
-            force_fields[m] = (x - dx, y - dy)
-
-        # angle forces
         angles = []
         for n, m_bond in bonds.items():
             neighbors = list(m_bond)
@@ -80,49 +53,77 @@ class Calculate2D:
                     ange = cycle_angle[0]
                 angles.append((a, n, c, ange))
             elif ln == 4:
-                angles.append((neighbors[0], n, neighbors[2], 2*pi))
-                angles.append((neighbors[1], n, neighbors[3], 2*pi))
+                angles.append((neighbors[0], n, neighbors[2], 2 * pi))
+                angles.append((neighbors[1], n, neighbors[3], 2 * pi))
                 angles.append((neighbors[-1], n, neighbors[0], pi))
                 for v, w in zip(neighbors, neighbors[1:]):
                     angles.append((v, n, w, pi))
             elif ln != 1:
-                ange = 4*pi/ln
+                ange = 4 * pi / ln
                 if cycle_angle:
                     ange = cycle_angle[0]
                 angles.append((neighbors[-1], n, neighbors[0], ange))
                 for v, w in zip(neighbors, neighbors[1:]):
                     angles.append((v, n, w, ange))
+        return angles
 
+    def __get_forces(self):
+        plane = self._plane
+        atoms = self._atoms
+
+        force_fields = {k: (0, 0) for k in atoms}
+
+        # distance forces
+        for n, m, bond in self.bonds():
+            nx, ny = plane[n]
+            mx, my = plane[m]
+            x, y = nx - mx, ny - my
+            # x,y = 0,0 then hypot(y, x) = 0
+            elong = normal_distance / hypot2(y, x) / 2 - .5
+            dx, dy = x * elong, y * elong
+            x, y = force_fields[n]
+            force_fields[n] = (x + dx, y + dy)
+            x, y = force_fields[m]
+            force_fields[m] = (x - dx, y - dy)
+
+        # angle forces
         #
         # a
         # |
         # b---c
         #
-        for a, b, c, opt in angles:
+        for a, b, c, opt in self.__angles:
             ax, ay = plane[a]
             bx, by = plane[b]
             cx, cy = plane[c]
             bax, bay = ax - bx, ay - by
             bcx, bcy = cx - bx, cy - by
-            angle_ba = atan2(bay, bax)
-            angle_bc = atan2(bcy, bcx)
-            angle = acos((bax*bcx + bay*bcy) / (hypot(bay, bax) * hypot(bcy, bcx)))
-            angle_biss = (angle_bc + angle_ba) / 2
-            print('angle', angle, angle_biss, angle_ba, angle_bc)
 
-            # if angle < .01:
-            #     dx, dy = rotate_vector(0.2, .0, abx, aby)
-            #     fax, fay = force_fields[a]
-            #     force_fields[a] = fax + dx, fay + dy
-            #     fcx, fcy = force_fields[c]
-            #     force_fields[a] = fcx - dx, fcy - dy
+            l_ba, l_bc = hypot2(bay, bax), hypot2(bcy, bcx)
+            bax /= l_ba
+            bay /= l_ba
+            bcx /= l_bc
+            bcy /= l_bc
 
-            dx, dy = rotate_vector(1 * (angle - opt) ** 2, 0, angle_biss)
-            print(dx, dy, 1 * (angle - opt) ** 2)
+            bis_x = bax + bcx
+            bis_y = bay + bcy
+            bis_l = hypot2(bis_y, bis_x)
+
+            angle = acos(bax * bcx + bay * bcy)
+            if angle < .01:
+                dx, dy = rotate_vector(0, .2, bcx, bcy)
+                fax, fay = force_fields[a]
+                force_fields[a] = fax + dx, fay + dy
+                fcx, fcy = force_fields[c]
+                force_fields[c] = fcx - dx, fcy - dy
+            force = 2 * (opt - angle) * abs(angle - opt)
+
+            ratio = force / bis_l
+            bis_x *= ratio
+            bis_y *= ratio
+
             kx, ky = force_fields[b]
-            # if b == 2:
-            #     print(dx + kx, dy + ky)
-            force_fields[b] = (kx - dx, ky - dy)
+            force_fields[b] = (kx + bis_x, ky + bis_y)
         return force_fields
 
     def clean2d(self):
@@ -131,19 +132,24 @@ class Calculate2D:
         :return: None
         """
         plane = self._plane
-        for x in range(1):
+        stack = 1
+        steps = 1
+        while stack:
+            stack = 0
             forces = self.__get_forces()
-            print(forces, '\n')
-            for atom, v in forces.items():
+            force = max(hypot2(x, y) for x, y in forces.values())
+            ratio = .2 / force
+            if ratio > 1:
+                ratio = 1
+            for atom, (x2, y2) in forces.items():
                 x1, y1 = plane[atom]
-                x2, y2 = v
-                force = hypot(x2, y2)
-                ratio = .2 / force
-                if ratio < 1:
-                    x2, y2 = x2 * ratio, y2 * ratio
+                x2, y2 = x2 * ratio, y2 * ratio
                 plane[atom] = (x1 + x2, y1 + y2)
-            # if steps >= 100:
-            #     break
+            steps += 1
+            if force > .05:
+                stack = 1
+            if steps >= 100:
+                break
 
 
 normal_distance = .825
