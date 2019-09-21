@@ -23,7 +23,7 @@ from .common import Graph
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import QueryStereo
-from ..periodictable import Element, QueryElement
+from ..periodictable import Element, QueryElement, AnyElement
 
 
 class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
@@ -35,7 +35,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
         self._atoms_stereo: Dict[int, bool] = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,
+    def add_atom(self, atom: Union[QueryElement, AnyElement, Element, int, str], *args,
                  neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
                  hybridization: Union[int, List[int], Tuple[int, ...], None] = None, **kwargs):
         if neighbors is None:
@@ -72,7 +72,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
         else:
             raise TypeError('hybridization should be int or list or tuple of ints')
 
-        if not isinstance(atom, QueryElement):
+        if not isinstance(atom, (QueryElement, AnyElement)):
             if isinstance(atom, Element):
                 atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
             elif isinstance(atom, str):

@@ -16,7 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .element import Element, FrozenDict
+from CachedMethods import FrozenDict
+from .element import Element
 from .groups import GroupI
 from .periods import *
 
