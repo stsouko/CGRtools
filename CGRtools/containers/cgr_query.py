@@ -332,6 +332,11 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
             return super().get_mapping(other, **kwargs)
         raise TypeError('CGRContainer or QueryCGRContainer expected')
 
+    def get_mcs_mapping(self, other: Union['QueryCGRContainer', 'cgr.CGRContainer']):
+        if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
+            return super().get_mcs_mapping(other)
+        raise TypeError('CGRContainer or QueryCGRContainer expected')
+
     def __getstate__(self):
         return {'p_charges': self._p_charges, 'p_radicals': self._p_radicals, 'neighbors': self._neighbors,
                 'hybridizations': self._hybridizations, 'p_neighbors': self._p_neighbors,

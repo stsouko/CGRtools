@@ -241,6 +241,11 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
 
+    def get_mcs_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer']):
+        if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
+            return super().get_mcs_mapping(other)
+        raise TypeError('MoleculeContainer or QueryContainer expected')
+
     def __getstate__(self):
         return {'atoms_stereo': self._atoms_stereo, 'neighbors': self._neighbors,
                 'hybridizations': self._hybridizations, **super().__getstate__()}

@@ -21,13 +21,14 @@ from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond
 from ..algorithms.isomorphism import Isomorphism
+from ..algorithms.mcs import MCS
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
 from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
-class Graph(Isomorphism, SSSR, Morgan, ABC):
+class Graph(Isomorphism, MCS, SSSR, Morgan, ABC):
     __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
                  '_radicals')
 
