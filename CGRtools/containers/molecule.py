@@ -478,6 +478,26 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return list(errors)
 
     @cached_property
+    def molecular_charge(self):
+        """
+        total charge of molecule
+        """
+        return sum(self._charges.values())
+
+    def __int__(self):
+        """
+        total charge of molecule
+        """
+        return self.molecular_charge
+
+    @cached_property
+    def molecular_mass(self):
+        return sum(x.atomic_mass for x in self._atoms.values())
+
+    def __float__(self):
+        return self.molecular_mass
+
+    @cached_property
     def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
         """
         aromatic rings atoms numbers

@@ -67,6 +67,9 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
     def __contains__(self, n: int):
         return n in self._atoms
 
+    def __bool__(self):
+        return bool(self._atoms)
+
     def atom(self, n: int) -> Core:
         return self._atoms[n]
 

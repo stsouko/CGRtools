@@ -23,7 +23,7 @@ from setuptools import setup
 
 setup(
     name='CGRtools',
-    version='4.0.6',
+    version='4.0.7',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files', 'CGRtools.files.dll',
               'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',
@@ -31,7 +31,7 @@ setup(
     author='Dr. Ramil Nugmanov',
     author_email='stsouko@live.ru',
     python_requires='>=3.6.1',
-    install_requires=['CachedMethods>=0.1.2,<0.2'],
+    install_requires=['CachedMethods>=0.1.3,<0.2'],
     extras_require={'smiles': ['coho>=0.4,<0.5'], 'mrv': ['lxml>=4.1,<4.4']},
     package_data={'CGRtools.files.dll': ['LICENCE', 'readme.txt', 'libinchi.so', 'libinchi.dll']},
     zip_safe=False,

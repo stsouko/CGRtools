@@ -21,7 +21,6 @@
 from abc import ABC, abstractmethod
 from CachedMethods import class_cached_property
 from collections import defaultdict
-from collections.abc import Mapping
 from typing import Optional, Tuple, Dict, Set, List, Type
 from weakref import ref
 from ..exceptions import IsConnectedAtom, IsNotConnectedAtom, ValenceError
@@ -455,14 +454,14 @@ class QueryElement(Core):
         21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 4bit
         """
         return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
-            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
+            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
 
-    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                             (1, 2, 3, 4): 15}  # 4 bit
-    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                              (1, 2, 3, 4): 15}  # 4 bit
+    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
 
 
 class DynamicQueryElement(Core, Dynamic):
@@ -527,35 +526,137 @@ class DynamicQueryElement(Core, Dynamic):
         """
         return (self.isotope or 0) << 27 | self.atomic_number << 20 | self.charge + 4 << 16 | self.p_charge << 12 | \
             self.is_radical << 11 | self.p_is_radical << 10 | \
-            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
+            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
-    _hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                             ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                             ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                             ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    _neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                         ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                         ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
+                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
+                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
+                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
+    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
+                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
+                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
 
 
-class FrozenDict(Mapping):
-    __slots__ = '__d'
+class AnyElement(Core):
+    __slots__ = ()
 
-    def __init__(self, *args, **kwargs):
-        self.__d = dict(*args, **kwargs)
+    @property
+    def atomic_symbol(self) -> str:
+        return 'A'
 
-    def __iter__(self):
-        return iter(self.__d)
+    @property
+    def atomic_number(self) -> int:
+        return 0
 
-    def __len__(self):
-        return len(self.__d)
+    @property
+    def isotopes_distribution(self) -> Dict[int, float]:
+        return {}
 
-    def __getitem__(self, key):
-        return self.__d[key]
+    @property
+    def isotopes_masses(self) -> Dict[int, float]:
+        return {}
 
-    def __repr__(self):
-        return repr(self.__d)
+    def __eq__(self, other):
+        """
+        compare attached to molecules elements and query elements
+        """
+        if isinstance(other, Element):
+            if self.charge == other.charge and self.is_radical == other.is_radical:
+                if self.neighbors:
+                    if other.neighbors in self.neighbors:
+                        if self.hybridization:
+                            if other.hybridization in self.hybridization:
+                                return True
+                        else:
+                            return True
+                elif self.hybridization:
+                    if other.hybridization in self.hybridization:
+                        return True
+                else:
+                    return True
+        elif isinstance(other, (QueryElement, AnyElement)):
+            if self.charge == other.charge and self.is_radical == other.is_radical \
+                    and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+                return True
+        return False
+
+    def __int__(self):
+        """
+        13bit = 4bit | 1bit | 4bit | 4bit
+        """
+        return self.charge + 4 << 9 | self.is_radical << 8 | \
+            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
+
+    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                              (1, 2, 3, 4): 15}  # 4 bit
+    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+
+
+class DynamicAnyElement(Core, Dynamic):
+    __slots__ = ()
+
+    @property
+    def atomic_symbol(self) -> str:
+        return 'A'
+
+    @property
+    def atomic_number(self) -> int:
+        return 0
+
+    @property
+    def isotopes_distribution(self) -> Dict[int, float]:
+        return {}
+
+    @property
+    def isotopes_masses(self) -> Dict[int, float]:
+        return {}
+
+    def __eq__(self, other):
+        if isinstance(other, DynamicElement):
+            if self.charge == other.charge and self.p_charge == other.p_charge and \
+                    self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical:
+                if self.neighbors:  # neighbors and p_neighbors all times paired
+                    if (other.neighbors, other.p_neighbors) in zip(self.neighbors, self.p_neighbors):
+                        if self.hybridization:
+                            if (other.hybridization, other.p_hybridization) in zip(self.hybridization,
+                                                                                   self.p_hybridization):
+                                return True
+                        else:
+                            return True
+                elif self.hybridization:
+                    if (other.hybridization, other.p_hybridization) in zip(self.hybridization, self.p_hybridization):
+                        return True
+                else:
+                    return True
+        elif isinstance(other, (DynamicQueryElement, DynamicAnyElement)):
+            if self.charge == other.charge and self.p_charge == other.p_charge and \
+                    self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
+                    self.neighbors == other.neighbors and self.hybridization and other.hybridization and \
+                    self.p_neighbors == other.p_neighbors and self.p_hybridization and other.p_hybridization:
+                # equal query element has equal query marks
+                return True
+        return False
+
+    def __int__(self):
+        """
+        20bit = 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
+        """
+        return self.charge + 4 << 16 | self.p_charge << 12 | \
+            self.is_radical << 11 | self.p_is_radical << 10 | \
+            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
+
+    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
+                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
+                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
+                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
+    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
+                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
+                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
 
 
 # averaged isotopes. 3.*-compatibility

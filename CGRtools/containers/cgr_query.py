@@ -21,7 +21,7 @@ from . import cgr, molecule, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.smiles import QueryCGRSmiles
-from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement
+from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement
 
 
 class QueryCGRContainer(Graph, QueryCGRSmiles):
@@ -36,7 +36,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         self._p_hybridizations: Dict[int, Tuple[int, ...]] = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element, int, str], *args,
+    def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element,
+                                   AnyElement, DynamicAnyElement, int, str], *args,
                  p_charge: int = 0, p_is_radical: bool = False,
                  neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
                  hybridization: Union[int, List[int], Tuple[int, ...], None] = None,
@@ -115,8 +116,10 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
         if not isinstance(p_is_radical, bool):
             raise TypeError('radical state should be bool')
 
-        if not isinstance(atom, DynamicQueryElement):
-            if isinstance(atom, (Element, QueryElement, DynamicElement)):
+        if not isinstance(atom, (DynamicQueryElement, DynamicAnyElement)):
+            if isinstance(atom, AnyElement):
+                atom = DynamicAnyElement()
+            elif isinstance(atom, (Element, QueryElement, DynamicElement)):
                 atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
             elif isinstance(atom, str):
                 atom = DynamicQueryElement.from_symbol(atom)()
