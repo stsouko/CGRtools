@@ -79,6 +79,20 @@ class MCS:
         bonds = self._bonds
         o_bonds = other._bonds
 
+        s_equal = defaultdict(set)  # equal self atoms. from n - 1 to (n^2 - n)/2 complexity
+        stack = list(atoms.items())
+        while stack:
+            n, n_atom = stack.pop()
+            s_equal[n].add(n)
+            new_stack = []
+            for m_atom in stack:
+                m, atom = m_atom
+                if n_atom == atom:
+                    s_equal[n].add(m)
+                else:
+                    new_stack.append(m_atom)
+            stack = new_stack
+
         product_graph = {}
         equal_atoms = defaultdict(set)
 
