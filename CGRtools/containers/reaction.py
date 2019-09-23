@@ -136,22 +136,25 @@ class ReactionContainer(DepictReaction):
         return total
 
     def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
-        # объединение реакционных центров по уходящим и приходящим группам
+
+        # union reaction centers by leaving or substitute group
         reactants = reduce(or_, self.reactants)
         products = reduce(or_, self.products)
         cgr = reactants^products
-        prot_list = []
-        coming_list = []
 
         all_prot = set(reactants).difference(products)
         all_coming = set(products).difference(reactants)
 
         if all_prot:
-            prot_gr = cgr.substructure(all_prot).split()
+            prot_gr = cgr.substructure(all_prot).connected_components
             prot_list = [set(x) for x in prot_gr]
+        else:
+            prot_list = []
         if all_coming:
-            coming_gr = cgr.substructure(all_coming).split()
+            coming_gr = cgr.substructure(all_coming).connected_components
             coming_list = [set(x) for x in coming_gr]
+        else:
+            coming_list = []
 
         all_prot_come = prot_list + coming_list
         other_list = list(cgr.centers_list)
@@ -168,49 +171,8 @@ class ReactionContainer(DepictReaction):
                     qq.update(other_list[i])
                     other_list.pop(i)
                 other_list.append(list(qq))
-            del (unio)
-        # конец объединения
+        # the end of union
 
-        # объединение реакционных центров при циклизации в общий для этих рц цикл
-        cycles = []
-        cycles.extend(reactants.sssr)
-        for x in products.sssr:
-            if x not in cycles:
-                cycles.append(x)
-
-        for y in cycles:
-            kk = cgr.substructure(y)
-            ept = []
-            new_ind = []
-            unite = []
-            if all(z[2].order == 4 for z in list(kk.bonds())) and any(z[2].p_order != 4 for z in list(kk.bonds())) \
-                    or all(z[2].p_order == 4 for z in list(kk.bonds())) and any(
-                z[2].order != 4 for z in list(kk.bonds())):
-                unite.extend(y)
-            else:
-                for x in other_list:
-                    if len(set(x).intersection(kk)) > 1:
-                        ept.append(set(x).intersection(kk))  # пересечение рц в цикле
-
-                if len(ept) >= 2:
-                    for x in ept:
-                        for i, p in enumerate(x):
-                            for i2, m in enumerate(x):
-                                if i != i2:
-                                    if any((m == mp[0] and p == mp[1]) or (p == mp[0] and m == mp[1]) for mp in kk.bonds()) and (kk.bond(m, p).order == None or kk.bond(m, p).p_order == None):
-                                        unite.extend([m,p])  # объединение информмации о всех атомах учавствующих в образовании или разрыве цикла
-
-            if unite:
-                for i3, zop in enumerate(other_list):
-                    if set(zop).intersection(unite):
-                        new_ind.append(i3)
-            if len(new_ind) > 1:
-                y = []
-                new_ind.reverse()
-                for x in new_ind:
-                    y.extend(other_list[x])
-                    other_list.pop(x)
-                other_list.append(y)  # объединение всех атомов реакционных центров в один реакционный центр участвующих в образовании, разрыве или ароматизации цикла
         return other_list
 
     def explicify_hydrogens(self) -> int:
