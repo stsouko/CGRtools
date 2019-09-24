@@ -53,8 +53,8 @@ class Core(ABC):
     def __setstate__(self, state):
         self.__isotope = state['isotope']
 
-    def __hash__(self):
-        return self.__int__()
+    def __int__(self):
+        return hash(self)
 
     @property
     @abstractmethod
@@ -245,7 +245,7 @@ class Element(Core):
         return isinstance(other, Element) and self.atomic_number == other.atomic_number and \
             self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical
 
-    def __int__(self):
+    def __hash__(self):
         """
         21bit = 9bit | 7bit | 4bit | 1bit
         """
@@ -386,6 +386,13 @@ class Query(Core):
         except AttributeError:
             raise IsNotConnectedAtom
 
+    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                             (1, 2, 3, 4): 15}  # 4 bit
+    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+
 
 class Dynamic(Core):
     __slots__ = ()
@@ -508,6 +515,14 @@ class DynamicQuery(Dynamic):
         except AttributeError:
             raise IsNotConnectedAtom
 
+    _hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
+                             ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
+                             ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
+                             ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
+    _neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
+                         ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
+                         ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+
 
 class DynamicElement(Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
@@ -546,7 +561,7 @@ class DynamicElement(Dynamic):
             self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical and \
             self.p_charge == other.p_charge and self.p_is_radical == other.p_is_radical
 
-    def __int__(self):
+    def __hash__(self):
         """
         26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
         """
@@ -609,19 +624,12 @@ class QueryElement(Query):
             return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 4bit
         """
         return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
-            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
-
-    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                              (1, 2, 3, 4): 15}  # 4 bit
-    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
 class DynamicQueryElement(DynamicQuery):
@@ -680,22 +688,14 @@ class DynamicQueryElement(DynamicQuery):
             return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         36bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
         """
         return (self.isotope or 0) << 27 | self.atomic_number << 20 | self.charge + 4 << 16 | self.p_charge << 12 | \
             self.is_radical << 11 | self.p_is_radical << 10 | \
-            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
-
-    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
 
 class AnyElement(Query):
@@ -741,19 +741,12 @@ class AnyElement(Query):
                 return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         13bit = 4bit | 1bit | 4bit | 4bit
         """
         return self.charge + 4 << 9 | self.is_radical << 8 | \
-            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
-
-    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                              (1, 2, 3, 4): 15}  # 4 bit
-    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
 class DynamicAnyElement(DynamicQuery):
@@ -801,22 +794,14 @@ class DynamicAnyElement(DynamicQuery):
                 return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         20bit = 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
         """
         return self.charge + 4 << 16 | self.p_charge << 12 | \
             self.is_radical << 11 | self.p_is_radical << 10 | \
-            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
-
-    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
 
 # averaged isotopes. 3.*-compatibility
