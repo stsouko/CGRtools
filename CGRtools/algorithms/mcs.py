@@ -75,31 +75,19 @@ class MCS:
                 subgraph, candidates, roots = stack.pop()
 
     def __get_product(self, other) -> Dict[Tuple[int, int], Set[Tuple[int, int]]]:
-        atoms = self._atoms
         bonds = self._bonds
         o_bonds = other._bonds
 
         s_equal = defaultdict(set)  # equal self atoms. from n - 1 to (n^2 - n)/2 complexity
-        stack = list(atoms.items())
-        while stack:
-            n, n_atom = stack.pop()
-            s_equal[n].add(n)
-            new_stack = []
-            for m_atom in stack:
-                m, atom = m_atom
-                if n_atom == atom:
-                    s_equal[n].add(m)
-                else:
-                    new_stack.append(m_atom)
-            stack = new_stack
+        for n, atom in self._atoms.items():
+            s_equal[atom].add(n)
 
         product_graph = {}
         equal_atoms = defaultdict(set)
-
-        for (s_n, s_atom), (o_n, o_atom) in product(self._atoms.items(), other._atoms.items()):
-            if s_atom == o_atom:
-                product_graph[(s_n, o_n)] = set()
-                equal_atoms[s_n].add(o_n)
+        for n, atom in other._atoms.items():
+            for m in s_equal.get(atom, ()):
+                product_graph[(m, n)] = set()
+                equal_atoms[m].add(n)
 
         for (n, ns_other), (m, ms_other) in combinations(equal_atoms.items(), 2):
             bond = bonds[n].get(m)
@@ -107,7 +95,7 @@ class MCS:
                 for o_n, o_m in product(ns_other, ms_other):
                     if o_n != o_m:
                         node1 = (n, o_n)
-                        node2 = (n, o_m)
+                        node2 = (m, o_m)
                         product_graph[node1].add(node2)
                         product_graph[node2].add(node1)
             else:
@@ -116,7 +104,7 @@ class MCS:
                         o_bond = o_bonds[o_n].get(o_m)
                         if not o_bond or bond == o_bond:
                             node1 = (n, o_n)
-                            node2 = (n, o_m)
+                            node2 = (m, o_m)
                             product_graph[node1].add(node2)
                             product_graph[node2].add(node1)
         return product_graph
