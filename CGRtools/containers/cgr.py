@@ -43,12 +43,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
     def add_atom(self, atom: Union[DynamicElement, Element, int, str], *args, p_charge: int = 0,
                  p_is_radical: bool = False, **kwargs):
-        if not isinstance(p_charge, int):
-            raise TypeError('formal charge should be int in range [-4, 4]')
-        if p_charge > 4 or p_charge < -4:
-            raise ValueError('formal charge should be in range [-4, 4]')
-        if not isinstance(p_is_radical, bool):
-            raise TypeError('radical state should be bool')
+        p_charge = self._validate_charge(p_charge)
+        p_is_radical = self._validate_radical(p_is_radical)
 
         if not isinstance(atom, DynamicElement):
             if isinstance(atom, Element):
