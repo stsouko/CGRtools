@@ -26,14 +26,17 @@ class MCS:
     __slots__ = ()
 
     @abstractmethod
-    def get_mcs_mapping(self, other) -> Iterator[Dict[int, int]]:
+    def get_mcs_mapping(self, other) -> Dict[int, int]:
+        bonds = self._bonds
+        o_bonds = self._bonds
         product_graph = self.__get_product(other)
-
+        mapping = {}
         for clique in self.__clique(product_graph):
-            yield dict(clique)
+            pass  # todo: bond filter
+        return mapping
 
     @staticmethod
-    def __clique(graph: Dict[Tuple[int, int], Set[Hashable]]) -> Iterator[List[Tuple[int, int]]]:
+    def __clique(graph: Dict[Tuple[int, int], Set[Tuple[int, int]]]) -> Iterator[Dict[int, int]]:
         """
         clique search
 
@@ -43,7 +46,7 @@ class MCS:
         if not subgraph:
             return  # empty or fully disconnected
         elif len(subgraph) == 2:  # dimer
-            yield list(subgraph)
+            yield dict(subgraph)
             return
 
         stack = []
@@ -59,7 +62,7 @@ class MCS:
                 neighbors = graph[root]
                 neighbors_subgraph = subgraph & neighbors
                 if not neighbors_subgraph:
-                    yield clique_atoms.copy()
+                    yield dict(clique_atoms)
                 else:
                     neighbors_candidates = candidates & neighbors
                     if neighbors_candidates:
