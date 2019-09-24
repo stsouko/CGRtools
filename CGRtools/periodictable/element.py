@@ -163,36 +163,6 @@ class Core(ABC):
             self._map = _map
 
 
-class Dynamic:
-    @property
-    def p_charge(self) -> int:
-        try:
-            return self._graph()._p_charges[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_is_radical(self) -> bool:
-        try:
-            return self._graph()._p_radicals[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_neighbors(self):
-        try:
-            return self._graph()._p_neighbors[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_hybridization(self):
-        try:
-            return self._graph()._p_hybridizations[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-
 class Element(Core):
     __slots__ = ()
     __class_cache__ = {}
@@ -200,6 +170,30 @@ class Element(Core):
     @property
     def atomic_symbol(self) -> str:
         return self.__class__.__name__
+
+    @Core.charge.setter
+    def charge(self, charge: int):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            g._calc_implicit(self._map)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical: bool):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            g._calc_implicit(self._map)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
 
     @property
     def implicit_hydrogens(self) -> Optional[int]:
@@ -349,7 +343,173 @@ class Element(Core):
         return dict(rules)
 
 
-class DynamicElement(Core, Dynamic):
+class Query(Core):
+    __slots__ = ()
+
+    @Core.charge.setter
+    def charge(self, charge):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.neighbors.setter
+    def neighbors(self, neighbors):
+        try:
+            g = self._graph()
+            g._neighbors[self._map] = g._validate_neighbors(neighbors)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.hybridization.setter
+    def hybridization(self, hybridization):
+        try:
+            g = self._graph()
+            g._hybridizations[self._map] = g._validate_hybridization(hybridization)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+
+class Dynamic(Core):
+    __slots__ = ()
+
+    @Core.charge.setter
+    def charge(self, charge):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_charge(self) -> int:
+        try:
+            return self._graph()._p_charges[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @p_charge.setter
+    def p_charge(self, charge):
+        try:
+            g = self._graph()
+            g._p_charges[self._map] = g._validate_charge(charge)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_is_radical(self) -> bool:
+        try:
+            return self._graph()._p_radicals[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @p_is_radical.setter
+    def p_is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._p_radicals[self._map] = g._validate_radical(is_radical)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_neighbors(self):
+        try:
+            return self._graph()._p_neighbors[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_hybridization(self):
+        try:
+            return self._graph()._p_hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+
+class DynamicQuery(Dynamic):
+    __slots__ = ()
+
+    @Dynamic.neighbors.setter
+    def neighbors(self, neighbors):
+        try:
+            g = self._graph()
+            neighbors = g._validate_neighbors(neighbors)
+            neighbors, p_neighbors = g._validate_neighbors_pairing(neighbors, g._p_neighbors[self._map])
+            g._neighbors[self._map] = neighbors
+            g._p_neighbors[self._map] = p_neighbors
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.hybridization.setter
+    def hybridization(self, hybridization):
+        try:
+            g = self._graph()
+            hybridization = g._validate_hybridization(hybridization)
+            hybridization, p_hybridization = g._validate_hybridization_pairing(hybridization,
+                                                                               g._p_hybridizations[self._map])
+            g._hybridizations[self._map] = hybridization
+            g._p_hybridizations[self._map] = p_hybridization
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.p_neighbors.setter
+    def p_neighbors(self, p_neighbors):
+        try:
+            g = self._graph()
+            p_neighbors = g._validate_neighbors(p_neighbors)
+            neighbors, p_neighbors = g._validate_neighbors_pairing(g._neighbors[self._map], p_neighbors)
+            g._neighbors[self._map] = neighbors
+            g._p_neighbors[self._map] = p_neighbors
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.p_hybridization.setter
+    def p_hybridization(self, p_hybridization):
+        try:
+            g = self._graph()
+            p_hybridization = g._validate_hybridization(p_hybridization)
+            hybridization, p_hybridization = g._validate_hybridization_pairing(g._hybridizations[self._map],
+                                                                               p_hybridization)
+            g._hybridizations[self._map] = hybridization
+            g._p_hybridizations[self._map] = p_hybridization
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+
+class DynamicElement(Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
     @property
@@ -394,7 +554,7 @@ class DynamicElement(Core, Dynamic):
             self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
 
 
-class QueryElement(Core):
+class QueryElement(Query):
     __slots__ = ()
 
     @property
@@ -464,7 +624,7 @@ class QueryElement(Core):
                           (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
 
 
-class DynamicQueryElement(Core, Dynamic):
+class DynamicQueryElement(DynamicQuery):
     __slots__ = ()
 
     @property
@@ -538,7 +698,7 @@ class DynamicQueryElement(Core, Dynamic):
                           ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
 
 
-class AnyElement(Core):
+class AnyElement(Query):
     __slots__ = ()
 
     @property
@@ -596,7 +756,7 @@ class AnyElement(Core):
                           (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
 
 
-class DynamicAnyElement(Core, Dynamic):
+class DynamicAnyElement(DynamicQuery):
     __slots__ = ()
 
     @property
