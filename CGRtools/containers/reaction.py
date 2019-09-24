@@ -20,6 +20,7 @@ from CachedMethods import cached_method
 from collections.abc import Iterable
 from itertools import chain
 from functools import reduce
+from hashlib import sha512
 from operator import or_
 from typing import Tuple, Dict, Iterable as TIterable, Optional
 from .cgr import CGRContainer
@@ -260,6 +261,17 @@ class ReactionContainer(DepictReaction):
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - min_y)
         return max_x
+
+    def __eq__(self, other):
+        return isinstance(other, ReactionContainer) and str(self) == str(other)
+
+    @cached_method
+    def __hash__(self):
+        return hash(str(self))
+
+    @cached_method
+    def __bytes__(self):
+        return sha512(str(self).encode()).digest()
 
     @cached_method
     def __str__(self):
