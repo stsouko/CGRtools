@@ -312,6 +312,8 @@ class ReactionContainer(DepictReaction):
 
     def flush_cache(self):
         self.__dict__.clear()
+        for m in chain(self.__reagents, self.__reactants, self.__products):
+            m.flush_cache()
 
 
 __all__ = ['ReactionContainer']
