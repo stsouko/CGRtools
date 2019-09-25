@@ -274,11 +274,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             or_ = other._radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
             h = cgr.CGRContainer()
             atoms = h._atoms
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
+            for n in sa.keys() - common:  # cleavage atoms
                 h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
@@ -322,11 +322,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             opr = other._p_radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
             h = other.__class__()  # subclasses support
             atoms = h._atoms
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
+            for n in sa.keys() - common:  # cleavage atoms
                 h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
@@ -336,7 +336,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
-                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n], p_is_radical=opr[n])
+                h.add_atom(oa[n].copy(), n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n],
+                           p_is_radical=opr[n])
                 for m, bond in ob[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is formed bond
