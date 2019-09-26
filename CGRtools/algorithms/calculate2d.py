@@ -17,8 +17,44 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from math import hypot, pi, acos
+from math import hypot, pi, acos, cos, sin
 from ..algorithms.depict import rotate_vector
+
+
+def rotate_vector2(x1, y1, angle):
+    """
+    rotate x,y vector over angle
+    """
+    cos_rad = cos(angle)
+    sin_rad = sin(angle)
+    return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
+
+
+# def optimal(temps, a, b, c):
+#     ax, ay = a
+#     bx, by = b
+#     cx, cy = c
+#     min_distance = 10000
+#     fa = fc = 0
+#     for temp in temps:
+#         t1, t2 = temp
+#         tx1, ty1 = t1
+#         tx2, ty2 = t2
+#
+#
+#         tx1, ty1, tx2, ty2 = tx1 + bx, ty1 + by, tx2 + bx, ty2 + by
+#         fa_1, fc_1 = (tx1 - ax, ty1 - ay), (tx2 - cx, ty2 - cy)
+#         fa_2, fc_2 = (tx1 - cx, ty1 - cy), (tx2 - ax, ty2 - ay)
+#         sum_1 = hypot(*fa_1) + hypot(*fc_1)
+#         sum_2 = hypot(*fa_2) + hypot(*fc_2)
+#         summ = min(sum_1, sum_2)
+#         if summ < min_distance:
+#             min_distance = summ
+#             if summ == sum_1:
+#                 fa, fc = fa_1, fc_1
+#             else:
+#                 fa, fc = fa_2, fc_2
+#     return fa, fc
 
 
 class Calculate2D:
@@ -30,7 +66,7 @@ class Calculate2D:
         sssr = self.sssr
         angles = []
         for n, m_bond in bonds.items():
-            neighbors = list(m_bond)
+            neighbors = tuple(m_bond)
             ln = len(m_bond)
             cycle_angle = None
             for cycle in sssr:
@@ -38,67 +74,77 @@ class Calculate2D:
                 if n in cycle:
                     if lc == 3:
                         cycle_angle = pi / 3
-                    elif lc == 4:
-                        cycle_angle = pi / 2
                     else:
-                        cycle_angle = [pi / 2 - pi / len(cycle) for cycle in sssr if n in cycle][0]
+                        cycle_angle = pi - 2 * pi / lc
             if ln == 2:
-                a = neighbors[0]
-                c = neighbors[1]
+                a, c = neighbors
                 ange = normal_angles[bonds[a][n].order][bonds[n][c].order]
                 if cycle_angle:
                     ange = cycle_angle
                 angles.append((a, n, c, ange))
-            elif ln == 4:
-                print(m_bond)
-                print(neighbors)
-                angles.append((neighbors[0], n, neighbors[-1], pi))
-                angles.append((neighbors[1], n, neighbors[2], pi))
-                angles.append((neighbors[0], n, neighbors[2], pi / 2))
-                angles.append((neighbors[2], n, neighbors[3], pi / 2))
-                angles.append((neighbors[3], n, neighbors[1], pi / 2))
-                angles.append((neighbors[1], n, neighbors[0], pi / 2))
-                print(angles)
-                # for v, w in zip(neighbors, neighbors[1:]):
-                #     angles.append((v, n, w, pi / 2))
-            elif ln != 1:
-                ange = 2 * pi / ln
-                if cycle_angle:
-                    ange = cycle_angle
-                angles.append((neighbors[-1], n, neighbors[0], ange))
-                for v, w in zip(neighbors, neighbors[1:]):
-                    angles.append((v, n, w, ange))
+            # elif ln == 4:
+            #     print(m_bond)
+            #     print(neighbors)
+            #     angles.append((neighbors[0], n, neighbors[3], pi))
+            #     angles.append((neighbors[1], n, neighbors[2], pi))
+            #     angles.append((neighbors[0], n, neighbors[2], pi / 2))
+            #     angles.append((neighbors[2], n, neighbors[3], pi / 2))
+            #     angles.append((neighbors[3], n, neighbors[1], pi / 2))
+            #     angles.append((neighbors[1], n, neighbors[0], pi / 2))
+            #     print(angles)
+            #     # for v, w in zip(neighbors, neighbors[1:]):
+            #     #     angles.append((v, n, w, pi / 2))
+            # elif ln != 1:
+            #     ange = 2 * pi / ln
+            #     if cycle_angle:
+            #         ange = cycle_angle
+            #     angles.append((neighbors[-1], n, neighbors[0], ange))
+            #     for v, w in zip(neighbors, neighbors[1:]):
+            #         angles.append((v, n, w, ange))
         return angles
 
-    def __get_forces(self):
+    def __get_dist_forces(self):
         plane = self._plane
-        atoms = self._atoms
 
         # for hypot(x, y)
         for n, (x, y) in plane.items():
             if not x and not y:
                 plane[n] = (.0001, .0001)
-
-        force_fields = {k: (0, 0) for k in atoms}
+        force_fields = {k: (.00001, .00001) for k in self._atoms}
 
         # distance forces
+        max_diff = 0.1
         for n, m, bond in self.bonds():
             nx, ny = plane[n]
             mx, my = plane[m]
             x, y = nx - mx, ny - my
-            elong = normal_distance / hypot(y, x) / 2 - .5
+            c_dist = hypot(x, y)
+
+            diff = abs(n_dist - c_dist)
+            if diff > max_diff:
+                max_diff = diff
+
+            elong = n_dist / c_dist / 2 - .5
             dx, dy = x * elong, y * elong
             x, y = force_fields[n]
             force_fields[n] = (x + dx, y + dy)
             x, y = force_fields[m]
             force_fields[m] = (x - dx, y - dy)
 
+        return force_fields, max_diff
+
+    def __get_angle_forces(self):
         # angle forces
         #
         # a
         # |
         # b---c
         #
+        plane = self._plane
+        force_fields = {k: (.00001, .00001) for k in self._atoms}
+
+        max_diff = 0.1
+        print(self.__angles)
         for a, b, c, opt in self.__angles:
             ax, ay = plane[a]
             bx, by = plane[b]
@@ -112,9 +158,9 @@ class Calculate2D:
             bcx /= l_bc
             bcy /= l_bc
 
-            bis_x = bax + bcx
-            bis_y = bay + bcy
-            bis_l = hypot(bis_y, bis_x)
+            # bis_x = bax + bcx
+            # bis_y = bay + bcy
+            # bis_l = hypot(bis_y, bis_x)
             angle = acos(bax * bcx + bay * bcy)
             if angle < .01:
                 dx, dy = rotate_vector(0, .2, bcx, bcy)
@@ -122,28 +168,55 @@ class Calculate2D:
                 force_fields[a] = fax + dx, fay + dy
                 fcx, fcy = force_fields[c]
                 force_fields[c] = fcx - dx, fcy - dy
-            force = 2 * (opt - angle) * abs(angle - opt)
 
-            ratio = force / bis_l
-            bis_x *= ratio
-            bis_y *= ratio
+            diff = angle - opt
+            adiff = abs(diff)
+            if adiff > max_diff:
+                max_diff = adiff
+
+            rx, ry = rotate_vector2(bcx, bcy, diff)
+            rx, ry = rx + bx, ry + by
+            fx, fy = rx - cx, ry - cy
+            # force = 2 * (opt - angle) * adiff
+            # ratio = force / bis_l
+            # bis_x *= ratio
+            # bis_y *= ratio
 
             kx, ky = force_fields[b]
-            force_fields[b] = (kx + bis_x, ky + bis_y)
-        return force_fields
+            force_fields[b] = (kx + fx, ky + fy)
+            # for n, m_bond in bonds.items():
+            #     ln = len(m_bond)
+            #     nx, ny = plane[n]
+            #     if ln == 1:
+            #         m, = m_bond
+            #         mx, my = plane[m]
+            #         min_distance = 10000
+            #         fx = fy = 0
+            #         for temp in templates_1:
+            #             tx, ty = temp
+            #             tx, ty = tx + nx, ty + ny
+            #             fm = (tx - mx, ty - my)
+            #             summ = hypot(*fm)
+            #             if summ < min_distance:
+            #                 min_distance = summ
+            #                 fx, fy = fm
+            #         fmx, fmy = force_fields[m]
+            #         force_fields[m] = fmx + fx, fmy + fy
+        return force_fields, max_diff
 
-    def clean2d(self):
+    def _changes(self, forces):
         """
-        steps for calculate 2d coordinates
-        :return: None
+        changes in coordinates
+        :param forces: dict of atoms forces
+        :return:
         """
         plane = self._plane
+
         stack = 1
         steps = 1
         while stack:
-        # for x in range(1):
+            # for x in range(1):
             stack = 0
-            forces = self.__get_forces()
             force = max(hypot(x, y) for x, y in forces.values())
             ratio = .2 / force
             if ratio > 1:
@@ -152,14 +225,62 @@ class Calculate2D:
                 x1, y1 = plane[atom]
                 x2, y2 = x2 * ratio, y2 * ratio
                 plane[atom] = (x1 + x2, y1 + y2)
-            steps += 1
             if force > .05:
                 stack = 1
-            if steps >= 100:
+            if steps >= 200:
                 break
+            steps += 1
+
+    def clean2d(self):
+        """
+        steps for calculate 2d coordinates
+        :return: None
+        """
+
+        stack = 1
+        steps = 1
+        primary_forces, dif_dist = self.__get_dist_forces()
+        secondary_forces, dif_ang = self.__get_angle_forces()
+        print(dif_dist, dif_ang)
+        if dif_ang > dif_dist:
+            primary_forces, secondary_forces = secondary_forces, primary_forces
+
+        while stack:
+            # for x in range(1):
+            stack = 0
+            self._changes(primary_forces)
+            self._changes(secondary_forces)
+
+            primary_forces, dif_dist = self.__get_dist_forces()
+            secondary_forces, dif_ang = self.__get_angle_forces()
+            if dif_ang > dif_dist:
+                primary_forces, secondary_forces = secondary_forces, primary_forces
+            force_p = max(hypot(x, y) for x, y in primary_forces.values())
+            force_s = max(hypot(x, y) for x, y in secondary_forces.values())
+            print(force_p, force_s)
+            if force_p < .05 and force_s < 0.5:
+                stack = 0
+
+            if steps >= 200:
+                break
+            steps += 1
 
 
-normal_distance = .825
+n_dist = .825
+dist_3_sm = n_dist / 2
+dist_3_la = n_dist*cos(pi/6)
+dist_4 = n_dist*cos(pi/4)
+templates_1 = [(-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm), (dist_3_la, -dist_3_sm), (-dist_3_la, -dist_3_sm)]
+templates_2 = [((-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm)),
+               ((-dist_3_la, -dist_3_sm), (dist_3_la, -dist_3_sm)),
+               ((-dist_3_sm, dist_3_la), (-dist_3_sm, -dist_3_la)),
+               ((dist_3_sm, dist_3_la), (dist_3_sm, -dist_3_la))]
+templates_3 = [((0, n_dist), (dist_3_la, -dist_3_sm), (-dist_3_la, -dist_3_sm)),
+               ((0, -n_dist), (-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm)),
+               ((-n_dist, 0), (dist_3_sm, dist_3_la), (dist_3_sm, -dist_3_la)),
+               ((n_dist, 0), (-dist_3_sm, -dist_3_la), (-dist_3_sm, dist_3_la))]
+templates_4 = [((-n_dist, 0), (0, n_dist), (n_dist, 0), (0, -n_dist)),
+               ((-dist_4, dist_4), (dist_4, dist_4), (dist_4, -dist_4), (-dist_4, -dist_4))]
 normal_angles = {1: {1: 2/3*pi, 2: 2/3*pi, 3: pi, 4: pi},
                  2: {1: 2/3*pi, 2: pi, 3: pi, 4: pi},
                  3: {1: pi, 2: pi, 3: pi, 4: pi},
