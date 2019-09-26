@@ -29,16 +29,6 @@ class MCS:
     def get_mcs_mapping(self, other, *, automorphism_filter: bool = True) -> Dict[int, int]:
         product_graph = self.__get_product(other)
 
-        def calc_bonds(c):
-            seen = set()
-            bond_sum = 0
-            for n in c:
-                seen.add(n)
-                for m, (b, o_b) in product_graph[n].items():
-                    if m not in seen and m in c and b == o_b is not None:
-                        bond_sum += 1
-            return bond_sum
-
         cliques = self.__clique(product_graph)
         yield from (dict(c) for c in cliques)
         #mapping = [(c, calc_bonds(c)) for c in islice(cliques, 42)]
@@ -116,34 +106,53 @@ class MCS:
         for n, atom in other._atoms.items():
             p_equal[atom].add(n)
 
-        product_graph = {}
+        half_product = {}
+        full_product = {}
         equal_atoms = {}
         for atom, ns in s_equal.items():
             ms = p_equal[atom]
             if ms:
                 for nm in product(ns, ms):
-                    product_graph[nm] = set()
+                    full_product[nm] = set()
+                    half_product[nm] = defaultdict(list)
                 for n in ns:
                     equal_atoms[n] = ms  # memory save
 
-        for (n, ns_other), (m, ms_other) in combinations(equal_atoms.items(), 2):
-            bond = bonds[n].get(m)
-            if bond:
-                for o_n, o_m in product(ns_other, ms_other):
-                    if o_n != o_m:
-                        o_bond = o_bonds[o_n].get(o_m)
-                        if bond == o_bond:
-                            node1 = (n, o_n)
-                            node2 = (m, o_m)
-                            product_graph[node1].add(node2)
-                            product_graph[node2].add(node1)
-        for ms in product_graph.values():
-            if len(ms) > 1:
-                for n, m in combinations(ms, 2):
-                    if m not in product_graph[n]:
-                        product_graph[n].add(m)
-                        product_graph[m].add(n)
-        return product_graph
+        seen = set()
+        for n, o_ns in equal_atoms.items():
+            seen.add(n)
+            for m, b in bonds[n].items():
+                if m in equal_atoms and m not in seen:
+                    o_ms = equal_atoms[m]
+                    for o_n in o_ns:
+                        ms = []
+                        node1 = (n, o_n)
+                        fms = full_product[node1]
+                        for o_m, o_b in o_bonds[o_n].items():
+                            if o_m in o_ms and b == o_b:
+                                node2 = (m, o_m)
+                                ms.append(node2)
+                                full_product[node2].add(node1)
+                                fms.add(node2)
+                        if ms:
+                            half_product[node1][m].extend(ms)
+
+        seen = set()
+        for n, moms in half_product.items():
+            if moms:
+                n1 = n[0]
+                seen.add(n1)
+                for m1, mom in moms.items():
+                    if m1 not in seen:
+                        for m in mom:
+                            half_product[m][n1].append(n)
+                for mc in combinations(moms.values(), 2):
+                    for m1, m2 in product(*mc):
+                        if m1[1] != m2[1]:
+                            full_product[m1].add(m2)
+                            full_product[m2].add(m1)
+
+        return full_product
 
 
 __all__ = ['MCS']
