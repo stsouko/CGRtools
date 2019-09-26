@@ -214,14 +214,33 @@ class AUXStructure(Structure):
     pass
 
 
-INCHIread = INCHIRead
+class INCHIread:
+    def __init__(self, *args, **kwargs):
+        warn('INCHIread deprecated. Use INCHIRead instead', DeprecationWarning)
+        warning('INCHIread deprecated. Use INCHIRead instead')
+        self.__obj = INCHIRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
 
 __all__ = ['INCHIRead', 'INCHIread']
 
 if platform == 'linux':
     opt_flag = '-'
     lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.so')
-
 elif platform == 'win32':
     opt_flag = '/'
     lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.dll')

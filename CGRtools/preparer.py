@@ -17,7 +17,9 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
+from logging import warning
 from operator import or_
+from warnings import warn
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
@@ -160,4 +162,14 @@ class CGRPreparer:
         return reduce(or_, data) if data else MoleculeContainer()
 
 
-__all__ = ['CGRPreparer']
+class CGRpreparer:
+    def __init__(self, *args, **kwargs):
+        warn('CGRpreparer deprecated. Use CGRPreparer instead', DeprecationWarning)
+        warning('CGRpreparer deprecated. Use CGRPreparer instead')
+        self.__obj = CGRPreparer(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+
+__all__ = ['CGRPreparer', 'CGRpreparer']
