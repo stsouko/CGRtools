@@ -28,30 +28,19 @@ class MCS:
     @abstractmethod
     def get_mcs_mapping(self, other, *, automorphism_filter: bool = True) -> Dict[int, int]:
         product_graph = self.__get_product(other)
-
         cliques = self.__clique(product_graph)
-        yield from (dict(c) for c in cliques)
-        #mapping = [(c, calc_bonds(c)) for c in islice(cliques, 42)]
-        #max_bonds = max(x for _, x in mapping)
-        #max_atoms = max(len(x) for x, y in mapping if y == max_bonds)
-        #yield from (dict(x) for x, y in mapping if y == max_bonds and len(x) == max_atoms)
 
-        #br = 0
-        #for clique in cliques:
-        #    if len(clique) < max_atoms:
-        #        br += 1
-        #        if br > 10:
-        #            break
-        #        continue
-        #    elif br:
-        #        br = 0
-        #    bond_sum = calc_bonds(clique)
-        #    if bond_sum > max_bonds:
-        #        max_bonds = bond_sum
-        #        max_atoms = len(clique)
-        #        yield dict(clique)
-        #    elif bond_sum == max_bonds:
-        #        yield dict(clique)
+        mapping = [x for x in islice(cliques, 42)]
+        max42 = max(len(x) for x in mapping)
+
+        yield from (dict(x) for x in mapping if len(x) == max42)
+
+        for x in cliques:
+            if len(x) > max42:
+                max42 = len(x)
+                yield dict(x)
+            elif len(x) == max42:
+                yield dict(x)
 
     @staticmethod
     def __clique(graph: Dict[Tuple[int, int], Set[Tuple[int, int]]]) -> Iterator[Set[Tuple[int, int]]]:
@@ -99,12 +88,12 @@ class MCS:
         bonds = self._bonds
         o_bonds = other._bonds
 
-        s_equal = defaultdict(set)  # equal self atoms
+        s_equal = defaultdict(list)  # equal self atoms
         for n, atom in self._atoms.items():
-            s_equal[atom].add(n)
-        p_equal = defaultdict(set)  # equal other atoms
+            s_equal[atom].append(n)
+        p_equal = defaultdict(list)  # equal other atoms
         for n, atom in other._atoms.items():
-            p_equal[atom].add(n)
+            p_equal[atom].append(n)
 
         half_product = {}
         full_product = {}
@@ -146,12 +135,20 @@ class MCS:
                     if m1 not in seen:
                         for m in mom:
                             half_product[m][n1].append(n)
-                for mc in combinations(moms.values(), 2):
-                    for m1, m2 in product(*mc):
-                        if m1[1] != m2[1]:
-                            full_product[m1].add(m2)
-                            full_product[m2].add(m1)
-
+                for (m11, ms1), (m21, ms2) in combinations(moms.items(), 2):
+                    if m11 not in seen:
+                        if m21 in seen:
+                            for m1, m2 in product(ms1, ms2):
+                                if m2 not in full_product[m1] and m1[1] != m2[1]:
+                                    half_product[m1][m21].append(m2)
+                                    full_product[m1].add(m2)
+                                    full_product[m2].add(m1)
+                        else:
+                            for m1, m2 in product(ms1, ms2):
+                                if m1[1] != m2[1]:
+                                    half_product[m1][m21].append(m2)
+                                    full_product[m1].add(m2)
+                                    full_product[m2].add(m1)
         return full_product
 
 
