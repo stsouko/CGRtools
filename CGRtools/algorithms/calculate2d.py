@@ -232,38 +232,65 @@ class Calculate2D:
             steps += 1
 
     def clean2d(self):
-        """
-        steps for calculate 2d coordinates
-        :return: None
-        """
+        cycles = self.sssr
+        plane = self._plane
+        cycle = cycles[0]
+        lc = len(cycle)
 
-        stack = 1
-        steps = 1
-        primary_forces, dif_dist = self.__get_dist_forces()
-        secondary_forces, dif_ang = self.__get_angle_forces()
-        print(dif_dist, dif_ang)
-        if dif_ang > dif_dist:
-            primary_forces, secondary_forces = secondary_forces, primary_forces
+        if lc == 3:
+            a, b, c = cycle
+            plane[a], plane[b], plane[c] = (0, 0), (.825, 0), (.825 / 2, .825 * cos(pi / 6))
+        elif lc == 4:
+            a, b, c, d = cycle
+            plane[a], plane[b], plane[c], plane[d] = (0, 0), (.825, 0), (.825, .825), (0, .825)
 
-        while stack:
-            # for x in range(1):
-            stack = 0
-            self._changes(primary_forces)
-            self._changes(secondary_forces)
+        elif lc in (5, 6, 7, 8, 9, 10):
+            angle = 2 * pi / lc
+            print(angle)
+            a, b = cycle[0], cycle[1]
+            plane[a], plane[b] = (0, 0), (.825, 0)
+            seen = {a, b}
+            stack = [(2, (.825, 0), lc - 2)]
+            while stack:
+                index, coords, count = stack.pop(0)
+                atom = cycle[index]
+                count -= 1
+                x1, y1 = coords
+                if atom not in seen:
+                    x2, y2 = x1 * 2, y1 * 2
+                    print(x2, y2)
+                    x2, y2 = rotate_vector2(x2 - x1, y2 - y2, angle)
+                    print(x2, y2)
+                    plane[atom] = (x2, y2)
+                    if count:
+                        stack.append((index + 1, (x2, y2), count))
+            print(plane)
 
-            primary_forces, dif_dist = self.__get_dist_forces()
-            secondary_forces, dif_ang = self.__get_angle_forces()
-            if dif_ang > dif_dist:
-                primary_forces, secondary_forces = secondary_forces, primary_forces
-            force_p = max(hypot(x, y) for x, y in primary_forces.values())
-            force_s = max(hypot(x, y) for x, y in secondary_forces.values())
-            print(force_p, force_s)
-            if force_p < .05 and force_s < 0.5:
-                stack = 0
+        else:
+            angle = 2 * pi / lc
+            alternate = False
+            if angle < pi / 6:
+                alternate = True
+            chain = [(0, 0), (.825, 0)]
+            lc -= 1
+            a, b = (.825, 0), (2 * .825, 0)
+            ax, ay = a
+            bx, by = b
+            abx, aby = bx - ax, by - ay
+            abx, aby = rotate_vector2(abx, aby, angle)
+            stack = [(abx, aby)]
+            abx, aby = rotate_vector2(abx, aby, -angle)
+            stack.append((abx, aby))
 
-            if steps >= 200:
-                break
-            steps += 1
+            while stack:
+                x1, y1 = stack[1]
+                x2, y2 = stack[2]
+                stack = []
+                lc -= 1
+                chain.append((x1, y1))
+                if lc:
+                    x3, y3 = x1 * 2, y1 * 2
+                    stack.append(3)
 
 
 n_dist = .825
