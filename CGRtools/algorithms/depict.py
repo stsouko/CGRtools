@@ -39,10 +39,11 @@ class Depict:
     __slots__ = ()
 
     def depict(self, *, embedding=False):
-        min_x = min(x for x, _ in self._plane.values())
-        max_x = max(x for x, _ in self._plane.values())
-        min_y = min(y for _, y in self._plane.values())
-        max_y = max(y for _, y in self._plane.values())
+        values = self._plane.values()
+        min_x = min(x for x, _ in values())
+        max_x = max(x for x, _ in values())
+        min_y = min(y for _, y in values())
+        max_y = max(y for _, y in values())
 
         bonds = self._render_bonds()
         atoms, masks = self._render_atoms()
@@ -281,14 +282,14 @@ class DepictReaction:
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
                            f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}" mask="url(#mask-{uid})">')
-                if len(r_bonds) == 1:  # SVG BUG adhoc
+                if len(r_bonds) != 1:  # SVG BUG adhoc
                     svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
                                f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
                 svg.append('  </defs>')
                 svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
                            'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
-                svg.append(f'  <g fill="none" stroke="{config["bonds_color"]}" '
+                svg.append(f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}">')
             svg.extend(r_bonds)
             svg.append('  </g>')
