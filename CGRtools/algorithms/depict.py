@@ -49,7 +49,7 @@ class Depict:
         atoms, masks = self._render_atoms()
 
         if embedding:
-            return atoms, bonds, masks, max_x, max_y
+            return atoms, bonds, masks, max_x, max_y, min_x, max_y
 
         font = self._render_config['font']
         font125 = 1.25 * font
@@ -244,10 +244,10 @@ class DepictReaction:
         r_bonds = []
         r_masks = []
 
-        r_max_x = r_max_y = 0
+        r_max_x = r_max_y = r_min_y = 0
         for ml in (self.reactants, self.reagents, self.products):
             for m in ml:
-                atoms, bonds, masks, max_x, max_y = m.depict(embedding=True)
+                atoms, bonds, masks, max_x, max_y, min_x, min_y = m.depict(embedding=True)
                 r_atoms.extend(atoms)
                 r_bonds.extend(bonds)
                 r_masks.extend(masks)
@@ -255,17 +255,16 @@ class DepictReaction:
                     r_max_x = max_x
                 if max_y > r_max_y:
                     r_max_y = max_y
+                if min_y > r_min_y:
+                    r_min_y = min_y
 
         config = Depict._render_config
         font = config['font']
         font125 = 1.25 * font
         width = r_max_x + 3.0 * font
-        print(r_max_y)
-        height = r_max_y + 3.0 * font
+        height = abs(r_min_y) + abs(r_max_y) + 2.5 * font
         viewbox_x = -font125
         viewbox_y = -r_max_y - font125
-        # arrow_y = viewbox_y + height / 2
-        arrow_y = 0
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
@@ -281,7 +280,7 @@ class DepictReaction:
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
                 svg.extend(r_masks)
                 svg.append('      </g>\n    </mask>\n  </defs>\n'
-                           f'  <line x1="{self._arrow[0]:.2f}" y1="{arrow_y}" x2="{self._arrow[1]:.2f}" y2="{arrow_y}" '
+                           f'  <line x1="{self._arrow[0]:.2f}" y1="0" x2="{self._arrow[1]:.2f}" y2="0" '
                            f'fill="none" stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
                            f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}" mask="url(#mask-{uid})">')
@@ -290,7 +289,7 @@ class DepictReaction:
                                f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
                 svg.append('  </defs>')
-                svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="{arrow_y}" x2="{self._arrow[1]:.2f}" y2="{arrow_y}" '
+                svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="0" x2="{self._arrow[1]:.2f}" y2="0" '
                            f'fill="none" stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
                 svg.append(f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}">')
