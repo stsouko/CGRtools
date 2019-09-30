@@ -40,10 +40,10 @@ class Depict:
 
     def depict(self, *, embedding=False):
         values = self._plane.values()
-        min_x = min(x for x, _ in values())
-        max_x = max(x for x, _ in values())
-        min_y = min(y for _, y in values())
-        max_y = max(y for _, y in values())
+        min_x = min(x for x, _ in values)
+        max_x = max(x for x, _ in values)
+        min_y = min(y for _, y in values)
+        max_y = max(y for _, y in values)
 
         bonds = self._render_bonds()
         atoms, masks = self._render_atoms()
@@ -263,6 +263,7 @@ class DepictReaction:
         height = r_max_y + 2.5 * font
         viewbox_x = -font125
         viewbox_y = -r_max_y - font125
+        arrow_y = viewbox_y + height / 2
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
@@ -278,8 +279,8 @@ class DepictReaction:
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
                 svg.extend(r_masks)
                 svg.append('      </g>\n    </mask>\n  </defs>\n'
-                           f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
-                           'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
+                           f'  <line x1="{self._arrow[0]:.2f}" y1="{arrow_y}" x2="{self._arrow[1]:.2f}" y2="{arrow_y}" '
+                           f'fill="none" stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
                            f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}" mask="url(#mask-{uid})">')
                 if len(r_bonds) != 1:  # SVG BUG adhoc
@@ -287,8 +288,8 @@ class DepictReaction:
                                f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
                 svg.append('  </defs>')
-                svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="-1" x2="{self._arrow[1]:.2f}" y2="-1" fill="none" '
-                           'stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
+                svg.append(f'  <line x1="{self._arrow[0]:.2f}" y1="{arrow_y}" x2="{self._arrow[1]:.2f}" y2="{arrow_y}" '
+                           f'fill="none" stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>')
                 svg.append(f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}">')
             svg.extend(r_bonds)
