@@ -246,7 +246,7 @@ class Calculate2D:
             direction = negative
             plane[a], plane[b], plane[c] = (0, 0), (.825, 0), direction
 
-        elif lc in (4, 5, 6, 7, 8, 9, 10):
+        elif lc in (4, 5, 6, 7, 8):
             angle = 2 * pi / lc
             a, b = cycle[0], cycle[1]
             plane[a], plane[b] = (0, 0), (.825, 0)
@@ -266,30 +266,55 @@ class Calculate2D:
                         stack.append((index + 1, (x2 + .825, y2), count))
 
         else:
-            angle = 2 * pi / lc
-            alternate = False
-            if angle < pi / 6:
-                alternate = True
-            chain = [(0, 0), (.825, 0)]
-            lc -= 1
-            a, b = (.825, 0), (2 * .825, 0)
-            ax, ay = a
-            bx, by = b
-            abx, aby = bx - ax, by - ay
-            abx, aby = rotate_vector2(abx, aby, angle)
-            stack = [(abx, aby)]
-            abx, aby = rotate_vector2(abx, aby, -angle)
-            stack.append((abx, aby))
+            print(cycle)
+            angle = 2 * pi / 3
+            a, b = cycle[0], cycle[1]
+            plane[a], plane[b] = (0, 0), (.825, 0)
+            seen = {a, b}
 
+            stack = [(2, (.825, 0), lc - 2)]
             while stack:
-                x1, y1 = stack[1]
-                x2, y2 = stack[2]
-                stack = []
-                lc -= 1
-                chain.append((x1, y1))
-                if lc:
-                    x3, y3 = x1 * 2, y1 * 2
-                    stack.append(3)
+                index, coords, count = stack.pop(0)
+                if index % 2:
+                    direction = negative * (pi - angle)
+                else:
+                    direction = positive * (pi - angle)
+
+                # if count == 5:
+                #     break
+                atom = cycle[index]
+                count -= 1
+                x1, y1 = coords
+                if atom not in seen:
+                    x2, y2 = rotate_vector2(x1, y1, direction)
+                    x2 += .825
+                    plane[atom] = (x2, y2)
+                    if count:
+                        stack.append((index + 1, (x2, y2), count))
+            # angle = 2 * pi / 3
+            # alternate = False
+            # if angle < pi / 6:
+            #     alternate = True
+            # chain = [(0, 0), (.825, 0)]
+            # lc -= 1
+            # a, b = (.825, 0), (2 * .825, 0)
+            # ax, ay = a
+            # bx, by = b
+            # abx, aby = bx - ax, by - ay
+            # abx, aby = rotate_vector2(abx, aby, angle)
+            # stack = [(abx, aby)]
+            # abx, aby = rotate_vector2(abx, aby, -angle)
+            # stack.append((abx, aby))
+
+            # while stack:
+            #     x1, y1 = stack[1]
+            #     x2, y2 = stack[2]
+            #     stack = []
+            #     lc -= 1
+            #     chain.append((x1, y1))
+            #     if lc:
+            #         x3, y3 = x1 * 2, y1 * 2
+            #         stack.append(3)
 
 
 n_dist = .825
