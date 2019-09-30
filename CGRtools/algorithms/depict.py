@@ -260,10 +260,12 @@ class DepictReaction:
         font = config['font']
         font125 = 1.25 * font
         width = r_max_x + 3.0 * font
-        height = r_max_y + 2.5 * font
+        print(r_max_y)
+        height = r_max_y + 3.0 * font
         viewbox_x = -font125
         viewbox_y = -r_max_y - font125
-        arrow_y = viewbox_y + height / 2
+        # arrow_y = viewbox_y + height / 2
+        arrow_y = 0
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '

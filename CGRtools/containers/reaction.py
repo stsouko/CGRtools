@@ -238,7 +238,7 @@ class ReactionContainer(DepictReaction):
 
         if self.__reagents:
             for m in self.__reagents:
-                max_x = self.__fix_positions(m, shift_x, 1.5)
+                max_x = self.__fix_positions(m, shift_x, 1)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
@@ -255,11 +255,19 @@ class ReactionContainer(DepictReaction):
     @staticmethod
     def __fix_positions(molecule, shift_x, shift_y):
         plane = molecule._plane
-        min_x = min(x for x, _ in plane.values()) - shift_x
-        max_x = max(x for x, _ in plane.values()) - min_x
-        min_y = min(y for _, y in plane.values()) - shift_y
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+        max_x = max(x for x, _ in values) - min_x
+        min_y = min(y for _, y in values) - shift_y
+        max_y = max(y for _, y in values)
+        print(min_y, max_y)
+        middle_y = (abs(max_y) + abs(min_y)) / 2
+        if not min_y + max_y and not shift_y:
+            middle_y = 0
+        print(plane)
         for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - min_y)
+            plane[n] = (x - min_x, y - middle_y)
+        print(plane)
         return max_x
 
     def __eq__(self, other):
