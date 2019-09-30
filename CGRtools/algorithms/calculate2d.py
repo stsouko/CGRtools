@@ -236,20 +236,23 @@ class Calculate2D:
         plane = self._plane
         cycle = cycles[0]
         lc = len(cycle)
+        positive, negative = 1, -1
 
         if lc == 3:
+            angle = pi / 3
             a, b, c = cycle
-            plane[a], plane[b], plane[c] = (0, 0), (.825, 0), (.825 / 2, .825 * cos(pi / 6))
-        elif lc == 4:
-            a, b, c, d = cycle
-            plane[a], plane[b], plane[c], plane[d] = (0, 0), (.825, 0), (.825, .825), (0, .825)
+            x, y = .825 / 2, sin(angle) * .825
+            positive, negative = (x, y), (x, -y)
+            direction = negative
+            plane[a], plane[b], plane[c] = (0, 0), (.825, 0), direction
 
-        elif lc in (5, 6, 7, 8, 9, 10):
+        elif lc in (4, 5, 6, 7, 8, 9, 10):
             angle = 2 * pi / lc
-            print(angle)
             a, b = cycle[0], cycle[1]
             plane[a], plane[b] = (0, 0), (.825, 0)
             seen = {a, b}
+            direction = positive * angle
+
             stack = [(2, (.825, 0), lc - 2)]
             while stack:
                 index, coords, count = stack.pop(0)
@@ -257,14 +260,10 @@ class Calculate2D:
                 count -= 1
                 x1, y1 = coords
                 if atom not in seen:
-                    x2, y2 = x1 * 2, y1 * 2
-                    print(x2, y2)
-                    x2, y2 = rotate_vector2(x2 - x1, y2 - y2, angle)
-                    print(x2, y2)
-                    plane[atom] = (x2, y2)
+                    x2, y2 = rotate_vector2(x1, y1, direction)
+                    plane[atom] = (x2 + .825, y2)
                     if count:
-                        stack.append((index + 1, (x2, y2), count))
-            print(plane)
+                        stack.append((index + 1, (x2 + .825, y2), count))
 
         else:
             angle = 2 * pi / lc
