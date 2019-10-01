@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from math import hypot, pi, acos, cos, sin
+from math import hypot, pi, acos, cos, sin, ceil
 from ..algorithms.depict import rotate_vector
 
 
@@ -267,30 +267,81 @@ class Calculate2D:
 
         else:
             print(cycle)
+            a = tuple(range(9, 300, 4))
+            b = tuple(range(10, 300, 4))
+            d = tuple(range(11, 300, 4))
+            e = tuple(range(12, 301, 4))
+            if lc in a:
+                pass
+            elif lc in b:
+                pass
+            elif lc in d:
+                pass
+            elif lc in e:
+                pass
+            else:
+                raise Exception
             angle = 2 * pi / 3
-            a, b = cycle[0], cycle[1]
-            plane[a], plane[b] = (0, 0), (.825, 0)
-            seen = {a, b}
-
-            stack = [(2, (.825, 0), lc - 2)]
+            dx, dy = .825 / 2, sin(pi / 3) * .825
+            c = cycle[2]
+            plane[cycle[0]], plane[cycle[1]], plane[c] = (.825, 0), (0, 0), (-dx, -dy)
+            mid = ceil(lc / 2)
+            stack = [(3, plane[c], lc - 3)]
             while stack:
                 index, coords, count = stack.pop(0)
-                if index % 2:
-                    direction = negative * (pi - angle)
-                else:
-                    direction = positive * (pi - angle)
-
-                # if count == 5:
-                #     break
-                atom = cycle[index]
-                count -= 1
                 x1, y1 = coords
-                if atom not in seen:
-                    x2, y2 = rotate_vector2(x1, y1, direction)
-                    x2 += .825
-                    plane[atom] = (x2, y2)
-                    if count:
-                        stack.append((index + 1, (x2, y2), count))
+                count -= 1
+                atom = cycle[index]
+
+                if lc in a:
+                    if index % 2:
+                        x2 = x1 - .825
+                        y2 = y1
+                    else:
+                        x2 = x1 - dx
+                        y2 = y1 - dy
+                    if count < mid:
+                        if index % 2:
+                            x2 = x1 + dx
+                            y2 = y1 + dy
+                        else:
+                            x2 = x1 + .825
+                            y2 = y1
+
+                        if count == mid - 1:
+                            x2 = x1 - dx
+                            y2 = y1 + dy
+
+                elif lc in b:
+                    if index % 2:
+                        x2 = x1 - .825
+                        y2 = y1
+                    else:
+                        x2 = x1 - dx
+                        y2 = y1 + dy
+
+                    if count < mid:
+                        if index % 2:
+                            x2 = x1 + dx
+                            y2 = y1 - dy
+                        else:
+                            x2 = x1 + .825
+                            y2 = y1
+
+                        if count == mid - 1:
+                            x2 = x1 + dx
+                            y2 = y1 + dy
+
+                # if count == 6:
+                #     break
+                # x2, y2 = rotate_vector2(x1, y1, direction)
+                # x2 += .825
+                plane[atom] = (x2, y2)
+                print(atom)
+                print(x2, y2)
+                print(count)
+                if count:
+                    stack.append((index + 1, (x2, y2), count))
             # angle = 2 * pi / 3
             # alternate = False
             # if angle < pi / 6:
