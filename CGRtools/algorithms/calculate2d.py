@@ -284,7 +284,9 @@ class Calculate2D:
             angle = 2 * pi / 3
             dx, dy = .825 / 2, sin(pi / 3) * .825
             c = cycle[2]
-            plane[cycle[0]], plane[cycle[1]], plane[c] = (.825, 0), (0, 0), (-dx, -dy)
+            plane[cycle[0]], plane[cycle[1]], plane[c] = (.825, 0), (0, 0), (-dx, dy)
+            if lc in a:
+                plane[c] = (-dx, -dy)
             mid = ceil(lc / 2)
             stack = [(3, plane[c], lc - 3)]
             while stack:
