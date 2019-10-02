@@ -269,26 +269,16 @@ class Calculate2D:
             print(cycle)
             a = tuple(range(9, 300, 4))
             b = tuple(range(10, 300, 4))
-            d = tuple(range(11, 300, 4))
-            e = tuple(range(12, 301, 4))
-            if lc in a:
-                pass
-            elif lc in b:
-                pass
-            elif lc in d:
-                pass
-            elif lc in e:
-                pass
-            else:
-                raise Exception
-            angle = 2 * pi / 3
-            dx, dy = .825 / 2, sin(pi / 3) * .825
-            c = cycle[2]
-            plane[cycle[0]], plane[cycle[1]], plane[c] = (.825, 0), (0, 0), (-dx, dy)
-            if lc in a:
-                plane[c] = (-dx, -dy)
+            c = tuple(range(11, 300, 4))
+            d = tuple(range(12, 301, 4))
+            # angle = 2 * pi / 3
+            dy, dx = .825 / 2, sin(pi / 3) * .825
+            n, m, o = (dx, -dy / 2), (0, dy / 2), (-dx, -dy / 2)
+            if lc in b or lc in c:
+                n, m, o = (dx, dy / 2), (0, -dy / 2), (-dx, dy / 2)
+            plane[cycle[0]], plane[cycle[1]], plane[cycle[2]] = n, m, o
             mid = ceil(lc / 2)
-            stack = [(3, plane[c], lc - 3)]
+            stack = [(3, o, lc - 3)]
             while stack:
                 index, coords, count = stack.pop(0)
                 x1, y1 = coords
@@ -297,8 +287,8 @@ class Calculate2D:
 
                 if lc in a:
                     if index % 2:
-                        x2 = x1 - .825
-                        y2 = y1
+                        x2 = x1 - dx
+                        y2 = y1 + dy
                     else:
                         x2 = x1 - dx
                         y2 = y1 - dy
@@ -307,17 +297,17 @@ class Calculate2D:
                             x2 = x1 + dx
                             y2 = y1 + dy
                         else:
-                            x2 = x1 + .825
-                            y2 = y1
+                            x2 = x1 + dx
+                            y2 = y1 - dy
 
                         if count == mid - 1:
-                            x2 = x1 - dx
-                            y2 = y1 + dy
+                            x2 = x1
+                            y2 = y1 + .825
 
                 elif lc in b:
                     if index % 2:
-                        x2 = x1 - .825
-                        y2 = y1
+                        x2 = x1 - dx
+                        y2 = y1 - dy
                     else:
                         x2 = x1 - dx
                         y2 = y1 + dy
@@ -327,47 +317,60 @@ class Calculate2D:
                             x2 = x1 + dx
                             y2 = y1 - dy
                         else:
-                            x2 = x1 + .825
-                            y2 = y1
-
-                        if count == mid - 1:
                             x2 = x1 + dx
                             y2 = y1 + dy
 
-                # if count == 6:
-                #     break
-                # x2, y2 = rotate_vector2(x1, y1, direction)
-                # x2 += .825
+                        if count == mid - 1:
+                            x2 = x1
+                            y2 = y1 + .825
+
+                elif lc in c:
+                    if index % 2:
+                        x2 = x1 - dx
+                        y2 = y1 - dy
+                    else:
+                        x2 = x1 - dx
+                        y2 = y1 + dy
+
+                    if count < mid:
+                        if index % 2:
+                            x2 = x1 + dx
+                            y2 = y1 - dy
+                        else:
+                            x2 = x1 + dx
+                            y2 = y1 + dy
+
+                        if count == mid - 1:
+                            x2 = x1
+                            y2 = y1 + .825
+
+                        if not count:
+                            x2 = x1 - dx
+                            y2 = y1 - dy
+
+                elif lc in d:
+                    if index % 2:
+                        x2 = x1 - dx
+                        y2 = y1 + dy
+                    else:
+                        x2 = x1 - dx
+                        y2 = y1 - dy
+
+                    if count < mid:
+                        if index % 2:
+                            x2 = x1 + dx
+                            y2 = y1 + dy
+                        else:
+                            x2 = x1 + dx
+                            y2 = y1 - dy
+
+                        if count == mid - 1:
+                            x2 = x1
+                            y2 = y1 + .825
+
                 plane[atom] = (x2, y2)
-                print(atom)
-                print(x2, y2)
-                print(count)
                 if count:
                     stack.append((index + 1, (x2, y2), count))
-            # angle = 2 * pi / 3
-            # alternate = False
-            # if angle < pi / 6:
-            #     alternate = True
-            # chain = [(0, 0), (.825, 0)]
-            # lc -= 1
-            # a, b = (.825, 0), (2 * .825, 0)
-            # ax, ay = a
-            # bx, by = b
-            # abx, aby = bx - ax, by - ay
-            # abx, aby = rotate_vector2(abx, aby, angle)
-            # stack = [(abx, aby)]
-            # abx, aby = rotate_vector2(abx, aby, -angle)
-            # stack.append((abx, aby))
-
-            # while stack:
-            #     x1, y1 = stack[1]
-            #     x2, y2 = stack[2]
-            #     stack = []
-            #     lc -= 1
-            #     chain.append((x1, y1))
-            #     if lc:
-            #         x3, y3 = x1 * 2, y1 * 2
-            #         stack.append(3)
 
 
 n_dist = .825
