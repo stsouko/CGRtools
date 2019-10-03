@@ -17,7 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from math import hypot, pi, acos, cos, sin, ceil
+from itertools import product
+from math import hypot, pi, acos, cos, sin, ceil, atan2
 from ..algorithms.depict import rotate_vector
 
 
@@ -29,6 +30,16 @@ def rotate_vector2(x1, y1, angle):
     sin_rad = sin(angle)
     return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
 
+
+def dfs_paths(graph, start, goal):
+    stack = [(start, [start])]
+    while stack:
+        (vertex, path) = stack.pop()
+        for next in set(graph[vertex]) - set(path):
+            if next == goal:
+                yield path + [next]
+            else:
+                stack.append((next, path + [next]))
 
 # def optimal(temps, a, b, c):
 #     ax, ay = a
@@ -231,7 +242,7 @@ class Calculate2D:
                 break
             steps += 1
 
-    def clean2d(self):
+    def calculate_cycles(self):
         cycles = self.sssr
         plane = self._plane
         cycle = cycles[0]
@@ -266,7 +277,6 @@ class Calculate2D:
                         stack.append((index + 1, (x2 + .825, y2), count))
 
         else:
-            print(cycle)
             a = tuple(range(9, 300, 4))
             b = tuple(range(10, 300, 4))
             c = tuple(range(11, 300, 4))
@@ -371,6 +381,81 @@ class Calculate2D:
                 plane[atom] = (x2, y2)
                 if count:
                     stack.append((index + 1, (x2, y2), count))
+
+    def calculate_chains(self):
+        plane = self._plane
+        atoms = set(self._atoms)
+        bonds = self._bonds
+
+        if bonds:
+            singles = [k for k, v in bonds.items() if len(v) == 1]
+        else:
+            raise NotImplemented('can`t clean for one atom')
+        pairs = list(product(singles, singles))
+        max_dist = 0
+        max_path = None
+        for s, e in pairs:
+            if not s == e:
+                for path in dfs_paths(bonds, s, e):
+                    num = len(path)
+                    if num > max_dist:
+                        max_dist = num
+                        max_path = path
+
+        print(max_path)
+        print(max_dist)
+        if max_dist == 2:
+            n, m = max_path
+            plane[n] = (0, 0)
+            plane[m] = (n_dist, 0)
+        else:
+            atom1 = max_path[0]
+            atom2 = max_path[1]
+            atom3 = max_path[2]
+            dy, dx = n_dist / 2, sin(pi / 3) * n_dist
+            n, m, o = (-n_dist, 0), (0, 0), (n_dist, 0)
+            bond2 = bonds[atom2][atom3].order
+            if normal_angles[bonds[atom1][atom2].order][bond2] != pi:
+                n, m, o = (-dx, -dy / 2), (0, dy / 2), (dx, - dy / 2)
+            plane[atom1], plane[atom2], plane[atom3] = n, m, o
+            seen = {atom1, atom2}
+            print(bond2)
+            stack = [(2, o, bond2, max_dist - 2)]
+            while stack:
+                index, coords, bnd1, count = stack.pop(0)
+                atm1 = max_path[index]
+                count -= 1
+                x1, y1 = coords
+                if atm1 not in seen:
+                    nxt = index + 1
+                    if nxt <= max_dist + 1:
+                        atm2 = max_path[nxt]
+                        if normal_angles[bnd1][bonds[atm1][atm2].order] == pi:
+                            ang = atan2(y1, x1)
+                            if ang:
+                                x2 = x1 + dx
+                                if ang > 0:
+                                    y2 = y1 + dy
+                                else:
+                                    y2 = y1 - dy
+                            else:
+                                x2 = x1 + n_dist
+                                y2 = y1
+                            print(ang)
+                            break
+                    plane[atom] = (x2 + .825, y2)
+                    if count:
+                        stack.append((index + 1, (x2 + .825, y2), count))
+
+
+    def clean2d(self):
+        cycles = self.sssr
+        plane = self._plane
+
+        if cycles:
+            self.calculate_cycles()
+        else:
+            self.calculate_chains()
 
 
 n_dist = .825
