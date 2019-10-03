@@ -53,8 +53,8 @@ class Core(ABC):
     def __setstate__(self, state):
         self.__isotope = state['isotope']
 
-    def __hash__(self):
-        return self.__int__()
+    def __int__(self):
+        return hash(self)
 
     @property
     @abstractmethod
@@ -163,36 +163,6 @@ class Core(ABC):
             self._map = _map
 
 
-class Dynamic:
-    @property
-    def p_charge(self) -> int:
-        try:
-            return self._graph()._p_charges[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_is_radical(self) -> bool:
-        try:
-            return self._graph()._p_radicals[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_neighbors(self):
-        try:
-            return self._graph()._p_neighbors[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-    @property
-    def p_hybridization(self):
-        try:
-            return self._graph()._p_hybridizations[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
-
-
 class Element(Core):
     __slots__ = ()
     __class_cache__ = {}
@@ -200,6 +170,30 @@ class Element(Core):
     @property
     def atomic_symbol(self) -> str:
         return self.__class__.__name__
+
+    @Core.charge.setter
+    def charge(self, charge: int):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            g._calc_implicit(self._map)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical: bool):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            g._calc_implicit(self._map)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
 
     @property
     def implicit_hydrogens(self) -> Optional[int]:
@@ -251,7 +245,7 @@ class Element(Core):
         return isinstance(other, Element) and self.atomic_number == other.atomic_number and \
             self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical
 
-    def __int__(self):
+    def __hash__(self):
         """
         21bit = 9bit | 7bit | 4bit | 1bit
         """
@@ -349,7 +343,188 @@ class Element(Core):
         return dict(rules)
 
 
-class DynamicElement(Core, Dynamic):
+class Query(Core):
+    __slots__ = ()
+
+    @Core.charge.setter
+    def charge(self, charge):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            if self._map in g._atoms_stereo:
+                del g._atoms_stereo[self._map]
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.neighbors.setter
+    def neighbors(self, neighbors):
+        try:
+            g = self._graph()
+            g._neighbors[self._map] = g._validate_neighbors(neighbors)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.hybridization.setter
+    def hybridization(self, hybridization):
+        try:
+            g = self._graph()
+            g._hybridizations[self._map] = g._validate_hybridization(hybridization)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
+                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
+                             (1, 2, 3, 4): 15}  # 4 bit
+    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
+                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
+                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+
+
+class Dynamic(Core):
+    __slots__ = ()
+
+    @Core.charge.setter
+    def charge(self, charge):
+        try:
+            g = self._graph()
+            g._charges[self._map] = g._validate_charge(charge)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Core.is_radical.setter
+    def is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._radicals[self._map] = g._validate_radical(is_radical)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_charge(self) -> int:
+        try:
+            return self._graph()._p_charges[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @p_charge.setter
+    def p_charge(self, charge):
+        try:
+            g = self._graph()
+            g._p_charges[self._map] = g._validate_charge(charge)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_is_radical(self) -> bool:
+        try:
+            return self._graph()._p_radicals[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @p_is_radical.setter
+    def p_is_radical(self, is_radical):
+        try:
+            g = self._graph()
+            g._p_radicals[self._map] = g._validate_radical(is_radical)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_neighbors(self):
+        try:
+            return self._graph()._p_neighbors[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def p_hybridization(self):
+        try:
+            return self._graph()._p_hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+
+class DynamicQuery(Dynamic):
+    __slots__ = ()
+
+    @Dynamic.neighbors.setter
+    def neighbors(self, neighbors):
+        try:
+            g = self._graph()
+            neighbors = g._validate_neighbors(neighbors)
+            neighbors, p_neighbors = g._validate_neighbors_pairing(neighbors, g._p_neighbors[self._map])
+            g._neighbors[self._map] = neighbors
+            g._p_neighbors[self._map] = p_neighbors
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.hybridization.setter
+    def hybridization(self, hybridization):
+        try:
+            g = self._graph()
+            hybridization = g._validate_hybridization(hybridization)
+            hybridization, p_hybridization = g._validate_hybridization_pairing(hybridization,
+                                                                               g._p_hybridizations[self._map])
+            g._hybridizations[self._map] = hybridization
+            g._p_hybridizations[self._map] = p_hybridization
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.p_neighbors.setter
+    def p_neighbors(self, p_neighbors):
+        try:
+            g = self._graph()
+            p_neighbors = g._validate_neighbors(p_neighbors)
+            neighbors, p_neighbors = g._validate_neighbors_pairing(g._neighbors[self._map], p_neighbors)
+            g._neighbors[self._map] = neighbors
+            g._p_neighbors[self._map] = p_neighbors
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @Dynamic.p_hybridization.setter
+    def p_hybridization(self, p_hybridization):
+        try:
+            g = self._graph()
+            p_hybridization = g._validate_hybridization(p_hybridization)
+            hybridization, p_hybridization = g._validate_hybridization_pairing(g._hybridizations[self._map],
+                                                                               p_hybridization)
+            g._hybridizations[self._map] = hybridization
+            g._p_hybridizations[self._map] = p_hybridization
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    _hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
+                             ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
+                             ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
+                             ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
+    _neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
+                         ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
+                         ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+
+
+class DynamicElement(Dynamic):
     __slots__ = ('__p_charge', '__p_is_radical')
 
     @property
@@ -386,7 +561,7 @@ class DynamicElement(Core, Dynamic):
             self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical and \
             self.p_charge == other.p_charge and self.p_is_radical == other.p_is_radical
 
-    def __int__(self):
+    def __hash__(self):
         """
         26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
         """
@@ -394,7 +569,7 @@ class DynamicElement(Core, Dynamic):
             self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
 
 
-class QueryElement(Core):
+class QueryElement(Query):
     __slots__ = ()
 
     @property
@@ -449,22 +624,15 @@ class QueryElement(Core):
             return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 4bit
         """
         return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
-            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
-
-    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                              (1, 2, 3, 4): 15}  # 4 bit
-    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-class DynamicQueryElement(Core, Dynamic):
+class DynamicQueryElement(DynamicQuery):
     __slots__ = ()
 
     @property
@@ -520,25 +688,17 @@ class DynamicQueryElement(Core, Dynamic):
             return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         36bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
         """
         return (self.isotope or 0) << 27 | self.atomic_number << 20 | self.charge + 4 << 16 | self.p_charge << 12 | \
             self.is_radical << 11 | self.p_is_radical << 10 | \
-            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
-
-    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
 
-class AnyElement(Core):
+class AnyElement(Query):
     __slots__ = ()
 
     @property
@@ -581,22 +741,15 @@ class AnyElement(Core):
                 return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         13bit = 4bit | 1bit | 4bit | 4bit
         """
         return self.charge + 4 << 9 | self.is_radical << 8 | \
-            self.__neighbors_bitmap.get(self.neighbors, 15) << 4 | self.__hybridization_bitmap[self.hybridization]
-
-    __hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                              (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                              (1, 2, 3, 4): 15}  # 4 bit
-    __neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                          (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                          (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-class DynamicAnyElement(Core, Dynamic):
+class DynamicAnyElement(DynamicQuery):
     __slots__ = ()
 
     @property
@@ -641,22 +794,14 @@ class DynamicAnyElement(Core, Dynamic):
                 return True
         return False
 
-    def __int__(self):
+    def __hash__(self):
         """
         20bit = 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
         """
         return self.charge + 4 << 16 | self.p_charge << 12 | \
             self.is_radical << 11 | self.p_is_radical << 10 | \
-            self.__hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self.__neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
-
-    __hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                              ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                              ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                              ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    __neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                          ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                          ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
+            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
+            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
 
 # averaged isotopes. 3.*-compatibility

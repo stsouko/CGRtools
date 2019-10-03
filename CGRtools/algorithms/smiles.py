@@ -78,7 +78,7 @@ class Smiles:
         return str(self)
 
     def __eq__(self, other):
-        return str(self) == str(other)
+        return isinstance(other, Smiles) and str(self) == str(other)
 
     @cached_method
     def __hash__(self):

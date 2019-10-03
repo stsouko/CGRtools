@@ -241,10 +241,12 @@ class MoleculeStereo(Stereo):
 
     def _fix_stereo(self):
         if self._atoms_stereo:
-            stereo = self._atoms_stereo
+            atoms = self._atoms
+            stereo = {k: v for k, v in self._atoms_stereo.items() if k in atoms}
             self._atoms_stereo = new_stereo = {}
+
             old_stereo = 0
-            while len(stereo) != old_stereo:
+            while stereo and len(stereo) != old_stereo:
                 old_stereo = len(stereo)
                 failed_stereo = {}
                 chiral = self._chiral_atoms
