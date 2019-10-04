@@ -402,36 +402,44 @@ class Calculate2D:
                         max_dist = num
                         max_path = path
 
-        print(max_path)
-        print(max_dist)
         if max_dist == 2:
             n, m = max_path
             plane[n] = (0, 0)
             plane[m] = (n_dist, 0)
         else:
+            dict_for_single = {}
             atom1 = max_path[0]
             atom2 = max_path[1]
             atom3 = max_path[2]
             dy, dx = n_dist / 2, sin(pi / 3) * n_dist
-            n, m, o = (-n_dist, 0), (0, 0), (n_dist, 0)
+            n, m, o = (-dx, dy), (0, 0), (dx, -dy)
             bond2 = bonds[atom2][atom3].order
             if normal_angles[bonds[atom1][atom2].order][bond2] != pi:
                 n, m, o = (-dx, -dy / 2), (0, dy / 2), (dx, - dy / 2)
             plane[atom1], plane[atom2], plane[atom3] = n, m, o
+            nx, ny = n
+            mx, my = m
+            ox, oy = o
+            vx, vy = ox - mx, oy - my
+            dict_for_single[atom2] = (mx - nx, my - ny)
+            dict_for_single[atom3] = (vx, vy)
             seen = {atom1, atom2}
-            print(bond2)
-            stack = [(2, o, bond2, max_dist - 2)]
+            stack = [(2, o, bond2, (vx, vy), max_dist - 2)]
+            print(max_path)
             while stack:
-                index, coords, bnd1, count = stack.pop(0)
+                index, coords, bnd1, v, count = stack.pop(0)
                 atm1 = max_path[index]
                 count -= 1
                 x1, y1 = coords
+                v_x, v_y = v
                 if atm1 not in seen:
+                    seen.add(atm1)
                     nxt = index + 1
-                    if nxt <= max_dist + 1:
+                    if nxt < max_dist:
                         atm2 = max_path[nxt]
-                        if normal_angles[bnd1][bonds[atm1][atm2].order] == pi:
-                            ang = atan2(y1, x1)
+                        bnd2 = bonds[atm1][atm2].order
+                        ang = atan2(v_y, v_x)
+                        if normal_angles[bnd1][bnd2] == pi:
                             if ang:
                                 x2 = x1 + dx
                                 if ang > 0:
@@ -441,12 +449,49 @@ class Calculate2D:
                             else:
                                 x2 = x1 + n_dist
                                 y2 = y1
-                            print(ang)
-                            break
-                    plane[atom] = (x2 + .825, y2)
-                    if count:
-                        stack.append((index + 1, (x2 + .825, y2), count))
+                        else:
+                            if ang:
+                                x2 = x1 + dx
+                                if ang > 0:
+                                    y2 = y1 - dy
+                                else:
+                                    y2 = y1 + dy
+                            else:
+                                x2 = x1 + dx
+                                y2 = y1 + dy
+                        plane[atm2] = (x2, y2)
+                        if count:
+                            v = (x2 - x1, y2 - y1)
+                            dict_for_single[atm2] = v
+                            stack.append((nxt, (x2, y2), bnd2, v, count))
 
+            lasts = atoms - seen
+            kv = {}
+            was = None
+            for atm in lasts:
+                atm3 = list(bonds[atm])[0]
+                if atm3 not in dict_for_single:
+                    continue
+                if atm3 not in kv:
+                    kv[atm3] = atm
+                else:
+                    was = kv[atm3]
+                vx, vy = dict_for_single[atm3]
+                x1, y1 = plane[atm3]
+                ang = atan2(vy, vx)
+                if ang > 0:
+                    y2 = y1 + n_dist
+                else:
+                    y2 = y1 - n_dist
+                if was:
+                    x2 = x1 - 2/3 * dx
+                    x3 = x1 + 2/3 * dx
+                    plane[was] = (x3, y2)
+                    was = None
+                else:
+                    x2 = x1
+
+                plane[atm] = (x2, y2)
 
     def clean2d(self):
         cycles = self.sssr
