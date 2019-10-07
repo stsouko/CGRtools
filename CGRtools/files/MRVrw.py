@@ -521,15 +521,50 @@ class MRVWrite:
     __finalized = False
 
 
-MRVwrite = MRVWrite
+class MRVread:
+    def __init__(self, *args, **kwargs):
+        warn('MRVread deprecated. Use MRVRead instead', DeprecationWarning)
+        warning('MRVread deprecated. Use MRVRead instead')
+        self.__obj = MRVRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
+class MRVwrite:
+    def __init__(self, *args, **kwargs):
+        warn('MRVwrite deprecated. Use MRVWrite instead', DeprecationWarning)
+        warning('MRVwrite deprecated. Use MRVWrite instead')
+        self.__obj = MRVWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
 
 __all__ = ['MRVWrite', 'MRVwrite']
 
 if find_spec('lxml'):
     from lxml.etree import iterparse, QName, tostring
 
-    MRVread = MRVRead
     __all__.extend(['MRVRead', 'MRVread'])
 else:
     warn('lxml library not installed', ImportWarning)
-    del MRVRead
+    del MRVRead, MRVread

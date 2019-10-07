@@ -26,6 +26,7 @@ from subprocess import check_output
 from sys import platform
 from time import strftime
 from traceback import format_exc
+from warnings import warn
 from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
 from ..containers import ReactionContainer
 from ..containers.common import Graph
@@ -248,8 +249,48 @@ class RDFWrite(MDLWrite):
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
 
-RDFread = RDFRead
-RDFwrite = RDFWrite
+class RDFread:
+    def __init__(self, *args, **kwargs):
+        warn('RDFread deprecated. Use RDFRead instead', DeprecationWarning)
+        warning('RDFread deprecated. Use RDFRead instead')
+        self.__obj = RDFRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __getitem__(self, item):
+        return self.__obj[item]
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+    def __len__(self):
+        return len(self.__obj)
+
+
+class RDFwrite:
+    def __init__(self, *args, **kwargs):
+        warn('RDFwrite deprecated. Use RDFWrite instead', DeprecationWarning)
+        warning('RDFwrite deprecated. Use RDFWrite instead')
+        self.__obj = RDFWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
 
 
 __all__ = ['RDFRead', 'RDFWrite', 'RDFread', 'RDFwrite']

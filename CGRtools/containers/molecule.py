@@ -31,7 +31,7 @@ from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeStereo, DepictMolecule):
+class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
@@ -40,7 +40,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         self._neighbors: Dict[int, int] = {}
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
-        self._atoms_stereo: Dict[int, int] = {}
+        self._atoms_stereo: Dict[int, bool] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -80,16 +80,16 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         super().add_bond(n, m, bond)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        self._hydrogens[n] = self._calc_implicit(n)
-        self._hydrogens[m] = self._calc_implicit(m)
+        self._calc_implicit(n)
+        self._calc_implicit(m)
 
         # calc query marks dynamically.
         if self._atoms[n].atomic_number != 1:  # not hydrogen
             self._neighbors[m] += 1
-            self._hybridizations[m] = self._calc_hybridization(m)
+            self._calc_hybridization(m)
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
-            self._hybridizations[n] = self._calc_hybridization(n)
+            self._calc_hybridization(n)
         self._fix_stereo()
 
     def delete_atom(self, n):
@@ -98,36 +98,34 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         super().delete_atom(n)
 
         sn = self._neighbors
-        sh = self._hybridizations
-        shg = self._hydrogens
 
         del sn[n]
-        del sh[n]
-        del shg[n]
+        del self._hybridizations[n]
+        del self._hydrogens[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         if isnt_hydrogen:
             for m in old_bonds:
-                sh[m] = self._calc_hybridization(m)
+                self._calc_hybridization(m)
                 sn[m] -= 1
 
         for m in old_bonds:
-            shg[m] = self._calc_implicit(m)
+            self._calc_implicit(m)
         self._fix_stereo()
 
     def delete_bond(self, n, m):
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
-        self._hydrogens[n] = self._calc_implicit(n)
-        self._hydrogens[m] = self._calc_implicit(m)
+        self._calc_implicit(n)
+        self._calc_implicit(m)
 
         # neighbors query marks fix. ignore removed hydrogen
         if self._atoms[n].atomic_number != 1:
-            self._hybridizations[m] = self._calc_hybridization(m)
+            self._calc_hybridization(m)
             self._neighbors[m] -= 1
         if self._atoms[m].atomic_number != 1:
-            self._hybridizations[n] = self._calc_hybridization(n)
+            self._calc_hybridization(n)
             self._neighbors[n] -= 1
         self._fix_stereo()
 
@@ -208,7 +206,6 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
-            # todo: recalc stereo
             sub._conformers = []
             sub._atoms = ca = {}
             for n in atoms:
@@ -217,13 +214,15 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
 
             # recalculate query marks
             sub._neighbors = sn = {}
-            sub._hybridizations = sh = {}
-            sub._hydrogens = shg = {}
+            sub._hybridizations = {}
+            sub._hydrogens = {}
             atoms = sub._atoms
             for n, m_bonds in sub._bonds.items():
                 sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
-                sh[n] = sub._calc_hybridization(n)
-                shg[n] = sub._calc_implicit(n)
+                sub._calc_hybridization(n)
+                sub._calc_implicit(n)
+            sub._atoms_stereo = self._atoms_stereo
+            sub._fix_stereo()
         return sub
 
     def union(self, other):
@@ -275,11 +274,11 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
             or_ = other._radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
             h = cgr.CGRContainer()
             atoms = h._atoms
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
+            for n in sa.keys() - common:  # cleavage atoms
                 h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
@@ -323,11 +322,11 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
             opr = other._p_radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
             h = other.__class__()  # subclasses support
             atoms = h._atoms
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
+            for n in sa.keys() - common:  # cleavage atoms
                 h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
@@ -337,7 +336,8 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
                             bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
                         bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
-                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n], p_is_radical=opr[n])
+                h.add_atom(oa[n].copy(), n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n],
+                           p_is_radical=opr[n])
                 for m, bond in ob[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is formed bond
@@ -478,6 +478,26 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         return list(errors)
 
     @cached_property
+    def molecular_charge(self):
+        """
+        total charge of molecule
+        """
+        return sum(self._charges.values())
+
+    def __int__(self):
+        """
+        total charge of molecule
+        """
+        return self.molecular_charge
+
+    @cached_property
+    def molecular_mass(self):
+        return sum(x.atomic_mass for x in self._atoms.values())
+
+    def __float__(self):
+        return self.molecular_mass
+
+    @cached_property
     def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
         """
         aromatic rings atoms numbers
@@ -529,7 +549,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
         bonds = self._bonds
         tetra = []
         for n, atom in atoms.items():
-            if atom.atomic_number == 6:
+            if atom.atomic_number == 6 and not self._charges[n]:
                 env = bonds[n]
                 b_sum = sum(x.order for x in env.values())
                 if b_sum > 4:
@@ -563,6 +583,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
             for m, bond in self._bonds[n].items():
                 order = bond.order
                 if order == 4:  # aromatic rings not supported
+                    self._hydrogens[n] = None
                     return
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
@@ -570,10 +591,13 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
             try:
                 rules = atom.valence_rules(charge, is_radical, explicit_sum)
             except ValenceError:
+                self._hydrogens[n] = None
                 return
             for s, d, h in rules:
                 if h and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                    self._hydrogens[n] = h
                     return h
+        self._hydrogens[n] = 0
         return 0
 
     def _calc_hybridization(self, n: int) -> int:
@@ -584,6 +608,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
                 continue
             order = bond.order
             if order == 4:
+                self._hybridizations[n] = 4
                 return 4
             elif order == 3:
                 if hybridization != 3:
@@ -593,6 +618,7 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
                     hybridization = 3
                 elif hybridization == 1:
                     hybridization = 2
+        self._hybridizations[n] = hybridization
         return hybridization
 
     @class_cached_property
@@ -655,13 +681,13 @@ class MoleculeContainer(Graph, Aromatize, Standardize, MoleculeSmiles, MoleculeS
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}
-        self._hybridizations = sh = {}
-        self._hydrogens = shg = {}
+        self._hybridizations = {}
+        self._hydrogens = {}
         atoms = state['atoms']
         for n, m_bonds in state['bonds'].items():
             sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
-            sh[n] = self._calc_hybridization(n)
-            shg[n] = self._calc_implicit(n)
+            self._calc_hybridization(n)
+            self._calc_implicit(n)
 
 
 __all__ = ['MoleculeContainer']

@@ -926,6 +926,26 @@ class SMILESRead(CGRRead):
         #         'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': []}
 
 
-SMILESread = SMILESRead
+class SMILESread:
+    def __init__(self, *args, **kwargs):
+        warn('SMILESread deprecated. Use SMILESRead instead', DeprecationWarning)
+        warning('SMILESread deprecated. Use SMILESRead instead')
+        self.__obj = SMILESRead(*args, **kwargs)
 
-__all__ = ['SMILESRead']
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
+__all__ = ['SMILESRead', 'SMILESread']

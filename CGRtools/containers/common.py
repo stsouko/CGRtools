@@ -67,6 +67,9 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
     def __contains__(self, n: int):
         return n in self._atoms
 
+    def __bool__(self):
+        return bool(self._atoms)
+
     def atom(self, n: int) -> Core:
         return self._atoms[n]
 
@@ -158,12 +161,9 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
 
         if not isinstance(xy, tuple) or len(xy) != 2 or not isinstance(xy[0], float) or not isinstance(xy[1], float):
             raise TypeError('XY should be tuple with 2 float')
-        if not isinstance(charge, int):
-            raise TypeError('formal charge should be int in range [-4, 4]')
-        if charge > 4 or charge < -4:
-            raise ValueError('formal charge should be in range [-4, 4]')
-        if not isinstance(is_radical, bool):
-            raise TypeError('radical state should be bool')
+
+        charge = self._validate_charge(charge)
+        is_radical = self._validate_radical(is_radical)
 
         self._atoms[_map] = atom
         self._charges[_map] = charge
@@ -403,6 +403,20 @@ class Graph(Isomorphism, SSSR, Morgan, ABC):
 
     def flush_cache(self):
         self.__dict__.clear()
+
+    @staticmethod
+    def _validate_charge(charge):
+        if not isinstance(charge, int):
+            raise TypeError('formal charge should be int in range [-4, 4]')
+        if charge > 4 or charge < -4:
+            raise ValueError('formal charge should be in range [-4, 4]')
+        return charge
+
+    @staticmethod
+    def _validate_radical(is_radical):
+        if not isinstance(is_radical, bool):
+            raise TypeError('radical state should be bool')
+        return is_radical
 
     def __component(self, start):
         bonds = self._bonds

@@ -28,7 +28,6 @@ class Standardize:
         """
         atom_map = {'charge': self._charges, 'radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
-        shg = self._hydrogens
         hs = set()
         for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
             for mapping in pattern.get_mapping(self):
@@ -43,7 +42,7 @@ class Standardize:
         if hs:
             self.flush_cache()
             for n in hs:
-                shg[n] = self._calc_implicit(n)
+                self._calc_implicit(n)
 
     @staticmethod
     def _standardize_rules():

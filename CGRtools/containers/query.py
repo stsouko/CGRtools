@@ -23,56 +23,25 @@ from .common import Graph
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import QueryStereo
-from ..periodictable import Element, QueryElement
+from ..periodictable import Element, QueryElement, AnyElement
 
 
-class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
+class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}
         self._hybridizations: Dict[int, Tuple[int, ...]] = {}
-        self._atoms_stereo: Dict[int, int] = {}
+        self._atoms_stereo: Dict[int, bool] = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[QueryElement, Element, int, str], *args,
+    def add_atom(self, atom: Union[QueryElement, AnyElement, Element, int, str], *args,
                  neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
                  hybridization: Union[int, List[int], Tuple[int, ...], None] = None, **kwargs):
-        if neighbors is None:
-            neighbors = ()
-        if isinstance(neighbors, int):
-            if neighbors < 0 or neighbors > 14:
-                raise ValueError('neighbors should be in range [0, 14]')
-            neighbors = (neighbors,)
-        elif isinstance(neighbors, (tuple, list)):
-            if not all(isinstance(n, int) for n in neighbors):
-                raise TypeError('neighbors should be list or tuple of ints')
-            if any(n < 0 or n > 14 for n in neighbors):
-                raise ValueError('neighbors should be in range [0, 14]')
-            if len(set(neighbors)) != len(neighbors):
-                raise ValueError('neighbors should be unique')
-            neighbors = tuple(sorted(neighbors))
-        else:
-            raise TypeError('neighbors should be int or list or tuple of ints')
+        neighbors = self._validate_neighbors(neighbors)
+        hybridization = self._validate_hybridization(hybridization)
 
-        if hybridization is None:
-            hybridization = ()
-        elif isinstance(hybridization, int):
-            if hybridization < 1 or hybridization > 4:
-                raise ValueError('hybridization should be in range [1, 4]')
-            hybridization = (hybridization,)
-        elif isinstance(hybridization, (tuple, list)):
-            if not all(isinstance(h, int) for h in hybridization):
-                raise TypeError('hybridizations should be list or tuple of ints')
-            if any(h < 1 or h > 4 for h in hybridization):
-                raise ValueError('hybridizations should be in range [1, 4]')
-            if len(set(hybridization)) != len(hybridization):
-                raise ValueError('hybridizations should be unique')
-            hybridization = tuple(sorted(hybridization))
-        else:
-            raise TypeError('hybridization should be int or list or tuple of ints')
-
-        if not isinstance(atom, QueryElement):
+        if not isinstance(atom, (QueryElement, AnyElement)):
             if isinstance(atom, Element):
                 atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
             elif isinstance(atom, str):
@@ -240,6 +209,46 @@ class QueryContainer(Graph, QuerySmiles, QueryStereo, DepictQuery):
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
+
+    @staticmethod
+    def _validate_neighbors(neighbors):
+        if neighbors is None:
+            neighbors = ()
+        elif isinstance(neighbors, int):
+            if neighbors < 0 or neighbors > 14:
+                raise ValueError('neighbors should be in range [0, 14]')
+            neighbors = (neighbors,)
+        elif isinstance(neighbors, (tuple, list)):
+            if not all(isinstance(n, int) for n in neighbors):
+                raise TypeError('neighbors should be list or tuple of ints')
+            if any(n < 0 or n > 14 for n in neighbors):
+                raise ValueError('neighbors should be in range [0, 14]')
+            if len(set(neighbors)) != len(neighbors):
+                raise ValueError('neighbors should be unique')
+            neighbors = tuple(sorted(neighbors))
+        else:
+            raise TypeError('neighbors should be int or list or tuple of ints')
+        return neighbors
+
+    @staticmethod
+    def _validate_hybridization(hybridization):
+        if hybridization is None:
+            hybridization = ()
+        elif isinstance(hybridization, int):
+            if hybridization < 1 or hybridization > 4:
+                raise ValueError('hybridization should be in range [1, 4]')
+            hybridization = (hybridization,)
+        elif isinstance(hybridization, (tuple, list)):
+            if not all(isinstance(h, int) for h in hybridization):
+                raise TypeError('hybridizations should be list or tuple of ints')
+            if any(h < 1 or h > 4 for h in hybridization):
+                raise ValueError('hybridizations should be in range [1, 4]')
+            if len(set(hybridization)) != len(hybridization):
+                raise ValueError('hybridizations should be unique')
+            hybridization = tuple(sorted(hybridization))
+        else:
+            raise TypeError('hybridization should be int or list or tuple of ints')
+        return hybridization
 
     def __getstate__(self):
         return {'atoms_stereo': self._atoms_stereo, 'neighbors': self._neighbors,
