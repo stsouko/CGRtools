@@ -232,13 +232,13 @@ class ReactionContainer(DepictReaction):
         """
         shift_x = 0
         for m in self.__reactants:
-            max_x = self.__fix_positions(m, shift_x, 0)
+            max_x = self.__fix_positions(m, shift_x)
             shift_x = max_x + 1
         arrow_min = shift_x
 
         if self.__reagents:
             for m in self.__reagents:
-                max_x = self.__fix_positions(m, shift_x, 1)
+                max_x = self.__fix_reagent_positions(m, shift_x)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
@@ -247,26 +247,36 @@ class ReactionContainer(DepictReaction):
         arrow_max = shift_x - 1
 
         for m in self.__products:
-            max_x = self.__fix_positions(m, shift_x, 0)
+            max_x = self.__fix_positions(m, shift_x)
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
         self.flush_cache()
 
     @staticmethod
-    def __fix_positions(molecule, shift_x, shift_y):
+    def __fix_reagent_positions(molecule, shift_x):
         plane = molecule._plane
+        shift_y = .5
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+        max_x = max(x for x, _ in values) - min_x
+        min_y = min(y for _, y in values) - shift_y
+        for n, (x, y) in plane.items():
+            plane[n] = (x - min_x, y - min_y)
+        return max_x
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x):
+        plane = molecule._plane
+
         values = plane.values()
         min_x = min(x for x, _ in values) - shift_x
         max_x = max(x for x, _ in values) - min_x
         min_y = min(y for _, y in values)
         max_y = max(y for _, y in values)
-
-        middle_y = - shift_y + (abs(max_y) + abs(min_y)) / 2
-        if not min_y + max_y and not shift_y:
-            middle_y = 0
-
+        mean_y = (max_y + min_y) / 2
         for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - middle_y)
+            plane[n] = (x - min_x, y - mean_y)
         return max_x
 
     def __eq__(self, other):

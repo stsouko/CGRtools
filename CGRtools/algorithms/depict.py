@@ -47,9 +47,8 @@ class Depict:
 
         bonds = self._render_bonds()
         atoms, masks = self._render_atoms()
-
         if embedding:
-            return atoms, bonds, masks, max_x, max_y, min_x, max_y
+            return atoms, bonds, masks, min_x, min_y, max_x, max_y
 
         font = self._render_config['font']
         font125 = 1.25 * font
@@ -247,7 +246,7 @@ class DepictReaction:
         r_max_x = r_max_y = r_min_y = 0
         for ml in (self.reactants, self.reagents, self.products):
             for m in ml:
-                atoms, bonds, masks, max_x, max_y, min_x, min_y = m.depict(embedding=True)
+                atoms, bonds, masks, min_x, min_y, max_x, max_y = m.depict(embedding=True)
                 r_atoms.extend(atoms)
                 r_bonds.extend(bonds)
                 r_masks.extend(masks)
@@ -255,14 +254,14 @@ class DepictReaction:
                     r_max_x = max_x
                 if max_y > r_max_y:
                     r_max_y = max_y
-                if min_y > r_min_y:
+                if min_y < r_min_y:
                     r_min_y = min_y
 
         config = Depict._render_config
         font = config['font']
         font125 = 1.25 * font
         width = r_max_x + 3.0 * font
-        height = abs(r_min_y) + abs(r_max_y) + 2.5 * font
+        height = r_max_y - r_min_y + 2.5 * font
         viewbox_x = -font125
         viewbox_y = -r_max_y - font125
 
