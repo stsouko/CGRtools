@@ -137,9 +137,10 @@ class ReactionContainer(DepictReaction):
         new_centers_list = list(cgr.centers_list)
 
         for x in all_groups:
+            x = set(x)
             intersection = []
             for i, y in enumerate(new_centers_list):
-                if not set(x).isdisjoint(y):
+                if not x.isdisjoint(y):
                     intersection.append(i)
 
             if len(intersection) > 1:
