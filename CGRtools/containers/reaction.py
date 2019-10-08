@@ -122,46 +122,36 @@ class ReactionContainer(DepictReaction):
                               products=(x.copy() for x in self.__products),
                               reactants=(x.copy() for x in self.__reactants))
 
+    @property
     def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
         """
         union reaction centers by leaving or substitute group
 
         :return: list of reaction centers
         """
-        reactants = reduce(or_, self.reactants)
-        products = reduce(or_, self.products)
+        reactants = reduce(or_, self.__reactants)
+        products = reduce(or_, self.__products)
         cgr = reactants ^ products
-        protective_groups = set(reactants).difference(products)
-        comming_groups = set(products).difference(reactants)
-
-        if protective_groups:
-            protective_group = cgr.substructure(protective_groups).connected_components
-            protective_groups_list = [set(x) for x in protective_group]
-        else:
-            protective_groups_list = []
-        if comming_groups:
-            comming_group = cgr.substructure(comming_groups).connected_components
-            comming_groups_list = [set(x) for x in comming_group]
-        else:
-            comming_groups_list = []
-
-        all_groups = protective_groups_list + comming_groups_list
-        out_list = list(cgr.centers_list)
+        all_atoms = set(reactants) ^ set(products)
+        all_groups = cgr.substructure(all_atoms).connected_components
+        new_centers_list = list(cgr.centers_list)
 
         for x in all_groups:
             intersection = []
-            for i, y in enumerate(out_list):
-                if y.intersection(x):
+            for i, y in enumerate(new_centers_list):
+                if x.isdisjoint(y):
                     intersection.append(i)
 
             if len(intersection) > 1:
-                union = set()
+                union = []
                 for i in reversed(intersection):
-                    union.update(out_list[i])
-                    out_list.pop(i)
-                out_list.append(list(union))
+                    union.append(new_centers_list[i])
+                    new_centers_list.pop(i)
+                new_centers_list.append(list(union))
 
-        return out_list
+        out_tuple = [(x,) for x in new_centers_list]
+
+        return tuple(out_tuple)
 
     def implicify_hydrogens(self) -> int:
         """
