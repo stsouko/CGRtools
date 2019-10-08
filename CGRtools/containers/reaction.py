@@ -146,13 +146,10 @@ class ReactionContainer(DepictReaction):
             if len(intersection) > 1:
                 union = []
                 for i in reversed(intersection):
-                    union.extend(new_centers_list[i])
-                    new_centers_list.pop(i)
-                new_centers_list.append(list(union))
+                    union.extend(new_centers_list.pop(i))
+                new_centers_list.append(union)
 
-        out_tuple = [tuple(x) for x in new_centers_list]
-
-        return tuple(out_tuple)
+        return tuple(tuple(x) for x in new_centers_list)
 
     def implicify_hydrogens(self) -> int:
         """
