@@ -139,17 +139,17 @@ class ReactionContainer(DepictReaction):
         for x in all_groups:
             intersection = []
             for i, y in enumerate(new_centers_list):
-                if x.isdisjoint(y):
+                if not set(x).isdisjoint(y):
                     intersection.append(i)
 
             if len(intersection) > 1:
                 union = []
                 for i in reversed(intersection):
-                    union.append(new_centers_list[i])
+                    union.extend(new_centers_list[i])
                     new_centers_list.pop(i)
                 new_centers_list.append(list(union))
 
-        out_tuple = [(x,) for x in new_centers_list]
+        out_tuple = [tuple(x) for x in new_centers_list]
 
         return tuple(out_tuple)
 
