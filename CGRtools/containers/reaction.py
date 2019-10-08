@@ -70,6 +70,16 @@ class ReactionContainer(DepictReaction):
         self._arrow = None
         self._signs = None
 
+    @classmethod
+    def from_cgr(cls, cgr: CGRContainer) -> 'ReactionContainer':
+        """
+        decompose CGR into reaction
+        """
+        if not isinstance(cgr, CGRContainer):
+            raise TypeError('CGR expected')
+        r, p = ~cgr
+        return cls(r.split(), p.split(), meta=cgr.meta)
+
     def __getitem__(self, item):
         if item in ('reactants', 0):
             return self.__reactants
