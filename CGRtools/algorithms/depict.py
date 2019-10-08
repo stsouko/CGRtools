@@ -299,7 +299,7 @@ class DepictReaction:
                 svg.append(f'  <g fill="none" stroke="black" stroke-width=".04" >')
                 for x in sings_plus:
                     svg.append(f'    <line x1="{x + .35:.2f}" y1="0" x2="{x + .65:.2f}" y2="0"/>')
-                    svg.append(f'    <line x1="{x + .5:.2f}" y1="{.15}" x2="{x + .5:.2f}" y2="{-.15}"/>')
+                    svg.append(f'    <line x1="{x + .5:.2f}" y1="0.15" x2="{x + .5:.2f}" y2="-0.15"/>')
                 svg.append('  </g>')
 
         if r_atoms:
