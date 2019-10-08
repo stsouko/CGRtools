@@ -38,7 +38,7 @@ class ReactionContainer(DepictReaction):
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '__dict__')
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '_signs', '__dict__')
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
                  reagents: TIterable[Graph] = (), meta: Optional[Dict] = None):
@@ -68,6 +68,7 @@ class ReactionContainer(DepictReaction):
         else:
             self.__meta = dict(meta)
         self._arrow = None
+        self._signs = None
 
     def __getitem__(self, item):
         if item in ('reactants', 0):
@@ -91,6 +92,7 @@ class ReactionContainer(DepictReaction):
         self.__reagents = state['reagents']
         self.__meta = state['meta']
         self._arrow = None
+        self._signs = None
 
     @property
     def reactants(self) -> Tuple[Graph, ...]:
@@ -231,8 +233,14 @@ class ReactionContainer(DepictReaction):
         fix coordinates of molecules in reaction
         """
         shift_x = 0
-        for m in self.__reactants:
+        reactants = self.__reactants
+        amount = len(reactants) - 1
+        self._signs = []
+        for m in reactants:
             max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                self._signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         arrow_min = shift_x
 
@@ -246,8 +254,13 @@ class ReactionContainer(DepictReaction):
             shift_x += 3
         arrow_max = shift_x - 1
 
-        for m in self.__products:
+        products = self.__products
+        amount = len(products) - 1
+        for m in products:
             max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                self._signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
         self.flush_cache()
