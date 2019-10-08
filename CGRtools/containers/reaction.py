@@ -124,6 +124,35 @@ class ReactionContainer(DepictReaction):
                               products=(x.copy() for x in self.__products),
                               reactants=(x.copy() for x in self.__reactants))
 
+    @property
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        union reaction centers by leaving or substitute group
+
+        :return: list of reaction centers
+        """
+        reactants = reduce(or_, self.__reactants)
+        products = reduce(or_, self.__products)
+        cgr = reactants ^ products
+        all_atoms = set(reactants) ^ set(products)
+        all_groups = cgr.substructure(all_atoms).connected_components
+        new_centers_list = list(cgr.centers_list)
+
+        for x in all_groups:
+            x = set(x)
+            intersection = []
+            for i, y in enumerate(new_centers_list):
+                if not x.isdisjoint(y):
+                    intersection.append(i)
+
+            if len(intersection) > 1:
+                union = []
+                for i in reversed(intersection):
+                    union.extend(new_centers_list.pop(i))
+                new_centers_list.append(union)
+
+        return tuple(tuple(x) for x in new_centers_list)
+
     def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogens if possible
