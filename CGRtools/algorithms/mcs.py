@@ -26,24 +26,69 @@ class MCS:
     __slots__ = ()
 
     @abstractmethod
-    def get_mcs_mapping(self, other, *, automorphism_filter: bool = True) -> Dict[int, int]:
-        product_graph = self.__get_product(other)
-        cliques = self.__clique(product_graph)
+    def get_mcs_mapping(self, other, *, limit=10000) -> Iterator[Dict[int, int]]:
+        """
+        find maximum common substructure. based on clique searching in product graph.
 
-        mapping = [x for x in islice(cliques, 42)]
-        max42 = max(len(x) for x in mapping)
+        :param limit: limit tested cliques
+        """
+        core_product, full_product = self.__get_product(other)
+        # search maximum bonded substructures
+        hits = []
+        max_atoms = 0
+        max_bonds = 0
+        for mapping in islice(self.__clique(full_product), limit):
+            if len(mapping) < max_atoms:
+                continue
+            # search bonds count
+            bonds = 0
+            seen = set()
+            for n in mapping:
+                seen.add(n)
+                for m in core_product[n]:
+                    if m not in seen and m in mapping:
+                        bonds += 1
+            if bonds > max_bonds:
+                max_bonds = bonds
+                max_atoms = len(mapping)
+                hits = [mapping]
+            elif bonds == max_bonds:
+                hits.append(mapping)
 
-        yield from (dict(x) for x in mapping if len(x) == max42)
+        # search maximal components in substructures
+        hits2 = []
+        max_component = 0
+        for mapping in hits:
+            # search components
+            components = []
+            atoms = mapping.copy()
+            while atoms:
+                n = atoms.pop()
+                seen = {n}
+                queue = [n]
+                component = []
+                while queue:
+                    n = queue.pop(0)
+                    component.append(n)
+                    for m in core_product[n]:
+                        if m not in seen and m in mapping:
+                            queue.append(m)
+                            seen.add(m)
 
-        for x in cliques:
-            if len(x) > max42:
-                max42 = len(x)
-                yield dict(x)
-            elif len(x) == max42:
-                yield dict(x)
+                components.append(component)
+                atoms.difference_update(component)
+
+            # get max component
+            component = max(len(x) for x in components)
+            if component > max_component:
+                max_component = component
+                hits2 = [mapping]
+            elif component == max_component:
+                hits2.append(mapping)
+        yield from (dict(x) for x in hits2)
 
     @staticmethod
-    def __clique(graph: Dict[Tuple[int, int], Set[Tuple[int, int]]]) -> Iterator[Set[Tuple[int, int]]]:
+    def __clique(graph) -> Iterator[Set[Tuple[int, int]]]:
         """
         clique search
 
@@ -84,7 +129,7 @@ class MCS:
                 clique_atoms.pop()
                 subgraph, candidates, roots = stack.pop()
 
-    def __get_product(self, other) -> Dict[Tuple[int, int], Set[Tuple[int, int]]]:
+    def __get_product(self, other):
         bonds = self._bonds
         o_bonds = other._bonds
 
@@ -146,7 +191,7 @@ class MCS:
                     new_atoms.add(nm2)
             atoms = new_atoms
 
-        return full_product
+        return core_product, full_product
 
 
 __all__ = ['MCS']
