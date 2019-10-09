@@ -385,6 +385,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer expected')
 
+    def get_mcs_mapping(self, other: 'MoleculeContainer', **kwargs):
+        if isinstance(other, MoleculeContainer):
+            return super().get_mcs_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer expected')
+
     def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogen if possible
