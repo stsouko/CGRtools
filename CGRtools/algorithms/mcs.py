@@ -18,8 +18,8 @@
 #
 from abc import abstractmethod
 from collections import defaultdict
-from itertools import product, combinations, islice, permutations
-from typing import Dict, Set, Optional, Iterator, Tuple, Type
+from itertools import product, combinations, islice
+from typing import Dict, Set, Iterator, Tuple
 
 
 class MCS:
@@ -95,15 +95,15 @@ class MCS:
         for n, atom in other._atoms.items():
             p_equal[atom].append(n)
 
-        half_product = {}
         full_product = {}
+        core_product = {}
         equal_atoms = {}
         for atom, ns in s_equal.items():
             ms = p_equal[atom]
             if ms:
                 for nm in product(ns, ms):
                     full_product[nm] = set()
-                    half_product[nm] = defaultdict(list)
+                    core_product[nm] = set()
                 for n in ns:
                     equal_atoms[n] = ms  # memory save
 
@@ -114,41 +114,38 @@ class MCS:
                 if m in equal_atoms and m not in seen:
                     o_ms = equal_atoms[m]
                     for o_n in o_ns:
-                        ms = []
                         node1 = (n, o_n)
                         fms = full_product[node1]
+                        cms = core_product[node1]
                         for o_m, o_b in o_bonds[o_n].items():
                             if o_m in o_ms and b == o_b:
                                 node2 = (m, o_m)
-                                ms.append(node2)
                                 full_product[node2].add(node1)
+                                core_product[node2].add(node1)
                                 fms.add(node2)
-                        if ms:
-                            half_product[node1][m].extend(ms)
+                                cms.add(node2)
 
-        seen = set()
-        for n, moms in half_product.items():
-            if moms:
-                n1 = n[0]
-                seen.add(n1)
-                for m1, mom in moms.items():
-                    if m1 not in seen:
-                        for m in mom:
-                            half_product[m][n1].append(n)
-                for (m11, ms1), (m21, ms2) in combinations(moms.items(), 2):
-                    if m11 not in seen:
-                        if m21 in seen:
-                            for m1, m2 in product(ms1, ms2):
-                                if m2 not in full_product[m1] and m1[1] != m2[1]:
-                                    half_product[m1][m21].append(m2)
-                                    full_product[m1].add(m2)
-                                    full_product[m2].add(m1)
-                        else:
-                            for m1, m2 in product(ms1, ms2):
-                                if m1[1] != m2[1]:
-                                    half_product[m1][m21].append(m2)
-                                    full_product[m1].add(m2)
-                                    full_product[m2].add(m1)
+        atoms = core_product
+        while atoms:
+            new_atoms = set()
+            for n in atoms:
+                core = core_product[n]
+                for nm1, nm2 in combinations(full_product[n], 2):
+                    n1, m1 = nm1
+                    n2, m2 = nm2
+                    if n1 == n2 or m1 == m2:
+                        continue
+                    if nm1 in full_product[nm2]:
+                        continue
+                    if nm1 not in core and nm2 not in core:
+                        continue
+
+                    full_product[nm1].add(nm2)
+                    full_product[nm2].add(nm1)
+                    new_atoms.add(nm1)
+                    new_atoms.add(nm2)
+            atoms = new_atoms
+
         return full_product
 
 
