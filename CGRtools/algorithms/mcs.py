@@ -33,6 +33,9 @@ class MCS:
         :param limit: limit tested cliques
         """
         core_product, full_product = self.__get_product(other)
+        if not core_product:
+            return
+
         # search maximum bonded substructures
         hits = []
         max_atoms = 0
@@ -50,7 +53,7 @@ class MCS:
                         bonds += 1
             if bonds > max_bonds:
                 max_bonds = bonds
-                max_atoms = len(mapping)
+                max_atoms = len(mapping) - 1  # -1 is ad-hoc
                 hits = [mapping]
             elif bonds == max_bonds:
                 hits.append(mapping)
