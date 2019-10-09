@@ -210,6 +210,11 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
 
+    def get_mcs_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer'], **kwargs):
+        if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
+            return super().get_mcs_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer or QueryContainer expected')
+
     @staticmethod
     def _validate_neighbors(neighbors):
         if neighbors is None:
