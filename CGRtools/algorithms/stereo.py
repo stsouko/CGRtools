@@ -260,13 +260,22 @@ class MoleculeStereo(Stereo):
 
     @cached_property
     def _chiral_atoms(self):
+        atoms_stereo = self._atoms_stereo
+        morgan = self.__chiral_morgan()
+        return {n for n, env in self._tetrahedrons.items()
+                if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
+
+    def __chiral_morgan(self):
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
+        cis_trans_stereo = self._cis_trans_stereo
         tetrahedrons = self._tetrahedrons
+        morgan_update = {}
+        # todo: рекурсивно находить хиральные центры. сначала найти явные из моргана. найти их группы. после сделать
+        # в группах разделение. заново найти моргана. найти новые хиральные.
+
         if atoms_stereo:
             grouped_stereo = defaultdict(list)
-            morgan_update = {}
-
             for n in atoms_stereo:
                 grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
             for group in grouped_stereo.values():
@@ -276,11 +285,37 @@ class MoleculeStereo(Stereo):
                     if 0 < len(s) < len(group):  # RS pair required
                         for n in s:
                             morgan_update[n] = -morgan[n]
-            if morgan_update:
-                morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
+        if cis_trans_stereo:
+            grouped_stereo = defaultdict(list)
+            for n, m in cis_trans_stereo:
+                g1 = (morgan[n], morgan[m])
+                g2 = (morgan[m], morgan[n])
+                if g1 == g2:
+                    grouped_stereo[g1].append()
 
-        return {n for n, env in self._tetrahedrons.items()
-                if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
+        if morgan_update:
+            return self._morgan(self._sorted_primed({**morgan, **morgan_update}))
+        return morgan
+
+    @cached_property
+    def __cumulenes(self):
+        # 5       4
+        #  \     /
+        #   2---3
+        #  /     \
+        # 1       6
+        bonds = self._bonds
+        atoms = self._atoms
+        cumulenes = {}
+        for path in self.cumulenes:
+            n1, m1 = path[1], path[-2]
+            nn = [x for x in bonds[path[0]] if x != n1 and atoms[x].atomic_number != 1]
+            mn = [x for x in bonds[path[-1]] if x != m1 and atoms[x].atomic_number != 1]
+            if nn and mn:
+                sn = nn[1] if len(nn) == 2 else None
+                sm = mn[1] if len(mn) == 2 else None
+                cumulenes[path] = (nn[0], mn[0], sn, sm)
+        return cumulenes
 
 
 class QueryStereo(Stereo):
@@ -310,28 +345,6 @@ class QueryStereo(Stereo):
 
 
 class NotUsed:
-    @cached_property
-    def __cumulenes(self):
-        # 5       4
-        #  \     /
-        #   2---3
-        #  /     \
-        # 1       6
-        bonds = self._bonds
-        atoms = self._atoms
-        cumulenes = {}
-        for path in self.cumulenes:
-            n, m = path[0], path[-1]
-            n1, m1 = path[1], path[-2]
-
-            nn = [x for x in bonds[n] if x != n1 and atoms[x].atomic_number != 1]
-            mn = [x for x in bonds[m] if x != m1 and atoms[x].atomic_number != 1]
-            if nn and mn:
-                sn = nn[1] if len(nn) == 2 else None
-                sm = mn[1] if len(mn) == 2 else None
-                cumulenes[(n, m)] = (nn[0], mn[0], sn, sm)
-        return cumulenes
-
     def __atropoisomers(self):
         #     ___
         #    |   |
