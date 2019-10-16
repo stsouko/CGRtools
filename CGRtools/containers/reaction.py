@@ -339,10 +339,8 @@ class ReactionContainer(DepictReaction):
         r_y = plane[right_atom][1]
         factor = hydrogens[right_atom]
         if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18 and factor:
-            dx = .15
-            if factor > 1:
-                dx = .25
-        return max_x + dx
+            max_x += .15 if factor == 1 else .25
+        return max_x
 
     def __eq__(self, other):
         return isinstance(other, ReactionContainer) and str(self) == str(other)
