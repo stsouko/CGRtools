@@ -326,8 +326,8 @@ class ReactionContainer(DepictReaction):
         values = plane.values()
         min_x = min(x for x, _ in values) - shift_x
 
-        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1])
-        max_x, r_y = right_atom_plane
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+        max_x = right_atom_plane[0]
         max_x -= min_x
 
         min_y = min(y for _, y in values)
@@ -337,11 +337,12 @@ class ReactionContainer(DepictReaction):
             plane[n] = (x - min_x, y - mean_y)
 
         r_y = plane[right_atom][1]
-        if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18:
-            if right_atom in hydrogens:
-                factor = hydrogens[right_atom]
-                max_x += factor * .15
-        return max_x
+        factor = hydrogens[right_atom]
+        if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18 and factor:
+            dx = .15
+            if factor > 1:
+                dx = .25
+        return max_x + dx
 
     def __eq__(self, other):
         return isinstance(other, ReactionContainer) and str(self) == str(other)
