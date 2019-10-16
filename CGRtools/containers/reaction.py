@@ -320,15 +320,26 @@ class ReactionContainer(DepictReaction):
     @staticmethod
     def __fix_positions(molecule, shift_x):
         plane = molecule._plane
+        atoms = molecule._atoms
+        hydrogens = molecule._hydrogens
 
         values = plane.values()
         min_x = min(x for x, _ in values) - shift_x
-        max_x = max(x for x, _ in values) - min_x
+
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+        max_x = right_atom_plane[0]
+        max_x -= min_x
+
         min_y = min(y for _, y in values)
         max_y = max(y for _, y in values)
         mean_y = (max_y + min_y) / 2
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - mean_y)
+
+        r_y = plane[right_atom][1]
+        factor = hydrogens[right_atom]
+        if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18 and factor:
+            max_x += .15 if factor == 1 else .25
         return max_x
 
     def __eq__(self, other):
