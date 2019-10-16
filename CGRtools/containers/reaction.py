@@ -30,18 +30,6 @@ from .query import QueryContainer
 from ..algorithms.depict import DepictReaction
 
 
-def fix_one_atom_positions(molecule):
-    atoms = molecule._atoms
-    hydrogens = molecule._hydrogens
-
-    factor = None
-    if len(atoms) == 1:
-        atom, = tuple(atoms)
-        if hydrogens:
-            factor = hydrogens[atom] * .15
-    return factor
-
-
 class ReactionContainer(DepictReaction):
     """
     reaction storage. contains reactants, products and reagents lists.
@@ -321,32 +309,38 @@ class ReactionContainer(DepictReaction):
         plane = molecule._plane
         shift_y = .5
 
-        dx = fix_one_atom_positions(molecule)
         values = plane.values()
         min_x = min(x for x, _ in values) - shift_x
         max_x = max(x for x, _ in values) - min_x
         min_y = min(y for _, y in values) - shift_y
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - min_y)
-        if dx:
-            max_x += dx
         return max_x
 
     @staticmethod
     def __fix_positions(molecule, shift_x):
         plane = molecule._plane
+        atoms = molecule._atoms
+        hydrogens = molecule._hydrogens
 
-        dx = fix_one_atom_positions(molecule)
         values = plane.values()
         min_x = min(x for x, _ in values) - shift_x
-        max_x = max(x for x, _ in values) - min_x
+
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1])
+        max_x, r_y = right_atom_plane
+        max_x -= min_x
+
         min_y = min(y for _, y in values)
         max_y = max(y for _, y in values)
         mean_y = (max_y + min_y) / 2
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - mean_y)
-        if dx:
-            max_x += dx
+
+        r_y = plane[right_atom][1]
+        if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18:
+            if right_atom in hydrogens:
+                factor = hydrogens[right_atom]
+                max_x += factor * .15
         return max_x
 
     def __eq__(self, other):
