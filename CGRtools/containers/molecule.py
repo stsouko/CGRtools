@@ -32,7 +32,8 @@ from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
+                 '_allenes_stereo')
     __class_cache__ = {}
 
     def __init__(self):
@@ -41,6 +42,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, bool] = {}
+        self._allenes_stereo: Dict[int, bool] = {}
+        self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
