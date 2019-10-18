@@ -155,6 +155,13 @@ class Stereo:
         return tuple(wedge)
 
     def _translate_tetrahedron_stereo(self, n, env):
+        """
+        get sign of chiral tetrahedron atom for specified neighbors order
+
+        :param n: stereo atom
+        :param env: neighbors order
+        """
+        s = self._atoms_stereo[n]
         order = self._tetrahedrons[n]
         if len(order) == 3:
             if len(env) == 4:
@@ -164,12 +171,38 @@ class Stereo:
                 raise ValueError('invalid atoms list')
         elif len(env) not in (3, 4):
             raise ValueError('invalid atoms list')
-        s = self._atoms_stereo[n]
 
-        translate = tuple(order.index(x) + 1 for x in env[:3])
+        translate = tuple(order.index(x) for x in env[:3])
         if _tetrahedron_translate[translate]:
             return not s
         return s
+
+    def _translate_cis_trans_stereo(self, n, m, nn, nm):
+        """
+        get sign for specified opposite neighbors
+
+        :param n: first double bonded atom
+        :param m: last double bonded atom
+        :param nn: neighbor of first atom
+        :param nm: neighbor of last atom
+        """
+        cis_trans_stereo = self._cis_trans_stereo
+        try:
+            k = (n, m)
+            s = cis_trans_stereo[k]
+        except KeyError:
+            k = (m, n)
+            s = cis_trans_stereo[k]
+
+        order = self._cis_trans[k]
+        translate = (order.index(nn), order.index(nm))
+        if _alkene_translate[translate]:
+            return not s
+        return s
+
+    @cached_property
+    def _cis_trans(self):
+        return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
 
 
 class MoleculeStereo(Stereo):
@@ -214,7 +247,7 @@ class MoleculeStereo(Stereo):
             if set(env) != set(self._bonds[n]):
                 raise AtomNotFound
 
-            translate = tuple(env.index(x) + 1 for x in self._tetrahedrons[n][:3])
+            translate = tuple(env.index(x) for x in self._tetrahedrons[n][:3])
             if _tetrahedron_translate[translate]:
                 mark = not mark
 
@@ -298,7 +331,7 @@ class MoleculeStereo(Stereo):
         return morgan
 
     @cached_property
-    def __cumulenes(self):
+    def _cumulenes(self):
         # 5       4
         #  \     /
         #   2---3
@@ -398,28 +431,28 @@ class NotUsed:
         return atropos
 
 
-# 2  3
+# 1  2
 #  \ |
 #   \|
-#    0---4
+#    n---3
 #   /
 #  /
-# 1
-_tetrahedron_translate = {(1, 2, 3): False, (2, 3, 1): False, (3, 1, 2): False,
-                          (1, 3, 2): True, (2, 1, 3): True, (3, 2, 1): True,
-                          (1, 4, 2): False, (4, 2, 1): False, (2, 1, 4): False,
-                          (1, 2, 4): True, (2, 4, 1): True, (4, 1, 2): True,
-                          (1, 3, 4): False, (3, 4, 1): False, (4, 1, 3): False,
-                          (1, 4, 3): True, (4, 3, 1): True, (3, 1, 4): True,
-                          (2, 4, 3): False, (4, 3, 2): False, (3, 2, 4): False,
-                          (2, 3, 4): True, (3, 4, 2): True, (4, 2, 3): True}
-# 5       4
+# 0
+_tetrahedron_translate = {(0, 1, 2): False, (1, 2, 0): False, (2, 0, 1): False,
+                          (0, 2, 1): True, (1, 0, 2): True, (2, 1, 0): True,
+                          (0, 3, 1): False, (3, 1, 0): False, (1, 0, 3): False,
+                          (0, 1, 3): True, (1, 3, 0): True, (3, 0, 1): True,
+                          (0, 2, 3): False, (2, 3, 0): False, (3, 0, 2): False,
+                          (0, 3, 2): True, (3, 2, 0): True, (2, 0, 3): True,
+                          (1, 3, 2): False, (3, 2, 1): False, (2, 1, 3): False,
+                          (1, 2, 3): True, (2, 3, 1): True, (3, 1, 2): True}
+# 2       1
 #  \     /
-#   2---3
+#   n---m
 #  /     \
-# 1       6
-_alkene_translate = {(1, 2, 3, 4): False, (4, 3, 2, 1): False, (1, 2, 3, 6): True, (6, 3, 2, 1): True,
-                     (5, 2, 3, 6): False, (6, 3, 2, 5): False, (5, 2, 3, 4): True, (4, 3, 2, 5): True}
+# 0       3
+_alkene_translate = {(0, 1): False, (1, 0): False, (0, 3): True, (3, 0): True,
+                     (2, 3): False, (3, 2): False, (2, 1): True, (1, 2): True}
 
 
 __all__ = ['MoleculeStereo', 'QueryStereo']
