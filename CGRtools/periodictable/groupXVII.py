@@ -18,7 +18,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .element import Element, FrozenDict
+from CachedMethods import FrozenDict
+from .element import Element
 from .groups import GroupXVII
 from .periods import PeriodII, PeriodIII, PeriodIV, PeriodV, PeriodVI, PeriodVII
 
@@ -129,11 +130,11 @@ class I(Element, PeriodV, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({127: 1.0})
+        return FrozenDict({127: 1.0, 131: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({127: 126.904468})
+        return FrozenDict({127: 126.904468, 131: 130.906125})
 
     @property
     def _common_valences(self):

@@ -20,6 +20,7 @@ from CachedMethods import cached_method
 from collections.abc import Iterable
 from itertools import chain
 from functools import reduce
+from hashlib import sha512
 from operator import or_
 from typing import Tuple, Dict, Iterable as TIterable, Optional
 from .cgr import CGRContainer
@@ -37,7 +38,7 @@ class ReactionContainer(DepictReaction):
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '__dict__')
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '_signs', '__dict__')
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
                  reagents: TIterable[Graph] = (), meta: Optional[Dict] = None):
@@ -67,6 +68,17 @@ class ReactionContainer(DepictReaction):
         else:
             self.__meta = dict(meta)
         self._arrow = None
+        self._signs = None
+
+    @classmethod
+    def from_cgr(cls, cgr: CGRContainer) -> 'ReactionContainer':
+        """
+        decompose CGR into reaction
+        """
+        if not isinstance(cgr, CGRContainer):
+            raise TypeError('CGR expected')
+        r, p = ~cgr
+        return cls(r.split(), p.split(), meta=cgr.meta)
 
     def __getitem__(self, item):
         if item in ('reactants', 0):
@@ -90,6 +102,7 @@ class ReactionContainer(DepictReaction):
         self.__reagents = state['reagents']
         self.__meta = state['meta']
         self._arrow = None
+        self._signs = None
 
     @property
     def reactants(self) -> Tuple[Graph, ...]:
@@ -120,6 +133,35 @@ class ReactionContainer(DepictReaction):
         return self.__class__(reagents=(x.copy() for x in self.__reagents), meta=self.__meta.copy(),
                               products=(x.copy() for x in self.__products),
                               reactants=(x.copy() for x in self.__reactants))
+
+    @property
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        union reaction centers by leaving or substitute group
+
+        :return: list of reaction centers
+        """
+        reactants = reduce(or_, self.__reactants)
+        products = reduce(or_, self.__products)
+        cgr = reactants ^ products
+        all_atoms = set(reactants) ^ set(products)
+        all_groups = cgr.substructure(all_atoms).connected_components
+        new_centers_list = list(cgr.centers_list)
+
+        for x in all_groups:
+            x = set(x)
+            intersection = []
+            for i, y in enumerate(new_centers_list):
+                if not x.isdisjoint(y):
+                    intersection.append(i)
+
+            if len(intersection) > 1:
+                union = []
+                for i in reversed(intersection):
+                    union.extend(new_centers_list.pop(i))
+                new_centers_list.append(union)
+
+        return tuple(tuple(x) for x in new_centers_list)
 
     def implicify_hydrogens(self) -> int:
         """
@@ -230,14 +272,20 @@ class ReactionContainer(DepictReaction):
         fix coordinates of molecules in reaction
         """
         shift_x = 0
-        for m in self.__reactants:
-            max_x = self.__fix_positions(m, shift_x, 0)
+        reactants = self.__reactants
+        amount = len(reactants) - 1
+        self._signs = []
+        for m in reactants:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                self._signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         arrow_min = shift_x
 
         if self.__reagents:
             for m in self.__reagents:
-                max_x = self.__fix_positions(m, shift_x, 1.5)
+                max_x = self.__fix_reagent_positions(m, shift_x)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
@@ -245,21 +293,65 @@ class ReactionContainer(DepictReaction):
             shift_x += 3
         arrow_max = shift_x - 1
 
-        for m in self.__products:
-            max_x = self.__fix_positions(m, shift_x, 0)
+        products = self.__products
+        amount = len(products) - 1
+        for m in products:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                self._signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
         self.flush_cache()
 
     @staticmethod
-    def __fix_positions(molecule, shift_x, shift_y):
+    def __fix_reagent_positions(molecule, shift_x):
         plane = molecule._plane
-        min_x = min(x for x, _ in plane.values()) - shift_x
-        max_x = max(x for x, _ in plane.values()) - min_x
-        min_y = min(y for _, y in plane.values()) - shift_y
+        shift_y = .5
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+        max_x = max(x for x, _ in values) - min_x
+        min_y = min(y for _, y in values) - shift_y
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - min_y)
         return max_x
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x):
+        plane = molecule._plane
+        atoms = molecule._atoms
+        hydrogens = molecule._hydrogens
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+        max_x = right_atom_plane[0]
+        max_x -= min_x
+
+        min_y = min(y for _, y in values)
+        max_y = max(y for _, y in values)
+        mean_y = (max_y + min_y) / 2
+        for n, (x, y) in plane.items():
+            plane[n] = (x - min_x, y - mean_y)
+
+        r_y = plane[right_atom][1]
+        factor = hydrogens[right_atom]
+        if len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18 and factor:
+            max_x += .15 if factor == 1 else .25
+        return max_x
+
+    def __eq__(self, other):
+        return isinstance(other, ReactionContainer) and str(self) == str(other)
+
+    @cached_method
+    def __hash__(self):
+        return hash(str(self))
+
+    @cached_method
+    def __bytes__(self):
+        return sha512(str(self).encode()).digest()
 
     @cached_method
     def __str__(self):
@@ -300,6 +392,8 @@ class ReactionContainer(DepictReaction):
 
     def flush_cache(self):
         self.__dict__.clear()
+        for m in chain(self.__reagents, self.__reactants, self.__products):
+            m.flush_cache()
 
 
 __all__ = ['ReactionContainer']

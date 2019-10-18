@@ -23,6 +23,7 @@ from logging import warning
 from subprocess import check_output
 from sys import platform
 from traceback import format_exc
+from warnings import warn
 from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
 
 
@@ -168,8 +169,48 @@ class SDFWrite(MDLWrite):
         self._file.write('$$$$\n')
 
 
-SDFread = SDFRead
-SDFwrite = SDFWrite
+class SDFread:
+    def __init__(self, *args, **kwargs):
+        warn('SDFread deprecated. Use SDFRead instead', DeprecationWarning)
+        warning('SDFread deprecated. Use SDFRead instead')
+        self.__obj = SDFRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __getitem__(self, item):
+        return self.__obj[item]
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+    def __len__(self):
+        return len(self.__obj)
+
+
+class SDFwrite:
+    def __init__(self, *args, **kwargs):
+        warn('SDFwrite deprecated. Use SDFWrite instead', DeprecationWarning)
+        warning('SDFwrite deprecated. Use SDFWrite instead')
+        self.__obj = SDFWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
 
 
 __all__ = ['SDFRead', 'SDFWrite', 'SDFread', 'SDFwrite']

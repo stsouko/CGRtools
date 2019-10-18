@@ -43,12 +43,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
     def add_atom(self, atom: Union[DynamicElement, Element, int, str], *args, p_charge: int = 0,
                  p_is_radical: bool = False, **kwargs):
-        if not isinstance(p_charge, int):
-            raise TypeError('formal charge should be int in range [-4, 4]')
-        if p_charge > 4 or p_charge < -4:
-            raise ValueError('formal charge should be in range [-4, 4]')
-        if not isinstance(p_is_radical, bool):
-            raise TypeError('radical state should be bool')
+        p_charge = self._validate_charge(p_charge)
+        p_is_radical = self._validate_radical(p_is_radical)
 
         if not isinstance(atom, DynamicElement):
             if isinstance(atom, Element):
@@ -501,10 +497,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             or_ = other._radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
-                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=spc[n], p_is_radical=spr[n])
+            for n in sa.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n].copy(), n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=spc[n],
+                           p_is_radical=spr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
@@ -536,7 +533,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 san = sa[n]
                 if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
                     raise MappingError(f'atoms with number {{{n}}} not equal')
-                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
+                h.add_atom(san.copy(), n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
                         bond = object.__new__(DynamicBond)
@@ -550,10 +547,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             opr = other._p_radicals
             op = other._plane
             ob = other._bonds
-            common = self._atoms.keys() & other
+            common = sa.keys() & other
 
-            for n in self._atoms.keys() - common:  # cleavage atoms
-                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=spc[n], p_is_radical=spr[n])
+            for n in sa.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n].copy(), n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=spc[n],
+                           p_is_radical=spr[n])
                 for m, bond in sb[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is broken bond
@@ -565,7 +563,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                         else:
                             bonds.append((n, m, bond))
             for n in other._atoms.keys() - common:  # coupling atoms
-                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n], p_is_radical=opr[n])
+                h.add_atom(oa[n].copy(), n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n],
+                           p_is_radical=opr[n])
                 for m, bond in ob[n].items():
                     if m not in atoms:
                         if m in common:  # bond to common atoms is formed bond
@@ -589,7 +588,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 san = sa[n]
                 if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
                     raise MappingError(f'atoms with number {{{n}}} not equal')
-                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n], p_is_radical=opr[n])
+                h.add_atom(san.copy(), n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n],
+                           p_is_radical=opr[n])
                 for m, (o1, o2) in adj[n].items():
                     if m not in atoms:
                         bond = object.__new__(DynamicBond)
@@ -611,6 +611,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
     def get_mapping(self, other: 'CGRContainer', **kwargs):
         if isinstance(other, CGRContainer):
             return super().get_mapping(other, **kwargs)
+        raise TypeError('CGRContainer expected')
+
+    def get_mcs_mapping(self, other: 'CGRContainer', **kwargs):
+        if isinstance(other, CGRContainer):
+            return super().get_mcs_mapping(other, **kwargs)
         raise TypeError('CGRContainer expected')
 
     @cached_property
@@ -698,7 +703,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         for n, atom in self._atoms.items():
             atom = Element.from_atomic_number(atom.atomic_number)(atom.isotope)
             reactants.add_atom(atom, n, charge=charges[n], is_radical=radicals[n], xy=plane[n])
-            products.add_atom(atom, n, charge=p_charges[n], is_radical=p_radicals[n], xy=plane[n])
+            products.add_atom(atom.copy(), n, charge=p_charges[n], is_radical=p_radicals[n], xy=plane[n])
 
         for n, m, bond in self.bonds():
             if bond.order:

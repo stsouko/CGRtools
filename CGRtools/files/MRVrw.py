@@ -206,10 +206,11 @@ class MRVRead(CGRRead):
                               'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
                               'charge': int(atom.get('@formalCharge', 0)),
                               'is_radical': '@radical' in atom,
-                              'mapping': int(atom.get('@mrvMap', 0)),
-                              'x': float(atom['@x3'] if '@x3' in atom else atom['@x2'] / 2),
-                              'y': float(atom['@y3'] if '@y3' in atom else atom['@y2'] / 2),
-                              'z': float(atom['@z3'] if '@z3' in atom else 0.)})
+                              'mapping': int(atom.get('@mrvMap', 0))})
+                if '@z3' in atom:
+                    atoms[-1].update(x=float(atom['@x3']), y=float(atom['@y3']), z=float(atom['@z3']))
+                else:
+                    atoms[-1].update(x=float(atom['@x2']) / 2, y=float(atom['@y2']) / 2, z=0.)
                 if '@mrvQueryProps' in atom:
                     if atom['@mrvQueryProps'][0] == 'L':
                         al = atom['@mrvQueryProps']
@@ -521,15 +522,50 @@ class MRVWrite:
     __finalized = False
 
 
-MRVwrite = MRVWrite
+class MRVread:
+    def __init__(self, *args, **kwargs):
+        warn('MRVread deprecated. Use MRVRead instead', DeprecationWarning)
+        warning('MRVread deprecated. Use MRVRead instead')
+        self.__obj = MRVRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
+class MRVwrite:
+    def __init__(self, *args, **kwargs):
+        warn('MRVwrite deprecated. Use MRVWrite instead', DeprecationWarning)
+        warning('MRVwrite deprecated. Use MRVWrite instead')
+        self.__obj = MRVWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
 
 __all__ = ['MRVWrite', 'MRVwrite']
 
 if find_spec('lxml'):
     from lxml.etree import iterparse, QName, tostring
 
-    MRVread = MRVRead
     __all__.extend(['MRVRead', 'MRVread'])
 else:
     warn('lxml library not installed', ImportWarning)
-    del MRVRead
+    del MRVRead, MRVread

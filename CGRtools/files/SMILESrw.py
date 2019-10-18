@@ -154,11 +154,33 @@ class SMILESRead(CGRRead):
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
 
 
+class SMILESread:
+    def __init__(self, *args, **kwargs):
+        warn('SMILESread deprecated. Use SMILESRead instead', DeprecationWarning)
+        warning('SMILESread deprecated. Use SMILESRead instead')
+        self.__obj = SMILESRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
 if find_spec('coho'):
     from coho.smiles import Parser
-    SMILESread = SMILESRead
+
     __all__ = ['SMILESRead', 'SMILESread']
 else:
     warn('coho library not installed', ImportWarning)
     __all__ = []
-    del SMILESRead
+    del SMILESRead, SMILESread
