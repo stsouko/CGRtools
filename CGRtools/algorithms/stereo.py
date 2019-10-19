@@ -291,44 +291,60 @@ class MoleculeStereo(Stereo):
                         failed_stereo[n] = s
                 stereo = failed_stereo
 
-    @cached_property
+    @property
     def _chiral_atoms(self):
-        atoms_stereo = self._atoms_stereo
-        morgan = self.__chiral_morgan()
-        return {n for n, env in self._tetrahedrons.items()
-                if n not in atoms_stereo and len(set(morgan[x] for x in env)) == len(env)}
+        return self.__chiral_centers[0]
 
-    def __chiral_morgan(self):
+    @cached_property
+    def __chiral_centers(self):
         morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
         cis_trans_stereo = self._cis_trans_stereo
-        tetrahedrons = self._tetrahedrons
+        tetrahedrons = self._tetrahedrons.copy()
+        cumulenes = self._cumulenes.copy()
+
         morgan_update = {}
-        # todo: рекурсивно находить хиральные центры. сначала найти явные из моргана. найти их группы. после сделать
-        # в группах разделение. заново найти моргана. найти новые хиральные.
+        while True:
+            chiral_t = {n for n, env in tetrahedrons.items() if len(set(morgan[x] for x in env)) == len(env)}
+            chiral_c = {path for path, (n1, m1, n2, m2) in cumulenes.items()
+                        if morgan[n1] != morgan.get(n2, 0) and morgan[m1] != morgan.get(m2, 0)}
 
-        if atoms_stereo:
-            grouped_stereo = defaultdict(list)
-            for n in atoms_stereo:
-                grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
-            for group in grouped_stereo.values():
-                if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
-                    s = [n for n in group
-                         if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
-                    if 0 < len(s) < len(group):  # RS pair required
-                        for n in s:
-                            morgan_update[n] = -morgan[n]
-        if cis_trans_stereo:
-            grouped_stereo = defaultdict(list)
-            for n, m in cis_trans_stereo:
-                g1 = (morgan[n], morgan[m])
-                g2 = (morgan[m], morgan[n])
-                if g1 == g2:
-                    grouped_stereo[g1].append()
+            if atoms_stereo:
+                grouped_stereo = defaultdict(list)
+                for n in chiral_t:
+                    if n in atoms_stereo:
+                        grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
+                for group in grouped_stereo.values():
+                    if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
+                        s = [n for n in group
+                             if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
+                        if 0 < len(s) < len(group):  # RS pair required
+                            for n in s:
+                                morgan_update[n] = -morgan[n]
+                    for n in group:  # remove seen stereo atoms
+                        del tetrahedrons[n]
+                        chiral_t.discard(n)
 
-        if morgan_update:
-            return self._morgan(self._sorted_primed({**morgan, **morgan_update}))
-        return morgan
+            if cis_trans_stereo:
+                grouped_stereo = defaultdict(list)
+                for n, *mid, m in chiral_c:
+                    if len(mid) % 2:  # allenes
+                        ...
+                    elif (n, m) in cis_trans_stereo:
+                        mn, mm = morgan[n], morgan[m]
+                        if mn < mm:
+                            grouped_stereo[mn].append(n)
+                        elif (m, n) in cis_trans_stereo:
+                            grouped_stereo[mm].append(m)
+                for group in grouped_stereo.values():
+                    if len(group) % 2 == 0:  # only even number of equal stereo bonds give new stereo center
+                        ...
+
+            if morgan_update:
+                morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
+                morgan_update = {}
+            else:
+                return chiral_t, chiral_c
 
     @cached_property
     def _cumulenes(self):
