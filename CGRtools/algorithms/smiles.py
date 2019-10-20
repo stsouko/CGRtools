@@ -85,6 +85,8 @@ class Smiles:
         return sha512(str(self).encode()).digest()
 
     def _smiles(self, weights, *, asymmetric_closures=False, **kwargs):
+        if not self._atoms:
+            return ''
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
