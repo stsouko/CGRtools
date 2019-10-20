@@ -265,9 +265,29 @@ class MoleculeStereo(Stereo):
                     s = _pyramid_sign(order[-1], *order[:3])
             if s:
                 self._atoms_stereo[n] = s > 0
-                self.flush_cache()
+                del self.__dict__['_MoleculeStereo__chiral_centers']
         else:  # only tetrahedrons supported
             raise NotChiral
+
+    def calculate_cis_trans_from_2d(self):
+        cis_trans_stereo = self._cis_trans_stereo
+        plane = self._plane
+        while True:
+            chiral = self._chiral_cis_trans
+            if not chiral:
+                break
+            stereo = {}
+            for path in chiral:
+                n, *_, m = path
+                n1, m1 = self._cumulenes[path][:2]
+                s = _dihedral_sign((*plane[n1], 0), (*plane[n], 0), (*plane[m], 0), (*plane[m1], 0))
+                if s:
+                    stereo[(n, m)] = s > 0
+            if stereo:
+                cis_trans_stereo.update(stereo)
+                del self.__dict__['_MoleculeStereo__chiral_centers']
+            else:
+                break
 
     def add_atom_stereo(self, n, env, mark: bool):
         if n not in self._atoms:
@@ -288,7 +308,7 @@ class MoleculeStereo(Stereo):
                 mark = not mark
 
             self._atoms_stereo[n] = mark
-            self.flush_cache()
+            del self.__dict__['_MoleculeStereo__chiral_centers']
         else:  # only tetrahedrons supported
             raise NotChiral
 
@@ -303,7 +323,7 @@ class MoleculeStereo(Stereo):
                 old_stereo = len(stereo)
                 failed_stereo = {}
                 chiral = self._chiral_atoms
-                self.__dict__.clear()
+                del self.__dict__['_MoleculeStereo__chiral_centers']
                 for n, s in stereo.items():
                     if n in chiral:
                         new_stereo[n] = s
@@ -315,19 +335,31 @@ class MoleculeStereo(Stereo):
     def _chiral_atoms(self):
         return self.__chiral_centers[0]
 
+    @property
+    def _chiral_cis_trans(self):
+        return self.__chiral_centers[1]
+
     @cached_property
     def __chiral_centers(self):
-        morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
         cis_trans_stereo = self._cis_trans_stereo
+        allenes_stereo = self._allenes_stereo
+
+        morgan = self.atoms_order
         tetrahedrons = self._tetrahedrons.copy()
         cumulenes = self._cumulenes.copy()
 
         morgan_update = {}
         while True:
             chiral_t = {n for n, env in tetrahedrons.items() if len(set(morgan[x] for x in env)) == len(env)}
-            chiral_c = {path for path, (n1, m1, n2, m2) in cumulenes.items()
-                        if morgan[n1] != morgan.get(n2, 0) and morgan[m1] != morgan.get(m2, 0)}
+            chiral_c = set()
+            chiral_a = set()
+            for path, (n1, m1, n2, m2) in cumulenes.items():
+                if morgan[n1] != morgan.get(n2, 0) and morgan[m1] != morgan.get(m2, 0):
+                    if len(path) % 2:
+                        chiral_a.add(path)
+                    else:
+                        chiral_c.add(path)
 
             if atoms_stereo:
                 grouped_stereo = defaultdict(list)
@@ -335,7 +367,7 @@ class MoleculeStereo(Stereo):
                     if n in atoms_stereo:
                         grouped_stereo[morgan[n]].append(n)  # collect equal stereo atoms
                 for group in grouped_stereo.values():
-                    if len(group) % 2 == 0:  # only even number of equal stereo atoms give new stereo center
+                    if not len(group) % 2:  # only even number of equal stereo atoms give new stereo center
                         s = [n for n in group
                              if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
                         if 0 < len(s) < len(group):  # RS pair required
@@ -347,15 +379,41 @@ class MoleculeStereo(Stereo):
 
             if cis_trans_stereo:
                 grouped_stereo = defaultdict(list)
-                for n, *mid, m in chiral_c:
+                for path in chiral_c:
+                    n, *_, m = path
+                    mn, mm = morgan[n], morgan[m]
+                    if (n, m) in cis_trans_stereo or (m, n) in cis_trans_stereo:
+                        if mn <= mm:
+                            grouped_stereo[mn].append((n, m, cumulenes[path], path))
+                        else:
+                            grouped_stereo[mm].append((m, n, cumulenes[path], path))
+                for group in grouped_stereo.values():
+                    if not len(group) % 2:  # only even number of equal stereo bonds give new stereo center
+                        s = []
+                        for n, m, (n1, m1, n2, m2), _ in group:
+                            if n2 is None:
+                                a = n1
+                            else:
+                                a = min(n1, n2, key=morgan.get)
+                            if m2 is None:
+                                b = m1
+                            else:
+                                b = min(m1, m2, key=morgan.get)
+                            if self._translate_cis_trans_stereo(n, m, a, b):
+                                s.append(n)
+                        if 0 < len(s) < len(group):  # RS pair required
+                            for n in s:
+                                morgan_update[n] = -morgan[n]
+                    for *_, path in group:  # remove seen stereo atoms
+                        del cumulenes[path]
+                        chiral_c.discard(path)
+
+            if allenes_stereo:
+                grouped_stereo = defaultdict(list)
+                for n, *mid, m in chiral_a:
                     if len(mid) % 2:  # allenes
-                        ...
-                    elif (n, m) in cis_trans_stereo:
-                        mn, mm = morgan[n], morgan[m]
-                        if mn < mm:
-                            grouped_stereo[mn].append(n)
-                        elif (m, n) in cis_trans_stereo:
-                            grouped_stereo[mm].append(m)
+                        c = mid[len(mid) // 2]
+                        grouped_stereo[morgan[c]].append(c)
                 for group in grouped_stereo.values():
                     if len(group) % 2 == 0:  # only even number of equal stereo bonds give new stereo center
                         ...
@@ -364,7 +422,7 @@ class MoleculeStereo(Stereo):
                 morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
                 morgan_update = {}
             else:
-                return chiral_t, chiral_c
+                return chiral_t, chiral_c, chiral_a
 
 
 class QueryStereo(Stereo):  # todo: implement add_wedge, calculate_cis_trans_from_2d
