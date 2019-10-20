@@ -310,8 +310,8 @@ class Aromatize:
                     else:
                         if atom in pyroles:  # try pyrole and pyridine
                             opposite = stack[-1].copy()
-                            opposite.append((next_atom, atom, 1, None))
-                            stack[-1].append((next_atom, atom, 2, len(path)))
+                            opposite.append((next_atom, atom, 2, None))
+                            stack[-1].append((next_atom, atom, 1, len(path)))
                             stack.append(opposite)
                         else:
                             stack[-1].append((next_atom, atom, 2, None))
