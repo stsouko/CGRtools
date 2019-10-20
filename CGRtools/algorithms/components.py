@@ -114,10 +114,10 @@ class StructureComponents:
         for n, atom in atoms.items():
             if atom.atomic_number == 6 and not self._charges[n]:
                 env = bonds[n]
-                b_sum = sum(x.order for x in env.values())
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-                elif all(x.order == 1 for x in env.values()):
+                if all(x.order == 1 for x in env.values()):
+                    b_sum = sum(x.order for x in env.values())
+                    if b_sum > 4:
+                        raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
                     tetra.append(n)
         return tetra
 
