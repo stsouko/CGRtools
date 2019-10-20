@@ -201,6 +201,42 @@ class Stereo:
         return s
 
     @cached_property
+    def _cumulenes(self):
+        # 5       4
+        #  \     /
+        #   2---3
+        #  /     \
+        # 1       6
+        bonds = self._bonds
+        atoms = self._atoms
+        cumulenes = {}
+        for path in self.cumulenes:
+            n1, m1 = path[1], path[-2]
+            nn = [x for x in bonds[path[0]] if x != n1 and atoms[x].atomic_number != 1]
+            mn = [x for x in bonds[path[-1]] if x != m1 and atoms[x].atomic_number != 1]
+            if nn and mn:
+                sn = nn[1] if len(nn) == 2 else None
+                sm = mn[1] if len(mn) == 2 else None
+                cumulenes[path] = (nn[0], mn[0], sn, sm)
+        return cumulenes
+
+    @cached_property
+    def _tetrahedrons(self):
+        #    2
+        #    |
+        # 1--K--3
+        #    |
+        #    4?
+        atoms = self._atoms
+        bonds = self._bonds
+        tetrahedrons = {}
+        for n in self.tetrahedrons:
+            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
+            if len(env) in (3, 4):
+                tetrahedrons[n] = env
+        return tetrahedrons
+
+    @cached_property
     def _cis_trans(self):
         return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
 
@@ -255,22 +291,6 @@ class MoleculeStereo(Stereo):
             self.flush_cache()
         else:  # only tetrahedrons supported
             raise NotChiral
-
-    @cached_property
-    def _tetrahedrons(self):
-        #    2
-        #    |
-        # 1--K--3
-        #    |
-        #    4?
-        atoms = self._atoms
-        bonds = self._bonds
-        tetrahedrons = {}
-        for n in self.tetrahedrons:
-            env = tuple(x for x in bonds[n] if atoms[x].atomic_number != 1)
-            if len(env) in (3, 4):
-                tetrahedrons[n] = env
-        return tetrahedrons
 
     def _fix_stereo(self):
         if self._atoms_stereo:
@@ -346,51 +366,9 @@ class MoleculeStereo(Stereo):
             else:
                 return chiral_t, chiral_c
 
-    @cached_property
-    def _cumulenes(self):
-        # 5       4
-        #  \     /
-        #   2---3
-        #  /     \
-        # 1       6
-        bonds = self._bonds
-        atoms = self._atoms
-        cumulenes = {}
-        for path in self.cumulenes:
-            n1, m1 = path[1], path[-2]
-            nn = [x for x in bonds[path[0]] if x != n1 and atoms[x].atomic_number != 1]
-            mn = [x for x in bonds[path[-1]] if x != m1 and atoms[x].atomic_number != 1]
-            if nn and mn:
-                sn = nn[1] if len(nn) == 2 else None
-                sm = mn[1] if len(mn) == 2 else None
-                cumulenes[path] = (nn[0], mn[0], sn, sm)
-        return cumulenes
 
-
-class QueryStereo(Stereo):
+class QueryStereo(Stereo):  # todo: implement add_wedge, calculate_cis_trans_from_2d
     __slots__ = ()
-
-    @cached_property
-    def _tetrahedrons(self):
-        #    2
-        #    |
-        # 1--K--3
-        #    |
-        #    4?
-        atoms = self._atoms
-        bonds = self._bonds
-        tetrahedrons = {}
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6 and not self._charges[n]:
-                env = bonds[n]
-                b_sum = sum(x.order for x in env.values())
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-                if all(x.order == 1 for x in env.values()):
-                    env = tuple(x for x in env if atoms[x].atomic_number != 1)
-                    if len(env) in (3, 4):
-                        tetrahedrons[n] = env
-        return tetrahedrons
 
 
 class NotUsed:

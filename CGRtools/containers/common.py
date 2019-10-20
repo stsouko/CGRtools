@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond
+from ..algorithms.components import GraphComponents
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.mcs import MCS
 from ..algorithms.morgan import Morgan
@@ -28,7 +29,7 @@ from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
-class Graph(Isomorphism, MCS, SSSR, Morgan, ABC):
+class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
     __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
                  '_radicals')
 
@@ -129,23 +130,6 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, ABC):
     @property
     def meta(self) -> Dict:
         return self._meta
-
-    @cached_property
-    def connected_components(self) -> Tuple[Tuple[int, ...], ...]:
-        if not self._atoms:
-            return ()
-        atoms = set(self._atoms)
-        components = []
-        while atoms:
-            start = atoms.pop()
-            component = tuple(self.__component(start))
-            components.append(component)
-            atoms.difference_update(component)
-        return tuple(components)
-
-    @property
-    def connected_components_count(self) -> int:
-        return len(self.connected_components)
 
     @abstractmethod
     def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
@@ -418,17 +402,6 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, ABC):
         if not isinstance(is_radical, bool):
             raise TypeError('radical state should be bool')
         return is_radical
-
-    def __component(self, start):
-        bonds = self._bonds
-        seen = {start}
-        queue = [start]
-        while queue:
-            start = queue.pop(0)
-            yield start
-            for i in bonds[start].keys() - seen:
-                queue.append(i)
-                seen.add(i)
 
     def __augmented_substructure(self, atoms, deep):
         atoms = set(atoms)
