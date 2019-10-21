@@ -234,42 +234,26 @@ class Calculate2D:
         dx, dy = n_dist * sin(pi / 3), n_dist / 2
         components = {k: set(v) for k, v in bonds.items()}
         start = next(n for n, ms in components.items() if len(ms) == 1)
-        stack = [[(next_atom, start, bonds[start][next_atom].order, 'up1', None, 0)] for next_atom in components[start]]
+        stack = [[(next_atom, start, bonds[start][next_atom].order, None, None, 0)] for next_atom in components[start]]
 
         size = len(atoms) - 1
         good_path = []
         path = []
         hashed_path = set()
         while stack:
-            atom, prev_atom, bond, direct, v, _ = stack[-1].pop()
-            if prev_atom == start:
+            atom, prev_atom, bond, current_coordinates, v, _ = stack[-1].pop()
+            if current_coordinates is None:
                 plane[atom], plane[prev_atom] = (dx, dy), (0, 0)
+                vx, vy = mx, my = dx, dy
             else:
-                # hypot can`t for vx == 0 and vy in (-.825, 825)
-                old_x, old_y = plane[prev_atom]
                 if self.towards(bond, bonds[prev_atom][atom].order):
-                    vx, vy = v
-                    ang = hypot(vx, vy)
-                    if ang > 0:
-                        if ang == vy:
-                            plane[atom] = (old_x, old_y + .825)
-                            direct = 'down1'
-                        else:
-                            plane[atom] = (old_x + dx, old_y + dy)
-                    else:
-                        if ang == -vy:
-                            plane[atom] = (old_x, old_y - .825)
-                            direct = 'up1'
-                        else:
-                            plane[atom] = (old_x + dx, old_y - dy)
-                elif direct == 'up1':
-                    plane[atom] = (old_x + dx, old_y + dy)
-                elif direct == 'up2':
-                    plane[atom] = (old_x, old_y + .825)
-                elif direct == 'down1':
-                    plane[atom] = (old_x + dx, old_y - dy)
-                elif direct == 'down2':
-                    plane[atom] = (old_x, old_y - .825)
+                    pass
+                else:
+                    pass
+                nx, ny = plane[prev_atom]
+                mx, my = plane[atom]
+                vx, vy = mx - nx, my - ny
+                plane[atom] = current_coordinates
 
             path.append((atom, prev_atom, bond))
             hashed_path.add(atom)
@@ -281,7 +265,7 @@ class Calculate2D:
                     path = path[:stack[-1][-1][-1]]
                     hashed_path = {x for x, *_ in path}
 
-            elif atom != start:
+            elif atom != start:  # we finished. next step is final closure
                 for_stack = []
                 closures = []
                 loop = 0
@@ -295,66 +279,44 @@ class Calculate2D:
                     else:
                         for_stack.append(next_atom)
 
-                if loop:  # we found starting point.
-                    if direct == 'up1':  # finish should be single bonded
-                        del stack[-1]
-                        if stack:
-                            path = path[:stack[-1][-1][-1]]
-                            hashed_path = {x for x, *_ in path}
-                        continue
-                    else:  # finish should be double bonded
-                        vx, vy = self.vector(prev_atom, atom, plane)
-                        stack[-1].insert(0, (loop, atom, bonds[prev_atom][atom].order, 'down1', (vx, vy), None))
-                        direct = 'up1'
-                # if direct == 'up1':  # double in - single out. quinone has two single bonds
-                #     # for next_atom in closures:
-                #     #     path.append((next_atom, atom, bonds[prev_atom][atom].order))  # closures always single-bonded
-                #     #     stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
-                #     for next_atom in for_stack:
-                #         vx, vy = self.vector(prev_atom, atom, plane)
-                #         stack[-1].append((next_atom, atom, bonds[prev_atom][atom].order, 'down1', (vx, vy), None))
-                # elif direct == 'up2':
-                #     for next_atom in for_stack:
-                #         vx, vy = self.vector(prev_atom, atom, plane)
-                #         stack[-1].append((next_atom, atom, bonds[prev_atom][atom].order, 'up1', (vx, vy), None))
                 if len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
                     next_atom = for_stack[0]
-                    vx, vy = self.vector(prev_atom, atom, plane)
-                    if direct == 'down1':
-                        d = 'up1'
-                    else:
-                        d = 'down1'
-                    stack[-1].append((next_atom, atom, bonds[prev_atom][atom].order, d, (vx, vy), None))
-                    # if closures:
-                    #     next_atom = closures[0]
-                    #     path.append((next_atom, atom, 1))  # closures always single-bonded
-                    #     stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
-                elif for_stack:  # fork
-                    next_atom1, next_atom2 = for_stack
-                    # if next_atom1 in double_bonded:  # quinone next from fork
-                    #     if next_atom2 in double_bonded:  # bad path
+                    # if next_atom in double_bonded:  # need double bond, but next atom quinone
+                    #     if atom in pyroles:
+                    #         stack[-1].append((next_atom, atom, 1, None))
+                    #     else:
                     #         del stack[-1]
                     #         if stack:
                     #             path = path[:stack[-1][-1][-1]]
                     #             hashed_path = {x for x, *_ in path}
-                    #     else:
-                    vx, vy = self.vector(prev_atom, atom, plane)
-                    if direct == 'up1':
-                        stack[-1].append((next_atom1, atom, bonds[prev_atom][atom].order, 'up2', (vx, vy), None))
-                        stack[-1].append((next_atom2, atom, bonds[prev_atom][atom].order, 'down1', (vx, vy), None))
-                    elif direct == 'down1':
-                        stack[-1].append((next_atom1, atom, bonds[prev_atom][atom].order, 'up1', (vx, vy), None))
-                        stack[-1].append((next_atom2, atom, bonds[prev_atom][atom].order, 'down2', (vx, vy), None))
-                    # elif next_atom2 in double_bonded:  # quinone next from fork
-                    #     stack[-1].append((next_atom2, atom, 1, None))
-                    #     stack[-1].append((next_atom1, atom, 2, None))
-                    # else:  # new path
-                    #     opposite = stack[-1].copy()
-                    #     stack[-1].append((next_atom1, atom, 1, None))
-                    #     stack[-1].append((next_atom2, atom, 2, len(path)))
-                    #     opposite.append((next_atom2, atom, 1, None))
-                    #     opposite.append((next_atom1, atom, 2, None))
-                    #     stack.append(opposite)
+                    # else:
+                    #     if atom in pyroles:  # try pyrole and pyridine
+                    bond2 = bonds[atom][next_atom].order
+                    opposite = stack[-1].copy()
+                    vx1, vy1 = rotate_vector(dx, dy, vx, vy)
+                    vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
+                    opposite.append((next_atom, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
+                    stack[-1].append((next_atom, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), len(path)))
+                    stack.append(opposite)
+                    # else:
+                    #     stack[-1].append((next_atom, atom, 2, None))
+                    #     if closures:
+                    #         next_atom = closures[0]
+                    #         path.append((next_atom, atom, 1))  # closures always single-bonded
+                    #         stack[-1].remove((atom, next_atom, 1, None))  # remove fork from stack
+
+                elif len(for_stack) == 2:  # fork
+                    next_atom1, next_atom2 = for_stack
+                    bond2 = bonds[atom][next_atom1].order
+                    bond3 = bonds[atom][next_atom2].order
+                    opposite = stack[-1].copy()
+                    vx1, vy1 = rotate_vector(dx, dy, vx, vy)
+                    vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
+                    opposite.append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
+                    opposite.append((next_atom1, atom, bond3, (vx1 + mx, vy1 + my), (vx1, vy1), None))
+                    stack[-1].append((next_atom1, atom, bond3, (vx1 + mx, vy1 + my), (vx1, vy1), len(path)))
+                    stack[-1].append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), len(path)))
+                    stack.append(opposite)
 
     def clean2d(self):
         cycles = self.sssr
