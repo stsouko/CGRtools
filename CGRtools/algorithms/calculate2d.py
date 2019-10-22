@@ -241,7 +241,7 @@ class Calculate2D:
         atoms = self._atoms
         bonds = self._bonds
 
-        dx, dy = n_dist * sin(pi / 3), n_dist / 2
+        dx, dy = n_dist / 2, n_dist * sin(pi / 3)
         components = {k: set(v) for k, v in bonds.items()}
         start = next(n for n, ms in components.items() if len(ms) == 1)
         stack = [[(next_atom, start, bonds[start][next_atom].order, None, None, 0)] for next_atom in components[start]]
@@ -251,19 +251,19 @@ class Calculate2D:
         path = []
         hashed_path = set()
         while stack:
-            atom, prev_atom, bond, current_coordinates, v, _ = stack[-1].pop()
+            atom, prev_atom, bond1, current_coordinates, v, _ = stack[-1].pop()
+            bond2 = bonds[prev_atom][atom].order
             if current_coordinates is None:
                 plane[atom], plane[prev_atom] = (dx, dy), (0, 0)
                 vx, vy = mx, my = dx, dy
             else:
                 x, y = v
                 nx, ny = plane[prev_atom]
-                if self.towards(bond, bonds[prev_atom][atom].order):
+                if self.towards(bond1, bond2):
                     current_coordinates = (x + nx, y + ny)
                 mx, my = plane[atom] = current_coordinates
                 vx, vy = mx - nx, my - ny
-
-            path.append((atom, prev_atom, bond))
+            path.append((atom, prev_atom, bond2))
             hashed_path.add(atom)
 
             if len(path) == size:
@@ -299,12 +299,11 @@ class Calculate2D:
                     #             hashed_path = {x for x, *_ in path}
                     # else:
                     #     if atom in pyroles:  # try pyrole and pyridine
-                    bond2 = bonds[atom][next_atom].order
                     opposite = stack[-1].copy()
                     vx1, vy1 = rotate_vector(dx, dy, vx, vy)
                     vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
-                    opposite.append((next_atom, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
-                    stack[-1].append((next_atom, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), len(path)))
+                    opposite.append((next_atom, atom, bond2, (vx1 + mx, vy1 + my), (vx, vy), None))
+                    stack[-1].append((next_atom, atom, bond2, (vx2 + mx, vy2 + my), (vx, vy), len(path)))
                     stack.append(opposite)
                     # else:
                     #     stack[-1].append((next_atom, atom, 2, None))
@@ -315,14 +314,12 @@ class Calculate2D:
 
                 elif len(for_stack) == 2:  # fork
                     next_atom1, next_atom2 = for_stack
-                    bond2 = bonds[atom][next_atom1].order
-                    bond3 = bonds[atom][next_atom2].order
                     opposite = stack[-1].copy()
                     vx1, vy1 = rotate_vector(dx, dy, vx, vy)
                     vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
                     opposite.append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
-                    opposite.append((next_atom1, atom, bond3, (vx1 + mx, vy1 + my), (vx1, vy1), None))
-                    stack[-1].append((next_atom1, atom, bond3, (vx1 + mx, vy1 + my), (vx1, vy1), len(path)))
+                    opposite.append((next_atom1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
+                    stack[-1].append((next_atom1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), len(path)))
                     stack[-1].append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), len(path)))
                     stack.append(opposite)
 
