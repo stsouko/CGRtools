@@ -20,7 +20,17 @@ from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import product
 from math import hypot, pi, acos, cos, sin, ceil, atan2
-from ..algorithms.depict import rotate_vector
+# from ..algorithms.depict import rotate_vector
+
+
+def rotate_vector(x1, y1, x2, y2):
+    """
+    rotate x,y vector over x2-x1, y2-y1 angle
+    """
+    angle = atan2(y2, x2)
+    cos_rad = cos(angle)
+    sin_rad = sin(angle)
+    return cos_rad * x1 - sin_rad * y1, sin_rad * x1 + cos_rad * y1
 
 
 def rotate_vector2(x1, y1, angle):
@@ -246,14 +256,12 @@ class Calculate2D:
                 plane[atom], plane[prev_atom] = (dx, dy), (0, 0)
                 vx, vy = mx, my = dx, dy
             else:
-                if self.towards(bond, bonds[prev_atom][atom].order):
-                    pass
-                else:
-                    pass
+                x, y = v
                 nx, ny = plane[prev_atom]
-                mx, my = plane[atom]
+                if self.towards(bond, bonds[prev_atom][atom].order):
+                    current_coordinates = (x + nx, y + ny)
+                mx, my = plane[atom] = current_coordinates
                 vx, vy = mx - nx, my - ny
-                plane[atom] = current_coordinates
 
             path.append((atom, prev_atom, bond))
             hashed_path.add(atom)
