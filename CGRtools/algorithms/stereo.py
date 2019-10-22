@@ -200,6 +200,21 @@ class Stereo:
             return not s
         return s
 
+    def _translate_allene_stereo(self, c, nn, nm):
+        """
+        get sign for specified opposite neighbors
+
+        :param c: central double bonded atom
+        :param nn: neighbor of first double bonded atom
+        :param nm: neighbor of last double bonded atom
+        """
+        s = self._allenes_stereo[c]
+        order = self._allenes[c]
+        translate = (order.index(nn), order.index(nm))
+        if _alkene_translate[translate]:
+            return not s
+        return s
+
     @cached_property
     def _cumulenes(self):
         # 5       4
@@ -239,6 +254,10 @@ class Stereo:
     @cached_property
     def _cis_trans(self):
         return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
+
+    @cached_property
+    def _allenes(self):
+        return {path[len(path) // 2]: env for path, env in self._cumulenes.items() if len(path) % 2}
 
 
 class MoleculeStereo(Stereo):
@@ -339,6 +358,10 @@ class MoleculeStereo(Stereo):
     def _chiral_cis_trans(self):
         return self.__chiral_centers[1]
 
+    @property
+    def _chiral_allenes(self):
+        return self.__chiral_centers[2]
+
     @cached_property
     def __chiral_centers(self):
         atoms_stereo = self._atoms_stereo
@@ -410,13 +433,29 @@ class MoleculeStereo(Stereo):
 
             if allenes_stereo:
                 grouped_stereo = defaultdict(list)
-                for n, *mid, m in chiral_a:
-                    if len(mid) % 2:  # allenes
-                        c = mid[len(mid) // 2]
-                        grouped_stereo[morgan[c]].append(c)
+                for path in chiral_a:
+                    c = path[len(path) // 2]
+                    grouped_stereo[morgan[c]].append((c, cumulenes[path], path))
                 for group in grouped_stereo.values():
-                    if len(group) % 2 == 0:  # only even number of equal stereo bonds give new stereo center
-                        ...
+                    if not len(group) % 2:  # only even number of equal stereo bonds give new stereo center
+                        s = []
+                        for c, (n1, m1, n2, m2), _ in group:
+                            if n2 is None:
+                                a = n1
+                            else:
+                                a = min(n1, n2, key=morgan.get)
+                            if m2 is None:
+                                b = m1
+                            else:
+                                b = min(m1, m2, key=morgan.get)
+                            if self._translate_allene_stereo(c, a, b):
+                                s.append(c)
+                        if 0 < len(s) < len(group):  # RS pair required
+                            for c in s:
+                                morgan_update[c] = -morgan[c]
+                    for *_, path in group:  # remove seen stereo atoms
+                        del cumulenes[path]
+                        chiral_a.discard(path)
 
             if morgan_update:
                 morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
