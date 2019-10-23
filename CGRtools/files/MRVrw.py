@@ -415,8 +415,8 @@ class MRVWrite:
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
 
-            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0]:.4f}" y1="1" x2="{data._arrow[1]:.4f}" '
-                             f'y2="1"/>')
+            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0] * 2:.4f}" y1="0" '
+                             f'x2="{data._arrow[1] * 2:.4f}" y2="0"/>')
             self._file.write('</reaction>')
         self._file.write('</MChemicalStruct></MDocument>\n')
 
