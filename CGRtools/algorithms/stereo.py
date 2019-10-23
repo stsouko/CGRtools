@@ -20,6 +20,7 @@ from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations, product
 from logging import info
+from typing import Set, Tuple, Dict, Optional, Union
 from ..exceptions import AtomNotFound, NotChiral, IsChiral, ValenceError
 
 
@@ -216,7 +217,7 @@ class Stereo:
         return s
 
     @cached_property
-    def _cumulenes(self):
+    def _cumulenes(self) -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
         # 5       4
         #  \     /
         #   2---3
@@ -236,7 +237,7 @@ class Stereo:
         return cumulenes
 
     @cached_property
-    def _tetrahedrons(self):
+    def _tetrahedrons(self) -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
         #    2
         #    |
         # 1--K--3
@@ -252,12 +253,40 @@ class Stereo:
         return tetrahedrons
 
     @cached_property
-    def _cis_trans(self):
+    def _cis_trans(self) -> Dict[Tuple[int, int], Tuple[int, int, Optional[int], Optional[int]]]:
         return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
 
     @cached_property
-    def _allenes(self):
-        return {path[len(path) // 2]: env for path, env in self._cumulenes.items() if len(path) % 2}
+    def _allenes(self) -> Dict[int, Tuple[int, int, Optional[int], Optional[int]]]:
+        """
+        dict of allenes centers valued with neighbors of terminal atoms
+        """
+        return {path[len(path) // 2]: (path[0], path[-1], *env)
+                for path, env in self._cumulenes.items() if len(path) % 2}
+
+    @cached_property
+    def _allenes_centers(self) -> Dict[int, int]:
+        """
+        allene terminal atom to center mapping
+        """
+        terminals = {}
+        for path, env in self._cumulenes.items():
+            if len(path) % 2:
+                c = path[len(path) // 2]
+                terminals[path[0]] = terminals[path[-1]] = c
+        return terminals
+
+    @cached_property
+    def _allenes_terminals(self) -> Dict[int, Tuple[int, int]]:
+        """
+        allene center atom to terminals mapping
+        """
+        terminals = {}
+        for path, env in self._cumulenes.items():
+            if len(path) % 2:
+                c = path[len(path) // 2]
+                terminals[c] = (path[0], path[-1])
+        return terminals
 
 
 class MoleculeStereo(Stereo):
@@ -270,7 +299,7 @@ class MoleculeStereo(Stereo):
             raise IsChiral
 
         plane = self._plane
-        if n in self._chiral_atoms:
+        if n in self._chiral_tetrahedrons:
             if m not in self._bonds[n]:
                 raise AtomNotFound
 
@@ -285,20 +314,33 @@ class MoleculeStereo(Stereo):
             if s:
                 self._atoms_stereo[n] = s > 0
                 del self.__dict__['_MoleculeStereo__chiral_centers']
-        else:  # only tetrahedrons supported
+        else:
+            c = self._allenes_centers.get(n)
+            if c:
+                if c in self._allenes_stereo:
+                    raise IsChiral
+
+                order = self._allenes[c]
+                t1, t2 = self._allenes_terminals[c]
+
+                translate = (order.index(nn), order.index(nm))
+                s = _dihedral_sign((*plane[n1], 0), (*plane[t1], 0), (*plane[t2], 0), (*plane[m1], 0))
+                if s:
+                    self._allenes_stereo[c] = s > 0
+
+            # only tetrahedrons and allenes supported
             raise NotChiral
 
     def calculate_cis_trans_from_2d(self):
         cis_trans_stereo = self._cis_trans_stereo
         plane = self._plane
         while True:
-            chiral = self._chiral_cis_trans
-            if not chiral:
+            if not self._chiral_cis_trans:
                 break
             stereo = {}
-            for path in chiral:
-                n, *_, m = path
-                n1, m1 = self._cumulenes[path][:2]
+            for nm in self._chiral_cis_trans:
+                n, m = nm
+                n1, m1 = self._cis_trans[nm][:2]
                 s = _dihedral_sign((*plane[n1], 0), (*plane[n], 0), (*plane[m], 0), (*plane[m1], 0))
                 if s:
                     stereo[(n, m)] = s > 0
@@ -318,7 +360,7 @@ class MoleculeStereo(Stereo):
         if not isinstance(mark, bool):
             raise TypeError('stereo mark should be bool')
 
-        if n in self._chiral_atoms:
+        if n in self._chiral_tetrahedrons:
             if set(env) != set(self._bonds[n]):
                 raise AtomNotFound
 
@@ -341,7 +383,7 @@ class MoleculeStereo(Stereo):
             while stereo and len(stereo) != old_stereo:
                 old_stereo = len(stereo)
                 failed_stereo = {}
-                chiral = self._chiral_atoms
+                chiral = self._chiral_tetrahedrons
                 del self.__dict__['_MoleculeStereo__chiral_centers']
                 for n, s in stereo.items():
                     if n in chiral:
@@ -351,15 +393,15 @@ class MoleculeStereo(Stereo):
                 stereo = failed_stereo
 
     @property
-    def _chiral_atoms(self):
+    def _chiral_tetrahedrons(self) -> Set[int]:
         return self.__chiral_centers[0]
 
     @property
-    def _chiral_cis_trans(self):
+    def _chiral_cis_trans(self) -> Set[Tuple[int, int]]:
         return self.__chiral_centers[1]
 
     @property
-    def _chiral_allenes(self):
+    def _chiral_allenes(self) -> Set[int]:
         return self.__chiral_centers[2]
 
     @cached_property
@@ -461,7 +503,7 @@ class MoleculeStereo(Stereo):
                 morgan = self._morgan(self._sorted_primed({**morgan, **morgan_update}))
                 morgan_update = {}
             else:
-                return chiral_t, chiral_c, chiral_a
+                return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}
 
 
 class QueryStereo(Stereo):  # todo: implement add_wedge, calculate_cis_trans_from_2d

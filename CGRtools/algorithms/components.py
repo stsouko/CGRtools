@@ -88,16 +88,16 @@ class StructureComponents:
         if not adj:
             return ()
 
-        terminals = {x for x, y in adj.items() if len(y) == 1}
+        terminals = [x for x, y in adj.items() if len(y) == 1]
         cumulenes = []
         while terminals:
-            m = terminals.pop()
+            m = terminals.pop(0)
             path = [m]
             while m not in terminals:
                 n, m = m, adj[m].pop()
                 adj[m].discard(n)
                 path.append(m)
-            terminals.discard(m)
+            terminals.remove(m)
             if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
                 # check for carbon only double-bonded chains.
                 cumulenes.append(tuple(path))
