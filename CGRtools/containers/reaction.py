@@ -38,10 +38,10 @@ class ReactionContainer(DepictReaction):
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '_signs', '__dict__')
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
-                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None):
+                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
         """
         new empty or filled reaction object creation
 
@@ -67,6 +67,10 @@ class ReactionContainer(DepictReaction):
             self.__meta = {}
         else:
             self.__meta = dict(meta)
+        if name is None:
+            self.__name = ''
+        else:
+            self.name = name
         self._arrow = None
         self._signs = None
 
@@ -78,7 +82,15 @@ class ReactionContainer(DepictReaction):
         if not isinstance(cgr, CGRContainer):
             raise TypeError('CGR expected')
         r, p = ~cgr
-        return cls(r.split(), p.split(), meta=cgr.meta)
+        reaction = object.__new__(cls)
+        reaction._ReactionContainer__reactants = tuple(r.split())
+        reaction._ReactionContainer__products = tuple(p.split())
+        reaction._ReactionContainer__reagents = ()
+        reaction._ReactionContainer__meta = cgr._Graph__meta.copy()
+        reaction._ReactionContainer__name = cgr._Graph__name
+        reaction._arrow = None
+        reaction._signs = None
+        return reaction
 
     def __getitem__(self, item):
         if item in ('reactants', 0):
@@ -89,10 +101,13 @@ class ReactionContainer(DepictReaction):
             return self.__reagents
         elif item == 'meta':
             return self.__meta
+        elif item == 'name':
+            return self.__name
         raise KeyError('invalid attribute')
 
     def __getstate__(self):
-        return dict(reactants=self.__reactants, products=self.__products, reagents=self.__reagents, meta=self.__meta)
+        return dict(reactants=self.__reactants, products=self.__products, reagents=self.__reagents, meta=self.__meta,
+                    name=self.__name)
 
     def __setstate__(self, state):
         if next(iter(state)) == 'reagents':  # 3.0 compatibility
@@ -101,6 +116,7 @@ class ReactionContainer(DepictReaction):
         self.__products = state['products']
         self.__reagents = state['reagents']
         self.__meta = state['meta']
+        self.__name = state.get('name')  # 4.0.9 compatibility
         self._arrow = None
         self._signs = None
 
@@ -124,15 +140,33 @@ class ReactionContainer(DepictReaction):
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
 
+    @property
+    def name(self):
+        return self.__name
+
+    @name.setter
+    def name(self, name):
+        if not isinstance(name, str):
+            raise TypeError('name should be string up to 80 symbols')
+        if len(name) > 80:
+            raise ValueError('name should be string up to 80 symbols')
+        self.__name = name
+
     def copy(self) -> 'ReactionContainer':
         """
         get copy of object
 
         :return: ReactionContainer
         """
-        return self.__class__(reagents=(x.copy() for x in self.__reagents), meta=self.__meta.copy(),
-                              products=(x.copy() for x in self.__products),
-                              reactants=(x.copy() for x in self.__reactants))
+        copy = object.__new__(self.__class__)
+        copy._ReactionContainer__reactants = tuple(x.copy() for x in self.__reactants)
+        copy._ReactionContainer__products = tuple(x.copy() for x in self.__products)
+        copy._ReactionContainer__reagents = tuple(x.copy() for x in self.__reagents)
+        copy._ReactionContainer__meta = self.__meta.copy()
+        copy._ReactionContainer__name = self.__name
+        copy._arrow = self._arrow
+        copy._signs = self._signs
+        return copy
 
     @property
     def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
@@ -274,11 +308,11 @@ class ReactionContainer(DepictReaction):
         shift_x = 0
         reactants = self.__reactants
         amount = len(reactants) - 1
-        self._signs = []
+        signs = []
         for m in reactants:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
-                self._signs.append(max_x)
+                signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
         arrow_min = shift_x
@@ -298,10 +332,11 @@ class ReactionContainer(DepictReaction):
         for m in products:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
-                self._signs.append(max_x)
+                signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
+        self._signs = tuple(signs)
         self.flush_cache()
 
     @staticmethod

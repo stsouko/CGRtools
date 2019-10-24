@@ -117,7 +117,7 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-        return ReactionContainer(meta=reaction['meta'], **rc)
+        return ReactionContainer(meta=reaction['meta'], name=reaction['title'], **rc)
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -140,6 +140,8 @@ class CGRRead:
 
         g = self.__prepare_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
+        if molecule['title']:
+            g.name = molecule['title']
         return g
 
     @staticmethod

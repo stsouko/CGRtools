@@ -379,7 +379,9 @@ class RXNRead:
         if self.__parser:
             if self.__parser(line):
                 self.__im = 4
-                self.__molecules.append(self.__parser.getvalue())
+                mol = self.__parser.getvalue()
+                mol['title'] = self.__title
+                self.__molecules.append(mol)
                 self.__parser = None
                 if len(self.__molecules) == self.__reagents_count:
                     self.__rend = True
@@ -396,6 +398,8 @@ class RXNRead:
                 raise ValueError('invalid RXN')
             self.__im = 3
         elif self.__im:
+            if self.__im == 3:
+                self.__title = line.strip()
             self.__im -= 1
         else:
             try:
@@ -459,6 +463,7 @@ class ERXNRead:
             else:
                 if x:
                     x = self.__parser.getvalue()
+                    x['title'] = ''
                     self.__in_mol -= 1
                     if self.__in_mol:
                         self.__parser = EMOLRead()
@@ -695,7 +700,7 @@ class MDLWrite:
         gc = g._charges
         gr = g._radicals
         props = []
-        out = [f'\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n']
+        out = [f'{g.name}\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n']
         for n, (m, a) in enumerate(g._atoms.items(), start=1):
             x, y = gp[m]
             c = gc[m]
