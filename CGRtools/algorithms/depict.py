@@ -190,6 +190,11 @@ class DepictMolecule(Depict):
         font6 = .6 * font
         font8 = .8 * font
 
+        # for cumulenes
+        cumulenes = {}
+        if self.cumulenes:
+            cumulenes = {y for x in self.cumulenes for y in x[1:-1] if len(x) > 2}
+
         svg = []
         maps = []
         mask = []
@@ -197,7 +202,8 @@ class DepictMolecule(Depict):
             x, y = plane[n]
             y = -y
             symbol = atom.atomic_symbol
-            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope:
+            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope \
+                    or n in cumulenes:
                 h = hydrogens[n]
                 if h == 1:
                     h = 'H'
@@ -689,6 +695,11 @@ class DepictQuery(Depict):
         font7 = .7 * font
         font8 = .8 * font
 
+        # for cumulenes
+        cumulenes = {}
+        if self.cumulenes:
+            cumulenes = {y for x in self.cumulenes for y in x[1:-1] if len(x) > 2}
+
         svg = []
         mask = []
         maps = []
@@ -699,7 +710,7 @@ class DepictQuery(Depict):
             y = -y
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
-            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
+            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical or n in cumulenes:
                 svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
                 svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
                            f'font-size="{font:.2f}">{symbol}</text>')
