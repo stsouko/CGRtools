@@ -31,6 +31,7 @@ main_atom_list = {'B': 11, 'C': 12, 'N': 14, 'O': 16, 'P': 31, 'S': 32, 'F': 19,
 bond_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '.': 8}
 dynamic_radical = {'^': False, '*': True}
 
+
 class IncorrectSmiles(ValueError):
     pass
 
@@ -103,7 +104,7 @@ class SMILESRead(CGRRead):
                     warning(f'invalid metadata entry: {x}')
 
             if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^'):
-                record = dict(reactants=[], reagents=[], products=[], meta=meta)
+                record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
                 try:
                     reactants, reagents, products = smi.split('>')
                 except ValueError:
@@ -145,6 +146,7 @@ class SMILESRead(CGRRead):
                     continue
 
                 record['meta'] = meta
+                record['title'] = ''
                 try:
                     yield self._convert_structure(record)
                 except ValueError:
