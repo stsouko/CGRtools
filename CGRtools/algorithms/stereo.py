@@ -21,7 +21,7 @@ from collections import defaultdict
 from itertools import combinations, product
 from logging import info
 from typing import Set, Tuple, Dict, Optional, Union
-from ..exceptions import AtomNotFound, NotChiral, IsChiral, ValenceError
+from ..exceptions import AtomNotFound, NotChiral, IsChiral
 
 
 def _pyramid_sign(n, u, v, w):
@@ -57,54 +57,66 @@ def _pyramid_sign(n, u, v, w):
     return 0
 
 
-def _dihedral_sign(n, u, v, w):
+def _cis_trans_sign(n, u, v, w):
+    # n      w
+    #  \    /
+    #   u--v
+    #  /    \
+    # x      x
+    nx, ny = n
+    ux, uy = u
+    vx, vy = v
+    wx, wy = w
+
+    q1x = ux - nx
+    q1y = uy - ny
+    q2x = vx - ux
+    q2y = vy - uy
+    q3x = wx - vx
+    q3y = wy - vy
+
+    # cross vectors
+    q1q2z = q1x * q2y - q1y * q2x
+    q2q3z = q2x * q3y - q2y * q3x
+
+    dot = q1q2z * q2q3z
+    if dot > 0:
+        return 1
+    elif dot < 0:
+        return -1
+    return 0
+
+
+def _allene_sign(n, u, v, w):
     # n    w
     # |   /
     # u--v
     nx, ny, nz = n
-    ux, uy, uz = u
-    vx, vy, vz = v
+    ux, uy = u
+    vx, vy = v
     wx, wy, wz = w
 
     q1x = ux - nx
     q1y = uy - ny
-    q1z = uz - nz
+    q1z = -nz
     q2x = vx - ux
     q2y = vy - uy
-    q2z = vz - uz
     q3x = wx - vx
     q3y = wy - vy
-    q3z = wz - vz
+    q3z = wz
 
     # cross vectors
-    q1q2x = q1y * q2z - q1z * q2y
-    q1q2y = q1z * q2x - q1x * q2z
+    q1q2x = -q1z * q2y
+    q1q2y = q1z * q2x
     q1q2z = q1x * q2y - q1y * q2x
-    q2q3x = q2y * q3z - q2z * q3y
-    q2q3y = q2z * q3x - q2x * q3z
+    q2q3x = q2y * q3z
+    q2q3y = -q2x * q3z
     q2q3z = q2x * q3y - q2y * q3x
 
-    # angle calculation
-    # len_q1q2 = sqrt(q1q2x ** 2 + q1q2y ** 2 + q1q2z ** 2)
-    # n1x = q1q2x / len_q1q2
-    # n1y = q1q2y / len_q1q2
-    # n1z = q1q2z / len_q1q2
-    # len_q2q3 = sqrt(q2q3x ** 2 + q2q3y ** 2 + q2q3z ** 2)
-    # u1x = q2q3x / len_q2q3
-    # u1y = q2q3y / len_q2q3
-    # u1z = q2q3z / len_q2q3
-    # len_q2 = sqrt(q2x ** 2 + q2y ** 2 + q2z ** 2)
-    # u3x = q2x / len_q2
-    # u3y = q2y / len_q2
-    # u3z = q2z / len_q2
-    # u2x = u3y * u1z - u3z * u1y
-    # u2y = u3z * u1x - u3x * u1z
-    # u2z = u3x * u1y - u3y * u1x
-    # cos_theta = n1x * u1x + n1y * u1y + n1z * u1z
-    # sin_theta = n1x * u2x + n1y * u2y + n1z * u2z
-    # return -atan2(sin_theta, cos_theta)
+    q1q2q3x = q1q2y * q2q3z - q1q2z * q2q3y
+    q1q2q3y = q1q2z * q2q3x - q1q2x * q2q3z
 
-    dot = q1q2x * q2q3x + q1q2y * q2q3y + q1q2z * q2q3z
+    dot = q1q2q3x * q2x + q1q2q3y * q2y
     if dot > 0:
         return 1
     elif dot < 0:
@@ -261,8 +273,7 @@ class Stereo:
         """
         dict of allenes centers valued with neighbors of terminal atoms
         """
-        return {path[len(path) // 2]: (path[0], path[-1], *env)
-                for path, env in self._cumulenes.items() if len(path) % 2}
+        return {path[len(path) // 2]: env for path, env in self._cumulenes.items() if len(path) % 2}
 
     @cached_property
     def _allenes_centers(self) -> Dict[int, int]:
@@ -322,14 +333,26 @@ class MoleculeStereo(Stereo):
 
                 order = self._allenes[c]
                 t1, t2 = self._allenes_terminals[c]
-
-                translate = (order.index(nn), order.index(nm))
-                s = _dihedral_sign((*plane[n1], 0), (*plane[t1], 0), (*plane[t2], 0), (*plane[m1], 0))
+                w = order.index(m)
+                if w == 0:
+                    m1 = order[1]
+                    r = False
+                elif w == 1:
+                    m1 = order[0]
+                    r = False
+                elif w == 2:
+                    m1 = order[1]
+                    r = True
+                else:
+                    m1 = order[0]
+                    r = True
+                s = _dihedral_sign((*plane[m], mark), (*plane[t1], 0), (*plane[t2], 0), (*plane[m1], 0))
                 if s:
-                    self._allenes_stereo[c] = s > 0
-
-            # only tetrahedrons and allenes supported
-            raise NotChiral
+                    self._allenes_stereo[c] = s < 0 if r else s > 0
+                    del self.__dict__['_MoleculeStereo__chiral_centers']
+            else:
+                # only tetrahedrons and allenes supported
+                raise NotChiral
 
     def calculate_cis_trans_from_2d(self):
         cis_trans_stereo = self._cis_trans_stereo
@@ -341,7 +364,7 @@ class MoleculeStereo(Stereo):
             for nm in self._chiral_cis_trans:
                 n, m = nm
                 n1, m1 = self._cis_trans[nm][:2]
-                s = _dihedral_sign((*plane[n1], 0), (*plane[n], 0), (*plane[m], 0), (*plane[m1], 0))
+                s = _cis_trans_sign(plane[n1], plane[n], plane[m], plane[m1])
                 if s:
                     stereo[(n, m)] = s > 0
             if stereo:
