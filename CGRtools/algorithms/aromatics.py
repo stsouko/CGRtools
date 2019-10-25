@@ -102,18 +102,22 @@ class Aromatize:
             copy._Aromatize__kekule_patch(form)
             yield copy
 
-    def __kekule_patch(self, patch):
-        bonds = self._bonds
-        atoms = set()
-        for n, m, b in patch:
-            bonds[n][m]._Bond__order = b
-            atoms.add(n)
-            atoms.add(m)
-        for n in atoms:
-            self._calc_hybridization(n)
-            self._calc_implicit(n)
+    def check_thiele(self, fast=True) -> bool:
+        """
+        check basic aromaticity errors of molecule.
 
-    def __kekule_full(self):
+        :param fast: don't try to solve kekule form
+        """
+        try:
+            if fast:
+                self.__prepare_rings()
+            else:
+                next(self.__kekule_full(), None)
+        except InvalidAromaticRing:
+            return False
+        return True
+
+    def __prepare_rings(self):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
@@ -215,7 +219,21 @@ class Aromatize:
                     raise InvalidAromaticRing
             else:
                 raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se possible, not: {atoms[n].atomic_symbol}')
+        return rings, pyroles, double_bonded
 
+    def __kekule_patch(self, patch):
+        bonds = self._bonds
+        atoms = set()
+        for n, m, b in patch:
+            bonds[n][m]._Bond__order = b
+            atoms.add(n)
+            atoms.add(m)
+        for n in atoms:
+            self._calc_hybridization(n)
+            self._calc_implicit(n)
+
+    def __kekule_full(self):
+        rings, pyroles, double_bonded = self.__prepare_rings()
         atoms = set(rings)
         components = []
         while atoms:
@@ -242,6 +260,8 @@ class Aromatize:
         size = sum(len(x) for x in rings.values()) // 2
         path = []
         hashed_path = set()
+        nether_yielded = True
+
         while stack:
             atom, prev_atom, bond, _ = stack[-1].pop()
             path.append((atom, prev_atom, bond))
@@ -249,6 +269,8 @@ class Aromatize:
 
             if len(path) == size:
                 yield path
+                if nether_yielded:
+                    nether_yielded = False
                 del stack[-1]
                 if stack:
                     path = path[:stack[-1][-1][-1]]
@@ -345,6 +367,9 @@ class Aromatize:
                     if stack:
                         path = path[:stack[-1][-1][-1]]
                         hashed_path = {x for x, *_ in path}
+
+        if nether_yielded:
+            raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
 
     @staticmethod
     def __component(bonds, start):
