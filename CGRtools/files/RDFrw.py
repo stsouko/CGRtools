@@ -108,6 +108,14 @@ class RDFRead(MDLRead):
                 return bisect_left(self._shifts, t) - 1
         raise self._implement_error
 
+    def __convert_reaction(self, record):
+        container = self._convert_reaction(record)
+        for mol, raw in zip(chain(container.reactants, container.products, container.reagents),
+                            chain(record['reactants'], record['products'], record['reagents'])):
+            if raw['title']:
+                mol.name = raw['title']
+        return container
+
     def __reader(self):
         record = parser = mkey = None
         failed = False
@@ -140,8 +148,9 @@ class RDFRead(MDLRead):
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
+                    record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -160,8 +169,9 @@ class RDFRead(MDLRead):
             elif line.startswith('$MFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
+                    record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -186,8 +196,10 @@ class RDFRead(MDLRead):
                     if data:
                         meta[mkey].append(data)
             elif ir:
+                if ir == 3:  # parse mol or rxn title
+                    title = line.strip()
                 ir -= 1
-            elif not ir:
+            else:
                 try:
                     if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
@@ -207,8 +219,9 @@ class RDFRead(MDLRead):
                     yield None
         if record:
             record['meta'] = self._prepare_meta(meta)
+            record['title'] = title
             try:
-                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
@@ -236,7 +249,7 @@ class RDFWrite(MDLWrite):
             self._file.write('$MFMT\n')
             self._file.write(m)
         elif isinstance(data, ReactionContainer):
-            self._file.write('$RFMT\n$RXN\n\n\n\n'
+            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n'
                              f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)

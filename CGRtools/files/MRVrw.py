@@ -206,10 +206,11 @@ class MRVRead(CGRRead):
                               'isotope': int(atom['@isotope']) if '@isotope' in atom else None,
                               'charge': int(atom.get('@formalCharge', 0)),
                               'is_radical': '@radical' in atom,
-                              'mapping': int(atom.get('@mrvMap', 0)),
-                              'x': float(atom['@x3'] if '@x3' in atom else atom['@x2'] / 2),
-                              'y': float(atom['@y3'] if '@y3' in atom else atom['@y2'] / 2),
-                              'z': float(atom['@z3'] if '@z3' in atom else 0.)})
+                              'mapping': int(atom.get('@mrvMap', 0))})
+                if '@z3' in atom:
+                    atoms[-1].update(x=float(atom['@x3']), y=float(atom['@y3']), z=float(atom['@z3']))
+                else:
+                    atoms[-1].update(x=float(atom['@x2']) / 2, y=float(atom['@y2']) / 2, z=0.)
                 if '@mrvQueryProps' in atom:
                     if atom['@mrvQueryProps'][0] == 'L':
                         al = atom['@mrvQueryProps']
@@ -414,8 +415,8 @@ class MRVWrite:
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
 
-            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0]:.4f}" y1="1" x2="{data._arrow[1]:.4f}" '
-                             f'y2="1"/>')
+            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0] * 2:.4f}" y1="0" '
+                             f'x2="{data._arrow[1] * 2:.4f}" y2="0"/>')
             self._file.write('</reaction>')
         self._file.write('</MChemicalStruct></MDocument>\n')
 

@@ -20,13 +20,14 @@ from typing import List, Tuple, Union, Dict
 from . import cgr, molecule  # cyclic imports resolve
 from .bonds import Bond
 from .common import Graph
+from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement, AnyElement
 
 
-class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
+class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, DepictQuery):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo')
 
     def __init__(self):
@@ -208,6 +209,11 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, DepictQuery):
     def get_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer'], **kwargs):
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
             return super().get_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer or QueryContainer expected')
+
+    def get_mcs_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer'], **kwargs):
+        if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
+            return super().get_mcs_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
 
     @staticmethod

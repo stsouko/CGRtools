@@ -61,6 +61,9 @@ class CGRPreparer:
 
     @staticmethod
     def decompose(data):
+        """
+        decompose CGR into reaction
+        """
         if not isinstance(data, CGRContainer):
             raise TypeError('CGR only supported')
         r, p = ~data

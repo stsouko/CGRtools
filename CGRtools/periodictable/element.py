@@ -316,9 +316,11 @@ class Element(Core):
 
         rules = defaultdict(list)
         if self._common_valences[0]:  # atom has implicit hydrogens by default
+            prev = -1
             for valence in self._common_valences:
-                for h in range(valence + 1):
+                for h in range(valence - prev):
                     rules[(0, False, valence - h)].append((set(), {}, h))  # any atoms and bonds possible
+                prev = valence
         else:
             for valence in self._common_valences:
                 rules[(0, False, valence)].append((set(), {}, 0))  # any atoms and bonds possible

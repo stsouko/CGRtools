@@ -23,6 +23,7 @@ from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
+from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
@@ -31,7 +32,8 @@ from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, DepictMolecule):
+class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
+                        DepictMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
@@ -385,6 +387,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer expected')
 
+    def get_mcs_mapping(self, other: 'MoleculeContainer', **kwargs):
+        if isinstance(other, MoleculeContainer):
+            return super().get_mcs_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer expected')
+
     def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogen if possible
@@ -496,67 +503,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def __float__(self):
         return self.molecular_mass
-
-    @cached_property
-    def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
-        """
-        aromatic rings atoms numbers
-        """
-        bonds = self._bonds
-        return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
-                     and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:])))
-
-    @cached_property
-    def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
-        """
-        alkenes, allenes and cumulenes atoms numbers
-        """
-        atoms = self._atoms
-        bonds = self._bonds
-        adj = defaultdict(set)  # carbon double bonds adjacency matrix
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6:
-                adj_n = adj[n].add
-                b_sum = 0
-                for m, bond in bonds[n].items():
-                    b_sum += bond.order
-                    if bond.order == 2 and atoms[m].atomic_number == 6:
-                        adj_n(m)
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-        if not adj:
-            return ()
-
-        terminals = {x for x, y in adj.items() if len(y) == 1}
-        cumulenes = []
-        while terminals:
-            m = terminals.pop()
-            path = [m]
-            while m not in terminals:
-                n, m = m, adj[m].pop()
-                adj[m].discard(n)
-                path.append(m)
-            terminals.discard(m)
-            cumulenes.append(tuple(path))
-        return tuple(cumulenes)
-
-    @cached_property
-    def tetrahedrons(self) -> Tuple[int, ...]:
-        """
-        carbon sp3 atoms numbers
-        """
-        atoms = self._atoms
-        bonds = self._bonds
-        tetra = []
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6 and not self._charges[n]:
-                env = bonds[n]
-                b_sum = sum(x.order for x in env.values())
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-                elif all(x.order == 1 for x in env.values()):
-                    tetra.append(n)
-        return tuple(tetra)
 
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:

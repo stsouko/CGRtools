@@ -38,10 +38,10 @@ class ReactionContainer(DepictReaction):
     for reactions with query containers hash and comparison may give errors due to non-uniqueness.
     query containers itself not support hashing and comparison.
     """
-    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '_arrow', '__dict__')
+    __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
-                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None):
+                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
         """
         new empty or filled reaction object creation
 
@@ -67,7 +67,30 @@ class ReactionContainer(DepictReaction):
             self.__meta = {}
         else:
             self.__meta = dict(meta)
+        if name is None:
+            self.__name = ''
+        else:
+            self.name = name
         self._arrow = None
+        self._signs = None
+
+    @classmethod
+    def from_cgr(cls, cgr: CGRContainer) -> 'ReactionContainer':
+        """
+        decompose CGR into reaction
+        """
+        if not isinstance(cgr, CGRContainer):
+            raise TypeError('CGR expected')
+        r, p = ~cgr
+        reaction = object.__new__(cls)
+        reaction._ReactionContainer__reactants = tuple(r.split())
+        reaction._ReactionContainer__products = tuple(p.split())
+        reaction._ReactionContainer__reagents = ()
+        reaction._ReactionContainer__meta = cgr._Graph__meta.copy()
+        reaction._ReactionContainer__name = cgr._Graph__name
+        reaction._arrow = None
+        reaction._signs = None
+        return reaction
 
     def __getitem__(self, item):
         if item in ('reactants', 0):
@@ -78,10 +101,13 @@ class ReactionContainer(DepictReaction):
             return self.__reagents
         elif item == 'meta':
             return self.__meta
+        elif item == 'name':
+            return self.__name
         raise KeyError('invalid attribute')
 
     def __getstate__(self):
-        return dict(reactants=self.__reactants, products=self.__products, reagents=self.__reagents, meta=self.__meta)
+        return dict(reactants=self.__reactants, products=self.__products, reagents=self.__reagents, meta=self.__meta,
+                    name=self.__name)
 
     def __setstate__(self, state):
         if next(iter(state)) == 'reagents':  # 3.0 compatibility
@@ -90,7 +116,9 @@ class ReactionContainer(DepictReaction):
         self.__products = state['products']
         self.__reagents = state['reagents']
         self.__meta = state['meta']
+        self.__name = state.get('name')  # 4.0.9 compatibility
         self._arrow = None
+        self._signs = None
 
     @property
     def reactants(self) -> Tuple[Graph, ...]:
@@ -112,15 +140,62 @@ class ReactionContainer(DepictReaction):
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
 
+    @property
+    def name(self):
+        return self.__name
+
+    @name.setter
+    def name(self, name):
+        if not isinstance(name, str):
+            raise TypeError('name should be string up to 80 symbols')
+        if len(name) > 80:
+            raise ValueError('name should be string up to 80 symbols')
+        self.__name = name
+
     def copy(self) -> 'ReactionContainer':
         """
         get copy of object
 
         :return: ReactionContainer
         """
-        return self.__class__(reagents=(x.copy() for x in self.__reagents), meta=self.__meta.copy(),
-                              products=(x.copy() for x in self.__products),
-                              reactants=(x.copy() for x in self.__reactants))
+        copy = object.__new__(self.__class__)
+        copy._ReactionContainer__reactants = tuple(x.copy() for x in self.__reactants)
+        copy._ReactionContainer__products = tuple(x.copy() for x in self.__products)
+        copy._ReactionContainer__reagents = tuple(x.copy() for x in self.__reagents)
+        copy._ReactionContainer__meta = self.__meta.copy()
+        copy._ReactionContainer__name = self.__name
+        copy._arrow = self._arrow
+        copy._signs = self._signs
+        return copy
+
+    @property
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        union reaction centers by leaving or substitute group
+
+        :return: list of reaction centers
+        """
+        reactants = reduce(or_, self.__reactants)
+        products = reduce(or_, self.__products)
+        cgr = reactants ^ products
+        all_atoms = set(reactants) ^ set(products)
+        all_groups = cgr.substructure(all_atoms).connected_components
+        new_centers_list = list(cgr.centers_list)
+
+        for x in all_groups:
+            x = set(x)
+            intersection = []
+            for i, y in enumerate(new_centers_list):
+                if not x.isdisjoint(y):
+                    intersection.append(i)
+
+            if len(intersection) > 1:
+                union = []
+                for i in reversed(intersection):
+                    union.extend(new_centers_list.pop(i))
+                new_centers_list.append(union)
+
+        return tuple(tuple(x) for x in new_centers_list)
 
     def implicify_hydrogens(self) -> int:
         """
@@ -231,14 +306,20 @@ class ReactionContainer(DepictReaction):
         fix coordinates of molecules in reaction
         """
         shift_x = 0
-        for m in self.__reactants:
-            max_x = self.__fix_positions(m, shift_x, 0)
+        reactants = self.__reactants
+        amount = len(reactants) - 1
+        signs = []
+        for m in reactants:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         arrow_min = shift_x
 
         if self.__reagents:
             for m in self.__reagents:
-                max_x = self.__fix_positions(m, shift_x, 1.5)
+                max_x = self.__fix_reagent_positions(m, shift_x)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
@@ -246,20 +327,56 @@ class ReactionContainer(DepictReaction):
             shift_x += 3
         arrow_max = shift_x - 1
 
-        for m in self.__products:
-            max_x = self.__fix_positions(m, shift_x, 0)
+        products = self.__products
+        amount = len(products) - 1
+        for m in products:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                signs.append(max_x)
+                amount -= 1
             shift_x = max_x + 1
         self._arrow = (arrow_min, arrow_max)
+        self._signs = tuple(signs)
         self.flush_cache()
 
     @staticmethod
-    def __fix_positions(molecule, shift_x, shift_y):
+    def __fix_reagent_positions(molecule, shift_x):
         plane = molecule._plane
-        min_x = min(x for x, _ in plane.values()) - shift_x
-        max_x = max(x for x, _ in plane.values()) - min_x
-        min_y = min(y for _, y in plane.values()) - shift_y
+        shift_y = .5
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+        max_x = max(x for x, _ in values) - min_x
+        min_y = min(y for _, y in values) - shift_y
         for n, (x, y) in plane.items():
             plane[n] = (x - min_x, y - min_y)
+        return max_x
+
+    @staticmethod
+    def __fix_positions(molecule, shift_x):
+        plane = molecule._plane
+        atoms = molecule._atoms
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+        max_x = right_atom_plane[0]
+        max_x -= min_x
+
+        min_y = min(y for _, y in values)
+        max_y = max(y for _, y in values)
+        mean_y = (max_y + min_y) / 2
+        for n, (x, y) in plane.items():
+            plane[n] = (x - min_x, y - mean_y)
+
+        r_y = plane[right_atom][1]
+        if isinstance(molecule, MoleculeContainer) and len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18:
+            factor = molecule._hydrogens[right_atom]
+            if factor == 1:
+                max_x += .15
+            elif factor:
+                max_x += .25
         return max_x
 
     def __eq__(self, other):
