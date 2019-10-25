@@ -240,6 +240,7 @@ class Calculate2D:
         plane = self._plane
         atoms = self._atoms
         bonds = self._bonds
+        atoms_order = self.atoms_order
 
         dx, dy = n_dist / 2, n_dist * sin(pi / 3)
         components = {k: set(v) for k, v in bonds.items()}
@@ -384,10 +385,13 @@ class Calculate2D:
                     stack[-1].append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
                     stack[-1].append((next_atom3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), ll))
                     for combination in combinations:
-                        next_atom1, next_atom2, next_atom3 = combination
-                        opposite1.append((next_atom1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
-                        opposite1.append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
-                        opposite1.append((next_atom3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), ll))
+                        nxt_atm1, nxt_atm2, nxt_atm3 = combination
+                        if atoms_order[next_atom1] == atoms_order[nxt_atm1] \
+                                or atoms_order[next_atom3] == atoms_order[nxt_atm3]:
+                            continue
+                        opposite1.append((nxt_atm1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
+                        opposite1.append((nxt_atm2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
+                        opposite1.append((nxt_atm3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), ll))
                         stack.append(opposite1)
                         opposite1 = opposite2.copy()
 
