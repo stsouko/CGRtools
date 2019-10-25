@@ -108,14 +108,6 @@ class RDFRead(MDLRead):
                 return bisect_left(self._shifts, t) - 1
         raise self._implement_error
 
-    def __convert_reaction(self, record):
-        container = self._convert_reaction(record)
-        for mol, raw in zip(chain(container.reactants, container.products, container.reagents),
-                            chain(record['reactants'], record['products'], record['reagents'])):
-            if raw['title']:
-                mol.name = raw['title']
-        return container
-
     def __reader(self):
         record = parser = mkey = None
         failed = False
@@ -150,7 +142,7 @@ class RDFRead(MDLRead):
                     record['meta'] = self._prepare_meta(meta)
                     record['title'] = title
                     try:
-                        seek = yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -171,7 +163,7 @@ class RDFRead(MDLRead):
                     record['meta'] = self._prepare_meta(meta)
                     record['title'] = title
                     try:
-                        seek = yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -221,7 +213,7 @@ class RDFRead(MDLRead):
             record['meta'] = self._prepare_meta(meta)
             record['title'] = title
             try:
-                yield self.__convert_reaction(record) if is_reaction else self._convert_structure(record)
+                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None

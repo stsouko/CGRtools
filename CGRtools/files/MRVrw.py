@@ -158,7 +158,7 @@ class MRVRead(CGRRead):
                 warning('invalid MDocument')
 
     def __parse_reaction(self, data):
-        reaction = dict(reactants=[], products=[], reagents=[])
+        reaction = dict(reactants=[], products=[], reagents=[], title=data.get('@title', ''))
         for tag, group in (('reactantList', 'reactants'), ('productList', 'products'), ('agentList', 'reagents')):
             if tag in data and 'molecule' in data[tag]:
                 molecule = data[tag]['molecule']
@@ -315,7 +315,7 @@ class MRVRead(CGRRead):
                     else:
                         warning(f'ignored data: {cgr_dat}')
         return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': atoms_lists, 'cgr': cgr, 'stereo': stereo,
-                'query': query}
+                'query': query, 'title': data.get('@title', '')}
 
     __bond_map = {'Any': 8, 'any': 8, 'A': 4, 'a': 4, '1': 1, '2': 2, '3': 3}
     __radical_map = {'monovalent': 2, 'divalent': 1, 'divalent1': 1, 'divalent3': 3}
@@ -381,7 +381,11 @@ class MRVWrite:
         self._file.write('<MDocument><MChemicalStruct>')
 
         if isinstance(data, Graph):
-            self._file.write('<molecule>')
+            if data.name:
+                self._file.write(f'<molecule title="{data.name}">')
+            else:
+                self._file.write('<molecule>')
+
             if data.meta:
                 self._file.write('<propertyList>')
                 for k, v in data.meta.items():
@@ -395,7 +399,11 @@ class MRVWrite:
             if not data._arrow:
                 data.fix_positions()
 
-            self._file.write('<reaction>')
+            if data.name:
+                self._file.write(f'<reaction title="{data.name}">')
+            else:
+                self._file.write('<reaction>')
+
             if data.meta:
                 self._file.write('<propertyList>')
                 for k, v in data.meta.items():
@@ -410,7 +418,10 @@ class MRVWrite:
                     continue
                 self._file.write(f'<{j}>')
                 for n, m in zip(c, i):
-                    self._file.write(f'<molecule molID="m{n}">')
+                    if m.name:
+                        self._file.write(f'<molecule title="{m.name}" molID="m{n}">')
+                    else:
+                        self._file.write(f'<molecule molID="m{n}">')
                     self._file.write(self.__convert_structure(m))
                     self._file.write('</molecule>')
                 self._file.write(f'</{j}>')
