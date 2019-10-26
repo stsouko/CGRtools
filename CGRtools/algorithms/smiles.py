@@ -98,8 +98,19 @@ class Smiles:
         while True:
             start = min(atoms_set, key=weights)
 
+            seen = {start: 0}
+            queue = [(start, 1)]
+            while queue:
+                n, d = queue.pop(0)
+                for m in bonds[n].keys() - seen.keys():
+                    queue.append((m, d + 1))
+                    seen[m] = d
+
+            def mod_weights(x):
+                return weights(x), seen[x]
+
             # modified NX dfs with cycle detection
-            stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=weights)))]
+            stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=mod_weights)))]
             visited = {start: []}  # predecessors for stereo. atom: (visited[atom], *edges[atom])
             disconnected = set()
             edges = defaultdict(list)
@@ -117,7 +128,7 @@ class Smiles:
                         if depth_now > 1:
                             front = bonds[child].keys() - {parent}
                             if front:
-                                stack.append((child, depth_now - 1, iter(sorted(front, key=weights))))
+                                stack.append((child, depth_now - 1, iter(sorted(front, key=mod_weights))))
                     elif child not in disconnected:
                         disconnected.add(parent)
                         cycle = next(cycles)
