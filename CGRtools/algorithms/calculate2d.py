@@ -268,6 +268,7 @@ class Calculate2D:
 
             if len(path) == size:
                 bad_points = False
+                cross = False
                 for k, v in plane.items():
                     kx, ky = v
                     for key, value in plane.items():
@@ -277,7 +278,18 @@ class Calculate2D:
                         d_x, d_y = abs(kx - key_x), abs(ky - key_y)
                         if d_x < .1 and d_y < .1:
                             bad_points = True
-                if not bad_points:
+
+                # _bonds = list(self.bonds())
+                # for i, triple in enumerate(_bonds):
+                #     n, m, bond = triple
+                #     nx, ny = plane[n]
+                #     mx, my = plane[m]
+                #     for _triple in _bonds[i:]:
+                #         _n, _m, _bond = _triple
+                #         _nx, _ny = plane[_n]
+                #         _mx, _my = plane[_m]
+
+                if not bad_points and not cross:
                     yield path
                 del stack[-1]
                 if stack:
@@ -299,8 +311,28 @@ class Calculate2D:
                     else:
                         for_stack.append(next_atom)
 
-                neighbors = len(for_stack)
-                if neighbors == 1:  # easy path grow. next bond double or include single for pyroles
+                if loop:
+                    for_stack.remove(loop)
+                    sx, sy = plane[start]
+                    lp = len(path)
+                    vx1, vy1 = rotate_vector(dx, dy, vx, vy)
+                    vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
+                    nx1, ny1 = vx1 + mx, vy1 + my
+                    mx2, my2 = vx2 + mx, vy2 + my
+                    d1_x, d2_x = abs(nx1 - sx), abs(ny1 - sy)
+                    d1_y, d2_y = abs(mx2 - sx), abs(my2 - sy)
+                    if d1_x < .001 and d1_y < .001:
+                        stack[-1].append((loop, atom, bond2, (nx1, ny1), (vx, vy), lp))
+                    elif d2_x < .001 and d2_y < .001:
+                        stack[-1].append((loop, atom, bond2, (mx2, my2), (vx, vy), lp))
+                    else:
+                        del stack[-1]
+                        if stack:
+                            path = path[:stack[-1][-1][-1]]
+                            hashed_path = {x for x, *_ in path}
+
+                elif len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
+                    lp = len(path)
                     next_atom = for_stack[0]
                     opposite = stack[-1].copy()
                     vx1, vy1 = rotate_vector(dx, dy, vx, vy)
@@ -330,14 +362,15 @@ class Calculate2D:
                             path = path[:stack[-1][-1][-1]]
                             hashed_path = {x for x, *_ in path}
                     elif new_coords:
-                        stack[-1].append((next_atom, atom, bond2, new_coords, (vx, vy), len(path)))
+                        stack[-1].append((next_atom, atom, bond2, new_coords, (vx, vy), lp))
                     else:
-                        stack[-1].append((next_atom, atom, bond2, new_coords1, (vx, vy), len(path)))
+                        stack[-1].append((next_atom, atom, bond2, new_coords1, (vx, vy), lp))
                         if not self.towards(bond2, bonds[atom][next_atom].order):
-                            opposite.append((next_atom, atom, bond2, new_coords2, (vx, vy), len(path)))
+                            opposite.append((next_atom, atom, bond2, new_coords2, (vx, vy), lp))
                             stack.append(opposite)
 
-                elif neighbors == 2:  # fork
+                elif len(for_stack) == 2:  # fork
+                    lp = len(path)
                     next_atom1, next_atom2 = for_stack
                     opposite = stack[-1].copy()
                     vx1, vy1 = rotate_vector(dx, dy, vx, vy)
@@ -362,14 +395,15 @@ class Calculate2D:
                             hashed_path = {x for x, *_ in path}
                     else:
                         stack[-1].append((next_atom1, atom, bond2, new_coords1, (vx1, vy1), None))
-                        stack[-1].append((next_atom2, atom, bond2, new_coords2, (vx2, vy2), len(path)))
+                        stack[-1].append((next_atom2, atom, bond2, new_coords2, (vx2, vy2), lp))
                         if not self.towards(bond2, bonds[atom][next_atom1].order) and \
-                                not self.towards(bond2, bonds[atom][next_atom2].order):
+                                not self.towards(bond2, bonds[atom][next_atom2].order) and \
+                                atoms_order[next_atom1] != atoms_order[next_atom2]:
                             opposite.append((next_atom1, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
-                            opposite.append((next_atom2, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), len(path)))
+                            opposite.append((next_atom2, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), lp))
                             stack.append(opposite)
 
-                elif neighbors == 3:
+                elif len(for_stack) == 3:
                     dx1, dx2, dx3 = 0, .825, 0
                     dy1, dy2, dy3 = .825, 0, -.825
                     combinations = permutations(for_stack)
@@ -377,23 +411,24 @@ class Calculate2D:
                     vx2, vy2 = rotate_vector(dx2, dy2, vx, vy)
                     vx3, vy3 = rotate_vector(dx3, dy3, vx, vy)
 
+                    opposite = stack[-1].copy()
                     opposite1 = stack[-1].copy()
-                    opposite2 = stack[-1].copy()
-                    ll = len(path)
+                    lp = len(path)
                     next_atom1, next_atom2, next_atom3 = next(combinations)
                     stack[-1].append((next_atom1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
                     stack[-1].append((next_atom2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
-                    stack[-1].append((next_atom3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), ll))
+                    stack[-1].append((next_atom3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), lp))
                     for combination in combinations:
                         nxt_atm1, nxt_atm2, nxt_atm3 = combination
                         if atoms_order[next_atom1] == atoms_order[nxt_atm1] \
-                                or atoms_order[next_atom3] == atoms_order[nxt_atm3]:
+                                or atoms_order[next_atom1] == atoms_order[nxt_atm2] \
+                                or atoms_order[next_atom1] == atoms_order[nxt_atm3]:
                             continue
-                        opposite1.append((nxt_atm1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
-                        opposite1.append((nxt_atm2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
-                        opposite1.append((nxt_atm3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), ll))
-                        stack.append(opposite1)
-                        opposite1 = opposite2.copy()
+                        opposite.append((nxt_atm1, atom, bond2, (vx1 + mx, vy1 + my), (vx1, vy1), None))
+                        opposite.append((nxt_atm2, atom, bond2, (vx2 + mx, vy2 + my), (vx2, vy2), None))
+                        opposite.append((nxt_atm3, atom, bond2, (vx3 + mx, vy3 + my), (vx3, vy3), lp))
+                        stack.append(opposite)
+                        opposite = opposite1.copy()
 
                 elif closures:
                     atom_x, atom_y = plane[atom]
