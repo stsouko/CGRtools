@@ -487,8 +487,9 @@ query_patch['N2;3'].extend(_prepare([(b1, n21), (b3, n1_)],
                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
 
 # 29
+# Carbon Monoxide
 #
-# ↑↑C = O  >> С- # O+
+# [CX1] = O  >> С- # O+
 #
 c_co = QueryAtom()
 o_co = QueryAtom()
@@ -499,20 +500,5 @@ central['C1;2;3'] = c_co
 query_patch['C1;2;3'].extend(_prepare([(b2, o_co)],
                                       [{'charge': -1, '_hybridization': 3, 'multiplicity': None},
                                        ({'order': 3}, {'charge': 1, '_hybridization': 3})]))
-
-# 30
-#
-# ↑↑C - O  >> С- # O+
-#
-c_co2 = QueryAtom()
-o_co2 = QueryAtom()
-c_co2.update(element='C', neighbors=1, hybridization=1, multiplicity=3)
-o_co2.update(element='O', neighbors=1, hybridization=1)
-central['C1;1;3'] = c_co2
-
-query_patch['C1;1;3'].extend(_prepare([(b1, o_co2)],
-                                      [{'charge': -1, '_hybridization': 3, 'multiplicity': None},
-                                       ({'order': 3}, {'charge': 1, '_hybridization': 3})]))
-
 
 __all__ = ['Standardize']
