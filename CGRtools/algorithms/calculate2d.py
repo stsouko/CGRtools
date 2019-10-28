@@ -321,10 +321,10 @@ class Calculate2D:
                     mx2, my2 = vx2 + mx, vy2 + my
                     d1_x, d2_x = abs(nx1 - sx), abs(ny1 - sy)
                     d1_y, d2_y = abs(mx2 - sx), abs(my2 - sy)
-                    if d1_x < .001 and d1_y < .001:
-                        stack[-1].append((loop, atom, bond2, (nx1, ny1), (vx, vy), lp))
-                    elif d2_x < .001 and d2_y < .001:
-                        stack[-1].append((loop, atom, bond2, (mx2, my2), (vx, vy), lp))
+                    if d1_x < .1 and d1_y < .1:
+                        stack[-1].append((loop, atom, bond2, (sx, sy), (vx, vy), lp))
+                    elif d2_x < .1 and d2_y < .1:
+                        stack[-1].append((loop, atom, bond2, (sx, sy), (vx, vy), lp))
                     else:
                         del stack[-1]
                         if stack:
@@ -348,13 +348,13 @@ class Calculate2D:
                         n2_x, n2_y = new_coords2
                         d1_x, d2_x = abs(n1_x - v_x), abs(n2_x - v_x)
                         d1_y, d2_y = abs(n1_y - v_y), abs(n2_y - v_y)
-                        if d1_x < .1 and d1_y < .1:
+                        if d1_x < .3 and d1_y < .3:
                             new_coords = new_coords2
-                            if d2_x < .1 and d2_y < .1:
+                            if d2_x < .3 and d2_y < .3:
                                 new_coords = None
-                        elif d2_x < .1 and d2_y < .1:
+                        elif d2_x < .3 and d2_y < .3:
                             new_coords = new_coords1
-                            if d1_x < .1 and d1_y < .1:
+                            if d1_x < .3 and d1_y < .3:
                                 new_coords = None
                     if new_coords is None:
                         del stack[-1]
