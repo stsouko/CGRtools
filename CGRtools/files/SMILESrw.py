@@ -95,7 +95,7 @@ class SMILESRead(CGRRead):
                     warning(f'invalid metadata entry: {x}')
 
             if '>' in smi:
-                record = dict(reactants=[], reagents=[], products=[], meta=meta)
+                record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
                 try:
                     reactants, reagents, products = smi.split('>')
                 except ValueError:
@@ -149,7 +149,7 @@ class SMILESRead(CGRRead):
                            'is_radical': False}
                           for a in self.__parser.atoms],
                 'bonds': [(b['atom0'], b['atom1'], self.__bond_map[b['order']]) for b in self.__parser.bonds],
-                'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': []}
+                'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': [], 'title': ''}
 
     __bond_map = {1: 1, 2: 2, 3: 3, 5: 4}
 
