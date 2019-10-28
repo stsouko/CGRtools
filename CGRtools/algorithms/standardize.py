@@ -414,6 +414,18 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Carbon Monoxide
+        #
+        # [CX1] = O  >> С- # O+
+        #
+
+        atoms = ({'atom': 'C', 'neighbors': 1, 'hybridization': 2, 'is_radical': True},
+                 {'atom': 'O', 'neighbors': 1, 'hybridization': 2})
+        bonds = ((1, 2, 2), )
+        atom_fix = {1: {'charge': -1, 'hybridization': 3, 'radical': False}, 2: {'charge': 1, 'hybridization': 3}}
+        bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         return rules
 
 
