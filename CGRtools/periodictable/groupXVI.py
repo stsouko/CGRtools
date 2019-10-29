@@ -71,6 +71,8 @@ class S(Element, PeriodIII, GroupXVI):
     @property
     def _valences_exceptions(self):
         return ((-1, False, 1, ()), (-2, False, 0, ()),
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'N'))),
                 (0, False, 0, ((2, 'O'), (2, 'C'))),
@@ -139,6 +141,8 @@ class Se(Element, PeriodIV, GroupXVI):
     @property
     def _valences_exceptions(self):
         return ((-1, False, 1, ()),
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'S'), (2, 'S'))),
 
@@ -173,7 +177,9 @@ class Te(Element, PeriodV, GroupXVI):
 
     @property
     def _valences_exceptions(self):
-        return ((0, False, 0, ((2, 'O'), (2, 'O'))),
+        return ((1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'))),
 
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),
