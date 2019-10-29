@@ -148,7 +148,7 @@ class Aromatize:
         double_bonded &= rings.keys()
         if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
             raise InvalidAromaticRing('quinone valence error')
-        if any(atoms[n].atomic_number not in (6, 15, 16, 24) or charges[n] for n in double_bonded):
+        if any(atoms[n].atomic_number not in (6, 15, 16, 34) or charges[n] for n in double_bonded):
             raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
 
         for n in rings:
@@ -203,7 +203,7 @@ class Aromatize:
                     double_bonded.add(n)
                 else:
                     raise InvalidAromaticRing
-            elif an in (16, 24):  # thiophene [not sulphoxyde or sulphone]
+            elif an in (16, 34):  # thiophene [not sulphoxyde or sulphone]
                 if n not in double_bonded:
                     if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
                         double_bonded.add(n)
