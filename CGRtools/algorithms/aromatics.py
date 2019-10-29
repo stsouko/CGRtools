@@ -124,6 +124,8 @@ class Aromatize:
         bonds = self._bonds
 
         rings = defaultdict(set)  # aromatic skeleton
+        pyroles = set()
+
         double_bonded = set()
         triple_bonded = set()
         for n, m_bond in bonds.items():
@@ -135,8 +137,9 @@ class Aromatize:
                     double_bonded.add(n)
                 elif bo == 3:
                     triple_bonded.add(n)
+
         if not rings:
-            return
+            return rings, pyroles, double_bonded
         elif not triple_bonded.isdisjoint(rings):
             raise InvalidAromaticRing('triple bonds connected to rings')
         elif any(len(ms) not in (2, 3) for ms in rings.values()):
@@ -148,7 +151,6 @@ class Aromatize:
         if any(atoms[n].atomic_number not in (6, 15, 16, 24) or charges[n] for n in double_bonded):
             raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
 
-        pyroles = set()
         for n in rings:
             an = atoms[n].atomic_number
             ac = charges[n]
