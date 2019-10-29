@@ -139,7 +139,7 @@ class Aromatize:
                     triple_bonded.add(n)
 
         if not rings:
-            return rings, pyroles, double_bonded
+            return rings, pyroles, set()
         elif not triple_bonded.isdisjoint(rings):
             raise InvalidAromaticRing('triple bonds connected to rings')
         elif any(len(ms) not in (2, 3) for ms in rings.values()):
@@ -148,8 +148,8 @@ class Aromatize:
         double_bonded &= rings.keys()
         if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
             raise InvalidAromaticRing('quinone valence error')
-        if any(atoms[n].atomic_number not in (6, 15, 16, 34) or charges[n] for n in double_bonded):
-            raise InvalidAromaticRing('quinone should be neutral S, Se, C, P atom')
+        if any(atoms[n].atomic_number not in (6, 15, 16, 34, 52) or charges[n] for n in double_bonded):
+            raise InvalidAromaticRing('quinone should be neutral S, Se, Te, C, P atom')
 
         for n in rings:
             an = atoms[n].atomic_number
@@ -183,7 +183,7 @@ class Aromatize:
                         double_bonded.add(n)
                     elif ab == 2:
                         pyroles.add(n)
-                    else:
+                    elif ab != 4 or an != 15:  # P(V) in ring
                         raise InvalidAromaticRing
                 elif ac == -1:  # pyrole only
                     if ab != 2 or radicals[n]:
@@ -203,12 +203,20 @@ class Aromatize:
                     double_bonded.add(n)
                 else:
                     raise InvalidAromaticRing
-            elif an in (16, 34):  # thiophene [not sulphoxyde or sulphone]
-                if n not in double_bonded:
-                    if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
-                        double_bonded.add(n)
+            elif an in (16, 34, 52):  # thiophene
+                if n not in double_bonded:  # not sulphoxyde or sulphone
+                    if ab == 2:
+                        if radicals[n]:
+                            if ac == 1:
+                                double_bonded.add(n)
+                            else:
+                                raise InvalidAromaticRing('S, Se, Te cation-radical expected')
+                        if ac == 0:
+                            double_bonded.add(n)
+                        elif ac != 1:
+                            raise InvalidAromaticRing('S, Se, Te cation in benzene like ring expected')
                     else:
-                        raise InvalidAromaticRing
+                        raise InvalidAromaticRing('S, Se, Te hypervalent ring')
             elif an == 5:  # boron
                 if ac == 0:
                     if ab == 3 and not radicals[n] or ab == 2:
@@ -220,7 +228,7 @@ class Aromatize:
                 else:
                     raise InvalidAromaticRing
             else:
-                raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se possible, not: {atoms[n].atomic_symbol}')
+                raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se, Te possible, not: {atoms[n].atomic_symbol}')
         return rings, pyroles, double_bonded
 
     def __kekule_patch(self, patch):
@@ -256,7 +264,10 @@ class Aromatize:
             start = next(iter(double_bonded))
             stack = [[(next(iter(rings[start])), start, 1, 0)]]
         else:  # select not pyrole not condensed atom
-            start = next(n for n, ms in rings.items() if len(ms) == 2 and n not in pyroles)
+            try:
+                start = next(n for n, ms in rings.items() if len(ms) == 2 and n not in pyroles)
+            except StopIteration:  # all pyroles
+                start = next(n for n, ms in rings.items() if len(ms) == 2)
             stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
 
         size = sum(len(x) for x in rings.values()) // 2
