@@ -61,21 +61,17 @@ class Calculate2D:
 
     def clean2d(self):
         plane = self._plane
-        atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
 
+        size = len(list(bonds.values()))
         dx, dy = n_dist / 2, n_dist * sin(pi / 3)
         components = {k: set(v) for k, v in bonds.items()}
-        try:
-            start = next(n for n, ms in components.items() if len(ms) == 1)
-        except StopIteration:
-            start = next(n for n, ms in components.items() if len(ms) == 2)
-        stack = [[(next_atom, start, bonds[start][next_atom].order, None, None, 0)] for next_atom in components[start]]
+        start, neigh = min((x for x in components.items()), key=lambda x: len(x[1]))
+        stack = [[(next_atom, start, bonds[start][next_atom].order, None, None, 0)] for next_atom in neigh]
 
-        size = len(atoms) - 1
         path = []
-        hashed_path = set()
+        hashed_path = {start}
         while stack:
             atom, prev_atom, bond1, current_coordinates, v, _ = stack[-1].pop()
             bond2 = bonds[prev_atom][atom].order
@@ -126,38 +122,15 @@ class Calculate2D:
             elif atom != start:  # we finished. next step is final closure
                 for_stack = []
                 closures = []
-                loop = 0
                 for next_atom in components[atom]:
                     if next_atom == prev_atom:  # only forward. behind us is the homeland
                         continue
-                    elif next_atom == start:
-                        loop = next_atom
                     elif next_atom in hashed_path:  # closure found
                         closures.append(next_atom)
                     else:
                         for_stack.append(next_atom)
 
-                if loop:
-                    for_stack.remove(loop)
-                    sx, sy = plane[start]
-                    lp = len(path)
-                    vx1, vy1 = rotate_vector(dx, dy, vx, vy)
-                    vx2, vy2 = rotate_vector(dx, -dy, vx, vy)
-                    nx1, ny1 = vx1 + mx, vy1 + my
-                    mx2, my2 = vx2 + mx, vy2 + my
-                    d1_x, d2_x = abs(nx1 - sx), abs(ny1 - sy)
-                    d1_y, d2_y = abs(mx2 - sx), abs(my2 - sy)
-                    if d1_x < .1 and d1_y < .1:
-                        stack[-1].append((loop, atom, bond2, (sx, sy), (vx, vy), lp))
-                    elif d2_x < .1 and d2_y < .1:
-                        stack[-1].append((loop, atom, bond2, (sx, sy), (vx, vy), lp))
-                    else:
-                        del stack[-1]
-                        if stack:
-                            path = path[:stack[-1][-1][-1]]
-                            hashed_path = {x for x, *_ in path}
-
-                elif len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
+                if len(for_stack) == 1:  # easy path grow. next bond double or include single for pyroles
                     lp = len(path)
                     next_atom = for_stack[0]
                     opposite = stack[-1].copy()
@@ -246,8 +219,6 @@ class Calculate2D:
                     new_coords = False
                     for hash_atom in hashed_path:
                         v_x, v_y = plane[hash_atom]
-                        # for n, v in plane.items():
-                        #     v_x, v_y = v
                         n1_x, n1_y = new_coords1
                         n2_x, n2_y = new_coords2
                         n3_x, n3_y = new_coords3
@@ -299,8 +270,6 @@ class Calculate2D:
                     new_coords = False
                     for hash_atom in hashed_path:
                         v_x, v_y = plane[hash_atom]
-                        # for n, v in plane.items():
-                        #     v_x, v_y = v
                         n1_x, n1_y = new_coords1
                         n2_x, n2_y = new_coords2
                         n3_x, n3_y = new_coords3
