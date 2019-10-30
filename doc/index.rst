@@ -1,9 +1,24 @@
 Welcome to CGRtools's documentation!
 ====================================
 
-Molecules and Reactions manipulation based on CGR approach
+Molecules, Reactions and CGR manipulation
+
+CGRtools package
+================
+
+.. automodule:: CGRtools
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Subpackages
+-----------
 
 .. toctree::
-   :maxdepth: 4
+    :maxdepth: 4
 
-   CGRtools
+    containers
+    files
+    reactor
+    utils
+    periodictable

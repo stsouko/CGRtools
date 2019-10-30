@@ -18,9 +18,10 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 """
-CGRtools main module. Contains CGR preparer
+CGRtools main module. Contains all common classes and functions.
 """
+from .containers import *
+from .files import *
 from .preparer import *
-
-
-__all__ = ['CGRPreparer']
+from .reactor import *
+from .utils import *

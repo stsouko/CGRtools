@@ -5,3 +5,4 @@ CGRtools\.utils package
     :members:
     :undoc-members:
     :show-inheritance:
+    :inherited-members:
