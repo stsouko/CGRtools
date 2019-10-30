@@ -159,33 +159,34 @@ class SMILESRead(CGRRead):
         actual_index = -1
 
         # atom description
-        if any(set(elements_list).intersection(atom_desc_list)):
-            for n, i in enumerate(atom_desc_list):
+        adl = atom_desc_list
+        if any(set(elements_list).intersection(adl)):
+            for n, i in enumerate(adl):
                 if n <= actual_index:
                     continue
                 #  atom
                 elif i in elements_list:
                     if i != 'H':
                         if not token_list[0]['element']:
-                            if atom_desc_list[n - 1].isnumeric() or atom_desc_list[n - 1] in bond_dict or n == 0:
+                            if adl[n - 1].isnumeric() or adl[n - 1] in bond_dict or n == 0:
                                 token_list[0]['element'] = i
                             else:
                                 raise IncorrectSmiles('incorrect description')
                         else:
                             raise IncorrectSmiles('two elements in description')
                     else:
-                        if atom_desc_list[n - 1].isnumeric() or atom_desc_list[n - 1] in bond_dict or n == 0 or atom_desc_list[n - 1] in elements_list:
-                            if len(atom_desc_list) > (n + 1) and atom_desc_list[n + 1].isnumeric() and atom_desc_list[n + 1] != '0':
-                                token_list[0]['hydrogen'] = int(atom_desc_list[n + 1])
+                        if adl[n - 1].isnumeric() or adl[n - 1] in bond_dict or n == 0 or adl[n - 1] in elements_list:
+                            if len(adl) > (n + 1) and adl[n + 1].isnumeric() and adl[n + 1] != '0':
+                                token_list[0]['hydrogen'] = int(adl[n + 1])
                                 actual_index = n + 1
                             else:
                                 token_list[0]['hydrogen'] = 1
                 #  charge
                 elif '-' in i or '+' in i or i == '0':
                     if token_list[0]['element'] or token_list[0]['hydrogen']:
-                        if len(atom_desc_list) > (n + 1) and atom_desc_list[n + 1].isnumeric() and atom_desc_list[n + 1] != '0':
+                        if len(adl) > (n + 1) and adl[n + 1].isnumeric() and adl[n + 1] != '0':
                             if len(i) == 1:
-                                token_list[0]['charge'] = int(i + atom_desc_list[n + 1])
+                                token_list[0]['charge'] = int(i + adl[n + 1])
                                 actual_index = n + 1
                             else:
                                 raise IncorrectSmiles('incorrect charge')
@@ -196,19 +197,19 @@ class SMILESRead(CGRRead):
                             else:
                                 actual_index = n
                         # dynamic
-                        if len(atom_desc_list) > (actual_index + 1) and atom_desc_list[actual_index + 1] == '>':
-                            if len(atom_desc_list) > (actual_index + 2) and ('-' in atom_desc_list[actual_index + 2] or '+' in atom_desc_list[actual_index + 2] or atom_desc_list[actual_index + 2] == '0'):
-                                if atom_desc_list[actual_index + 2] == '0':
+                        if len(adl) > (actual_index + 1) and adl[actual_index + 1] == '>':
+                            if len(adl) > (actual_index + 2) and ('-' in adl[actual_index + 2] or '+' in adl[actual_index + 2] or adl[actual_index + 2] == '0'):
+                                if adl[actual_index + 2] == '0':
                                     token_list[0]['p_charge'] = 0
                                     actual_index += 2
-                                elif len(atom_desc_list) > (actual_index + 3) and atom_desc_list[actual_index + 3].isnumeric() and atom_desc_list[actual_index + 3] != '0':
-                                    if len(atom_desc_list[actual_index + 2]) == 1:
-                                        token_list[0]['p_charge'] = int(atom_desc_list[actual_index + 2] + atom_desc_list[actual_index + 3])
+                                elif len(adl) > (actual_index + 3) and adl[actual_index + 3].isnumeric() and adl[actual_index + 3] != '0':
+                                    if len(adl[actual_index + 2]) == 1:
+                                        token_list[0]['p_charge'] = int(adl[actual_index + 2] + adl[actual_index + 3])
                                         actual_index += 3
                                     else:
                                         raise IncorrectSmiles('incorrect charge')
                                 else:
-                                    token_list[0]['p_charge'] = int(atom_desc_list[actual_index + 2][0] + str(len(atom_desc_list[actual_index + 2])))
+                                    token_list[0]['p_charge'] = int(adl[actual_index + 2][0] + str(len(adl[actual_index + 2])))
                                     actual_index += 2
                             else:
                                 raise IncorrectSmiles('incorrect dynamic charge')
@@ -219,12 +220,12 @@ class SMILESRead(CGRRead):
                 if i in bond_dict:
                     if n == 0:
                         token_list[1] = bond_dict[i]
-                    elif i == ':' and atom_desc_list[n + 1].isnumeric() and len(atom_desc_list) == (n + 2):
-                        token_list[0]['mapping'] = atom_desc_list[n + 1]
+                    elif i == ':' and adl[n + 1].isnumeric() and len(adl) == (n + 2):
+                        token_list[0]['mapping'] = adl[n + 1]
                         actual_index = n + 2
                 #  number
                 elif i.isnumeric():
-                    if len(atom_desc_list) > (n + 1) and atom_desc_list[n + 1] in elements_list:
+                    if len(adl) > (n + 1) and adl[n + 1] in elements_list:
                         token_list[0]['isotope'] = int(i)
                     else:
                         raise IncorrectSmiles('incorrect number in description')
@@ -234,9 +235,9 @@ class SMILESRead(CGRRead):
                         token_list[0]['radical'] = dynamic_radical[i]
                     else:
                         raise IncorrectSmiles('incorrect radical')
-                    if len(atom_desc_list) > (n + 1) and atom_desc_list[n + 1] == '>':
-                        if atom_desc_list[n + 2] in dynamic_radical and dynamic_radical[atom_desc_list[n + 2]] != token_list[0]['radical']:
-                            token_list[0]['p_radical'] = dynamic_radical[atom_desc_list[n + 2]]
+                    if len(adl) > (n + 1) and adl[n + 1] == '>':
+                        if adl[n + 2] in dynamic_radical and dynamic_radical[adl[n + 2]] != token_list[0]['radical']:
+                            token_list[0]['p_radical'] = dynamic_radical[adl[n + 2]]
                             actual_index = n + 2
                         else:
                             raise IncorrectSmiles('incorrect dynamic radical')
@@ -255,11 +256,11 @@ class SMILESRead(CGRRead):
                 else:
                     raise IncorrectSmiles('atom description contains only several H')
         #  dynamic_bond
-        elif '>' in atom_desc_list:
-            if len(atom_desc_list) == 3 and atom_desc_list[0] in bond_dict and not dynamic_bond:
+        elif '>' in adl:
+            if len(adl) == 3 and adl[0] in bond_dict and not dynamic_bond:
                 if len(token) > 0:
-                    dynamic_bond.append(bond_dict[atom_desc_list[0]])
-                    dynamic_bond.append(bond_dict[atom_desc_list[-1]])
+                    dynamic_bond.append(bond_dict[adl[0]])
+                    dynamic_bond.append(bond_dict[adl[-1]])
                 else:
                     raise IncorrectSmiles('dynamic bond is the first element in smiles')
         else:
@@ -757,7 +758,7 @@ class SMILESRead(CGRRead):
                 atoms.append({'element': c['element'],
                               'charge': (c['charge'][0] if isinstance(c['charge'], list) else c['charge']),
                               'mapping': c['mapping'], 'x': 0., 'y': 0., 'z': 0., 'isotope': c['isotope'],
-                              'is_radical': False})
+                              'is_radical': (c['radical'] if c['radical'] is not None else False)})
                 if atom_num > 0:
                     if b != 8 and not f:
                         adjacency.append((atom_num, last_num, b))
@@ -765,6 +766,9 @@ class SMILESRead(CGRRead):
                     cgr.append(((atom_num,), 'dynatom', ('c' + str(int(c['p_charge']) - int(c['charge'])))))
                 if f:
                     cgr.append(((atom_num, last_num), 'dynbond', (str(b) + '>' + str(f))))
+                    adjacency.append((atom_num, last_num, 8))
+                if c['radical'] is False or c['p_radical'] is False:
+                    cgr.append(((atom_num,), 'dynatom', 'r1'))
                 last_num = atom_num
 
         return {'atoms': atoms,
