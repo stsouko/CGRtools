@@ -17,7 +17,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from importlib.util import find_spec
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
@@ -28,8 +27,22 @@ from ._CGRrw import CGRRead, elements_list
 
 
 main_atom_list = {'B': 11, 'C': 12, 'N': 14, 'O': 16, 'P': 31, 'S': 32, 'F': 19, 'Cl': 35, 'Br': 80, 'I': 127, 'c': 12}
-bond_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '.': 8}
+# tokens structure:
+# (type: int, value, optional)
+# types:
+# 0: atom
+# 1: bond
+# 2: open chain (
+# 3: close chain )
+# 4: dot bond .
+# 5: in bracket raw data []
+# 6: closure number
+# 7: raw closure number
+
+replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
 dynamic_radical = {'^': False, '*': True}
+upper_atom_symbols = {x[0] for x in elements_list}
+lower_atom_symbols = {x[1] for x in elements_list if len(x) > 1}
 
 
 class IncorrectSmiles(ValueError):
@@ -146,7 +159,6 @@ class SMILESRead(CGRRead):
                     continue
 
                 record['meta'] = meta
-                record['title'] = ''
                 try:
                     yield self._convert_structure(record)
                 except ValueError:
@@ -316,342 +328,110 @@ class SMILESRead(CGRRead):
 
     @classmethod
     def __make_token(cls, smiles):
-
-        is_description = False
-        token_store = []
-        atom_desc_list = []
-        dynamic_bond = []
-        token = []
-
-        if smiles[0] in bond_dict or smiles[0].isnumeric():
+        if smiles[0] in r'=#:-0123456789/\~.%':
             raise IncorrectSmiles('bond or cycle can not be the first element in smiles')
-        elif smiles[-1] in bond_dict:
-            raise IncorrectSmiles('bond can not be the last element in smiles')
+        elif smiles[-1] in r'=#:-/\~.%':
+            raise IncorrectSmiles('bond or % can not be the last element in smiles')
 
-        for n, i in enumerate(smiles):
-
-            # atom_description
-            if i == '[':  # [[[[[[[[[[[[[
-                if not is_description:
-                    if len(token_store) > 0:
-                        cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                               dynamic_bond)
-                        token_store.clear()
-                    is_description = True
-                else:
+        token_type = token = None
+        tokens = []
+        for n, s in enumerate(smiles):
+            if s == '[':  # open complex token
+                if token_type == 5:
                     raise IncorrectSmiles('[...[')
-            elif i == ']':  # ]]]]]]]]]]]
-                if is_description:
-                    if len(token_store) > 0:
-                        cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                               dynamic_bond)
-                        token_store.clear()
-                    is_description = False
-                    if len(atom_desc_list) > 0:
-                        returned_token = cls.__description_parser(atom_desc_list, dynamic_bond, token)
-                        if isinstance(returned_token, list):
-                            token.append(returned_token)
-                        atom_desc_list.clear()
-                    else:
-                        raise IncorrectSmiles('empty [] brackets')
-                else:
+                elif token_type == 7:
+                    raise IncorrectSmiles('invalid closure')
+                elif token:
+                    tokens.append((token_type, token))
+                token = []
+                token_type = 5
+            elif s == ']':  # close complex token
+                if token_type != 5:
                     raise IncorrectSmiles(']..]')
-            # atom
-            elif not i.isnumeric() and ((i >= 'a' and i <= 'z') or (i >= 'A' and i <= 'Z')):
-                if not is_description:
-                    if len(token_store) == 0:  # nothing in token_store
-                        token_store.append(i)
-                    elif len(token_store) == 1:  # one element in token_store
-                        if token_store[-1] in bond_dict:
-                            token_store.append(i)
-                        elif not token_store[-1].isnumeric() and ((token_store[-1] >= 'a' and token_store[-1] <= 'z')
-                                                                  or
-                                                                  (token_store[-1] >= 'A' and token_store[-1] <= 'Z')):
-                            if (token_store[-1] + i) in main_atom_list:
-                                cls.__token_adder((token_store[-1] + i), token, atom_desc_list, is_description,
-                                                       token_store, dynamic_bond)
-                                token_store.clear()
-                            elif token_store[-1] in main_atom_list:
-                                cls.__token_adder(token_store[-1], token, atom_desc_list, is_description,
-                                                       token_store, dynamic_bond)
-                                token_store.clear()
-                                token_store = [i]
-                            else:
-                                raise IncorrectSmiles('invalid element in token_store1')
-                        else:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                    elif len(token_store) >= 2:  # two elements in token_store
-                        if (token_store[-1] + i) in main_atom_list:
-                            cls.__token_adder((token_store[-1] + i), token, atom_desc_list, is_description,
-                                                   token_store, dynamic_bond)
-                            token_store.clear()
-                        elif token_store[-1] in main_atom_list:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        elif token_store[-1].isnumeric():
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('invalid element in token_store')
+                elif not token:
+                    raise IncorrectSmiles('empty [] brackets')
+                tokens.append((5, token))
+                token_type = token = None
+            elif s in '()':
+                if token_type == 5:
+                    raise IncorrectSmiles('brackets in atom/bond token')
+                elif token_type == 7:
+                    raise IncorrectSmiles('invalid closure')
+                elif token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((replace_dict[s], None))
+            elif token_type == 5:  # grow token with brackets. skip validation
+                token.append(s)
+            elif s.isnumeric():  # closures
+                if token_type == 7:  # % already found. collect cumber
+                    if not token and s == '0':
+                        raise IncorrectSmiles('number starts with 0')
+                    token.append(s)
+                elif s == '0':
+                    raise IncorrectSmiles('number starts with 0')
+                elif token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((6, int(s)))
+            elif token_type == 7:
+                raise IncorrectSmiles('invalid closure')
+            elif s == '%':
+                if token:
+                    tokens.append((token_type, token))
+                token_type = 7
+                token = []
+            elif s in '=#:-~':  # bonds found
+                if token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((1, replace_dict[s]))
+            elif s in r'\/':
+                if token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((1, 1, s == '/'))  # Up is true
+            elif s == '.':
+                if token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((4, None))
+            elif s in 'NOPSFI':  # organic atoms
+                if token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((0, s))
+            elif s in 'cnops':  # aromatic ring atom
+                if token:
+                    tokens.append((token_type, token))
+                    token_type = token = None
+                tokens.append((0, s.upper()))
+            elif s in 'CB':  # flag possible Cl or Br
+                if token:
+                    tokens.append((token_type, token))
+                token_type = 0
+                token = s
+            elif token_type == 0:
+                if s == 'l':
+                    if token == 'C':
+                        tokens.append((0, 'Cl'))
+                        token_type = token = None
                     else:
-                        raise IncorrectSmiles('token_store contains more than three elements')
-
-                else:  # inside atom description
-                    if len(token_store) == 0:
-                        token_store = [i]
-                    elif not token_store[-1].isnumeric() and ((token_store[-1] >= 'a' and token_store[-1] <= 'z') or (token_store[-1] >= 'A' and token_store[-1] <= 'Z')):
-                        if (token_store[-1] + i) in elements_list:
-                            atom_desc_list.append(token_store[-1] + i)
-                            token_store.clear()
-                        elif token_store[-1] in elements_list:
-                            atom_desc_list.append(token_store[-1])
-                            token_store = [i]
-                        elif token_store[-1] == 'H':
-                            atom_desc_list.append(token_store[-1])
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('invalid element in atom_description')
-                    elif token_store[-1].isnumeric():
-                        atom_desc_list.append(token_store[-1])
-                        token_store = [i]
-                    elif i == 'H' and '@' in token_store[-1]:
-                        atom_desc_list.append(token_store[-1])
-                        token_store = [i]
+                        raise IncorrectSmiles('invalid element Bl')
+                elif s == 'r':
+                    if token == 'B':
+                        tokens.append((0, 'Br'))
+                        token_type = token = None
                     else:
-                        raise IncorrectSmiles('impossible element in atom_description')
-            # brackets
-            elif i == '(' or i == ')':
-                if not is_description:
-                    if len(token_store) == 0:
-                        if len(dynamic_bond) == 0:
-                            token_store.append(i)
-                        else:
-                            raise IncorrectSmiles('dynamic bond before bracket')
-                    else:
-                        if token_store[-1] not in bond_dict:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            if len(dynamic_bond) == 0:
-                                token_store = [i]
-                            else:
-                                raise IncorrectSmiles('dynamic bond before bracket')
-                        else:
-                            raise IncorrectSmiles('bond before bracket')
+                        raise IncorrectSmiles('invalid smiles for Cr')
                 else:
-                    raise IncorrectSmiles('brackets in atom description')
-            # bond
-            elif i in bond_dict and i != '-':
-                if not is_description:
-                    if len(token_store) == 0:
-                        token_store.append(i)
-                    else:
-                        if token_store[-1] not in bond_dict:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('bond after bond')
-                else:
-                    if len(token_store) > 0:
-                        if token_store[-1] == '>' or (
-                                i == ':' and smiles[n + 1].isnumeric()):
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('incorrect element before/after bond in description')
-                    else:
-                        if len(atom_desc_list) == 0 and smiles[n + 1] == '>':
-                            token_store = [i]
-                        elif i == ':' and any(set(elements_list).intersection(atom_desc_list)) and smiles[
-                            n + 1].isnumeric():
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('incorrect element before/after bond in description')
-            # cycle/number
-            elif i.isnumeric():
-                if not is_description:
-                    if len(token_store) == 0:
-                        if i != '0':
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('0 cycle')
-                    else:
-                        if token_store[-1] in bond_dict:
-                            token_store.append(i)
-                        elif token_store[-1] == '%':
-                            token_store.append(i)
-                        elif token_store[-1].isnumeric():
-                            if '%' in token_store:
-                                token_store[-1] += i
-                            else:
-                                cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                                token_store = [i]
-                        else:
-                            if i != '0':
-                                cls.__token_adder(token_store[-1], token, atom_desc_list, is_description,
-                                                       token_store, dynamic_bond)
-                                token_store = [i]
-                            else:
-                                raise IncorrectSmiles('0 cycle')
-                else:
-                    if len(token_store) == 0:
-                        token_store.append(i)
-                    else:
-                        if token_store[-1].isnumeric():
-                            if token_store[-1] != '0':
-                                token_store[-1] += i
-                            else:
-                                raise IncorrectSmiles('number starts with 0')
-                        elif '@' in token_store[-1]:
-                            raise IncorrectSmiles('number after @')
-                        else:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                               dynamic_bond)
-                            token_store = [i]
-            # dynamic bond
-            elif i == '>':
-                if is_description and (
-                        token_store[-1] in {'0', '^', '*'} or '-' in token_store[-1] or token_store[-1] in bond_dict or '+' in
-                        token_store[-1] or (token_store[-1].isnumeric() and (
-                        atom_desc_list[-1] == '-' or atom_desc_list[-1] == '+'))):
-                    cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                           dynamic_bond)
-                    token_store = [i]
-                else:
-                    raise IncorrectSmiles('not bond > or outside atom description')
-            # charge +
-            elif i == '+':
-                if is_description:
-                    if len(token_store) == 0:
-                        if len(atom_desc_list) > 0 and atom_desc_list[-1] in elements_list:
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('impossible element before charge')
-                    elif token_store[-1] in elements_list or '@' in token_store[-1] or \
-                            token_store[-1].isnumeric() or token_store[-1] in {'>', 'H', '^', '*'}:
-                        cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                               dynamic_bond)
-                        token_store = [i]
-                    elif '+' in token_store[-1]:
-                        token_store[-1] += i
-                    else:
-                        raise IncorrectSmiles('impossible element before charge')
-                else:
-                    raise IncorrectSmiles('charge is outside atom description')
-            # bond and charge
-            elif i == '-':
-                if not is_description:
-                    if len(token_store) == 0:
-                        token_store.append(i)
-                    else:
-                        if token_store[-1] not in bond_dict:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('bond before -')
-                else:
-                    if len(token_store) == 0:
-                        if any(atom_desc_list) and atom_desc_list[-1] in elements_list:
-                            token_store = [i]
-                        elif not atom_desc_list and smiles[n + 1] == '>':
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('impossible element before +-')
-                    elif token_store[-1] in elements_list or '@' in token_store[-1] or \
-                            token_store[-1].isnumeric() or token_store[-1] in {'>', 'H', '^', '*'}:
-                        cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                               dynamic_bond)
-                        token_store = [i]
-                    elif '-' in token_store[-1]:
-                        token_store[-1] += i
-                    else:
-                        raise IncorrectSmiles('impossible element before +-')
-            # chiral specification
-            elif i == '@':
-                if is_description:
-                    if len(token_store) > 0:
-                        if token_store[-1] in elements_list:
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        elif token_store[-1] == '@':
-                            token_store[-1] += i
-                        else:
-                            raise IncorrectSmiles('impossible element before @')
-                    elif len(atom_desc_list) > 0 and atom_desc_list[-1] in elements_list:
-                        token_store = [i]
-                    else:
-                        raise IncorrectSmiles('impossible element before @')
-                else:
-                    raise IncorrectSmiles('@ is outside atom description')
-            # radical
-            elif i == '*':
-                if is_description:
-                    if len(token_store) > 0:
-                        if '-' in token_store[-1] or '+' in token_store[-1] or token_store[-1] in elements_list or \
-                                token_store[-1].isnumeric() or token_store[-1] == '>':
-                            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                                   dynamic_bond)
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('impossible element before *')
-                    elif any(atom_desc_list):
-                        if atom_desc_list[-1] in elements_list:
-                            token_store = [i]
-                        else:
-                            raise IncorrectSmiles('impossible element before *')
-                    else:
-                        raise IncorrectSmiles('* can not be the first element in description')
-                else:
-                    raise IncorrectSmiles('* outside atom_description')
-            # %
-            elif i == '%':
-                if not is_description:
-                    if len(token_store) == 0:
-                        if len(token) != 0 and (smiles[n + 1].isnumeric() and smiles[n + 1] != '0'):
-                            token_store.append(i)
-                        else:
-                            raise IncorrectSmiles('incorrect cycle')
-                    else:
-                        if smiles[n + 1].isnumeric() and smiles[n + 1] != '0':
-                            if token_store[-1] in bond_dict:
-                                token_store.append(i)
-                            else:
-                                cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store, dynamic_bond)
-                                token_store = [i]
-                        else:
-                            raise IncorrectSmiles('element after % in not numeric or 0')
-                else:
-                    raise IncorrectSmiles('% in description')
-            # ^
-            elif i == '^':
-                if is_description:
-                    if len(token_store) == 0:
-                        token_store = [i]
-                    else:
-                        cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store,
-                                          dynamic_bond)
-                        token_store = [i]
-                else:
-                    raise IncorrectSmiles('^ outside description')
+                    raise IncorrectSmiles('invalid smiles')
             else:
-                raise IncorrectSmiles('impossible element')
+                raise IncorrectSmiles('invalid smiles')
 
-        if len(token_store) > 0:
-            cls.__token_adder(token_store[-1], token, atom_desc_list, is_description, token_store, dynamic_bond)
-        if len(dynamic_bond) > 0:
-            raise IncorrectSmiles('dynamic bond left')
-        if is_description:
+        if token_type == 5:
             raise IncorrectSmiles('atom description has not finished')
-
-        return token
+        return tokens
 
     @staticmethod
     def __check_token(token, strong_cycle=False):
@@ -732,7 +512,7 @@ class SMILESRead(CGRRead):
         token = cls.__check_token(token)
 
         atoms = []
-        adjacency = []
+        bonds = []
         cgr = []
         atom_num = -1
         last_num = 0
@@ -748,7 +528,7 @@ class SMILESRead(CGRRead):
                 if c not in cycles:
                     cycles[c] = [atom_num, b, f]
                 else:
-                    adjacency.append((atom_num, cycles[c][0], b))
+                    bonds.append((atom_num, cycles[c][0], b))
                     if f:
                         cgr.append(((atom_num, cycles[c][0]), 'dynbond', (str(b) + '>' + str(f))))
                     del cycles[c]
@@ -761,19 +541,19 @@ class SMILESRead(CGRRead):
                               'is_radical': (c['radical'] if c['radical'] is not None else False)})
                 if atom_num > 0:
                     if b != 8 and not f:
-                        adjacency.append((atom_num, last_num, b))
+                        bonds.append((atom_num, last_num, b))
                 if c['p_charge'] is not None:
                     cgr.append(((atom_num,), 'dynatom', ('c' + str(int(c['p_charge']) - int(c['charge'])))))
                 if f:
                     cgr.append(((atom_num, last_num), 'dynbond', (str(b) + '>' + str(f))))
-                    adjacency.append((atom_num, last_num, 8))
+                    bonds.append((atom_num, last_num, 8))
                 if c['radical'] is False or c['p_radical'] is False:
                     cgr.append(((atom_num,), 'dynatom', 'r1'))
                 last_num = atom_num
 
         return {'atoms': atoms,
-                'bonds': adjacency,
-                'atoms_lists': {}, 'cgr': cgr, 'query': [], 'stereo': []}
+                'bonds': bonds,
+                'atoms_lists': {}, 'cgr': cgr, 'query': [], 'stereo': [], 'title': ''}
 
 
 class SMILESread:
