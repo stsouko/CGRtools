@@ -17,23 +17,41 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from distutils.util import get_platform
 from pathlib import Path
 from setuptools import setup
+from wheel.bdist_wheel import bdist_wheel
+
+
+platform = get_platform()
+if platform == 'win-amd64':
+    libinchi = ['INCHI/libinchi.dll']
+elif platform == 'linux-x86_64':
+    libinchi = ['INCHI/libinchi.so']
+else:
+    libinchi = []
+
+
+class _bdist_wheel(bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False
 
 
 setup(
     name='CGRtools',
     version='4.0.11',
-    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files', 'CGRtools.files.dll',
+    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='stsouko@live.ru',
     python_requires='>=3.6.1',
+    cmdclass={'bdist_wheel': _bdist_wheel},
     install_requires=['CachedMethods>=0.1.4,<0.2'],
     extras_require={'smiles': ['coho>=0.4,<0.5'], 'mrv': ['lxml>=4.1,<4.4']},
-    package_data={'CGRtools.files.dll': ['LICENCE', 'readme.txt', 'libinchi.so', 'libinchi.dll']},
+    data_files=[('lib', libinchi)],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').read_text(),
     classifiers=['Environment :: Plugins',

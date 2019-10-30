@@ -17,15 +17,15 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POINTER, Structure, cdll, byref
+from distutils.util import get_platform
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
 from re import split
-from sys import platform
+from site import getsitepackages
 from traceback import format_exc
 from warnings import warn
 from ._CGRrw import CGRRead, common_isotopes
-from . import __path__ as files_path
 
 
 class INCHIRead(CGRRead):
@@ -238,12 +238,14 @@ class INCHIread:
 
 __all__ = ['INCHIRead', 'INCHIread']
 
-if platform == 'linux':
+platform = get_platform()
+site_packages = Path(next(x for x in getsitepackages() if x.endswith('site-packages')))
+if platform == 'linux-x86_64':
     opt_flag = '-'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.so')
-elif platform == 'win32':
+    lib = cdll.LoadLibrary(site_packages.parents[1] / 'libinchi.so')
+elif platform == 'win-amd64':
     opt_flag = '/'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.dll')
+    lib = cdll.LoadLibrary(site_packages.parent / 'libinchi.dll')
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []
