@@ -175,4 +175,4 @@ class CGRpreparer:
         return getattr(self.__obj, item)
 
 
-__all__ = ['CGRPreparer', 'CGRpreparer']
+__all__ = ['CGRPreparer']

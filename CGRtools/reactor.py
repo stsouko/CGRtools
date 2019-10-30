@@ -19,7 +19,7 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count, islice, permutations, product
+from itertools import chain, count, permutations, product
 from logging import warning, info
 from operator import or_
 from typing import Union, Iterable
@@ -146,17 +146,8 @@ class CGRReactor(BaseReactor):
     """
     CGR based editor for CGRs and molecules.
     generates transformation from input CGR/molecule
-    using template (CGRtools ReactionContainer)
-    -----------------------------------------------------
-    input: transformation template, CGR/molecule to edit
-    output: generator of edited CGRs/molecules
-    -----------------------------------------------------
-    template should contain one reactant and one product:
-    CGRReactor allows only 1 -> 1 transformation
-
-    CGRReactor init prepares the reactor container:
-
-    >> reactor = CGRReactor(template, delete_atoms=True)
+    using template (CGRtools ReactionContainer).
+    Template should contain one reactant and one product:
 
     CGRReactor calling transforms reactants to products and
     returns generator of all possible products.
@@ -204,16 +195,8 @@ class Reactor(BaseReactor):
     CGR based reactor for molecules/queries.
     generates reaction from input queries/molecules using
     transformation template (CGRtools ReactionContainer).
-    -----------------------------------------------------
-    input: transformation template, list of reactants
-    output: generator of reactions
-    -----------------------------------------------------
 
-    reactor init prepares the reactor container:
-
-    >> reactor = CGRreactor(template, delete_atoms=True)
-
-    reactor calling transforms reactants to products and
+    Reactor calling transforms reactants to products and
     returns generator of reaction transformations with all
     possible products
     """

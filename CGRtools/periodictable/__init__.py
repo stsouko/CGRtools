@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 """
-periodic table of elements classes
+Periodic table of elements classes
 """
 from abc import ABCMeta
 from .element import Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement

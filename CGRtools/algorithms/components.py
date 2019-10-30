@@ -79,10 +79,17 @@ class StructureComponents:
             if atom.atomic_number == 6:
                 adj_n = adj[n].add
                 b_sum = 0
+                a_sum = 0
                 for m, bond in bonds[n].items():
-                    b_sum += bond.order
-                    if bond.order == 2 and atoms[m].atomic_number == 6:
+                    order = bond.order
+                    if order == 4:  # count aromatic bonds
+                        a_sum += 1
+                    elif order != 8:  # ignore special bond
+                        b_sum += order
+                    if order == 2 and atoms[m].atomic_number == 6:
                         adj_n(m)
+                if a_sum:
+                    b_sum += a_sum + 1
                 if b_sum > 4:
                     raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
         if not adj:
