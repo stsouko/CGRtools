@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from itertools import takewhile
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
@@ -24,6 +25,7 @@ from re import split
 from traceback import format_exc
 from warnings import warn
 from ._CGRrw import CGRRead
+from ..exceptions import IncorrectSmiles
 
 
 # tokens structure:
@@ -43,6 +45,10 @@ from ._CGRrw import CGRRead
 # 11: dynamic atom
 
 replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
+charge_dict = {'+': 1, '+1': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4,
+               '-': -1, '-1': -1, '--': -2, '-2': -2, '-3': -3, '-4': -4}
+charge_dict = {tuple(k): v for k, v in charge_dict.items()}
+charge_dict[()] = 0
 dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': '0>8',
                  '->.': '1>0', '->=': '1>2', '->#': '1>3', '->:': '1>4', '->~': '1>8',
                  '=>.': '2>0', '=>-': '2>1', '=>#': '2>3', '=>:': '2>4', '=>~': '2>8',
@@ -50,11 +56,6 @@ dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': 
                  ':>.': '4>0', ':>-': '4>1', ':>=': '4>2', ':>#': '4>3', ':>~': '4>8',
                  '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
 dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
-dynamic_radical = {'^': False, '*': True}
-
-
-class IncorrectSmiles(ValueError):
-    pass
 
 
 class SMILESRead(CGRRead):
@@ -172,13 +173,8 @@ class SMILESRead(CGRRead):
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
 
-    @classmethod
-    def __tokenize(cls, smiles):
-        if smiles[0] in r'=#:-0123456789/\~.%':
-            raise IncorrectSmiles('bond or cycle can not be the first element in smiles')
-        elif smiles[-1] in r'=#:-/\~.%':
-            raise IncorrectSmiles('bond or % can not be the last element in smiles')
-
+    @staticmethod
+    def __raw_tokenize(smiles):
         token_type = token = None
         tokens = []
         for n, s in enumerate(smiles):
@@ -280,23 +276,166 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('atom description has not finished')
         elif token:
             tokens.append((token_type, token))  # %closure or C or B
+        return tokens
 
-        # postprocess [tokens]
+    @classmethod
+    def __postprocess(cls, tokens):
         out = []
         for token_type, token in tokens:
-            if token_type == 7:  # composite closures folding
-                out.append((6, int(''.join(token))))
+            if token_type in (0, 8):  # simple atom
+                out.append((token_type, {'element': token, 'charge': 0, 'isotope': None, 'is_radical': False,
+                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': 0, 'stereo': 0}))
             elif token_type == 5:
-                if '>' in token:  # dynamic bond
-                    try:
-                        out.append((10, dynamic_bonds[token]))
-                    except KeyError:
-                        raise IncorrectSmiles('invalid dynamic bond token')
+                if '>' in token:  # dynamic bond or atom
+                    if len(token) == 3:  # bond only possible
+                        try:
+                            out.append((10, dynamic_bonds[token]))
+                        except KeyError:
+                            raise IncorrectSmiles('invalid dynamic bond token')
+                    else:  # dynamic atom token
+                        out.append((11, cls.__dynatom_parse(token)))
+                elif '*' in token:  # CGR atom radical mark
+                    out.append((11, cls.__dynatom_parse(token)))
                 else:  # atom token
-                    out.append((token_type, token))
-            else:
+                    out.append(cls.__atom_parse(token))
+            elif token_type == 7:  # composite closures folding
+                out.append((6, int(''.join(token))))
+            else:  # as is types: 1, 2, 3, 4, 6, 9
                 out.append((token_type, token))
         return out
+
+    @staticmethod
+    def __atom_parse(token):
+        isotope = ''.join(takewhile(lambda x: x.isnumeric(), token))
+        if isotope:
+            token = token[len(isotope):]
+            if not token:
+                raise IncorrectSmiles('atom token invalid')
+            isotope = int(isotope)
+        else:
+            isotope = None
+
+        element = token[0]
+        if not element.isalpha():
+            raise IncorrectSmiles('invalid atom token')
+        elif len(token) == 1:
+            hydrogen = charge = mapping = stereo = 0
+        else:
+            t1 = token[1]
+            token = token[2:]
+            if t1 == '@':  # only carbons stereo accepted
+                if token:
+                    t1 = token[0]
+                    token = token[1:]
+                    if t1 == '@':
+                        if token:
+                            t1 = token[0]
+                            token = token[1:]
+                            if t1 in ('H', ':') and element == 'C':
+                                stereo = -1
+                            else:
+                                stereo = 0
+                                warning('only neutral carbon stereo accepted')
+                        else:
+                            t1 = None
+                            if element == 'C':
+                                stereo = -1
+                            else:
+                                stereo = 0
+                                warning('only neutral carbon stereo accepted')
+                    elif t1 in ('H', ':') and element == 'C':
+                        stereo = 1
+                    else:
+                        stereo = 0
+                        warning('only neutral carbon stereo accepted')
+                else:
+                    t1 = None
+                    if element == 'C':
+                        stereo = 1
+                    else:
+                        stereo = 0
+                        warning('only neutral carbon stereo accepted')
+            else:
+                stereo = 0
+
+            if t1 == 'H':  # implicit H
+                if token:
+                    h = ''.join(takewhile(lambda x: x.isnumeric(), token))
+                    if h:
+                        token = token[len(h):]
+                        hydrogen = int(h)
+                    else:
+                        hydrogen = 1
+                else:
+                    hydrogen = 1
+            elif t1 is None:
+                hydrogen = 0
+            else:
+                hydrogen = 0
+                if t1.isalpha():
+                    element += t1
+                else:
+                    token = (t1, *token)  # reset token
+
+            if token:  # charge and mapping
+                if ':' in token:
+                    i = token.index(':')
+                    try:
+                        mapping = int(''.join(token[i + 1:]))
+                    except ValueError:
+                        raise IncorrectSmiles('invalid mapping token')
+                    token = token[:i]
+                else:
+                    mapping = 0
+                try:
+                    charge = charge_dict[token]
+                except KeyError:
+                    raise IncorrectSmiles('charge token invalid')
+            else:
+                charge = mapping = 0
+
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se'):
+            _type = 8
+            element = element.capitatize()
+        else:
+            _type = 0
+        return _type, {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': False,
+                       'mapping': mapping, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': hydrogen, 'stereo': stereo}
+
+    @staticmethod
+    def __dynatom_parse(token):
+        # token contain * or > symbol allways
+        isotope = ''.join(takewhile(lambda x: x.isnumeric(), token))
+        if isotope:
+            token = token[len(isotope):]
+            isotope = int(isotope)
+        else:
+            isotope = None
+
+        element = token[0]
+        if not element.isalpha():
+            raise IncorrectSmiles('invalid atom token')
+        t1 = token[1]
+        if t1.isalpha():  # extract element
+            token = token[2:]
+            element += t1
+        else:
+            token = token[1:]
+
+        if token == ('*',):  # cgr radical expected
+            charge = 0
+            is_radical = True
+            cgr = []
+        elif '>' in token:  # dynamic charge and/or radical
+            # todo: parse dynamic charge and/or radical
+            charge = 0  # set reagent state
+            is_radical = False
+            cgr = []  # add dynamic data
+        else:  # shit with * symbol
+            raise IncorrectSmiles('invalid dynamic atom token')
+
+        return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
+                'mapping': 0, 'x': 0., 'y': 0., 'z': 0.}, cgr
 
     @staticmethod
     def __check_token(token, strong_cycle=False):
@@ -372,10 +511,14 @@ class SMILESRead(CGRRead):
 
     @classmethod
     def __parse_smiles(cls, smiles):
+        if smiles[0] in r'=#:-0123456789/\~.%':
+            raise IncorrectSmiles('bond or cycle can not be the first element in smiles')
+        elif smiles[-1] in r'=#:-/\~.%':
+            raise IncorrectSmiles('bond or % can not be the last element in smiles')
 
-        token = cls.__make_token(smiles)
-        token = cls.__check_token(token)
-
+        tokens = cls.__raw_tokenize(smiles)
+        tokens = cls.__postprocess(tokens)
+        return tokens
         atoms = []
         bonds = []
         cgr = []
@@ -383,7 +526,7 @@ class SMILESRead(CGRRead):
         last_num = 0
         stack = []
         cycles = {}
-        for i in token:
+        for i in tokens:
             if i == '(':  # ((((((
                 stack.append(last_num)
             elif i == ')':  # ))))))
