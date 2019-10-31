@@ -23,12 +23,11 @@ from pathlib import Path
 from re import split
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRRead, elements_list
+from ._CGRrw import CGRRead
 
 
-main_atom_list = {'B': 11, 'C': 12, 'N': 14, 'O': 16, 'P': 31, 'S': 32, 'F': 19, 'Cl': 35, 'Br': 80, 'I': 127, 'c': 12}
 # tokens structure:
-# (type: int, value, optional)
+# (type: int, value)
 # types:
 # 0: atom
 # 1: bond
@@ -40,11 +39,18 @@ main_atom_list = {'B': 11, 'C': 12, 'N': 14, 'O': 16, 'P': 31, 'S': 32, 'F': 19,
 # 7: raw closure number
 # 8: aromatic atom
 # 9: up down bond
+# 10: dynamic bond
+# 11: dynamic atom
 
 replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
+dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': '0>8',
+                 '->.': '1>0', '->=': '1>2', '->#': '1>3', '->:': '1>4', '->~': '1>8',
+                 '=>.': '2>0', '=>-': '2>1', '=>#': '2>3', '=>:': '2>4', '=>~': '2>8',
+                 '#>.': '3>0', '#>-': '3>1', '#>=': '3>2', '#>:': '3>4', '#>~': '3>8',
+                 ':>.': '4>0', ':>-': '4>1', ':>=': '4>2', ':>#': '4>3', ':>~': '4>8',
+                 '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
+dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
 dynamic_radical = {'^': False, '*': True}
-upper_atom_symbols = {x[0] for x in elements_list}
-lower_atom_symbols = {x[1] for x in elements_list if len(x) > 1}
 
 
 class IncorrectSmiles(ValueError):
@@ -167,168 +173,6 @@ class SMILESRead(CGRRead):
                     warning(f'record consist errors:\n{format_exc()}')
 
     @classmethod
-    def __description_parser(cls, atom_desc_list, dynamic_bond, token):
-        token_list = [{'element': None, 'charge': 0, 'p_charge': None, 'isotope': None, 'mapping': 0, 'stereo': None, 'hydrogen': None,
-                       'radical': None, 'p_radical': None}, None, None]
-        actual_index = -1
-
-        # atom description
-        adl = atom_desc_list
-        if any(set(elements_list).intersection(adl)):
-            for n, i in enumerate(adl):
-                if n <= actual_index:
-                    continue
-                #  atom
-                elif i in elements_list:
-                    if i != 'H':
-                        if not token_list[0]['element']:
-                            if adl[n - 1].isnumeric() or adl[n - 1] in bond_dict or n == 0:
-                                token_list[0]['element'] = i
-                            else:
-                                raise IncorrectSmiles('incorrect description')
-                        else:
-                            raise IncorrectSmiles('two elements in description')
-                    else:
-                        if adl[n - 1].isnumeric() or adl[n - 1] in bond_dict or n == 0 or adl[n - 1] in elements_list:
-                            if len(adl) > (n + 1) and adl[n + 1].isnumeric() and adl[n + 1] != '0':
-                                token_list[0]['hydrogen'] = int(adl[n + 1])
-                                actual_index = n + 1
-                            else:
-                                token_list[0]['hydrogen'] = 1
-                #  charge
-                elif '-' in i or '+' in i or i == '0':
-                    if token_list[0]['element'] or token_list[0]['hydrogen']:
-                        if len(adl) > (n + 1) and adl[n + 1].isnumeric() and adl[n + 1] != '0':
-                            if len(i) == 1:
-                                token_list[0]['charge'] = int(i + adl[n + 1])
-                                actual_index = n + 1
-                            else:
-                                raise IncorrectSmiles('incorrect charge')
-                        else:
-                            if i != '0':
-                                token_list[0]['charge'] = int(i[0] + str(len(i)))
-                                actual_index = n
-                            else:
-                                actual_index = n
-                        # dynamic
-                        if len(adl) > (actual_index + 1) and adl[actual_index + 1] == '>':
-                            if len(adl) > (actual_index + 2) and ('-' in adl[actual_index + 2] or '+' in adl[actual_index + 2] or adl[actual_index + 2] == '0'):
-                                if adl[actual_index + 2] == '0':
-                                    token_list[0]['p_charge'] = 0
-                                    actual_index += 2
-                                elif len(adl) > (actual_index + 3) and adl[actual_index + 3].isnumeric() and adl[actual_index + 3] != '0':
-                                    if len(adl[actual_index + 2]) == 1:
-                                        token_list[0]['p_charge'] = int(adl[actual_index + 2] + adl[actual_index + 3])
-                                        actual_index += 3
-                                    else:
-                                        raise IncorrectSmiles('incorrect charge')
-                                else:
-                                    token_list[0]['p_charge'] = int(adl[actual_index + 2][0] + str(len(adl[actual_index + 2])))
-                                    actual_index += 2
-                            else:
-                                raise IncorrectSmiles('incorrect dynamic charge')
-                    else:
-                        token_list[1] = bond_dict[i]
-                    continue
-                #  bond
-                if i in bond_dict:
-                    if n == 0:
-                        token_list[1] = bond_dict[i]
-                    elif i == ':' and adl[n + 1].isnumeric() and len(adl) == (n + 2):
-                        token_list[0]['mapping'] = adl[n + 1]
-                        actual_index = n + 2
-                #  number
-                elif i.isnumeric():
-                    if len(adl) > (n + 1) and adl[n + 1] in elements_list:
-                        token_list[0]['isotope'] = int(i)
-                    else:
-                        raise IncorrectSmiles('incorrect number in description')
-                #  radical
-                elif i == '*' or i == '^':
-                    if token_list[0]['element']:
-                        token_list[0]['radical'] = dynamic_radical[i]
-                    else:
-                        raise IncorrectSmiles('incorrect radical')
-                    if len(adl) > (n + 1) and adl[n + 1] == '>':
-                        if adl[n + 2] in dynamic_radical and dynamic_radical[adl[n + 2]] != token_list[0]['radical']:
-                            token_list[0]['p_radical'] = dynamic_radical[adl[n + 2]]
-                            actual_index = n + 2
-                        else:
-                            raise IncorrectSmiles('incorrect dynamic radical')
-                    else:
-                        token_list[0]['p_radical'] = dynamic_radical[i]
-                #  chiral specification
-                elif i == '@' or i == '@@':
-                    token_list[0]['stereo'] = i
-                else:
-                    continue
-            #  hydrogen
-            if token_list[0]['element'] is None:
-                if token_list[0]['hydrogen'] == 1:
-                    token_list[0]['element'] = 'H'
-                    token_list[0]['hydrogen'] = None
-                else:
-                    raise IncorrectSmiles('atom description contains only several H')
-        #  dynamic_bond
-        elif '>' in adl:
-            if len(adl) == 3 and adl[0] in bond_dict and not dynamic_bond:
-                if len(token) > 0:
-                    dynamic_bond.append(bond_dict[adl[0]])
-                    dynamic_bond.append(bond_dict[adl[-1]])
-                else:
-                    raise IncorrectSmiles('dynamic bond is the first element in smiles')
-        else:
-            raise IncorrectSmiles('atom description does not contain element or dynamic bond')
-        if len(dynamic_bond) > 0 and token_list[0]['element'] is not None:
-            if token_list[1] is None:
-                token_list[1] = dynamic_bond[0]
-                token_list[2] = dynamic_bond[1]
-                dynamic_bond.clear()
-            else:
-                raise IncorrectSmiles('bond and dynamic bond')
-        if not token_list[1]:
-            token_list[1] = 1
-        if token_list[0]['element']:
-            return token_list
-
-    @classmethod
-    def __token_adder(cls, element, token, atom_desc_list, is_description, token_store, dynamic_bond):
-        if not is_description:
-            if element[-1] == ')' or element[-1] == '(':
-                token.append(element)
-            elif element.isnumeric():
-                token.append([int(element), (bond_dict[token_store[0]] if token_store[0] in bond_dict else 1), None])
-                if len(dynamic_bond) > 0:
-                    if token_store[0] not in bond_dict:
-                        token[-1][1] = dynamic_bond[0]
-                        token[-1][2] = dynamic_bond[1]
-                    else:
-                        raise IncorrectSmiles('bond and dynamic bond')
-                dynamic_bond.clear()
-            elif not element.isnumeric() and (
-                    (element >= 'a' and element <= 'z') or (element >= 'A' and element <= 'Z')):
-                if element in main_atom_list:
-                    token.append([{'element': element, 'charge': 0, 'p_charge': None, 'isotope': None, 'mapping': 0, 'stereo': None,
-                                    'hydrogen': None, 'radical': None, 'p_radical': None},
-                                  (1 if len(token_store) == 1 else bond_dict[token_store[0]]), None])
-                    if len(dynamic_bond) > 0:
-                        if token_store[0] not in bond_dict:
-                            token[-1][1] = dynamic_bond[0]
-                            token[-1][2] = dynamic_bond[1]
-                        else:
-                            raise IncorrectSmiles('bond and dynamic bond')
-                    dynamic_bond.clear()
-                else:
-                    raise IncorrectSmiles('atom must be in brackets')
-            elif element in bond_dict:
-                atom_desc_list.append(element)
-        else:
-            if not element.isnumeric() and ((element >= 'a' and element <= 'z') or (element >= 'A' and element <= 'Z')):
-                atom_desc_list.append(element)
-            else:
-                atom_desc_list.append(element)
-
-    @classmethod
     def __tokenize(cls, smiles):
         if smiles[0] in r'=#:-0123456789/\~.%':
             raise IncorrectSmiles('bond or cycle can not be the first element in smiles')
@@ -352,7 +196,7 @@ class SMILESRead(CGRRead):
                     raise IncorrectSmiles(']..]')
                 elif not token:
                     raise IncorrectSmiles('empty [] brackets')
-                tokens.append((5, token))
+                tokens.append((5, tuple(token)))
                 token_type = token = None
             elif s in '()':
                 if token_type == 5:
@@ -436,8 +280,23 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('atom description has not finished')
         elif token:
             tokens.append((token_type, token))  # %closure or C or B
-        # composite closures folding
-        return [(6, int(''.join(token))) if token_type == 7 else (token_type, token) for token_type, token in tokens]
+
+        # postprocess [tokens]
+        out = []
+        for token_type, token in tokens:
+            if token_type == 7:  # composite closures folding
+                out.append((6, int(''.join(token))))
+            elif token_type == 5:
+                if '>' in token:  # dynamic bond
+                    try:
+                        out.append((10, dynamic_bonds[token]))
+                    except KeyError:
+                        raise IncorrectSmiles('invalid dynamic bond token')
+                else:  # atom token
+                    out.append((token_type, token))
+            else:
+                out.append((token_type, token))
+        return out
 
     @staticmethod
     def __check_token(token, strong_cycle=False):
