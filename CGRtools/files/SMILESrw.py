@@ -38,6 +38,8 @@ main_atom_list = {'B': 11, 'C': 12, 'N': 14, 'O': 16, 'P': 31, 'S': 32, 'F': 19,
 # 5: in bracket raw data []
 # 6: closure number
 # 7: raw closure number
+# 8: aromatic atom
+# 9: up down bond
 
 replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
 dynamic_radical = {'^': False, '*': True}
@@ -327,7 +329,7 @@ class SMILESRead(CGRRead):
                 atom_desc_list.append(element)
 
     @classmethod
-    def __make_token(cls, smiles):
+    def __tokenize(cls, smiles):
         if smiles[0] in r'=#:-0123456789/\~.%':
             raise IncorrectSmiles('bond or cycle can not be the first element in smiles')
         elif smiles[-1] in r'=#:-/\~.%':
@@ -337,12 +339,12 @@ class SMILESRead(CGRRead):
         tokens = []
         for n, s in enumerate(smiles):
             if s == '[':  # open complex token
-                if token_type == 5:
+                if token_type == 5:  # two opened [
                     raise IncorrectSmiles('[...[')
-                elif token_type == 7:
-                    raise IncorrectSmiles('invalid closure')
                 elif token:
                     tokens.append((token_type, token))
+                elif token_type == 7:  # empty closure
+                    raise IncorrectSmiles('invalid closure')
                 token = []
                 token_type = 5
             elif s == ']':  # close complex token
@@ -355,11 +357,11 @@ class SMILESRead(CGRRead):
             elif s in '()':
                 if token_type == 5:
                     raise IncorrectSmiles('brackets in atom/bond token')
-                elif token_type == 7:
-                    raise IncorrectSmiles('invalid closure')
                 elif token:
                     tokens.append((token_type, token))
                     token_type = token = None
+                elif token_type == 7:  # empty closure
+                    raise IncorrectSmiles('invalid closure')
                 tokens.append((replace_dict[s], None))
             elif token_type == 5:  # grow token with brackets. skip validation
                 token.append(s)
@@ -368,17 +370,18 @@ class SMILESRead(CGRRead):
                     if not token and s == '0':
                         raise IncorrectSmiles('number starts with 0')
                     token.append(s)
-                elif s == '0':
-                    raise IncorrectSmiles('number starts with 0')
-                elif token:
-                    tokens.append((token_type, token))
-                    token_type = token = None
-                tokens.append((6, int(s)))
-            elif token_type == 7:
-                raise IncorrectSmiles('invalid closure')
+                else:
+                    if s == '0':
+                        raise IncorrectSmiles('number starts with 0')
+                    elif token:
+                        tokens.append((token_type, token))
+                        token_type = token = None
+                    tokens.append((6, int(s)))
             elif s == '%':
                 if token:
                     tokens.append((token_type, token))
+                elif token_type == 7:
+                    raise IncorrectSmiles('%%')
                 token_type = 7
                 token = []
             elif s in '=#:-~':  # bonds found
@@ -390,7 +393,7 @@ class SMILESRead(CGRRead):
                 if token:
                     tokens.append((token_type, token))
                     token_type = token = None
-                tokens.append((1, 1, s == '/'))  # Up is true
+                tokens.append((9, s == '/'))  # Up is true
             elif s == '.':
                 if token:
                     tokens.append((token_type, token))
@@ -405,7 +408,7 @@ class SMILESRead(CGRRead):
                 if token:
                     tokens.append((token_type, token))
                     token_type = token = None
-                tokens.append((0, s.upper()))
+                tokens.append((8, s.upper()))
             elif s in 'CB':  # flag possible Cl or Br
                 if token:
                     tokens.append((token_type, token))
@@ -431,7 +434,10 @@ class SMILESRead(CGRRead):
 
         if token_type == 5:
             raise IncorrectSmiles('atom description has not finished')
-        return tokens
+        elif token:
+            tokens.append((token_type, token))  # %closure or C or B
+        # composite closures folding
+        return [(6, int(''.join(token))) if token_type == 7 else (token_type, token) for token_type, token in tokens]
 
     @staticmethod
     def __check_token(token, strong_cycle=False):
