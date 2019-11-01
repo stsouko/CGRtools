@@ -61,61 +61,45 @@ class Calculate2D:
 
     def clean2d(self):
         plane = self._plane
-        atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
 
-        size = len(atoms)
+        size = len(list(bonds.values()))
         dx, dy = n_dist / 2, n_dist * sin(pi / 3)
         components = {k: set(v) for k, v in bonds.items()}
         start, neigh = min((x for x in components.items()), key=lambda x: len(x[1]))
-        stack = [[(next_atom, start, bonds[start][next_atom].order, None, 0, 0)] for next_atom in neigh]
+        stack = [[(next_atom, start, bonds[start][next_atom].order, None, None, 0)] for next_atom in neigh]
 
         path = []
-        hashed_path = set()
+        hashed_path = {start}
         while stack:
             atom, prev_atom, bond1, current_coordinates, v, _ = stack[-1].pop()
-            if atom not in hashed_path:
-                bond2 = bonds[prev_atom][atom].order
-                if current_coordinates is None:
-                    current_coordinates = (dx, dy)
-                    plane[atom], plane[prev_atom] = current_coordinates, (0, 0)
-                    vx, vy = mx, my = dx, dy
-                    path.append((start, (0, 0)))
-                    path.append((atom, current_coordinates))
-                    hashed_path.add(start)
-                    hashed_path.add(atom)
-                else:
-                    x, y = v
-                    nx, ny = plane[prev_atom]
-                    if self.towards(bond1, bond2):
-                        current_coordinates = (x + nx, y + ny)
-                    mx, my = plane[atom] = current_coordinates
-                    vx, vy = mx - nx, my - ny
-                    path.append((atom, current_coordinates))
-                    hashed_path.add(atom)
+            bond2 = bonds[prev_atom][atom].order
+            if current_coordinates is None:
+                plane[atom], plane[prev_atom] = (dx, dy), (0, 0)
+                vx, vy = mx, my = dx, dy
+            else:
+                x, y = v
+                nx, ny = plane[prev_atom]
+                if self.towards(bond1, bond2):
+                    current_coordinates = (x + nx, y + ny)
+                mx, my = plane[atom] = current_coordinates
+                vx, vy = mx - nx, my - ny
+            path.append((atom, prev_atom, bond1, current_coordinates))
+            hashed_path.add(atom)
 
             if len(path) == size:
                 bad_points = False
                 cross = False
-                long = False
-                _items = plane.items()
-                for k, v in _items:
+                for k, v in plane.items():
                     kx, ky = v
-                    for key, value in _items:
+                    for key, value in plane.items():
                         if k == key:
                             continue
                         key_x, key_y = value
-                        d_x, d_y = abs(key_x - kx), abs(key_y - ky)
+                        d_x, d_y = abs(kx - key_x), abs(ky - key_y)
                         if d_x < .1 and d_y < .1:
                             bad_points = True
-
-                for k, v in bonds.items():
-                    kx, ky = plane[k]
-                    for kk in v:
-                        kkx, kky = plane[kk]
-                        if not .800 < hypot(kkx - kx, kky - ky) < .850:
-                            long = True
 
                 # _bonds = list(self.bonds())
                 # for i, triple in enumerate(_bonds):
@@ -127,11 +111,12 @@ class Calculate2D:
                 #         _nx, _ny = plane[_n]
                 #         _mx, _my = plane[_m]
 
-                if not bad_points and not cross and not long:
+                if not bad_points and not cross:
                     yield path
                 del stack[-1]
                 if stack:
-                    path = path[:stack[-1][-1][-1]]
+                    nnn = stack[-1][-1][-1]
+                    path = path[:nnn]
                     hashed_path = {x for x, *_ in path}
 
             elif atom != start:  # we finished. next step is final closure
@@ -194,6 +179,8 @@ class Calculate2D:
                     new_coords = False
                     for hash_atom in hashed_path:
                         v_x, v_y = plane[hash_atom]
+                    # for n, v in plane.items():
+                    #     v_x, v_y = v
                         n1_x, n1_y = new_coords1
                         n2_x, n2_y = new_coords2
                         d1_x, d2_x = abs(n1_x - v_x), abs(n2_x - v_x)
@@ -338,6 +325,8 @@ class Calculate2D:
                     new_coords = False
                     for hash_atom in hashed_path:
                         v_x, v_y = plane[hash_atom]
+                        # for n, v in plane.items():
+                        #     v_x, v_y = v
                         n1_x, n1_y = new_coords1
                         n2_x, n2_y = new_coords2
                         n3_x, n3_y = new_coords3
