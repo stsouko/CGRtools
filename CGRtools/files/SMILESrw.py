@@ -83,7 +83,7 @@ class SMILESRead(CGRRead):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
     def close(self, force=False):
         """
@@ -106,13 +106,13 @@ class SMILESRead(CGRRead):
 
         :return: list of parsed molecules or reactions
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def __reader(self):
         for line in self._file:
@@ -131,6 +131,7 @@ class SMILESRead(CGRRead):
                     reactants, reagents, products = smi.split('>')
                 except ValueError:
                     warning('invalid SMIRKS')
+                    yield None
                     continue
 
                 try:
@@ -154,17 +155,20 @@ class SMILESRead(CGRRead):
                                 record['reagents'].append(self.__parse_smiles(x))
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
+                    yield None
                     continue
 
                 try:
                     yield self._convert_reaction(record)
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
+                    yield None
             else:
                 try:
                     record = self.__parse_smiles(smi)
                 except ValueError:
                     warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
+                    yield None
                     continue
 
                 record['meta'] = meta
@@ -172,6 +176,7 @@ class SMILESRead(CGRRead):
                     yield self._convert_structure(record)
                 except ValueError:
                     warning(f'record consist errors:\n{format_exc()}')
+                    yield None
 
     @staticmethod
     def __raw_tokenize(smiles):
