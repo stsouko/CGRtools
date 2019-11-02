@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import takewhile
+from itertools import takewhile, permutations
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
@@ -56,6 +56,13 @@ dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': 
                  ':>.': '4>0', ':>-': '4>1', ':>=': '4>2', ':>#': '4>3', ':>~': '4>8',
                  '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
 dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
+
+dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+3': 3, '+4': 4}
+tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2)}
+dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
+dyn_charge_dict.update(tmp)
+
+dyn_radical_dict = {(): (False,), ('*',): (True,), ('*', '>', '^'): (True, 'r1'), ('^', '>', '*'): (False, 'r1')}
 
 
 class SMILESRead(CGRRead):
@@ -182,7 +189,7 @@ class SMILESRead(CGRRead):
     def __raw_tokenize(smiles):
         token_type = token = None
         tokens = []
-        for n, s in enumerate(smiles):
+        for s in smiles:
             if s == '[':  # open complex token
                 if token_type == 5:  # two opened [
                     raise IncorrectSmiles('[...[')
@@ -207,6 +214,8 @@ class SMILESRead(CGRRead):
                     token_type = token = None
                 elif token_type == 7:  # empty closure
                     raise IncorrectSmiles('invalid closure')
+                elif token_type == 2:  # barely opened
+                    raise IncorrectSmiles('(( or ()')
                 tokens.append((replace_dict[s], None))
             elif token_type == 5:  # grow token with brackets. skip validation
                 token.append(s)
@@ -284,7 +293,7 @@ class SMILESRead(CGRRead):
         return tokens
 
     @classmethod
-    def __postprocess(cls, tokens):
+    def __fix_tokens(cls, tokens):
         out = []
         for token_type, token in tokens:
             if token_type in (0, 8):  # simple atom
@@ -427,42 +436,74 @@ class SMILESRead(CGRRead):
         else:
             token = token[1:]
 
-        if token == ('*',):  # cgr radical expected
+        charge = ''.join(takewhile(lambda x: x in '+->01234', token))
+        if charge:
+            token = token[len(charge):]
+            try:
+                charge, *cgr = dyn_charge_dict[charge]
+            except KeyError:
+                raise IncorrectSmiles('invalid dynamic charge token')
+        else:
             charge = 0
-            is_radical = True
             cgr = []
-        elif '>' in token:  # dynamic charge and/or radical
-            # todo: parse dynamic charge and/or radical
-            charge = 0  # set reagent state
-            is_radical = False
-            cgr = []  # add dynamic data
-        else:  # shit with * symbol
-            raise IncorrectSmiles('invalid dynamic atom token')
+
+        try:
+            is_radical, *dyn = dyn_radical_dict[token]
+        except KeyError:
+            raise IncorrectSmiles('invalid dynamic radical token')
+        else:
+            cgr.extend(dyn)
 
         return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
-                'mapping': 0, 'x': 0., 'y': 0., 'z': 0.}, cgr
+                'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
 
     @staticmethod
-    def __check_token(token, strong_cycle=False):
-        previous = ''
+    def __postprocess(tokens, strong_cycle=False):
+        start = tokens[0][0]
+        if start == 2:
+            if len(tokens) == 1 or tokens[1][0] not in (0, 8, 11):
+                raise IncorrectSmiles('smiles not started from (atom')
+        elif start not in (0, 8, 11):
+            raise IncorrectSmiles('smiles not started from atom')
+
+        previous = None
         dead_cycles = []
         cycles_check = {}
-        bracket_numb = 0
-        for n, i in enumerate(token):
+
+        out = []
+        for token_type, token in tokens:
+            if token_type == 2:
+                if previous:
+                    if previous[0] != 4:
+                        raise IncorrectSmiles('bond before side chain')
+                    previous = None
+                out.append((token_type, token))
+            elif token_type == 3:
+                if previous:
+                    raise IncorrectSmiles('bond before closure')
+                out.append((token_type, token))
+            elif token_type in (1, 4, 9, 10):  # bonds. only keeping for atoms connecting
+                previous = (token_type, token)
+
+            elif token_type == 6:  # closure
+                ...
+
+            elif token_type in (0, 11):  # atoms
+                if previous:
+                    out.append((token_type, token, previous))  # atom with incoming bond
+                    previous = None
+                else:
+                    out.append((token_type, token, (1, 1)))  # skipped single bond
+            elif token_type == 8:  # aromatic
+                if previous:
+                    out.append((token_type, token, previous))  # atom with incoming bond
+                    previous = None
+                else:  # todo:
+                    out.append((token_type, token, (1, 4)))  # skipped aromatic bond
+
+        for n, i in enumerate(tokens):
             if isinstance(i[0], dict):  # atom
                 previous = 'atom'
-            elif i == '(':  # (((((((
-                if previous == '(':
-                    raise IncorrectSmiles('((')
-                else:
-                    previous = '('
-                    bracket_numb += 1
-            elif i == ')':  # ))))))
-                if previous == '(':
-                    raise IncorrectSmiles('()')
-                else:
-                    previous = ')'
-                    bracket_numb -= 1
             else:  # cycles
                 if previous == ')':  # (...)#1
                     raise IncorrectSmiles('cycle after brackets')
@@ -508,11 +549,10 @@ class SMILESRead(CGRRead):
                     previous = 'cycle'
                 else:
                     raise IncorrectSmiles('different bonds in cycle')
-        if any(cycles_check):
+
+        if cycles_check:
             raise IncorrectSmiles('cycle is not finished')
-        if bracket_numb != 0:
-            raise IncorrectSmiles('number of ( does not equal to number of )')
-        return token
+        return tokens
 
     @classmethod
     def __parse_smiles(cls, smiles):
@@ -522,8 +562,9 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('bond or % can not be the last element in smiles')
 
         tokens = cls.__raw_tokenize(smiles)
+        tokens = cls.__fix_tokens(tokens)
         tokens = cls.__postprocess(tokens)
-        return tokens
+
         atoms = []
         bonds = []
         cgr = []
@@ -531,22 +572,22 @@ class SMILESRead(CGRRead):
         last_num = 0
         stack = []
         cycles = {}
-        for i in tokens:
-            if i == '(':  # ((((((
+        previous = None
+        for n, (token_type, token) in enumerate(tokens):
+            if token_type == 2:  # ((((((
                 stack.append(last_num)
-            elif i == ')':  # ))))))
+            elif token_type == 3:  # ))))))
                 last_num = stack.pop()
-            elif isinstance(i[0], int):  # cycle
-                c, b, f = i
-                if c not in cycles:
-                    cycles[c] = [atom_num, b, f]
+            elif token_type == 6:  # cycle
+                if token not in cycles:
+                    cycles[token] = atom_num
                 else:
-                    bonds.append((atom_num, cycles[c][0], b))
+                    bonds.append((atom_num, cycles[token], b))
                     if f:
                         cgr.append(((atom_num, cycles[c][0]), 'dynbond', (str(b) + '>' + str(f))))
                     del cycles[c]
             else:  # atom
-                c, b, f = i
+                c, b, f = token
                 atom_num += 1
                 atoms.append({'element': c['element'],
                               'charge': (c['charge'][0] if isinstance(c['charge'], list) else c['charge']),
@@ -564,6 +605,8 @@ class SMILESRead(CGRRead):
                     cgr.append(((atom_num,), 'dynatom', 'r1'))
                 last_num = atom_num
 
+        if stack:
+            raise IncorrectSmiles('number of ( does not equal to number of )')
         return {'atoms': atoms,
                 'bonds': bonds,
                 'atoms_lists': {}, 'cgr': cgr, 'query': [], 'stereo': [], 'title': ''}
