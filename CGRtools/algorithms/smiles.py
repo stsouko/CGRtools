@@ -38,7 +38,7 @@ dyn_charge_str = {(i, j): f'{charge_str[i]}>{charge_str[j]}' if i != j else char
                   for i, j in product(range(-4, 5), repeat=2)}
 dyn_charge_str[(0, 0)] = ''
 
-dyn_radical_str = {(True, True): "*", (True, False): "*>n", (False, True): "n>*"}
+dyn_radical_str = {(True, True): "*", (True, False): "*>^", (False, True): "^>*"}
 
 
 class Smiles:
