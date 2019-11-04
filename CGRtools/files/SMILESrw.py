@@ -77,7 +77,7 @@ class SMILESRead(CGRRead):
     example:
     C=C>>CC id:123 key=value\n
     """
-    def __init__(self, file, *args, strong_cycle=False, **kwargs):
+    def __init__(self, file, *args, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
             self._is_buffer = False
@@ -90,8 +90,16 @@ class SMILESRead(CGRRead):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        self.__strong_cycle = strong_cycle
         self._data = self.__reader()
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create SMILES parser function configured same as SMILESRead object
+        """
+        obj = object.__new__(cls)
+        super(SMILESRead, obj).__init__(*args, **kwargs)
+        return obj.parse
 
     def close(self, force=False):
         """
@@ -124,67 +132,66 @@ class SMILESRead(CGRRead):
 
     def __reader(self):
         for line in self._file:
-            smi, *data = line.split()
-            meta = {}
-            for x in data:
-                try:
-                    k, v = split('[=:]', x, 1)
-                    meta[k.strip()] = v.strip()
-                except ValueError:
-                    warning(f'invalid metadata entry: {x}')
+            yield self.parse(line)
 
-            if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^'):
-                record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
-                try:
-                    reactants, reagents, products = smi.split('>')
-                except ValueError:
-                    warning('invalid SMIRKS')
-                    yield None
-                    continue
+    def parse(self, smiles):
+        smi, *data = smiles.split()
+        meta = {}
+        for x in data:
+            try:
+                k, v = split('[=:]', x, 1)
+                meta[k.strip()] = v.strip()
+            except ValueError:
+                warning(f'invalid metadata entry: {x}')
 
-                try:
-                    if reactants:
-                        for x in reactants.split('.'):
-                            if not x and self._ignore:
-                                warning('empty molecule ignored')
-                            else:
-                                record['reactants'].append(self._parse_smiles(x))
-                    if products:
-                        for x in products.split('.'):
-                            if not x and self._ignore:
-                                warning('empty molecule ignored')
-                            else:
-                                record['products'].append(self._parse_smiles(x))
-                    if reagents:
-                        for x in reagents.split('.'):
-                            if not x and self._ignore:
-                                warning('empty molecule ignored')
-                            else:
-                                record['reagents'].append(self._parse_smiles(x))
-                except ValueError:
-                    warning(f'record consist errors:\n{format_exc()}')
-                    yield None
-                    continue
+        if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^'):
+            record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
+            try:
+                reactants, reagents, products = smi.split('>')
+            except ValueError:
+                warning('invalid SMIRKS')
+                return
 
-                try:
-                    yield self._convert_reaction(record)
-                except ValueError:
-                    warning(f'record consist errors:\n{format_exc()}')
-                    yield None
-            else:
-                try:
-                    record = self._parse_smiles(smi)
-                except ValueError:
-                    warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
-                    yield None
-                    continue
+            try:
+                if reactants:
+                    for x in reactants.split('.'):
+                        if not x and self._ignore:
+                            warning('empty molecule ignored')
+                        else:
+                            record['reactants'].append(self.__parse_smiles(x))
+                if products:
+                    for x in products.split('.'):
+                        if not x and self._ignore:
+                            warning('empty molecule ignored')
+                        else:
+                            record['products'].append(self.__parse_smiles(x))
+                if reagents:
+                    for x in reagents.split('.'):
+                        if not x and self._ignore:
+                            warning('empty molecule ignored')
+                        else:
+                            record['reagents'].append(self.__parse_smiles(x))
+            except ValueError:
+                warning(f'record consist errors:\n{format_exc()}')
+                return
 
-                record['meta'] = meta
-                try:
-                    yield self._convert_structure(record)
-                except ValueError:
-                    warning(f'record consist errors:\n{format_exc()}')
-                    yield None
+            try:
+                return self._convert_reaction(record)
+            except ValueError:
+                warning(f'record consist errors:\n{format_exc()}')
+                return
+        else:
+            try:
+                record = self.__parse_smiles(smi)
+            except ValueError:
+                warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
+                return
+
+            record['meta'] = meta
+            try:
+                return self._convert_structure(record)
+            except ValueError:
+                warning(f'record consist errors:\n{format_exc()}')
 
     @staticmethod
     def __raw_tokenize(smiles):
@@ -460,8 +467,8 @@ class SMILESRead(CGRRead):
         return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
                 'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
 
-    def _parse_smiles(self, smiles):
-        strong_cycle = self.__strong_cycle
+    def __parse_smiles(self, smiles):
+        strong_cycle = not self._ignore
 
         tokens = self.__raw_tokenize(smiles)
         tokens = self.__fix_tokens(tokens)

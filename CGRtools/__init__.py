@@ -25,3 +25,6 @@ from .files import *
 from .preparer import *
 from .reactor import *
 from .utils import *
+
+
+smiles = SMILESRead.create_parser(ignore=True)
