@@ -65,6 +65,15 @@ class Calculate2D:
         bonds = self._bonds
         atoms_order = self.atoms_order
 
+        for_cycles = defaultdict(set)
+        non_standard_cycle = defaultdict(set)
+        for cycle in self.sssr:
+            lc = len(cycle)
+            if lc != 6:
+                for_cycles[lc].add(set(cycle))
+            for elem in cycle:
+                non_standard_cycle[elem].add(lc)
+
         size = len(atoms)
         dx, dy = n_dist / 2, n_dist * sin(pi / 3)
         components = {k: set(v) for k, v in bonds.items()}
@@ -110,11 +119,12 @@ class Calculate2D:
                         if d_x < .1 and d_y < .1:
                             bad_points = True
 
-                for k, v in bonds.items():
-                    kx, ky = plane[k]
-                    for kk in v:
-                        kkx, kky = plane[kk]
-                        if not .800 < hypot(kkx - kx, kky - ky) < .850:
+                # for vector ab
+                for a, v in bonds.items():
+                    ax, ay = plane[a]
+                    for b in v:
+                        bx, by = plane[b]
+                        if not .800 < hypot(bx - ax, by - ay) < .850:
                             long = True
 
                 # _bonds = list(self.bonds())
@@ -133,6 +143,11 @@ class Calculate2D:
                 if stack:
                     path = path[:stack[-1][-1][-1]]
                     hashed_path = {x for x, *_ in path}
+
+            elif atom in non_standard_cycle:
+                cycle_size = list(non_standard_cycle[atom])
+                if prev_atom in non_standard_cycle:
+                    prev_cycle = list(non_standard_cycle[prev_atom])
 
             elif atom != start:  # we finished. next step is final closure
                 for_stack = []
