@@ -54,7 +54,7 @@ class INCHIRead(CGRRead):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
     def close(self, force=False):
         """
@@ -77,32 +77,29 @@ class INCHIRead(CGRRead):
 
         :return: list of parsed molecules
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def __reader(self):
         for line in self._file:
             inchi, *data = line.split()
             meta = {}
-            aux = None
             for x in data:
-                if x.startswith('AuxInfo='):
-                    aux = x
-                else:
-                    try:
-                        k, v = split('[=:]', x, 1)
-                        meta[k.strip()] = v.strip()
-                    except ValueError:
-                        warning(f'invalid metadata entry: {x}')
+                try:
+                    k, v = split('[=:]', x, 1)
+                    meta[k] = v
+                except ValueError:
+                    warning(f'invalid metadata entry: {x}')
             try:
-                record = self.__parse_aux(aux) if aux else self.__parse_inchi(inchi)
+                record = self.__parse_inchi(inchi)
             except ValueError:
-                warning(f'line: {inchi} {aux}\nconsist errors:\n{format_exc()}')
+                warning(f'line: {line}\nconsist errors:\n{format_exc()}')
+                yield None
                 continue
 
             record['meta'] = meta
@@ -110,11 +107,14 @@ class INCHIRead(CGRRead):
                 yield self._convert_structure(record)
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
+                yield None
 
     @staticmethod
     def __parse_inchi(string):
         structure = INCHIStructure()
-        lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure))
+        if lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure)):
+            lib.FreeStructFromINCHI(byref(structure))
+            raise ValueError('invalid INCHI')
 
         atoms, bonds = [], []
         seen = set()
@@ -140,20 +140,9 @@ class INCHIRead(CGRRead):
                 order = atom.bond_type[k]
                 if order:
                     bonds.append((n, m, order))
-        lib.FreeStructFromINCHI(byref(structure))
-        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': []}
 
-    @staticmethod
-    def __parse_aux(string):
-        atoms, bonds = [], []
-        for n in range(structure.num_atoms):
-            atom = structure.atom[n]
-            print(atom.x)
-            atoms.append({'element': atom.elname, 'charge': atom.charge, 'mapping': 0, 'x': atom.x, 'y': atom.y,
-                          'z': atom.z, 'mark': None, 'isotope': atom.isotopic_mass, 'multiplicity': atom.radical})
-            # (b['a0'], b['a1'], {'order': self.__bond_map[b['order']]}, None)
-        print(atoms)
-        return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
+        lib.FreeStructFromINCHI(byref(structure))
+        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': [], 'title': ''}
 
 
 class InputINCHI(Structure):
@@ -208,10 +197,6 @@ class INCHIStructure(Structure):
                                              # of recognized options and possibly an Error/warn message
                 ('WarningFlags', (c_long * 2) * 2)
                 ]
-
-
-class AUXStructure(Structure):
-    pass
 
 
 class INCHIread:
