@@ -46,7 +46,7 @@ class Smiles:
 
     @cached_method
     def __str__(self):
-        return self._smiles(self.atoms_order.get)
+        return ''.join(self._smiles(self.atoms_order.get))
 
     def __format__(self, format_spec):
         """
@@ -70,7 +70,7 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
-            return self._smiles(self.atoms_order.get, **kwargs)
+            return ''.join(self._smiles(self.atoms_order.get, **kwargs))
         return str(self)
 
     def __eq__(self, other):
@@ -84,9 +84,10 @@ class Smiles:
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    def _smiles(self, weights, *, asymmetric_closures=False, **kwargs):
+    def _smiles(self, weights, *, asymmetric_closures=False, open_parenthesis='(', close_parenthesis=')',
+                delimiter='.', **kwargs):
         if not self._atoms:
-            return ''
+            return []
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
@@ -178,6 +179,7 @@ class Smiles:
                     visited[token].extend(n for n, _ in tokens[token])
                 if token in edges:
                     visited[token].extend(edges[token])
+
             for token in smiles:
                 if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, adjacency=visited, **kwargs))
@@ -189,19 +191,24 @@ class Smiles:
                                     visited_bond.add((m, token))
                             else:
                                 string.append(self._format_bond(token, m, adjacency=visited, **kwargs))
-                            c = casted_cycles[c]
-                            string.append(str(c) if c < 10 else f'%{c}')
-                elif token in ('(', ')'):
-                    string.append(token)
+                            string.append(self._format_closure(casted_cycles[c]))
+                elif token == '(':
+                    string.append(open_parenthesis)
+                elif token == ')':
+                    string.append(close_parenthesis)
                 else:  # bonds
                     string.append(self._format_bond(*token, adjacency=visited, **kwargs))
 
             atoms_set.difference_update(visited)
             if atoms_set:
-                string.append('.')
+                string.append(delimiter)
             else:
                 break
-        return ''.join(string)
+        return string
+
+    @staticmethod
+    def _format_closure(c):
+        return str(c) if c < 10 else f'%{c}'
 
 
 class MoleculeSmiles(Smiles):
