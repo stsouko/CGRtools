@@ -25,3 +25,9 @@ from .files import *
 from .preparer import *
 from .reactor import *
 from .utils import *
+
+
+inchi = INCHIRead.create_parser()
+
+
+__all__ = ['inchi']

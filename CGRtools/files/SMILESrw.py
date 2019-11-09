@@ -90,7 +90,7 @@ class SMILESRead(CGRRead):
             for x in data:
                 try:
                     k, v = split('[=:]', x, 1)
-                    meta[k.strip()] = v.strip()
+                    meta[k] = v
                 except ValueError:
                     warning(f'invalid metadata entry: {x}')
 
