@@ -54,7 +54,7 @@ Mac
 Windows
 =======
 
-* Install python3.7 and git using [Chocolately](<https://chocolatey.org/>)
+* Install python3.7 and git using [Chocolatey](<https://chocolatey.org/>)
 
     ```
     choco install git
@@ -114,8 +114,20 @@ COPYRIGHT
 CONTRIBUTORS
 ============
 
-* Timur Gimadiev <timur.gimadiev@gmail.com>
-* Ravil Mukhametgaleev <sonic-mc@mail.ru>
-* Tagir Akhmetshin <tagirshin@gmail.com>
-* Adelia Fatykhova <adelik21979@gmail.com>
 * Dinar Batyrshin <batyrshin-dinar@mail.ru>
+* Timur Gimadiev <timur.gimadiev@gmail.com>
+* Adelia Fatykhova <adelik21979@gmail.com>
+* Tagir Akhmetshin <tagirshin@gmail.com>
+* Ravil Mukhametgaleev <sonic-mc@mail.ru>
+
+PACKAGING
+=========
+
+For wheel generation just type next command in source root
+
+    python setup.py bdist_wheel
+
+On Linux additionally do repairing of package
+
+    pip install auditwheel
+    auditwheel repair dist/CGRtools-<version>-<python_version>-linux_x86_64.whl
