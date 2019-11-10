@@ -61,7 +61,7 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
         self._bonds = state['bonds']
         self._parsed_mapping = state['parsed_mapping']
         self.__meta = state['meta']
-        self.__name = state.get('name')  # 4.0.9 compatibility
+        self.__name = state.get('name', '')  # 4.0.9 compatibility
 
     def __len__(self):
         return len(self._atoms)

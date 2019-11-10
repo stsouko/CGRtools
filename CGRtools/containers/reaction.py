@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method
+from CachedMethods import cached_method, class_cached_property
 from collections.abc import Iterable
 from itertools import chain
 from functools import reduce
@@ -28,9 +28,10 @@ from .common import Graph
 from .molecule import MoleculeContainer
 from .query import QueryContainer
 from ..algorithms.depict import DepictReaction
+from ..algorithms.standardize import StandardizeReaction
 
 
-class ReactionContainer(DepictReaction):
+class ReactionContainer(StandardizeReaction, DepictReaction):
     """
     reaction storage. contains reactants, products and reagents lists.
 
@@ -39,6 +40,7 @@ class ReactionContainer(DepictReaction):
     query containers itself not support hashing and comparison.
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
+    __class_cache__ = {}
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
                  reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
@@ -116,7 +118,7 @@ class ReactionContainer(DepictReaction):
         self.__products = state['products']
         self.__reagents = state['reagents']
         self.__meta = state['meta']
-        self.__name = state.get('name')  # 4.0.9 compatibility
+        self.__name = state.get('name', '')  # 4.0.9 compatibility
         self._arrow = None
         self._signs = None
 
@@ -205,7 +207,7 @@ class ReactionContainer(DepictReaction):
         """
         total = 0
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'implicify_hydrogens'):
+            if isinstance(m, MoleculeContainer):
                 total += m.implicify_hydrogens()
         if total:
             self.flush_cache()
@@ -219,50 +221,39 @@ class ReactionContainer(DepictReaction):
         """
         total = 0
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'explicify_hydrogens'):
+            if isinstance(m, MoleculeContainer):
                 total += m.explicify_hydrogens()
         if total:
             self.flush_cache()
         return total
 
-    def thiele(self):
+    def thiele(self) -> bool:
         """
-        convert structures to aromatic form. works only for Molecules
+        convert structures to aromatic form. works only for Molecules.
+        return True if in any molecule found kekule ring
         """
         total = False
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'thiele'):
-                m.thiele()
-                if not total:
+            if isinstance(m, MoleculeContainer):
+                if m.thiele() and not not total:
                     total = True
         if total:
             self.flush_cache()
+        return total
 
-    def kekule(self):
+    def kekule(self) -> bool:
         """
-        convert structures to kekule form. works only for Molecules
-        """
-        total = False
-        for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'kekule'):
-                m.kekule()
-                if not total:
-                    total = True
-        if total:
-            self.flush_cache()
-
-    def standardize(self):
-        """
-        standardize functional groups. works only for Molecules
+        convert structures to kekule form. works only for Molecules.
+        return True if in any molecule found aromatic ring
         """
         total = False
         for m in chain(self.__reagents, self.__reactants, self.__products):
-            if hasattr(m, 'standardize'):
-                m.standardize()
-                if not total:
+            if isinstance(m, MoleculeContainer):
+                if m.kekule() and not total:
                     total = True
         if total:
             self.flush_cache()
+        return total
 
     @cached_method
     def compose(self) -> CGRContainer:
@@ -431,6 +422,18 @@ class ReactionContainer(DepictReaction):
         self.__dict__.clear()
         for m in chain(self.__reagents, self.__reactants, self.__products):
             m.flush_cache()
+
+    @class_cached_property
+    def _standardize_compiled_rules(self):
+        rules = []
+        for atoms, bonds, fix in self._standardize_rules():
+            q = QueryContainer()
+            for a in atoms:
+                q.add_atom(**a)
+            for n, m, b in bonds:
+                q.add_bond(n, m, b)
+            rules.append((q, fix))
+        return rules
 
 
 __all__ = ['ReactionContainer']

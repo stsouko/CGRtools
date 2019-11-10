@@ -22,22 +22,20 @@ from typing import List, Tuple, Optional
 from ..exceptions import InvalidAromaticRing
 
 
-_pyrole_atoms = ('N', 'O', 'S', 'Se', 'P')
-
-
 class Aromatize:
     __slots__ = ()
 
-    def thiele(self):
+    def thiele(self) -> bool:
         """
-        convert structure to aromatic form
+        convert structure to aromatic form (Huckel rule ignored). return True if found any kekule ring.
         """
+        atoms = self._atoms
         bonds = self._bonds
         sh = self._hybridizations
 
         rings = defaultdict(set)  # aromatic? skeleton. include quinones
         for ring in self.sssr:
-            if len(ring) in (5, 6, 7) and all(sh[n] == 2 for n in ring):
+            if all(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring):
                 n, *_, m = ring
                 rings[n].add(m)
                 rings[m].add(n)
@@ -45,7 +43,7 @@ class Aromatize:
                     rings[n].add(m)
                     rings[m].add(n)
         if not rings:
-            return
+            return False
 
         double_bonded = [n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())]
         if double_bonded:  # delete quinones
@@ -63,11 +61,11 @@ class Aromatize:
                 for x in pm:
                     rings[x].discard(m)
         if not rings:
-            return
+            return False
 
         rings = self._sssr(rings)  # search rings again
         if not rings:
-            return
+            return False
 
         seen = set()
         for ring in rings:
@@ -80,18 +78,21 @@ class Aromatize:
             sh[n] = 4
 
         self.flush_cache()
+        return True
 
-    def kekule(self):
+    def kekule(self) -> bool:
         """
-        convert structure to kekule form.
+        convert structure to kekule form. return True if found any aromatic ring.
 
         only one of possible double/single bonds positions will be set.
         for enumerate bonds positions use `enumerate_kekule`
         """
         kekule = next(self.__kekule_full(), None)
         if kekule:
-            self.__kekule_patch(kekule)
+            self._kekule_patch(kekule)
             self.flush_cache()
+            return True
+        return False
 
     def enumerate_kekule(self):
         """
@@ -99,7 +100,7 @@ class Aromatize:
         """
         for form in self.__kekule_full():
             copy = self.copy()
-            copy._Aromatize__kekule_patch(form)
+            copy._kekule_patch(form)
             yield copy
 
     def check_thiele(self, fast=True) -> bool:
@@ -231,7 +232,7 @@ class Aromatize:
                 raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se, Te possible, not: {atoms[n].atomic_symbol}')
         return rings, pyroles, double_bonded
 
-    def __kekule_patch(self, patch):
+    def _kekule_patch(self, patch):
         bonds = self._bonds
         atoms = set()
         for n, m, b in patch:
