@@ -40,7 +40,7 @@ class _bdist_wheel(bdist_wheel):
 
 setup(
     name='CGRtools',
-    version='4.0.11',
+    version='4.0.12',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',

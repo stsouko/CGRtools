@@ -432,7 +432,7 @@ class Standardize:
 class StandardizeReaction:
     __slots__ = ()
 
-    def standardize(self) -> bool:
+    def standardize(self, fix_mapping: bool = True) -> bool:
         """
         standardize functional groups. works only for Molecules.
         return True if in any molecule found not canonical group
@@ -443,33 +443,35 @@ class StandardizeReaction:
                 if m.standardize() and not total:
                     total = True
 
-        seen = set()
-        for pattern, fix in self._standardize_compiled_rules:
-            found = []
-            for m in self.reactants:
-                for mapping in pattern.get_mapping(m, automorphism_filter=False):
-                    if mapping[1] not in seen:
-                        found.append(({fix.get(k, k): v for k, v in mapping.items()},
-                                      {mapping[k]: mapping[v] for k, v in fix.items()}))
+        if fix_mapping:
+            seen = set()
+            for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
+                found = []
+                for m in self.reactants:
+                    for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
+                        if mapping[1] not in seen:
+                            found.append(({fix.get(k, k): v for k, v in mapping.items()},
+                                          {mapping[k]: mapping[v] for k, v in fix.items()}))
 
-            if not found:
-                continue
-            for m in self.products:
-                for mapping in pattern.get_mapping(m, automorphism_filter=False):
-                    atom = mapping[1]
-                    if atom in seen:
-                        continue
-                    for n, (k, v) in enumerate(found):
-                        if k == mapping:
-                            break
-                    else:
-                        continue
+                if not found:
+                    continue
+                for m in self.products:
+                    for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
+                        atom = mapping[1]
+                        if atom in seen:
+                            continue
+                        for n, (k, v) in enumerate(found):
+                            if k == mapping:
+                                break
+                        else:
+                            continue
 
-                    del found[n]
-                    m.remap(v)
-                    seen.add(atom)
-                    if not total:
-                        total = True
+                        del found[n]
+                        m.remap(v)
+                        seen.add(atom)
+
+            if seen and not total:
+                total = True
 
         if total:
             self.flush_cache()
@@ -491,7 +493,7 @@ class StandardizeReaction:
                  {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
-        rules.append((atoms, bonds, fix))
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
         # Carbonate
         #
@@ -505,7 +507,7 @@ class StandardizeReaction:
                  {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
-        rules.append((atoms, bonds, fix))
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
         # Carbon Acid
         #
@@ -519,7 +521,7 @@ class StandardizeReaction:
                  {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
-        rules.append((atoms, bonds, fix))
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
         # Phosphate
         #
@@ -533,7 +535,24 @@ class StandardizeReaction:
                  {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
-        rules.append((atoms, bonds, fix))
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
+
+        # Nitro addition
+        #
+        #      O             O -- *
+        #     //            /
+        # * - N+   >>  * = N+
+        #      \            \
+        #       O-           O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        p_atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                   {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 2})
+        p_bonds = ((1, 2, 1), (1, 3, 1))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
 
         return rules
 

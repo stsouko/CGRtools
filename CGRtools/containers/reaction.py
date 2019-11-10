@@ -426,13 +426,18 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @class_cached_property
     def _standardize_compiled_rules(self):
         rules = []
-        for atoms, bonds, fix in self._standardize_rules():
-            q = QueryContainer()
-            for a in atoms:
-                q.add_atom(**a)
-            for n, m, b in bonds:
-                q.add_bond(n, m, b)
-            rules.append((q, fix))
+        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self._standardize_rules():
+            r_q = QueryContainer()
+            p_q = QueryContainer()
+            for a in r_atoms:
+                r_q.add_atom(**a)
+            for n, m, b in r_bonds:
+                r_q.add_bond(n, m, b)
+            for a in p_atoms:
+                p_q.add_atom(**a)
+            for n, m, b in p_bonds:
+                p_q.add_bond(n, m, b)
+            rules.append((r_q, p_q, fix))
         return rules
 
 
