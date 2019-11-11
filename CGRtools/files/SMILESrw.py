@@ -57,8 +57,8 @@ dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': 
                  '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
 dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
 
-dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+3': 3, '+4': 4}
-tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2)}
+dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '--': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4}
+tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2) if x != y}
 dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 
@@ -144,7 +144,7 @@ class SMILESRead(CGRRead):
             except ValueError:
                 warning(f'invalid metadata entry: {x}')
 
-        if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^'):
+        if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^', '0'):
             record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
             try:
                 reactants, reagents, products = smi.split('>')
@@ -225,6 +225,10 @@ class SMILESRead(CGRRead):
                 elif token_type == 2:  # barely opened
                     raise IncorrectSmiles('(( or ()')
                 tokens.append((replace_dict[s], None))
+                if s == '(':
+                    token_type = 2
+                elif s == ')':
+                    token_type = 3
             elif token_type == 5:  # grow token with brackets. skip validation
                 token.append(s)
             elif s.isnumeric():  # closures
@@ -504,7 +508,10 @@ class SMILESRead(CGRRead):
             elif token_type == 3:  # ))))))
                 if previous:
                     raise IncorrectSmiles('bond before closure')
-                last_num = stack.pop()
+                if stack:
+                    last_num = stack.pop()
+                else:
+                    raise IncorrectSmiles('close chain more than open')
             elif token_type in (1, 4, 9, 10):  # bonds. only keeping for atoms connecting
                 if previous:
                     raise IncorrectSmiles('2 bonds in a row')
@@ -564,7 +571,7 @@ class SMILESRead(CGRRead):
                         cgr.append(((atom_num, last_num), 'dynbond', previous[1]))
 
                 if token_type == 11:
-                    cgr.extend(token.pop('cgr'))
+                    cgr.extend(((atom_num,), 'dynatom', x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
                     if stereo:
