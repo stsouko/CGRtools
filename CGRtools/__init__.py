@@ -27,8 +27,10 @@ from .reactor import *
 from .utils import *
 
 
-inchi = INCHIRead.create_parser()
 smiles = SMILESRead.create_parser(ignore=True)
 
+__all__ = ['smiles']
 
-__all__ = ['inchi', 'smiles']
+if 'INCHIRead' in locals():
+    inchi = INCHIRead.create_parser()
+    __all__.append('inchi')

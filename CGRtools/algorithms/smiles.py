@@ -23,7 +23,7 @@ from hashlib import sha512
 from itertools import count, product
 
 
-charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '++', 3: '+3', 4: '+4'}
+charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
 order_str = {1: '', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
 organic_set = {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}

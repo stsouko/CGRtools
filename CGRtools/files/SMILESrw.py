@@ -23,8 +23,10 @@ from logging import warning
 from pathlib import Path
 from re import split
 from traceback import format_exc
+from typing import Union, List
 from warnings import warn
 from ._CGRrw import CGRRead
+from ..containers import MoleculeContainer, CGRContainer, ReactionContainer
 from ..exceptions import IncorrectSmiles
 
 
@@ -57,8 +59,8 @@ dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': 
                  '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
 dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
 
-dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+3': 3, '+4': 4}
-tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2)}
+dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '--': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4}
+tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2) if x != y}
 dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 
@@ -79,18 +81,18 @@ class SMILESRead(CGRRead):
     """
     def __init__(self, file, *args, **kwargs):
         if isinstance(file, str):
-            self._file = open(file)
-            self._is_buffer = False
+            self.__file = open(file)
+            self.__is_buffer = False
         elif isinstance(file, Path):
-            self._file = file.open()
-            self._is_buffer = False
+            self.__file = file.open()
+            self.__is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self._file = file
-            self._is_buffer = True
+            self.__file = file
+            self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        self._data = self.__reader()
+        self._data = (self.parse(line) for line in self.__file)
 
     @classmethod
     def create_parser(cls, *args, **kwargs):
@@ -107,8 +109,8 @@ class SMILESRead(CGRRead):
 
         :param force: force closing of externally opened file or buffer
         """
-        if not self._is_buffer or force:
-            self._file.close()
+        if not self.__is_buffer or force:
+            self.__file.close()
 
     def __enter__(self):
         return self
@@ -116,7 +118,7 @@ class SMILESRead(CGRRead):
     def __exit__(self, _type, value, traceback):
         self.close()
 
-    def read(self):
+    def read(self) -> List[Union[MoleculeContainer, CGRContainer, ReactionContainer]]:
         """
         parse whole file
 
@@ -130,11 +132,8 @@ class SMILESRead(CGRRead):
     def __next__(self):
         return next(iter(self))
 
-    def __reader(self):
-        for line in self._file:
-            yield self.parse(line)
-
-    def parse(self, smiles):
+    def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
+        """SMILES string parser"""
         smi, *data = smiles.split()
         meta = {}
         for x in data:
@@ -144,7 +143,7 @@ class SMILESRead(CGRRead):
             except ValueError:
                 warning(f'invalid metadata entry: {x}')
 
-        if '>' in smi and smi[smi.index('>') + 1] not in ('+', '-', '.', '=', '#', ':', '~', '*', '^'):
+        if '>' in smi and (smi[smi.index('>') + 1] in '>([' or smi[smi.index('>') + 1].isalpha()):
             record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
             try:
                 reactants, reagents, products = smi.split('>')
@@ -158,19 +157,19 @@ class SMILESRead(CGRRead):
                         if not x and self._ignore:
                             warning('empty molecule ignored')
                         else:
-                            record['reactants'].append(self.__parse_smiles(x))
+                            record['reactants'].append(self.__parse_tokens(x))
                 if products:
                     for x in products.split('.'):
                         if not x and self._ignore:
                             warning('empty molecule ignored')
                         else:
-                            record['products'].append(self.__parse_smiles(x))
+                            record['products'].append(self.__parse_tokens(x))
                 if reagents:
                     for x in reagents.split('.'):
                         if not x and self._ignore:
                             warning('empty molecule ignored')
                         else:
-                            record['reagents'].append(self.__parse_smiles(x))
+                            record['reagents'].append(self.__parse_tokens(x))
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 return
@@ -182,7 +181,7 @@ class SMILESRead(CGRRead):
                 return
         else:
             try:
-                record = self.__parse_smiles(smi)
+                record = self.__parse_tokens(smi)
             except ValueError:
                 warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
                 return
@@ -219,12 +218,13 @@ class SMILESRead(CGRRead):
                     raise IncorrectSmiles('brackets in atom/bond token')
                 elif token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
                 elif token_type == 7:  # empty closure
                     raise IncorrectSmiles('invalid closure')
                 elif token_type == 2:  # barely opened
                     raise IncorrectSmiles('(( or ()')
-                tokens.append((replace_dict[s], None))
+                token_type = replace_dict[s]
+                tokens.append((token_type, None))
             elif token_type == 5:  # grow token with brackets. skip validation
                 token.append(s)
             elif s.isnumeric():  # closures
@@ -467,12 +467,13 @@ class SMILESRead(CGRRead):
         return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
                 'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
 
-    def __parse_smiles(self, smiles):
-        strong_cycle = not self._ignore
-
+    def __parse_tokens(self, smiles):
         tokens = self.__raw_tokenize(smiles)
         tokens = self.__fix_tokens(tokens)
+        return self._parse_tokens(tokens)
 
+    def _parse_tokens(self, tokens):
+        strong_cycle = not self._ignore
         t1 = tokens[0][0]
         if t1 == 2:
             if tokens[1][0] not in (0, 8, 11):
@@ -504,7 +505,10 @@ class SMILESRead(CGRRead):
             elif token_type == 3:  # ))))))
                 if previous:
                     raise IncorrectSmiles('bond before closure')
-                last_num = stack.pop()
+                try:
+                    last_num = stack.pop()
+                except IndexError:
+                    raise IncorrectSmiles('close chain more than open')
             elif token_type in (1, 4, 9, 10):  # bonds. only keeping for atoms connecting
                 if previous:
                     raise IncorrectSmiles('2 bonds in a row')
@@ -564,7 +568,7 @@ class SMILESRead(CGRRead):
                         cgr.append(((atom_num, last_num), 'dynbond', previous[1]))
 
                 if token_type == 11:
-                    cgr.extend(token.pop('cgr'))
+                    cgr.extend(((atom_num,), 'dynatom', x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
                     if stereo:
