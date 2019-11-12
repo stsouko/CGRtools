@@ -32,24 +32,69 @@ def rotate_vector(x1, y1, x2, y2):
     return cos_rad * x1 - sin_rad * y1, sin_rad * x1 + cos_rad * y1
 
 
-def rotate_vector2(x1, y1, angle):
-    """
-    rotate x,y vector over angle
-    """
-    cos_rad = cos(angle)
-    sin_rad = sin(angle)
-    return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
+def crosses(a, b, c, d):
+    ax, ay = a
+    bx, by = b
+    cx, cy = c
+    dx, dy = d
+
+    x, y = None, None
+    a1 = ay - by
+    b1 = bx - ax
+    c1 = ax * by - bx * ay
+    a2 = cy - dy
+    b2 = dx - cx
+    c2 = cx * dy - dx * cy
+    um1 = a1 * b1
+    if a1 - .001 <= 0 <= a1 + .001:
+        a1 = 0
+    if b1 - .001 <= 0 <= b1 + .001:
+        b1 = 0
+    if a2 - .001 <= 0 <= a2 + .001:
+        a2 = 0
+    if b2 - .001 <= 0 <= b2 + .001:
+        b2 = 0
+    if not a1 and a2 or not b2 and b1:
+        x = -c2 / a2
+        y = -c1 / b1
+    elif not a2 and a1 or not b1 and b2:
+        x = -c1 / a1
+        y = -c2 / b2
+    elif not a1 and not a2 or not b1 and b2 or um1 - .001 <= a2 * b2 <= um1 + .001:
+        return False
+
+    #   calculate intersection point
+    if x is None and y is None:
+        x = (b2 * c1 - c2 * b1) / (b1 * a2 - b2 * a1)
+        if not b1:
+            b1 = .001
+        y = (-c1 - a1 * x) / b1
+    for px, py in (a, b, c, d):
+        if x - .001 <= px <= x + .001 and y - .001 <= py <= y + .001:
+            return False
+
+    #   check found point in ab and in cd
+    vr1 = hypot(ax - x, ay - y)
+    vr2 = hypot(bx - x, by - y)
+    ab = hypot(bx - ax, by - ay)
+    vr3 = hypot(cx - x, cy - y)
+    vr4 = hypot(dx - x, dy - y)
+    cd = hypot(dx - cx, dy - cy)
+    return ab == vr1 + vr2 and cd == vr3 + vr4
 
 
-def dfs_paths(graph, start, goal):
-    stack = [(start, [start])]
-    while stack:
-        (vertex, path) = stack.pop()
-        for next in set(graph[vertex]) - set(path):
-            if next == goal:
-                yield path + [next]
-            else:
-                stack.append((next, path + [next]))
+def superposition(def_dict):
+    out = False
+    for k, v in def_dict:
+        kx, ky = v
+        for key, value in def_dict:
+            if k == key:
+                continue
+            key_x, key_y = value
+            d_x, d_y = abs(key_x - kx), abs(key_y - ky)
+            if d_x < .1 and d_y < .1:
+                out = True
+    return out
 
 
 class Calculate2D:
@@ -70,7 +115,7 @@ class Calculate2D:
         for cycle in self.sssr:
             lc = len(cycle)
             if lc != 6:
-                for_cycles[lc].add(set(cycle))
+                for_cycles[lc].union(set(cycle))
             for elem in cycle:
                 non_standard_cycle[elem].add(lc)
 
@@ -91,7 +136,7 @@ class Calculate2D:
                     plane[atom], plane[prev_atom] = current_coordinates, (0, 0)
                     vx, vy = mx, my = dx, dy
                     path.append((start, (0, 0)))
-                    path.append((atom, current_coordinates))
+                    path.append((start, atom))
                     hashed_path.add(start)
                     hashed_path.add(atom)
                 else:
@@ -101,41 +146,37 @@ class Calculate2D:
                         current_coordinates = (x + nx, y + ny)
                     mx, my = plane[atom] = current_coordinates
                     vx, vy = mx - nx, my - ny
-                    path.append((atom, current_coordinates))
+                    path.append((prev_atom, atom))
                     hashed_path.add(atom)
 
             if len(path) == size:
-                bad_points = False
+                bad_points = superposition(plane.items())
                 cross = False
                 long = False
-                _items = plane.items()
-                for k, v in _items:
-                    kx, ky = v
-                    for key, value in _items:
-                        if k == key:
-                            continue
-                        key_x, key_y = value
-                        d_x, d_y = abs(key_x - kx), abs(key_y - ky)
-                        if d_x < .1 and d_y < .1:
-                            bad_points = True
 
                 # for vector ab
-                for a, v in bonds.items():
-                    ax, ay = plane[a]
-                    for b in v:
-                        bx, by = plane[b]
-                        if not .800 < hypot(bx - ax, by - ay) < .850:
-                            long = True
+                if not bad_points:
+                    for a, v in bonds.items():
+                        ax, ay = plane[a]
+                        for b in v:
+                            bx, by = plane[b]
+                            if not .800 < hypot(bx - ax, by - ay) < .850:
+                                long = True
 
-                # _bonds = list(self.bonds())
-                # for i, triple in enumerate(_bonds):
-                #     n, m, bond = triple
-                #     nx, ny = plane[n]
-                #     mx, my = plane[m]
-                #     for _triple in _bonds[i:]:
-                #         _n, _m, _bond = _triple
-                #         _nx, _ny = plane[_n]
-                #         _mx, _my = plane[_m]
+                if not bad_points and not long:
+                    for i, tpl in enumerate(path[1:], 1):
+                        if cross:
+                            break
+                        n, m = tpl
+                        nx, ny = plane[n]
+                        mx, my = plane[m]
+                        for _n, _m in path[i+1:]:
+                            if cross:
+                                break
+                            if n != _n and m != _m:
+                                _nx, _ny = plane[_n]
+                                _mx, _my = plane[_m]
+                                cross = crosses((nx, ny), (mx, my), (_nx, _ny), (_mx, _my))
 
                 if not bad_points and not cross and not long:
                     yield path
@@ -143,11 +184,6 @@ class Calculate2D:
                 if stack:
                     path = path[:stack[-1][-1][-1]]
                     hashed_path = {x for x, *_ in path}
-
-            elif atom in non_standard_cycle:
-                cycle_size = list(non_standard_cycle[atom])
-                if prev_atom in non_standard_cycle:
-                    prev_cycle = list(non_standard_cycle[prev_atom])
 
             elif atom != start:  # we finished. next step is final closure
                 for_stack = []
@@ -171,8 +207,6 @@ class Calculate2D:
                     new_coords = False
                     for hash_atom in hashed_path:
                         v_x, v_y = plane[hash_atom]
-                    # for n, v in plane.items():
-                    #     v_x, v_y = v
                         n1_x, n1_y = new_coords1
                         n2_x, n2_y = new_coords2
                         d1_x, d2_x = abs(n1_x - v_x), abs(n2_x - v_x)
@@ -409,23 +443,5 @@ class Calculate2D:
 
 
 n_dist = .825
-dist_3_sm = n_dist / 2
-dist_3_la = n_dist*cos(pi/6)
-dist_4 = n_dist*cos(pi/4)
-templates_1 = [(-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm), (dist_3_la, -dist_3_sm), (-dist_3_la, -dist_3_sm)]
-templates_2 = [((-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm)),
-               ((-dist_3_la, -dist_3_sm), (dist_3_la, -dist_3_sm)),
-               ((-dist_3_sm, dist_3_la), (-dist_3_sm, -dist_3_la)),
-               ((dist_3_sm, dist_3_la), (dist_3_sm, -dist_3_la))]
-templates_3 = [((0, n_dist), (dist_3_la, -dist_3_sm), (-dist_3_la, -dist_3_sm)),
-               ((0, -n_dist), (-dist_3_la, dist_3_sm), (dist_3_la, dist_3_sm)),
-               ((-n_dist, 0), (dist_3_sm, dist_3_la), (dist_3_sm, -dist_3_la)),
-               ((n_dist, 0), (-dist_3_sm, -dist_3_la), (-dist_3_sm, dist_3_la))]
-templates_4 = [((-n_dist, 0), (0, n_dist), (n_dist, 0), (0, -n_dist)),
-               ((-dist_4, dist_4), (dist_4, dist_4), (dist_4, -dist_4), (-dist_4, -dist_4))]
-normal_angles = {1: {1: False, 2: False, 3: True, 4: True},
-                 2: {1: False, 2: True, 3: True, 4: True},
-                 3: {1: True, 2: True, 3: True, 4: True},
-                 4: {1: True, 2: True, 3: True, 4: True}}
 
 __all__ = ['Calculate2D']
