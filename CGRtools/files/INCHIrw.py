@@ -17,15 +17,17 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POINTER, Structure, cdll, byref
+from distutils.util import get_platform
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
 from re import split
-from sys import platform
+from distutils.sysconfig import get_python_lib
 from traceback import format_exc
+from typing import Optional
 from warnings import warn
 from ._CGRrw import CGRRead, common_isotopes
-from . import __path__ as files_path
+from ..containers import MoleculeContainer
 
 
 class INCHIRead(CGRRead):
@@ -35,26 +37,33 @@ class INCHIRead(CGRRead):
     pathlib.Path object or another buffered reader object.
     line should be start with INCHI string and
     optionally continues with space/tab separated list of key:value [or key=value] data.
-    AuxInfo also can be stored in data.
 
     example:
-    InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 AuxInfo=1/0/N:1,2/CRV:1+1/rA:2C+C/rB:s1;/rC:-8,4583,1,1250,0;-7,1247,1,8950,0;
-    id:123 key=value\n
+    InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 id:123 key=value\n
     """
     def __init__(self, file, *args, **kwargs):
         if isinstance(file, str):
-            self._file = open(file)
-            self._is_buffer = False
+            self.__file = open(file)
+            self.__is_buffer = False
         elif isinstance(file, Path):
-            self._file = file.open()
-            self._is_buffer = False
+            self.__file = file.open()
+            self.__is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self._file = file
-            self._is_buffer = True
+            self.__file = file
+            self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        self.__data = self.__reader()
+        self._data = (self.parse(line) for line in self.__file)
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create INCHI parser function configured same as INCHIRead object
+        """
+        obj = object.__new__(cls)
+        super(INCHIRead, obj).__init__(*args, **kwargs)
+        return obj.parse
 
     def close(self, force=False):
         """
@@ -62,8 +71,8 @@ class INCHIRead(CGRRead):
 
         :param force: force closing of externally opened file or buffer
         """
-        if not self._is_buffer or force:
-            self._file.close()
+        if not self.__is_buffer or force:
+            self.__file.close()
 
     def __enter__(self):
         return self
@@ -77,44 +86,45 @@ class INCHIRead(CGRRead):
 
         :return: list of parsed molecules
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
-    def __reader(self):
-        for line in self._file:
-            inchi, *data = line.split()
-            meta = {}
-            aux = None
-            for x in data:
-                if x.startswith('AuxInfo='):
-                    aux = x
-                else:
-                    try:
-                        k, v = split('[=:]', x, 1)
-                        meta[k.strip()] = v.strip()
-                    except ValueError:
-                        warning(f'invalid metadata entry: {x}')
+    def parse(self, inchi: str) -> Optional[MoleculeContainer]:
+        """
+        convert INCHI string into MoleculeContainer object. string should be start with INCHI and
+        optionally continues with space/tab separated list of key:value [or key=value] data.
+        """
+        inchi, *data = inchi.split()
+        meta = {}
+        for x in data:
             try:
-                record = self.__parse_aux(aux) if aux else self.__parse_inchi(inchi)
+                k, v = split('[=:]', x, 1)
+                meta[k] = v
             except ValueError:
-                warning(f'line: {inchi} {aux}\nconsist errors:\n{format_exc()}')
-                continue
+                warning(f'invalid metadata entry: {x}')
+        try:
+            record = self.__parse_inchi(inchi)
+        except ValueError:
+            warning(f'string: {inchi}\nconsist errors:\n{format_exc()}')
+            return
 
-            record['meta'] = meta
-            try:
-                yield self._convert_structure(record)
-            except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
+        record['meta'] = meta
+        try:
+            return self._convert_structure(record)
+        except ValueError:
+            warning(f'record consist errors:\n{format_exc()}')
 
     @staticmethod
     def __parse_inchi(string):
         structure = INCHIStructure()
-        lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure))
+        if lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure)):
+            lib.FreeStructFromINCHI(byref(structure))
+            raise ValueError('invalid INCHI')
 
         atoms, bonds = [], []
         seen = set()
@@ -140,20 +150,9 @@ class INCHIRead(CGRRead):
                 order = atom.bond_type[k]
                 if order:
                     bonds.append((n, m, order))
-        lib.FreeStructFromINCHI(byref(structure))
-        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': []}
 
-    @staticmethod
-    def __parse_aux(string):
-        atoms, bonds = [], []
-        for n in range(structure.num_atoms):
-            atom = structure.atom[n]
-            print(atom.x)
-            atoms.append({'element': atom.elname, 'charge': atom.charge, 'mapping': 0, 'x': atom.x, 'y': atom.y,
-                          'z': atom.z, 'mark': None, 'isotope': atom.isotopic_mass, 'multiplicity': atom.radical})
-            # (b['a0'], b['a1'], {'order': self.__bond_map[b['order']]}, None)
-        print(atoms)
-        return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
+        lib.FreeStructFromINCHI(byref(structure))
+        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': [], 'title': ''}
 
 
 class InputINCHI(Structure):
@@ -210,10 +209,6 @@ class INCHIStructure(Structure):
                 ]
 
 
-class AUXStructure(Structure):
-    pass
-
-
 class INCHIread:
     def __init__(self, *args, **kwargs):
         warn('INCHIread deprecated. Use INCHIRead instead', DeprecationWarning)
@@ -238,12 +233,14 @@ class INCHIread:
 
 __all__ = ['INCHIRead', 'INCHIread']
 
-if platform == 'linux':
+platform = get_platform()
+site_packages = Path(get_python_lib())
+if platform == 'linux-x86_64':
     opt_flag = '-'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.so')
-elif platform == 'win32':
+    lib = cdll.LoadLibrary(site_packages.parents[1] / 'libinchi.so')
+elif platform == 'win-amd64':
     opt_flag = '/'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.dll')
+    lib = cdll.LoadLibrary(site_packages.parent / 'libinchi.dll')
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []

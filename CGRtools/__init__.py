@@ -27,4 +27,8 @@ from .reactor import *
 from .utils import *
 
 
+inchi = INCHIRead.create_parser()
 smiles = SMILESRead.create_parser(ignore=True)
+
+
+__all__ = ['inchi', 'smiles']

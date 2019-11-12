@@ -35,13 +35,12 @@ class SDFRead(MDLRead):
     """
     def __init__(self, *args, indexable=False, **kwargs):
         """
-        :param indexable: if True:
-            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
-            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
-            the object behaves like a normal open file
-                        if False:
-            works like generator converting a record into MoleculeContainer and returning each object in order,
-            records with errors are skipped
+        :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
+            dealing with a real file (the path to the file is specified) because the external grep utility is used,
+            supporting in unix-like OS the object behaves like a normal open file.
+
+            if False: works like generator converting a record into MoleculeContainer and returning each object in
+            order, records with errors are skipped
         """
         super().__init__(*args, **kwargs)
         self._data = self.__reader()
