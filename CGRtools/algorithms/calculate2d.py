@@ -86,8 +86,12 @@ def crosses(a, b, c, d):
 def superposition(def_dict):
     out = False
     for k, v in def_dict:
+        if out:
+            break
         kx, ky = v
         for key, value in def_dict:
+            if out:
+                break
             if k == key:
                 continue
             key_x, key_y = value
@@ -136,7 +140,7 @@ class Calculate2D:
                     plane[atom], plane[prev_atom] = current_coordinates, (0, 0)
                     vx, vy = mx, my = dx, dy
                     path.append((start, (0, 0)))
-                    path.append((start, atom))
+                    path.append((atom, start, current_coordinates))
                     hashed_path.add(start)
                     hashed_path.add(atom)
                 else:
@@ -146,7 +150,7 @@ class Calculate2D:
                         current_coordinates = (x + nx, y + ny)
                     mx, my = plane[atom] = current_coordinates
                     vx, vy = mx - nx, my - ny
-                    path.append((prev_atom, atom))
+                    path.append((atom, prev_atom, current_coordinates))
                     hashed_path.add(atom)
 
             if len(path) == size:
@@ -167,10 +171,10 @@ class Calculate2D:
                     for i, tpl in enumerate(path[1:], 1):
                         if cross:
                             break
-                        n, m = tpl
+                        n, m, crdnts = tpl
                         nx, ny = plane[n]
                         mx, my = plane[m]
-                        for _n, _m in path[i+1:]:
+                        for _n, _m, _crdnts in path[i+1:]:
                             if cross:
                                 break
                             if n != _n and m != _m:
