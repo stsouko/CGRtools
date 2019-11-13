@@ -20,9 +20,10 @@ from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POIN
 from distutils.util import get_platform
 from io import StringIO, TextIOWrapper
 from logging import warning
+from os import name
 from pathlib import Path
 from re import split
-from distutils.sysconfig import get_python_lib
+from sys import prefix, exec_prefix
 from traceback import format_exc
 from typing import List, Optional
 from warnings import warn
@@ -231,16 +232,39 @@ class INCHIread:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['INCHIRead', 'INCHIread']
+def getsitepackages():
+    """returns a list containing all global site-packages directories. stolen and modified site.py function
+    """
+    sitepackages = []
+    for pr in {prefix, exec_prefix}:
+        pr = Path(pr)
+        if name == 'posix':
+            sitepackages.append(pr / 'local/lib')
+        else:
+            sitepackages.append(pr)
+        sitepackages.append(pr / 'lib')
+    return sitepackages
+
 
 platform = get_platform()
-site_packages = Path(get_python_lib())
-if platform == 'linux-x86_64':
-    opt_flag = '-'
-    lib = cdll.LoadLibrary(str(site_packages.parents[1] / 'libinchi.so'))
-elif platform == 'win-amd64':
-    opt_flag = '/'
-    lib = cdll.LoadLibrary(str(site_packages.parent / 'libinchi.dll'))
+if platform in ('linux-x86_64', 'win-amd64'):
+    if platform == 'win-amd64':
+        opt_flag = '/'
+        libname = 'libinchi.dll'
+    else:
+        opt_flag = '-'
+        libname = 'libinchi.so'
+
+    for site in getsitepackages():
+        lib_path = site / libname
+        if lib_path.exists():
+            lib = cdll.LoadLibrary(str(lib_path))
+            __all__ = ['INCHIRead', 'INCHIread']
+            break
+    else:
+        warn('broken package installation. libinchi not found', ImportWarning)
+        __all__ = []
+        del INCHIRead, INCHIread
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []
