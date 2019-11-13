@@ -237,10 +237,10 @@ platform = get_platform()
 site_packages = Path(get_python_lib())
 if platform == 'linux-x86_64':
     opt_flag = '-'
-    lib = cdll.LoadLibrary(site_packages.parents[1] / 'libinchi.so')
+    lib = cdll.LoadLibrary(str(site_packages.parents[1] / 'libinchi.so'))
 elif platform == 'win-amd64':
     opt_flag = '/'
-    lib = cdll.LoadLibrary(site_packages.parent / 'libinchi.dll')
+    lib = cdll.LoadLibrary(str(site_packages.parent / 'libinchi.dll'))
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []
