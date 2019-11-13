@@ -70,3 +70,9 @@ class ValenceError(Exception):
     """
     atom has error in valence
     """
+
+
+class IncorrectSmiles(ValueError):
+    """
+    SMILES string invalid
+    """

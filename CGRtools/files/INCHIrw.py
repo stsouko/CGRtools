@@ -24,7 +24,7 @@ from pathlib import Path
 from re import split
 from distutils.sysconfig import get_python_lib
 from traceback import format_exc
-from typing import Optional
+from typing import List, Optional
 from warnings import warn
 from ._CGRrw import CGRRead, common_isotopes
 from ..containers import MoleculeContainer
@@ -80,7 +80,7 @@ class INCHIRead(CGRRead):
     def __exit__(self, _type, value, traceback):
         self.close()
 
-    def read(self):
+    def read(self) -> List[Optional[MoleculeContainer]]:
         """
         parse whole file
 
