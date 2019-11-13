@@ -193,7 +193,7 @@ class SMILESRead(CGRRead):
                 warning(f'record consist errors:\n{format_exc()}')
 
     @staticmethod
-    def __raw_tokenize(smiles):
+    def _raw_tokenize(smiles):
         token_type = token = None
         tokens = []
         for s in smiles:
@@ -303,7 +303,7 @@ class SMILESRead(CGRRead):
         return tokens
 
     @classmethod
-    def __fix_tokens(cls, tokens):
+    def _fix_tokens(cls, tokens):
         out = []
         for token_type, token in tokens:
             if token_type in (0, 8):  # simple atom
@@ -468,8 +468,8 @@ class SMILESRead(CGRRead):
                 'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
 
     def __parse_tokens(self, smiles):
-        tokens = self.__raw_tokenize(smiles)
-        tokens = self.__fix_tokens(tokens)
+        tokens = self._raw_tokenize(smiles)
+        tokens = self._fix_tokens(tokens)
         return self._parse_tokens(tokens)
 
     def _parse_tokens(self, tokens):
