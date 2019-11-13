@@ -436,6 +436,8 @@ class StandardizeReaction:
         """
         standardize functional groups. works only for Molecules.
         return True if in any molecule found not canonical group
+
+        :param fix_mapping: search AAM errors of functional groups.
         """
         total = False
         for m in chain(self.reagents, self.reactants, self.products):
@@ -443,39 +445,47 @@ class StandardizeReaction:
                 if m.standardize() and not total:
                     total = True
 
-        if fix_mapping:
-            seen = set()
-            for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
-                found = []
-                for m in self.reactants:
-                    for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
-                        if mapping[1] not in seen:
-                            found.append(({fix.get(k, k): v for k, v in mapping.items()},
-                                          {mapping[k]: mapping[v] for k, v in fix.items()}))
-
-                if not found:
-                    continue
-                for m in self.products:
-                    for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
-                        atom = mapping[1]
-                        if atom in seen:
-                            continue
-                        for n, (k, v) in enumerate(found):
-                            if k == mapping:
-                                break
-                        else:
-                            continue
-
-                        del found[n]
-                        m.remap(v)
-                        seen.add(atom)
-
-            if seen and not total:
-                total = True
+        if fix_mapping and self.fix_mapping():
+            return True
 
         if total:
             self.flush_cache()
         return total
+
+    def fix_mapping(self) -> bool:
+        """
+        fix atom-to-atom mapping of some functional groups. return True if found AAM errors
+        """
+        seen = set()
+        for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
+            found = []
+            for m in self.reactants:
+                for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
+                    if mapping[1] not in seen:
+                        found.append(({fix.get(k, k): v for k, v in mapping.items()},
+                                      {mapping[k]: mapping[v] for k, v in fix.items()}))
+
+            if not found:
+                continue
+            for m in self.products:
+                for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
+                    atom = mapping[1]
+                    if atom in seen:
+                        continue
+                    for n, (k, v) in enumerate(found):
+                        if k == mapping:
+                            break
+                    else:
+                        continue
+
+                    del found[n]
+                    m.remap(v)
+                    seen.add(atom)
+
+        if seen:
+            self.flush_cache()
+            return True
+        return False
 
     @staticmethod
     def _standardize_rules():
