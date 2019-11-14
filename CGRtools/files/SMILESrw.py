@@ -237,7 +237,8 @@ class SMILESRead(CGRRead):
                         raise IncorrectSmiles('number starts with 0')
                     elif token:
                         tokens.append((token_type, token))
-                        token_type = token = None
+                        token = None
+                    token_type = 6
                     tokens.append((6, int(s)))
             elif s == '%':
                 if token:
@@ -249,27 +250,32 @@ class SMILESRead(CGRRead):
             elif s in '=#:-~':  # bonds found
                 if token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
+                token_type = 1
                 tokens.append((1, replace_dict[s]))
             elif s in r'\/':
                 if token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
+                token_type = 9
                 tokens.append((9, s == '/'))  # Up is true
             elif s == '.':
                 if token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
+                token_type = 4
                 tokens.append((4, None))
             elif s in 'NOPSFI':  # organic atoms
                 if token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
+                token_type = 0
                 tokens.append((0, s))
             elif s in 'cnops':  # aromatic ring atom
                 if token:
                     tokens.append((token_type, token))
-                    token_type = token = None
+                    token = None
+                token_type = 8
                 tokens.append((8, s.upper()))
             elif s in 'CB':  # flag possible Cl or Br
                 if token:
@@ -280,13 +286,13 @@ class SMILESRead(CGRRead):
                 if s == 'l':
                     if token == 'C':
                         tokens.append((0, 'Cl'))
-                        token_type = token = None
+                        token = None
                     else:
                         raise IncorrectSmiles('invalid element Bl')
                 elif s == 'r':
                     if token == 'B':
                         tokens.append((0, 'Br'))
-                        token_type = token = None
+                        token = None
                     else:
                         raise IncorrectSmiles('invalid smiles for Cr')
                 else:
