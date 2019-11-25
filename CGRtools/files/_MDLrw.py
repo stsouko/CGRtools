@@ -230,6 +230,8 @@ class EMOLRead:
                     self.__parser = self.__bond_parser
                 elif lineu.startswith('M  V30 BEGIN SGROUP'):
                     self.__parser = self.__sgroup_parser
+                elif lineu.startswith('M  V30 BEGIN COLLECTION'):
+                    self.__parser = self.__collection_parser
                 else:
                     raise ValueError('invalid CTAB')
 
@@ -362,6 +364,10 @@ class EMOLRead:
                     self.__query.append((atoms[0], query_keys[_type], value))
                 else:
                     raise ValueError(f'CGR spec invalid {line}')
+
+    def __collection_parser(self, line):
+        """ COLLECTION BLOCK. currently ignored"""
+        return
 
     __record = __atoms_count = __in_mol = __parser = None
     __stereo_map = {'1': 1, '3': -1, '2': None}
