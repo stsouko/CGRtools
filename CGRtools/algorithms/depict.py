@@ -154,7 +154,7 @@ class DepictMolecule(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, -mn_y)
 
-        if aromatic_space / cr_y < .65:
+        if cr_y and aromatic_space / cr_y < .65:
             if cr_y > 0:
                 r_y = aromatic_space
             else:
@@ -573,7 +573,7 @@ class DepictCGR(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, -mn_y)
 
-        if aromatic_space / cr_y < .65:
+        if cr_y and aromatic_space / cr_y < .65:
             if cr_y > 0:
                 r_y = aromatic_space
             else:
