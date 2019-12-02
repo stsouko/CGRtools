@@ -306,7 +306,7 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('not closed')
         elif token:
             tokens.append((token_type, token))  # %closure or C or B
-        return tokens
+        return [(6, int(''.join(x[1]))) if x[0] == 7 else x for x in tokens]  # composite closures folding
 
     @classmethod
     def _fix_tokens(cls, tokens):
@@ -328,8 +328,6 @@ class SMILESRead(CGRRead):
                     out.append((11, cls.__dynatom_parse(token)))
                 else:  # atom token
                     out.append(cls.__atom_parse(token))
-            elif token_type == 7:  # composite closures folding
-                out.append((6, int(''.join(token))))
             else:  # as is types: 1, 2, 3, 4, 6, 9
                 out.append((token_type, token))
         return out
