@@ -162,6 +162,7 @@ class Te(Element, PeriodV, GroupXVI):
     def atomic_number(self):
         return 52
 
+    @property
     def isotopes_distribution(self):
         return FrozenDict({120: 0.0009, 122: 0.0255, 123: 0.0089, 124: 0.0474, 125: 0.0707, 126: 0.1884, 128: 0.3174,
                            130: 0.3408})
