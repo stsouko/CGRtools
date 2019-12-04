@@ -21,7 +21,7 @@ from itertools import count
 from logging import warning, info
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..containers.cgr import DynamicBond
-from ..exceptions import MappingError, NotChiral, IsChiral
+from ..exceptions import MappingError, NotChiral, IsChiral, ValenceError
 from ..periodictable import Element, DynamicElement, QueryElement
 
 
@@ -167,7 +167,13 @@ class CGRRead:
                     fail_stereo.append((n, m, s))
                 except IsChiral:
                     info(f'wedge {{{n}, {m}}} on already chiral atom')
-            stereo = fail_stereo
+                except ValenceError:
+                    info('structure has errors, stereo data skipped')
+                    break
+            else:
+                stereo = fail_stereo
+                continue
+            break
 
         return g
 
