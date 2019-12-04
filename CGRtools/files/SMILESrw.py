@@ -73,13 +73,19 @@ class SMILESRead(CGRRead):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object.
     line should be start with SMILES string and
-    optionally continues with space/tab separated list of key:value [or key=value] data.
-    for reactions . [dot] in bonds should be used only for molecules separation.
+    optionally continues with space/tab separated list of key:value [or key=value] data if header=None.
+        example:
+            C=C>>CC id:123 key=value
+    if header=True then first line of file should be space/tab separated list of keys including smiles column key.
+        example:
+            ignored_smi_key key1 key2
+            CCN 1 2
+    also possible to pass list of keys (without smiles_pseudo_key) for mapping space/tab separated list
+    of SMILES and values: header=['key1', 'key2'] # order depended
 
-    example:
-    C=C>>CC id:123 key=value\n
+    for reactions . [dot] in bonds should be used only for molecules separation.
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, header=None, **kwargs):
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -92,6 +98,16 @@ class SMILESRead(CGRRead):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
+
+        if header is True:
+            self.__header = next(self.__file).split()[1:]
+        elif header:
+            if not isinstance(header, (list, tuple)) or not all(isinstance(x, str) for x in header):
+                raise TypeError('expected list (tuple) of strings')
+            self.__header = header
+        else:
+            self.__header = None
+
         self._data = (self.parse(line) for line in self.__file)
 
     @classmethod
@@ -135,13 +151,16 @@ class SMILESRead(CGRRead):
     def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
         """SMILES string parser"""
         smi, *data = smiles.split()
-        meta = {}
-        for x in data:
-            try:
-                k, v = split('[=:]', x, 1)
-                meta[k.strip()] = v.strip()
-            except ValueError:
-                warning(f'invalid metadata entry: {x}')
+        if self.__header is None:
+            meta = {}
+            for x in data:
+                try:
+                    k, v = split('[=:]', x, 1)
+                    meta[k] = v
+                except ValueError:
+                    warning(f'invalid metadata entry: {x}')
+        else:
+            meta = dict(zip(self.__header, data))
 
         if '>' in smi and (smi[smi.index('>') + 1] in '>([' or smi[smi.index('>') + 1].isalpha()):
             record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
@@ -424,7 +443,7 @@ class SMILESRead(CGRRead):
 
         if element in ('c', 'n', 'o', 'p', 's', 'as', 'se'):
             _type = 8
-            element = element.capitatize()
+            element = element.capitalize()
         else:
             _type = 0
         return _type, {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': False,
