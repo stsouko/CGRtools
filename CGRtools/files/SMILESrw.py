@@ -613,8 +613,11 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('cycle is not finished')
         elif previous:
             raise IncorrectSmiles('bond on the end')
-        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': cgr, 'query': [], 'stereo': [], 'title': '',
-                'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
+        mol = {'atoms': atoms, 'bonds': bonds,
+               'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
+        if cgr:
+            mol['cgr'] = cgr
+        return mol
 
 
 class SMILESread:

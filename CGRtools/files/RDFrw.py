@@ -139,7 +139,8 @@ class RDFRead(MDLRead):
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
-                    record['title'] = title
+                    if title:
+                        record['title'] = title
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
@@ -160,7 +161,8 @@ class RDFRead(MDLRead):
             elif line.startswith('$MFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
-                    record['title'] = title
+                    if title:
+                        record['title'] = title
                     try:
                         seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
                     except ValueError:
@@ -210,7 +212,8 @@ class RDFRead(MDLRead):
                     yield None
         if record:
             record['meta'] = self._prepare_meta(meta)
-            record['title'] = title
+            if title:
+                record['title'] = title
             try:
                 yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
             except ValueError:

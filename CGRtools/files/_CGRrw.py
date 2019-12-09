@@ -117,7 +117,7 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-        return ReactionContainer(meta=reaction['meta'], name=reaction['title'], **rc)
+        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -214,15 +214,13 @@ class CGRRead:
     @staticmethod
     def __convert_query(molecule, mapping):
         atoms = molecule['atoms']
-        if molecule['atoms_lists']:
-            warning('atoms lists not supported yet')
 
         for n, _type, value in molecule['query']:
             atoms[n][_type] = [int(x) for x in value.split(',')]
 
         g = QueryContainer()
         pm = g._parsed_mapping
-        for n, atom in enumerate(molecule['atoms']):
+        for n, atom in enumerate(atoms):
             n = g.add_atom(QueryElement.from_symbol(atom['element'])(atom['isotope']), mapping[n],
                            charge=atom['charge'], is_radical=atom['is_radical'],
                            neighbors=atom.get('neighbors'), hybridization=atom.get('hybridization'),
@@ -233,15 +231,15 @@ class CGRRead:
         return g
 
     def __prepare_structure(self, molecule, mapping):
-        if molecule['atoms_lists'] or molecule['query']:
-            if molecule['cgr']:
-                raise ValueError('QueryCGR parsing not supported. try to compose Queries')
+        if 'query' in molecule:
+            if 'cgr'in molecule:
+                raise ValueError('QueryCGR parsing not supported')
             g = self.__convert_query(molecule, mapping)
-        elif molecule['cgr']:
+        elif 'cgr' in molecule:
             g = self.__convert_cgr(molecule, mapping)
         else:
             g = self.__convert_molecule(molecule, mapping)
 
-        if molecule['title']:
+        if 'title' in molecule:
             g.name = molecule['title']
         return g

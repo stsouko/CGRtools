@@ -243,7 +243,7 @@ class Reactor(BaseReactor):
                 if self.__split > 1:
                     new = new.split()
                     if len(new) != self.__split:
-                        info(f'expected {self.__split} molecules in reaction products, bun {len(new)} formed.\n'
+                        info(f'expected {self.__split} molecules in reaction products, but {len(new)} formed.\n'
                              'input molecules has disconnected components')
                 else:
                     new = [new]

@@ -107,7 +107,8 @@ class SDFRead(MDLRead):
             elif line.startswith("$$$$"):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
-                    record['title'] = title
+                    if title:
+                        record['title'] = title
                     try:
                         yield self._convert_structure(record)
                     except ValueError:
@@ -147,7 +148,8 @@ class SDFRead(MDLRead):
 
         if record:  # True for MOL file only.
             record['meta'] = self._prepare_meta(meta)
-            record['title'] = title
+            if title:
+                record['title'] = title
             try:
                 yield self._convert_structure(record)
             except ValueError:

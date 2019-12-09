@@ -37,12 +37,17 @@ class INCHIRead(CGRRead):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object.
     line should be start with INCHI string and
-    optionally continues with space/tab separated list of key:value [or key=value] data.
-
-    example:
-    InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 id:123 key=value\n
+    optionally continues with space/tab separated list of key:value [or key=value] data if header=None.
+        example:
+            InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 id:123 key=value
+    if header=True then first line of file should be space/tab separated list of keys including INCHI column key.
+        example:
+            ignored_inchi_key key1 key2
+            InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 1 2
+    also possible to pass list of keys (without inchi_pseudo_key) for mapping space/tab separated list
+    of INCHI and values: header=['key1', 'key2'] # order depended
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, header=None, **kwargs):
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -55,6 +60,16 @@ class INCHIRead(CGRRead):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
+
+        if header is True:
+            self.__header = next(self.__file).split()[1:]
+        elif header:
+            if not isinstance(header, (list, tuple)) or not all(isinstance(x, str) for x in header):
+                raise TypeError('expected list (tuple) of strings')
+            self.__header = header
+        else:
+            self.__header = None
+
         self._data = (self.parse(line) for line in self.__file)
 
     @classmethod
@@ -101,13 +116,17 @@ class INCHIRead(CGRRead):
         optionally continues with space/tab separated list of key:value [or key=value] data.
         """
         inchi, *data = inchi.split()
-        meta = {}
-        for x in data:
-            try:
-                k, v = split('[=:]', x, 1)
-                meta[k] = v
-            except ValueError:
-                warning(f'invalid metadata entry: {x}')
+        if self.__header is None:
+            meta = {}
+            for x in data:
+                try:
+                    k, v = split('[=:]', x, 1)
+                    meta[k] = v
+                except ValueError:
+                    warning(f'invalid metadata entry: {x}')
+        else:
+            meta = dict(zip(self.__header, data))
+
         try:
             record = self.__parse_inchi(inchi)
         except ValueError:
@@ -153,7 +172,7 @@ class INCHIRead(CGRRead):
                     bonds.append((n, m, order))
 
         lib.FreeStructFromINCHI(byref(structure))
-        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': {}, 'cgr': [], 'query': [], 'stereo': [], 'title': ''}
+        return {'atoms': atoms, 'bonds': bonds}
 
 
 class InputINCHI(Structure):
