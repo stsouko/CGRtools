@@ -78,6 +78,7 @@ class INCHIRead(CGRRead):
         Create INCHI parser function configured same as INCHIRead object
         """
         obj = object.__new__(cls)
+        obj._INCHIRead__header = None
         super(INCHIRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -135,7 +136,8 @@ class INCHIRead(CGRRead):
 
         record['meta'] = meta
         try:
-            return self._convert_structure(record)
+            container, mapping = self._convert_structure(record)
+            return container
         except ValueError:
             warning(f'record consist errors:\n{format_exc()}')
 

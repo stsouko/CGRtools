@@ -51,20 +51,21 @@ charge_dict = {'+': 1, '+1': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4,
                '-': -1, '-1': -1, '--': -2, '-2': -2, '-3': -3, '-4': -4}
 charge_dict = {tuple(k): v for k, v in charge_dict.items()}
 charge_dict[()] = 0
-dynamic_bonds = {'.>-': '0>1', '.>=': '0>2', '.>#': '0>3', '.>:': '0>4', '.>~': '0>8',
-                 '->.': '1>0', '->=': '1>2', '->#': '1>3', '->:': '1>4', '->~': '1>8',
-                 '=>.': '2>0', '=>-': '2>1', '=>#': '2>3', '=>:': '2>4', '=>~': '2>8',
-                 '#>.': '3>0', '#>-': '3>1', '#>=': '3>2', '#>:': '3>4', '#>~': '3>8',
-                 ':>.': '4>0', ':>-': '4>1', ':>=': '4>2', ':>#': '4>3', ':>~': '4>8',
-                 '~>.': '8>0', '~>-': '8>1', '~>=': '8>2', '~>#': '8>3', '~>:': '8>4'}
+dynamic_bonds = {'.>-': (None, 1), '.>=': (None, 2), '.>#': (None, 3), '.>:': (None, 4), '.>~': (None, 8),
+                 '->.': (1, None), '->=': (1, 2), '->#': (1, 3), '->:': (1, 4), '->~': (1, 8),
+                 '=>.': (2, None), '=>-': (2, 1), '=>#': (2, 3), '=>:': (2, 4), '=>~': (2, 8),
+                 '#>.': (3, None), '#>-': (3, 1), '#>=': (3, 2), '#>:': (3, 4), '#>~': (3, 8),
+                 ':>.': (4, None), ':>-': (4, 1), ':>=': (4, 2), ':>#': (4, 3), ':>~': (4, 8),
+                 '~>.': (8, None), '~>-': (8, 1), '~>=': (8, 2), '~>#': (8, 3), '~>:': (8, 4)}
 dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
 
 dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '--': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4}
-tmp = {f'{i}>{j}': (x, f'c{y - x:+d}') for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2) if x != y}
+tmp = {f'{i}>{j}': (x, ('charge', y - x)) for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2) if x != y}
 dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 
-dyn_radical_dict = {(): (False,), ('*',): (True,), ('*', '>', '^'): (True, 'r1'), ('^', '>', '*'): (False, 'r1')}
+dyn_radical_dict = {(): (False,), ('*',): (True,), ('*', '>', '^'): (True, ('radical', None)),
+                    ('^', '>', '*'): (False, ('radical', None))}
 
 
 class SMILESRead(CGRRead):
@@ -116,6 +117,7 @@ class SMILESRead(CGRRead):
         Create SMILES parser function configured same as SMILESRead object
         """
         obj = object.__new__(cls)
+        obj._SMILESRead__header = None
         super(SMILESRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -194,7 +196,8 @@ class SMILESRead(CGRRead):
                 return
 
             try:
-                return self._convert_reaction(record)
+                container, mapping = self._convert_reaction(record)
+                return container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 return
@@ -207,7 +210,8 @@ class SMILESRead(CGRRead):
 
             record['meta'] = meta
             try:
-                return self._convert_structure(record)
+                container, mapping = self._convert_structure(record)
+                return container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
 
@@ -573,7 +577,7 @@ class SMILESRead(CGRRead):
                         stereo_bonds.append((last_num, a, previous[1]))
                     else:  # bt == 10
                         bonds.append((last_num, a, 8))
-                        cgr.append(((last_num, a), 'dynbond', previous[1]))
+                        cgr.append(((last_num, a), 'bond', previous[1]))
                     del cycles[token]
                 previous = None
             else:  # atom
@@ -588,10 +592,10 @@ class SMILESRead(CGRRead):
                         stereo_bonds.append((last_num, atom_num, previous[1]))
                     elif bt == 10:
                         bonds.append((atom_num, last_num, 8))
-                        cgr.append(((atom_num, last_num), 'dynbond', previous[1]))
+                        cgr.append(((atom_num, last_num), 'bond', previous[1]))
 
                 if token_type == 11:
-                    cgr.extend(((atom_num,), 'dynatom', x) for x in token.pop('cgr'))
+                    cgr.extend((atom_num, *x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
                     if stereo:

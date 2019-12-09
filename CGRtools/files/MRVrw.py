@@ -19,12 +19,12 @@
 from collections import defaultdict
 from importlib.util import find_spec
 from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
-from itertools import chain, count
+from itertools import count
 from logging import warning
 from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRRead, cgr_keys, query_keys, elements_set, elements_list
+from ._CGRrw import CGRRead
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..containers.common import Graph
 from ..exceptions import EmptyMolecule
@@ -137,7 +137,8 @@ class MRVRead(CGRRead):
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._convert_structure(record)
+                        container, mapping = self._convert_structure(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         yield None
@@ -154,7 +155,8 @@ class MRVRead(CGRRead):
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._convert_reaction(record)
+                        container, mapping = self._convert_reaction(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         yield None
@@ -268,12 +270,11 @@ class MRVRead(CGRRead):
                     if '$' in bond['bondStereo']:
                         s = bond['bondStereo']['$']
                         if s == 'H':
-                            s = -1
+                            stereo.append((atom_map[a1], atom_map[a2], -1))
                         elif s == 'W':
-                            s = 1
+                            stereo.append((atom_map[a1], atom_map[a2], 1))
                         else:
                             warning('invalid or unsupported stereo')
-                        stereo.append((atom_map[a1], atom_map[a2], s))
                     else:
                         warning('incorrect bondStereo tag')
                 bonds.append((atom_map[a1], atom_map[a2], order))

@@ -18,10 +18,10 @@
 #
 from collections import defaultdict
 from itertools import count
-from logging import warning, info
+from logging import warning
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
 from ..containers.cgr import DynamicBond
-from ..exceptions import MappingError, NotChiral, IsChiral, ValenceError
+from ..exceptions import MappingError
 from ..periodictable import Element, DynamicElement, QueryElement
 
 
@@ -109,6 +109,7 @@ class CGRRead:
                         maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
 
         rc = {'reactants': [], 'products': [], 'reagents': []}
+        rm = {'reactants': [], 'products': [], 'reagents': []}
         for i, tmp in maps.items():
             shift = 0
             for j in reaction[i]:
@@ -117,7 +118,8 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
+                rm[i].append(remapped)
+        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc), rm
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -140,7 +142,7 @@ class CGRRead:
 
         g = self.__prepare_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
-        return g
+        return g, remapped
 
     @staticmethod
     def __convert_molecule(molecule, mapping):
@@ -154,27 +156,6 @@ class CGRRead:
             g.add_bond(mapping[n], mapping[m], b)
         if any(a['z'] for a in molecule['atoms']):
             g._conformers.append({mapping[n]: (a['x'], a['y'], a['z']) for n, a in enumerate(molecule['atoms'])})
-
-        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
-        old_stereo = 0
-        while len(stereo) != old_stereo:
-            fail_stereo = []
-            old_stereo = len(stereo)
-            for n, m, s in stereo:
-                try:
-                    g.add_wedge(n, m, s)
-                except NotChiral:
-                    fail_stereo.append((n, m, s))
-                except IsChiral:
-                    info(f'wedge {{{n}, {m}}} on already chiral atom')
-                except ValenceError:
-                    info('structure has errors, stereo data skipped')
-                    break
-            else:
-                stereo = fail_stereo
-                continue
-            break
-
         return g
 
     @staticmethod
@@ -183,18 +164,13 @@ class CGRRead:
         bonds = defaultdict(dict)
 
         for nm, _type, value in molecule['cgr']:
-            n = nm[0]
-            if _type == 'dynatom':
-                if value == 'r1':  # only dynatom = r1 acceptable. this means change of radical state
-                    atoms[n]['p_is_radical'] = not atoms[n]['is_radical']
-                elif value[0] == 'c':
-                    atoms[n]['p_charge'] = atoms[n]['charge'] + int(value[1:])
-                else:
-                    raise ValueError('unknown dynatom')
+            if _type == 'radical':
+                atoms[nm]['p_is_radical'] = not atoms[nm]['is_radical']
+            elif _type == 'charge':
+                atoms[nm]['p_charge'] = atoms[nm]['charge'] + value
             else:
-                bond, p_bond = value.split('>')
-                m = nm[1]
-                bonds[n][m] = bonds[m][n] = DynamicBond(int(bond) or None, int(p_bond) or None)
+                n, m = nm
+                bonds[n][m] = bonds[m][n] = DynamicBond(*value)
 
         g = CGRContainer()
         pm = g._parsed_mapping
@@ -214,9 +190,8 @@ class CGRRead:
     @staticmethod
     def __convert_query(molecule, mapping):
         atoms = molecule['atoms']
-
         for n, _type, value in molecule['query']:
-            atoms[n][_type] = [int(x) for x in value.split(',')]
+            atoms[n][_type] = value
 
         g = QueryContainer()
         pm = g._parsed_mapping

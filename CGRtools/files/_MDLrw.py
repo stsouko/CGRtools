@@ -19,16 +19,16 @@
 from base64 import urlsafe_b64encode
 from collections import defaultdict
 from csv import reader
-from logging import warning
+from logging import warning, info
 from io import StringIO, TextIOWrapper
 from itertools import chain, islice
 from os.path import abspath, join
 from pathlib import Path
 from pickle import dump, load, UnpicklingError
 from tempfile import gettempdir
-from ._CGRrw import CGRRead, cgr_keys, query_keys, elements_set, elements_list, common_isotopes
+from ._CGRrw import CGRRead, cgr_keys, query_keys, common_isotopes
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
-from ..exceptions import EmptyMolecule
+from ..exceptions import EmptyMolecule, NotChiral, IsChiral, ValenceError
 
 
 class MOLRead:
@@ -39,7 +39,6 @@ class MOLRead:
 
         self.__bonds_count = int(line[3:6])
         self.__atoms_count = atom_count
-        self.__atoms_lists = {}
         self.__cgr = {}
         self.__query = []
         self.__atoms = []
@@ -48,8 +47,12 @@ class MOLRead:
 
     def getvalue(self):
         if self.__mend:
-            return {'atoms': self.__atoms, 'bonds': self.__bonds, 'atoms_lists': self.__atoms_lists, 'cgr': self.__cgr,
-                    'stereo': self.__stereo, 'query': self.__query}
+            mol = {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo}
+            if self.__cgr:
+                mol['cgr'] = self.__cgr
+            if self.__query:
+                mol['query'] = self.__query
+            return mol
         raise ValueError('molecule not complete')
 
     def __call__(self, line):
@@ -64,24 +67,22 @@ class MOLRead:
             isotope = line[34:36]
 
             if element == 'A':
-                self.__atoms_lists[len(self.__atoms)] = elements_list
-                element = 'C'  # replace with carbon
+                self.__query.append((len(self.__atoms), 'element', 'A'))
                 if isotope != ' 0':
                     raise ValueError('isotope on query atom')
                 isotope = None
             elif element == 'L':
-                if isotope != ' 0':
-                    raise ValueError('isotope on query atom')
-                isotope = None
+                raise ValueError('list of atoms not supported')
             elif element == 'D':
                 element = 'H'
                 if isotope != ' 0':
                     raise ValueError('isotope on deuterium atom')
                 isotope = 2
-            elif element not in elements_set:
-                raise ValueError('invalid atom symbol')
             elif isotope != ' 0':
-                isotope = common_isotopes[element] + int(isotope)
+                try:
+                    isotope = common_isotopes[element] + int(isotope)
+                except KeyError:
+                    raise ValueError('invalid element symbol')
             else:
                 isotope = None
 
@@ -91,32 +92,42 @@ class MOLRead:
 
         elif len(self.__bonds) < self.__bonds_count:
             a1, a2 = int(line[0:3]) - 1, int(line[3:6]) - 1
-            try:
-                stereo = self.__stereo_map[line[9:12]]
-            except KeyError:
+            s = line[9:12]
+            if s == '  1':
+                self.__stereo.append((a1, a2, 1))
+            elif s == '  6':
+                self.__stereo.append((a1, a2, -1))
+            elif s != '  0':
                 warning('unsupported or invalid stereo')
-            else:
-                if stereo:
-                    self.__stereo.append((a1, a2, stereo))
             self.__bonds.append((a1, a2, int(line[6:9])))
         elif line.startswith('M  END'):
             cgr = []
-            if any(a['element'] == 'L' for a in self.__atoms):
-                raise ValueError('invalid CTAB')
             for a in self.__atoms:
                 if a['is_radical']:
                     a['is_radical'] = True
             for x in self.__cgr.values():
                 try:
-                    xt = x['type']
-                    if xt in query_keys:
-                        if len(x['atoms']) != 1 or x['atoms'][0] == -1 or not x['value']:
+                    atoms = x['atoms']
+                    _type = x['type']
+                    value = x['value']
+                    if _type in query_keys:
+                        if len(atoms) != 1 or atoms[0] == -1 or not value:
                             raise ValueError(f'CGR Query spec invalid {x}')
-                        self.__query.append((x['atoms'][0], query_keys[xt], x['value']))
-                    elif xt in cgr_keys:
-                        if cgr_keys[xt] != len(x['atoms']) or -1 in x['atoms'] or not x['value']:
+                        self.__query.append((atoms[0], query_keys[_type], [int(x) for x in value.split(',')]))
+                    elif _type in cgr_keys:
+                        if cgr_keys[_type] != len(atoms) or -1 in atoms or not value:
                             raise ValueError(f'CGR spec invalid {x}')
-                        cgr.append((x['atoms'], xt, x['value']))
+
+                        if _type == 'dynatom':
+                            if value == 'r1':  # only dynatom = r1 acceptable. this means change of radical state
+                                cgr.append((atoms[0], 'radical', None))
+                            elif value[0] == 'c':
+                                cgr.append((atoms[0], 'charge', int(value[1:])))
+                            else:
+                                raise ValueError('unknown dynatom')
+                        else:
+                            bond, p_bond = x['value'].split('>')
+                            cgr.append((atoms, 'bond', (int(bond) or None, int(p_bond) or None)))
                     else:
                         warning(f'ignored data: {x}')
                 except KeyError:
@@ -129,19 +140,7 @@ class MOLRead:
 
     def __collect(self, line):
         if line.startswith('M  ALS'):
-            atom = int(line[7:10]) - 1
-            if atom < 0 or atom >= len(self.__atoms) or atom in self.__atoms_lists:
-                raise ValueError('invalid atom number')
-            value = [line[16 + x * 4: 20 + x * 4].strip() for x in range(int(line[10:13]))]
-            if not value or not elements_set.issuperset(value):
-                raise ValueError('invalid atoms list')
-
-            if line[14] == 'T':
-                value = list(elements_set.difference(value))
-            elif line[14] != 'F':
-                raise ValueError('invalid atoms list')
-            self.__atoms_lists[atom] = value
-            self.__atoms[atom]['element'] = value[0]
+            raise ValueError('list of atoms not supported')
         elif line.startswith(('M  ISO', 'M  RAD', 'M  CHG')):
             _type = self.__ctf_data[line[3]]
             for i in range(int(line[6:9])):
@@ -172,26 +171,20 @@ class MOLRead:
 
     __ctf_data = {'R': 'is_radical', 'C': 'charge', 'I': 'isotope'}
     __charge_map = {'  0': 0, '  1': 3, '  2': 2, '  3': 1, '  4': 0, '  5': -1, '  6': -2, '  7': -3}
-    __stereo_map = {'  0': None, '  1': 1, '  6': -1, '  4': None}
     __mend = False
 
 
 class EMOLRead:
     def __init__(self):
-        self.__atoms_lists = {}
-        self.__cgr = []
-        self.__query = []
         self.__atoms = []
         self.__bonds = []
-        self.__sgroup = 0
         self.__atom_map = {}
         self.__stereo = []
 
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'atoms_lists': self.__atoms_lists, 'cgr': self.__cgr,
-                'stereo': self.__stereo, 'query': self.__query}
+        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo}
 
     def __call__(self, line, lineu=None):
         if lineu is None:
@@ -212,9 +205,6 @@ class EMOLRead:
                     elif x == 'BOND':
                         if cp == self.__bond_parser and len(self.__bonds) == self.__bonds_count:
                             return
-                    elif x == 'SGROUP':
-                        if cp == self.__sgroup_parser and self.__sgroup == self.__sgroup_count:
-                            return
                     else:
                         return
                     raise ValueError('invalid number of %s records or invalid CTAB' % x)
@@ -228,10 +218,8 @@ class EMOLRead:
                     self.__parser = self.__atom_parser
                 elif lineu.startswith('M  V30 BEGIN BOND'):
                     self.__parser = self.__bond_parser
-                elif lineu.startswith('M  V30 BEGIN SGROUP'):
-                    self.__parser = self.__sgroup_parser
-                elif lineu.startswith('M  V30 BEGIN COLLECTION'):
-                    self.__parser = self.__collection_parser
+                elif lineu.startswith(('M  V30 BEGIN SGROUP', 'M  V30 BEGIN COLLECTION')):
+                    self.__parser = self.__ignored_block_parser
                 else:
                     raise ValueError('invalid CTAB')
 
@@ -241,7 +229,6 @@ class EMOLRead:
                 if not atom_count:
                     raise EmptyMolecule
                 self.__bonds_count = int(b)
-                self.__sgroup_count = int(s)
                 self.__atoms_count = atom_count
 
         elif self.__in_mol is not None:
@@ -275,13 +262,12 @@ class EMOLRead:
         for kv in kvs:
             k, v = kv.split('=')
             if k in ('CFG', 'cfg', 'Cfg'):
-                try:
-                    stereo = self.__stereo_map[v]
-                except KeyError:
-                    warning('invalid or unsupported stereo')
+                if v == '1':
+                    self.__stereo.append((self.__atom_map[a1], self.__atom_map[a2], 1))
+                elif v == '3':
+                    self.__stereo.append((self.__atom_map[a1], self.__atom_map[a2], -1))
                 else:
-                    if stereo:
-                        self.__stereo.append((self.__atom_map[a1], self.__atom_map[a2], stereo))
+                    warning('invalid or unsupported stereo')
                 break
 
     def __atom_parser(self, line):
@@ -300,77 +286,21 @@ class EMOLRead:
                 r = True
 
         self.__atom_map[n] = n = len(self.__atoms)
-        if a.startswith('['):
-            a = a[1:-1].split(',')
-            if not elements_set.issuperset(a):
-                raise ValueError('invalid atoms list')
-            if i:
-                raise ValueError('isotope on query atom')
-            self.__atoms_lists[n] = a
-            a = a[0]
-        elif a.startswith(('NOT', 'not', 'Not')):
-            a = a[5:-1].split(',')
-            if not elements_set.issuperset(a):
-                raise ValueError('invalid atoms list')
-            if i:
-                raise ValueError('isotope on query atom')
-            a = list(elements_set.difference(a))
-            self.__atoms_lists[n] = a
-            a = a[0]
+        if a.startswith(('[', 'NOT', 'not', 'Not')):
+            raise ValueError('list of atoms not supported')
         elif a == 'D':
             if i:
                 raise ValueError('isotope on deuterium atom')
             a = 'H'
             i = 2
-        elif a == 'A':
-            if i:
-                raise ValueError('isotope on query atom')
-            self.__atoms_lists[n] = elements_list
-            a = 'C'
 
         self.__atoms.append({'element': a, 'isotope': i, 'charge': c, 'is_radical': r,
                              'x': float(x), 'y': float(y), 'z': float(z), 'mapping': int(m)})
 
-    def __sgroup_parser(self, line):
-        self.__sgroup += 1
-        if line[1] == 'DAT':
-            i = int(line[3][7:])
-            try:
-                if i == 1:
-                    atoms = (self.__atom_map[line[4][:-1]],)
-                elif i == 2:
-                    atoms = (self.__atom_map[line[4]], self.__atom_map[line[5][:-1]])
-                else:
-                    return
-            except (KeyError, IndexError):
-                raise ValueError('invalid atom number')
-
-            _type = value = None
-            for kv in line[i + 4:]:
-                if '=' not in kv:
-                    continue
-                k, v = kv.split('=', 1)
-                if k == 'FIELDNAME':
-                    _type = v.lower()
-                elif k == 'FIELDDATA':
-                    value = v.lower()
-            if _type in cgr_keys:
-                if value and cgr_keys[_type] == i:
-                    self.__cgr.append((atoms, _type, value))
-                else:
-                    raise ValueError(f'CGR spec invalid {line}')
-            elif _type in query_keys:
-                if value and i == 1:
-                    self.__query.append((atoms[0], query_keys[_type], value))
-                else:
-                    raise ValueError(f'CGR spec invalid {line}')
-
-    def __collection_parser(self, line):
-        """ COLLECTION BLOCK. currently ignored"""
+    def __ignored_block_parser(self, line):
         return
 
     __record = __atoms_count = __in_mol = __parser = None
-    __stereo_map = {'1': 1, '3': -1, '2': None}
 
 
 class RXNRead:
@@ -386,7 +316,8 @@ class RXNRead:
             if self.__parser(line):
                 self.__im = 4
                 mol = self.__parser.getvalue()
-                mol['title'] = self.__title
+                if self.__title:
+                    mol['title'] = self.__title
                 self.__molecules.append(mol)
                 self.__parser = None
                 if len(self.__molecules) == self.__reagents_count:
@@ -469,7 +400,6 @@ class ERXNRead:
             else:
                 if x:
                     x = self.__parser.getvalue()
-                    x['title'] = ''
                     self.__in_mol -= 1
                     if self.__in_mol:
                         self.__parser = EMOLRead()
@@ -728,12 +658,11 @@ class MDLWrite:
     @classmethod
     def __convert_molecule(cls, g):
         bonds = g._bonds
-        stereo_map = cls.__stereo_map
         atoms = {m: n for n, m in enumerate(g._atoms, start=1)}
         wedge = defaultdict(set)
         out = []
         for n, m, s in g._wedge_map:
-            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {stereo_map[s]}  0  0  0\n')
+            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {s == 1 and "1" or "6"}  0  0  0\n')
             wedge[n].add(m)
             wedge[m].add(n)
         for n, m, b in g.bonds():
@@ -789,12 +718,11 @@ class MDLWrite:
     @classmethod
     def __convert_query(cls, g):
         bonds = g._bonds
-        stereo_map = cls.__stereo_map
         atoms = {m: n for n, m in enumerate(g._atoms, start=1)}
         wedge = defaultdict(set)
         out = []
         for n, m, s in g._wedge_map:
-            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {stereo_map[s]}  0  0  0\n')
+            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {s == 1 and "1" or "6"}  0  0  0\n')
             wedge[n].add(m)
             wedge[m].add(n)
         for n, m, b in g.bonds():
@@ -827,5 +755,28 @@ class MDLWrite:
         out.extend(props)
         return out
 
-    __stereo_map = {-1: '6', 1: '1', None: '0'}
     __charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}
+
+
+class MOLStereo:
+    @staticmethod
+    def update_stereo(g, mapping, stereo):
+        stereo = [(mapping[n], mapping[m], s) for n, m, s in stereo]
+        old_stereo = 0
+        while len(stereo) != old_stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for n, m, s in stereo:
+                try:
+                    g.add_wedge(n, m, s)
+                except NotChiral:
+                    fail_stereo.append((n, m, s))
+                except IsChiral:
+                    info(f'wedge {{{n}, {m}}} on already chiral atom')
+                except ValenceError:
+                    info('structure has errors, stereo data skipped')
+                    break
+            else:
+                stereo = fail_stereo
+                continue
+            break

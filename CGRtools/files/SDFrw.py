@@ -110,7 +110,8 @@ class SDFRead(MDLRead):
                     if title:
                         record['title'] = title
                     try:
-                        yield self._convert_structure(record)
+                        container, mapping = self._convert_structure(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         yield None
@@ -151,7 +152,8 @@ class SDFRead(MDLRead):
             if title:
                 record['title'] = title
             try:
-                yield self._convert_structure(record)
+                container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
