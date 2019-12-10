@@ -139,9 +139,14 @@ class RDFRead(MDLRead):
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
-                    record['title'] = title
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -160,9 +165,14 @@ class RDFRead(MDLRead):
             elif line.startswith('$MFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
-                    record['title'] = title
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -210,9 +220,14 @@ class RDFRead(MDLRead):
                     yield None
         if record:
             record['meta'] = self._prepare_meta(meta)
-            record['title'] = title
+            if title:
+                record['title'] = title
             try:
-                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                if is_reaction:
+                    container, mapping = self._convert_reaction(record)
+                else:
+                    container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None

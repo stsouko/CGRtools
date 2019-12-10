@@ -19,12 +19,12 @@
 from collections import defaultdict
 from importlib.util import find_spec
 from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
-from itertools import chain, count
+from itertools import count
 from logging import warning
 from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRRead, cgr_keys, query_keys, elements_set, elements_list
+from ._CGRrw import CGRRead
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..containers.common import Graph
 from ..exceptions import EmptyMolecule
@@ -78,18 +78,18 @@ class MRVRead(CGRRead):
     """
     def __init__(self, file, *args, **kwargs):
         if isinstance(file, str):
-            self._file = open(file, 'rb')
-            self._is_buffer = False
+            self.__file = open(file, 'rb')
+            self.__is_buffer = False
         elif isinstance(file, Path):
-            self._file = file.open('rb')
-            self._is_buffer = False
+            self.__file = file.open('rb')
+            self.__is_buffer = False
         elif isinstance(file, (BytesIO, BufferedReader, BufferedIOBase)):
-            self._file = file
-            self._is_buffer = True
+            self.__file = file
+            self.__is_buffer = True
         else:
             raise TypeError('invalid file. BytesIO, BufferedReader and BufferedIOBase subclasses possible')
         super().__init__(*args, **kwargs)
-        self.__data = self.__reader()
+        self._data = self.__reader()
 
     def close(self, force=False):
         """
@@ -97,8 +97,8 @@ class MRVRead(CGRRead):
 
         :param force: force closing of externally opened file or buffer
         """
-        if not self._is_buffer or force:
-            self._file.close()
+        if not self.__is_buffer or force:
+            self.__file.close()
 
     def __enter__(self):
         return self
@@ -112,53 +112,63 @@ class MRVRead(CGRRead):
 
         :return: list of parsed molecules or reactions
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
     def __reader(self):
-        for _, element in iterparse(self._file, tag='{*}MChemicalStruct'):
+        for _, element in iterparse(self.__file, tag='{*}MChemicalStruct'):
             parsed = xml_dict(element)
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
-                data = parsed['molecule']
+                parsed = parsed['molecule']
                 try:
-                    record = self.__parse_molecule(data)
+                    record = self.__parse_molecule(parsed)
                 except (KeyError, ValueError):
                     warning(f'record consist errors:\n{format_exc()}')
+                    yield None
                 else:
-                    if 'propertyList' in data and 'property' in data['propertyList']:
-                        record['meta'] = self.__parse_property(data['propertyList']['property'])
+                    if 'propertyList' in parsed and 'property' in parsed['propertyList']:
+                        record['meta'] = self.__parse_property(parsed['propertyList']['property'])
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._convert_structure(record)
+                        container, mapping = self._convert_structure(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
+                        yield None
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
-                data = parsed['reaction']
+                parsed = parsed['reaction']
                 try:
-                    record = self.__parse_reaction(data)
+                    record = self.__parse_reaction(parsed)
                 except (KeyError, ValueError):
                     warning(f'record consist errors:\n{format_exc()}')
+                    yield None
                 else:
-                    if 'propertyList' in data and 'property' in data['propertyList']:
-                        record['meta'] = self.__parse_property(data['propertyList']['property'])
+                    if 'propertyList' in parsed and 'property' in parsed['propertyList']:
+                        record['meta'] = self.__parse_property(parsed['propertyList']['property'])
                     else:
                         record['meta'] = {}
                     try:
-                        yield self._convert_reaction(record)
+                        container, mapping = self._convert_reaction(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
+                        yield None
             else:
                 warning('invalid MDocument')
+                yield None
 
     def __parse_reaction(self, data):
-        reaction = dict(reactants=[], products=[], reagents=[], title=data.get('@title', ''))
+        reaction = {'reactants': [], 'products': [], 'reagents': []}
+        title = data.get('@title')
+        if title:
+            reaction['title'] = title
         for tag, group in (('reactantList', 'reactants'), ('productList', 'products'), ('agentList', 'reagents')):
             if tag in data and 'molecule' in data[tag]:
                 molecule = data[tag]['molecule']
@@ -194,7 +204,7 @@ class MRVRead(CGRRead):
         return meta
 
     def __parse_molecule(self, data):
-        atoms, bonds, atoms_lists, cgr, stereo, query = [], [], {}, [], [], []
+        atoms, bonds, stereo = [], [], []
         atom_map = {}
         if 'atom' in data['atomArray']:
             da = data['atomArray']['atom']
@@ -212,21 +222,7 @@ class MRVRead(CGRRead):
                 else:
                     atoms[-1].update(x=float(atom['@x2']) / 2, y=float(atom['@y2']) / 2, z=0.)
                 if '@mrvQueryProps' in atom:
-                    if atom['@mrvQueryProps'][0] == 'L':
-                        al = atom['@mrvQueryProps']
-                        _type = al[1]
-                        al = al[2:-1].split(_type)
-                        if not elements_set.issuperset(al):
-                            raise ValueError('invalid atoms list')
-                        if _type != ',':
-                            al = list(elements_set.difference(al))
-                        atoms_lists[n] = al
-                        atoms[-1]['element'] = al[0]
-                    elif atom['@mrvQueryProps'][0] == 'A':
-                        atoms_lists[n] = elements_list
-                        atoms[-1]['element'] = 'C'
-                    else:
-                        raise ValueError('unsupported atom query')
+                    raise ValueError('queries unsupported')
         else:
             atom = data['atomArray']
             for n, (_id, e) in enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split())):
@@ -259,22 +255,7 @@ class MRVRead(CGRRead):
                     if x != '0':
                         a['is_radical'] = True
             if '@mrvQueryProps' in atom:
-                for n, x in enumerate(atom['@mrvQueryProps'].split()):
-                    qp = x[0]
-                    if qp == 'L':
-                        _type = x[1]
-                        x = x[2:-1].split(_type)
-                        if not elements_set.issuperset(x):
-                            raise ValueError('invalid atoms list')
-                        if _type != ',':
-                            x = list(elements_set.difference(x))
-                        atoms_lists[n] = x
-                        atoms[n]['element'] = x[0]
-                    elif qp == 'A':
-                        atoms_lists[n] = elements_list
-                        atoms[n]['element'] = 'C'
-                    elif qp != '0':
-                        raise ValueError('unsupported atom query')
+                raise ValueError('queries unsupported')
         if not atoms:
             raise EmptyMolecule
 
@@ -287,39 +268,24 @@ class MRVRead(CGRRead):
                 a1, a2 = bond['@atomRefs2'].split()
                 if 'bondStereo' in bond:
                     if '$' in bond['bondStereo']:
-                        try:
-                            stereo.append((atom_map[a1], atom_map[a2], self.__stereo_map[bond['bondStereo']['$']]))
-                        except KeyError:
+                        s = bond['bondStereo']['$']
+                        if s == 'H':
+                            stereo.append((atom_map[a1], atom_map[a2], -1))
+                        elif s == 'W':
+                            stereo.append((atom_map[a1], atom_map[a2], 1))
+                        else:
                             warning('invalid or unsupported stereo')
                     else:
                         warning('incorrect bondStereo tag')
                 bonds.append((atom_map[a1], atom_map[a2], order))
 
-        if 'molecule' in data:
-            dm = data['molecule']
-            if isinstance(dm, dict):
-                dm = (dm,)
-            for cgr_dat in dm:
-                if cgr_dat['@role'] == 'DataSgroup':
-                    t = cgr_dat['@fieldName']
-                    a = tuple(atom_map[x] for x in cgr_dat['@atomRefs'].split())
-                    v = cgr_dat['@fieldData'].replace('/', '').lower()
-                    if t in cgr_keys:
-                        if len(a) != cgr_keys[t] or not v:
-                            raise ValueError(f'CGR spec invalid: {cgr_dat}')
-                        cgr.append((a, t, v))
-                    elif t in query_keys:
-                        if len(a) != 1 or not v:
-                            raise ValueError(f'CGR Query spec invalid: {cgr_dat}')
-                        query.append((a[0], query_keys[t], v))
-                    else:
-                        warning(f'ignored data: {cgr_dat}')
-        return {'atoms': atoms, 'bonds': bonds, 'atoms_lists': atoms_lists, 'cgr': cgr, 'stereo': stereo,
-                'query': query, 'title': data.get('@title', '')}
+        mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo}
+        if '@title' in data:
+            mol['title'] = data['@title']
+        return mol
 
     __bond_map = {'Any': 8, 'any': 8, 'A': 4, 'a': 4, '1': 1, '2': 2, '3': 3}
     __radical_map = {'monovalent': 2, 'divalent': 1, 'divalent1': 1, 'divalent3': 3}
-    __stereo_map = {'H': -1, 'W': 1}
 
 
 class MRVWrite:
@@ -466,13 +432,12 @@ class MRVWrite:
     @classmethod
     def __convert_molecule(cls, g):
         bonds = g._bonds
-        stereo_map = cls.__stereo_map
         bond_map = cls.__bond_map
         wedge = defaultdict(set)
         out = ['<bondArray>']
         for n, (i, j, s) in enumerate(g._wedge_map, start=1):
             out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bonds[i][j].order]}">'
-                       f'<bondStereo>{stereo_map[s]}</bondStereo></bond>')
+                       f'<bondStereo>{s == 1 and "W" or "H"}</bondStereo></bond>')
             wedge[i].add(j)
             wedge[j].add(i)
         for n, (i, j, bond) in enumerate(g.bonds(), start=len(out)):
@@ -529,7 +494,6 @@ class MRVWrite:
         return out
 
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', None: '0'}
-    __stereo_map = {-1: 'H', 1: 'W'}
     __finalized = False
 
 
