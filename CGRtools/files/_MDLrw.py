@@ -26,9 +26,13 @@ from os.path import abspath, join
 from pathlib import Path
 from pickle import dump, load, UnpicklingError
 from tempfile import gettempdir
-from ._CGRrw import CGRRead, cgr_keys, query_keys, common_isotopes
+from ._CGRrw import CGRRead, common_isotopes
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..exceptions import EmptyMolecule, NotChiral, IsChiral, ValenceError
+
+
+query_keys = {'atomhyb': 'hybridization', 'hybridization': 'hybridization', 'hyb': 'hybridization',
+              'atomneighbors': 'neighbors', 'neighbors': 'neighbors'}
 
 
 class MOLRead:
@@ -114,20 +118,20 @@ class MOLRead:
                         if len(atoms) != 1 or atoms[0] == -1 or not value:
                             raise ValueError(f'CGR Query spec invalid {x}')
                         self.__query.append((atoms[0], query_keys[_type], [int(x) for x in value.split(',')]))
-                    elif _type in cgr_keys:
-                        if cgr_keys[_type] != len(atoms) or -1 in atoms or not value:
+                    elif _type == 'dynatom':
+                        if len(atoms) != 1 or atoms[0] == -1 or not value:
                             raise ValueError(f'CGR spec invalid {x}')
-
-                        if _type == 'dynatom':
-                            if value == 'r1':  # only dynatom = r1 acceptable. this means change of radical state
-                                cgr.append((atoms[0], 'radical', None))
-                            elif value[0] == 'c':
-                                cgr.append((atoms[0], 'charge', int(value[1:])))
-                            else:
-                                raise ValueError('unknown dynatom')
+                        if value == 'r1':  # only dynatom = r1 acceptable. this means change of radical state
+                            cgr.append((atoms[0], 'radical', None))
+                        elif value[0] == 'c':
+                            cgr.append((atoms[0], 'charge', int(value[1:])))
                         else:
-                            bond, p_bond = x['value'].split('>')
-                            cgr.append((atoms, 'bond', (int(bond) or None, int(p_bond) or None)))
+                            raise ValueError('unknown dynatom')
+                    elif _type == 'dynbond':
+                        if len(atoms) != 2 or -1 in atoms or not value:
+                            raise ValueError(f'CGR spec invalid {x}')
+                        bond, p_bond = x['value'].split('>')
+                        cgr.append((atoms, 'bond', (int(bond) or None, int(p_bond) or None)))
                     else:
                         warning(f'ignored data: {x}')
                 except KeyError:
@@ -224,7 +228,7 @@ class EMOLRead:
                     raise ValueError('invalid CTAB')
 
             else:  # M  V30 COUNTS line expected
-                a, b, s, *_ = line[13:].split()
+                a, b, *_ = line[13:].split()
                 atom_count = int(a)
                 if not atom_count:
                     raise EmptyMolecule

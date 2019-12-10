@@ -25,9 +25,6 @@ from ..exceptions import MappingError
 from ..periodictable import Element, DynamicElement, QueryElement
 
 
-cgr_keys = {'dynbond': 2, 'dynatom': 1}
-query_keys = {'atomhyb': 'hybridization', 'hybridization': 'hybridization', 'hyb': 'hybridization',
-              'atomneighbors': 'neighbors', 'neighbors': 'neighbors'}
 common_isotopes = {'H': 1, 'He': 4, 'Li': 7, 'Be': 9, 'B': 11, 'C': 12, 'N': 14, 'O': 16, 'F': 19, 'Ne': 20, 'Na': 23,
                    'Mg': 24, 'Al': 27, 'Si': 28, 'P': 31, 'S': 32, 'Cl': 35, 'Ar': 40, 'K': 39, 'Ca': 40, 'Sc': 45,
                    'Ti': 48, 'V': 51, 'Cr': 52, 'Mn': 55, 'Fe': 56, 'Co': 59, 'Ni': 59, 'Cu': 64, 'Zn': 65, 'Ga': 70,
