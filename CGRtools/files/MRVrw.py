@@ -25,8 +25,7 @@ from pathlib import Path
 from traceback import format_exc
 from warnings import warn
 from ._CGRrw import CGRRead
-from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
-from ..containers.common import Graph
+from ..containers import MoleculeContainer, ReactionContainer
 from ..exceptions import EmptyMolecule
 
 
@@ -344,9 +343,46 @@ class MRVWrite:
         self.write = self.__write
 
     def __write(self, data):
-        self._file.write('<MDocument><MChemicalStruct>')
+        if isinstance(data, ReactionContainer):
+            buffer = ['<MDocument><MChemicalStruct>']
+            if not data._arrow:
+                data.fix_positions()
 
-        if isinstance(data, Graph):
+            if data.name:
+                buffer.append(f'<reaction title="{data.name}">')
+            else:
+                buffer.append('<reaction>')
+
+            if data.meta:
+                buffer.append('<propertyList>')
+                for k, v in data.meta.items():
+                    if isinstance(v, str):
+                        v = f'<![CDATA[{v}]]>'
+                    buffer.append(f'<property title="{k}"><scalar>{v}</scalar></property>')
+                buffer.append('</propertyList>')
+            c = count(1)
+            for i, j in ((data.reactants, 'reactantList'), (data.products, 'productList'),
+                         (data.reagents, 'agentList')):
+                if not i:
+                    continue
+                buffer.append(f'<{j}>')
+                for n, m in zip(c, i):
+                    if m.name:
+                        buffer.append(f'<molecule title="{m.name}" molID="m{n}">')
+                    else:
+                        buffer.append(f'<molecule molID="m{n}">')
+                    buffer.append(self.__convert_structure(m))
+                    buffer.append('</molecule>')
+                buffer.append(f'</{j}>')
+
+            buffer.append(f'<arrow type="DEFAULT" x1="{data._arrow[0] * 2:.4f}" y1="0" '
+                          f'x2="{data._arrow[1] * 2:.4f}" y2="0"/>')
+            buffer.append('</reaction>')
+            self._file.writelines(buffer)
+        else:
+            m = self.__convert_structure(data)
+            self._file.write('<MDocument><MChemicalStruct>')
+
             if data.name:
                 self._file.write(f'<molecule title="{data.name}">')
             else:
@@ -359,59 +395,18 @@ class MRVWrite:
                         v = f'<![CDATA[{v}]]>'
                     self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
                 self._file.write('</propertyList>')
-            self._file.write(self.__convert_structure(data))
+            self._file.write(m)
             self._file.write('</molecule>')
-        else:
-            if not data._arrow:
-                data.fix_positions()
-
-            if data.name:
-                self._file.write(f'<reaction title="{data.name}">')
-            else:
-                self._file.write('<reaction>')
-
-            if data.meta:
-                self._file.write('<propertyList>')
-                for k, v in data.meta.items():
-                    if isinstance(v, str):
-                        v = f'<![CDATA[{v}]]>'
-                    self._file.write(f'<property title="{k}"><scalar>{v}</scalar></property>')
-                self._file.write('</propertyList>')
-            c = count(1)
-            for i, j in ((data.reactants, 'reactantList'), (data.products, 'productList'),
-                         (data.reagents, 'agentList')):
-                if not i:
-                    continue
-                self._file.write(f'<{j}>')
-                for n, m in zip(c, i):
-                    if m.name:
-                        self._file.write(f'<molecule title="{m.name}" molID="m{n}">')
-                    else:
-                        self._file.write(f'<molecule molID="m{n}">')
-                    self._file.write(self.__convert_structure(m))
-                    self._file.write('</molecule>')
-                self._file.write(f'</{j}>')
-
-            self._file.write(f'<arrow type="DEFAULT" x1="{data._arrow[0] * 2:.4f}" y1="0" '
-                             f'x2="{data._arrow[1] * 2:.4f}" y2="0"/>')
-            self._file.write('</reaction>')
         self._file.write('</MChemicalStruct></MDocument>\n')
 
     def __convert_structure(self, g):
-        if isinstance(g, MoleculeContainer):
-            bonds = self.__convert_molecule(g)
-        elif isinstance(g, CGRContainer):
-            bonds = self.__convert_cgr(g)
-        elif isinstance(g, QueryContainer):
-            bonds = self.__convert_query(g)
-        elif isinstance(g, QueryCGRContainer):
-            raise TypeError('CGR queries not supported')
-        else:
-            raise TypeError('Graph expected')
-
+        if not isinstance(g, MoleculeContainer):
+            raise TypeError('MoleculeContainer expected')
+        bond_map = self.__bond_map
         gp = g._plane
         gc = g._charges
         gr = g._radicals
+        bg = g._bonds
 
         out = ['<atomArray>']
         for n, atom in g._atoms.items():
@@ -426,17 +421,11 @@ class MRVWrite:
                 out.append(f' isotope="{atom.isotope}"')
             out.append('/>')
         out.append('</atomArray>')
-        out.extend(bonds)
-        return ''.join(out)
 
-    @classmethod
-    def __convert_molecule(cls, g):
-        bonds = g._bonds
-        bond_map = cls.__bond_map
+        out.append('<bondArray>')
         wedge = defaultdict(set)
-        out = ['<bondArray>']
         for n, (i, j, s) in enumerate(g._wedge_map, start=1):
-            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bonds[i][j].order]}">'
+            out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bg[i][j].order]}">'
                        f'<bondStereo>{s == 1 and "W" or "H"}</bondStereo></bond>')
             wedge[i].add(j)
             wedge[j].add(i)
@@ -444,54 +433,7 @@ class MRVWrite:
             if j not in wedge[i]:
                 out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bond.order]}"/>')
         out.append('</bondArray>')
-        return out
-
-    @classmethod
-    def __convert_cgr(cls, g):
-        bond_map = cls.__bond_map
-        gpc = g._p_charges
-        gpr = g._p_radicals
-
-        out = ['<bondArray>']
-        dyn = []
-        for n, (i, j, bond) in enumerate(g.bonds(), start=1):
-            if bond.order != bond.p_order:
-                dyn.append((i, j, bond))
-                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="1" queryType="Any"/>')
-            else:
-                out.append(f'<bond id="b{n}" atomRefs2="a{i} a{j}" order="{bond_map[bond.order]}"/>')
-        out.append('</bondArray>')
-        for n, (i, j, bond) in enumerate(dyn, start=1):
-            out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynbond" '
-                       f'fieldData="{bond.order or 0}&gt;{bond.p_order or 0}" '
-                       f'atomRefs="a{i} a{j}" x="0" y="{n / 3:.4f}"/>')
-        n = len(dyn)
-        for n, (m, c) in enumerate(g._charges.items(), start=n + 1):
-            if c != gpc[m]:
-                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynatom" '
-                           f'fieldData="c{gpc[m] - c:+d}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
-        for n, (m, r) in enumerate(g._radicals.items(), start=n + 1):
-            if r != gpr[m]:
-                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="dynatom" '
-                           f'fieldData="r1" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
-        return out
-
-    @classmethod
-    def __convert_query(cls, g):
-        out = cls.__convert_molecule(g)
-
-        n = 0
-        for n, (m, an) in enumerate(g._neighbors.items(), start=1):
-            if an:
-                an = ','.join(str(x) for x in an)
-                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="neighbors" '
-                           f'fieldData="{an}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
-        for n, (m, h) in enumerate(g._hybridizations.items(), start=n + 1):
-            if h:
-                h = ','.join(str(x) for x in h)
-                out.append(f'<molecule id="sg{n}" role="DataSgroup" fieldName="hybridization" '
-                           f'fieldData="{h}" atomRefs="a{m}" x="0" y="{n / 3:.4f}"/>')
-        return out
+        return ''.join(out)
 
     __bond_map = {8: '1" queryType="Any', 4: 'A', 1: '1', 2: '2', 3: '3', None: '0'}
     __finalized = False
