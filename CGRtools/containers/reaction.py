@@ -137,7 +137,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """list of CGRs or/and Molecules in products side"""
         return self.__products
 
-    @property
     def molecules(self) -> Iterator[Graph, ...]:
         """
         :return: iterator of all reaction molecules
@@ -283,7 +282,9 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
             p = reduce(or_, self.__products)
         else:
             p = MoleculeContainer()
-        return r ^ p
+        c = r ^ p
+        c.meta.update(self.__meta)
+        return c
 
     def __invert__(self):
         """
