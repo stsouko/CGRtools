@@ -17,11 +17,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import takewhile, permutations
+from itertools import permutations
 from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
-from re import split
+from re import split, compile, fullmatch
 from traceback import format_exc
 from typing import Union, List
 from warnings import warn
@@ -49,23 +49,21 @@ from ..exceptions import IncorrectSmiles
 replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
 charge_dict = {'+': 1, '+1': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4,
                '-': -1, '-1': -1, '--': -2, '-2': -2, '-3': -3, '-4': -4}
-charge_dict = {tuple(k): v for k, v in charge_dict.items()}
-charge_dict[()] = 0
 dynamic_bonds = {'.>-': (None, 1), '.>=': (None, 2), '.>#': (None, 3), '.>:': (None, 4), '.>~': (None, 8),
                  '->.': (1, None), '->=': (1, 2), '->#': (1, 3), '->:': (1, 4), '->~': (1, 8),
                  '=>.': (2, None), '=>-': (2, 1), '=>#': (2, 3), '=>:': (2, 4), '=>~': (2, 8),
                  '#>.': (3, None), '#>-': (3, 1), '#>=': (3, 2), '#>:': (3, 4), '#>~': (3, 8),
                  ':>.': (4, None), ':>-': (4, 1), ':>=': (4, 2), ':>#': (4, 3), ':>~': (4, 8),
                  '~>.': (8, None), '~>-': (8, 1), '~>=': (8, 2), '~>#': (8, 3), '~>:': (8, 4)}
-dynamic_bonds = {tuple(k): v for k, v in dynamic_bonds.items()}
-
 dyn_charge_dict = {'-4': -4, '-3': -3, '-2': -2, '--': -2, '-': -1, '0': 0, '+': 1, '++': 2, '+2': 2, '+3': 3, '+4': 4}
 tmp = {f'{i}>{j}': (x, ('charge', y - x)) for (i, x), (j, y) in permutations(dyn_charge_dict.items(), 2) if x != y}
 dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
+dyn_radical_dict = {'*': (True,), '*>^': (True, ('radical', None)), '^>*': (False, ('radical', None))}
 
-dyn_radical_dict = {(): (False,), ('*',): (True,), ('*', '>', '^'): (True, ('radical', None)),
-                    ('^', '>', '*'): (False, ('radical', None))}
+atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnops][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
+dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Z][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?([*^](>[*^])?)?')
+delimiter = compile(r'[=:]')
 
 
 class SMILESRead(CGRRead):
@@ -157,7 +155,7 @@ class SMILESRead(CGRRead):
             meta = {}
             for x in data:
                 try:
-                    k, v = split('[=:]', x, 1)
+                    k, v = split(delimiter, x, 1)
                     meta[k] = v
                 except ValueError:
                     warning(f'invalid metadata entry: {x}')
@@ -234,7 +232,7 @@ class SMILESRead(CGRRead):
                     raise IncorrectSmiles(']..]')
                 elif not token:
                     raise IncorrectSmiles('empty [] brackets')
-                tokens.append((5, tuple(token)))
+                tokens.append((5, ''.join(token)))
                 token_type = token = None
             elif s in '()':
                 if token_type == 5:
@@ -357,93 +355,41 @@ class SMILESRead(CGRRead):
 
     @staticmethod
     def __atom_parse(token):
-        isotope = ''.join(takewhile(lambda x: x.isnumeric(), token))
+        # [isotope]Element[element][@[@]][H[n]][+-charge][:mapping]
+        match = fullmatch(atom_re, token)
+        if match is None:
+            raise IncorrectSmiles('atom token invalid')
+        isotope, element, stereo, hydrogen, charge, mapping = match.groups()
+
         if isotope:
-            token = token[len(isotope):]
-            if not token:
-                raise IncorrectSmiles('atom token invalid')
             isotope = int(isotope)
+
+        if stereo:
+            stereo = -1 if stereo == '@@' else 1
+
+        if hydrogen:
+            if len(hydrogen) > 1:
+                hydrogen = int(hydrogen[1:])
+            else:
+                hydrogen = 1
         else:
-            isotope = None
+            hydrogen = 0
 
-        element = token[0]
-        if not element.isalpha():
-            raise IncorrectSmiles('invalid atom token')
-        elif len(token) == 1:
-            hydrogen = charge = mapping = stereo = 0
+        if charge:
+            try:
+                charge = charge_dict[charge]
+            except KeyError:
+                raise IncorrectSmiles('charge token invalid')
         else:
-            t1 = token[1]
-            token = token[2:]
-            if t1 == '@':  # only carbons stereo accepted
-                if token:
-                    t1 = token[0]
-                    token = token[1:]
-                    if t1 == '@':
-                        if token:
-                            t1 = token[0]
-                            token = token[1:]
-                            if t1 in ('H', ':') and element == 'C':
-                                stereo = -1
-                            else:
-                                stereo = 0
-                                warning('only neutral carbon stereo accepted')
-                        else:
-                            t1 = None
-                            if element == 'C':
-                                stereo = -1
-                            else:
-                                stereo = 0
-                                warning('only neutral carbon stereo accepted')
-                    elif t1 in ('H', ':') and element == 'C':
-                        stereo = 1
-                    else:
-                        stereo = 0
-                        warning('only neutral carbon stereo accepted')
-                else:
-                    t1 = None
-                    if element == 'C':
-                        stereo = 1
-                    else:
-                        stereo = 0
-                        warning('only neutral carbon stereo accepted')
-            else:
-                stereo = 0
+            charge = 0
 
-            if t1 == 'H':  # implicit H
-                if token:
-                    h = ''.join(takewhile(lambda x: x.isnumeric(), token))
-                    if h:
-                        token = token[len(h):]
-                        hydrogen = int(h)
-                    else:
-                        hydrogen = 1
-                else:
-                    hydrogen = 1
-            elif t1 is None:
-                hydrogen = 0
-            else:
-                hydrogen = 0
-                if t1.isalpha():
-                    element += t1
-                else:
-                    token = (t1, *token)  # reset token
-
-            if token:  # charge and mapping
-                if ':' in token:
-                    i = token.index(':')
-                    try:
-                        mapping = int(''.join(token[i + 1:]))
-                    except ValueError:
-                        raise IncorrectSmiles('invalid mapping token')
-                    token = token[:i]
-                else:
-                    mapping = 0
-                try:
-                    charge = charge_dict[token]
-                except KeyError:
-                    raise IncorrectSmiles('charge token invalid')
-            else:
-                charge = mapping = 0
+        if mapping:
+            try:
+                mapping = int(mapping[1:])
+            except ValueError:
+                raise IncorrectSmiles('invalid mapping token')
+        else:
+            mapping = 0
 
         if element in ('c', 'n', 'o', 'p', 's', 'as', 'se'):
             _type = 8
@@ -455,41 +401,33 @@ class SMILESRead(CGRRead):
 
     @staticmethod
     def __dynatom_parse(token):
-        # token contain * or > symbol allways
-        isotope = ''.join(takewhile(lambda x: x.isnumeric(), token))
+        # [isotope]Element[element][+-charge[>+-charge]][*^[>*^]]
+        match = fullmatch(dyn_atom_re, token)
+        if match is None:
+            raise IncorrectSmiles('atom token invalid')
+        isotope, element, charge, _, is_radical, _ = match.groups()
+
         if isotope:
-            token = token[len(isotope):]
             isotope = int(isotope)
-        else:
-            isotope = None
 
-        element = token[0]
-        if not element.isalpha():
-            raise IncorrectSmiles('invalid atom token')
-        t1 = token[1]
-        if t1.isalpha():  # extract element
-            token = token[2:]
-            element += t1
-        else:
-            token = token[1:]
-
-        charge = ''.join(takewhile(lambda x: x in '+->01234', token))
         if charge:
-            token = token[len(charge):]
             try:
                 charge, *cgr = dyn_charge_dict[charge]
             except KeyError:
-                raise IncorrectSmiles('invalid dynamic charge token')
+                raise IncorrectSmiles('charge token invalid')
         else:
             charge = 0
             cgr = []
 
-        try:
-            is_radical, *dyn = dyn_radical_dict[token]
-        except KeyError:
-            raise IncorrectSmiles('invalid dynamic radical token')
+        if is_radical:
+            try:
+                is_radical, *dyn = dyn_radical_dict[is_radical]
+            except KeyError:
+                raise IncorrectSmiles('invalid dynamic radical token')
+            else:
+                cgr.extend(dyn)
         else:
-            cgr.extend(dyn)
+            is_radical = False
 
         return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
                 'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
@@ -619,7 +557,7 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('bond on the end')
         mol = {'atoms': atoms, 'bonds': bonds,
                'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
-        if cgr:
+        if cgr or any(x == 11 for x in atoms_types):
             mol['cgr'] = cgr
         return mol
 
