@@ -212,7 +212,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         :return: number of removed hydrogens
         """
         total = 0
-        for m in self.molecules:
+        for m in self.molecules():
             if isinstance(m, MoleculeContainer):
                 total += m.implicify_hydrogens()
         if total:
@@ -226,7 +226,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         :return: number of added atoms
         """
         total = 0
-        for m in self.molecules:
+        for m in self.molecules():
             if isinstance(m, MoleculeContainer):
                 total += m.explicify_hydrogens()
         if total:
@@ -239,7 +239,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return True if in any molecule found kekule ring
         """
         total = False
-        for m in self.molecules:
+        for m in self.molecules():
             if isinstance(m, MoleculeContainer):
                 if m.thiele() and not not total:
                     total = True
@@ -253,7 +253,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return True if in any molecule found aromatic ring
         """
         total = False
-        for m in self.molecules:
+        for m in self.molecules():
             if isinstance(m, MoleculeContainer):
                 if m.kekule() and not total:
                     total = True
@@ -296,7 +296,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """
         recalculate 2d coordinates
         """
-        for m in self.molecules:
+        for m in self.molecules():
             m.calculate2d()
         self.fix_positions()
 
@@ -428,7 +428,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     def flush_cache(self):
         self.__dict__.clear()
-        for m in self.molecules:
+        for m in self.molecules():
             m.flush_cache()
 
     @class_cached_property
