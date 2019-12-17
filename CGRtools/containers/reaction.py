@@ -137,7 +137,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """list of CGRs or/and Molecules in products side"""
         return self.__products
 
-    def molecules(self) -> Iterator[Graph, ...]:
+    def molecules(self) -> Iterator[Graph]:
         """
         :return: iterator of all reaction molecules
         """
