@@ -234,35 +234,28 @@ class MoleculeSmiles(Smiles):
             smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
             if ih:
                 smi.append('H')
-            smi.insert(0, '[')
-            smi.append(']')
         elif charge:
             if ih == 1:
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
             smi.append(charge_str[charge])
-            smi.insert(0, '[')
-            smi.append(']')
         elif self._radicals[n]:
             if ih == 1:
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
-            smi.insert(0, '[')
-            smi.append(']')
         elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P'):  # heterocycles
             if ih == 1:
-                smi.append('H]')
-                smi.insert(0, '[')
+                smi.append('H')
             elif ih:
-                smi.append(f'H{ih}]')
-                smi.insert(0, '[')
+                smi.append(f'H{ih}')
         elif atom.atomic_symbol not in organic_set:
             if ih == 1:
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
+        if len(smi) != 1:
             smi.insert(0, '[')
             smi.append(']')
         return ''.join(smi)
