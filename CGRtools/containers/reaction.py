@@ -138,6 +138,11 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return self.__products
 
     @property
+    def molecules(self) -> Tuple[Graph, ...]:
+        """all molecules from reaction"""
+        return chain(self.__reactants, self.__products, self.__reagents)
+
+    @property
     def meta(self) -> Dict:
         """dictionary of metadata. like DTYPE-DATUM in RDF"""
         return self.__meta
