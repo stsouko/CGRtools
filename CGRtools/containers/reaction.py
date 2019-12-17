@@ -139,7 +139,9 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     @property
     def molecules(self) -> Tuple[Graph, ...]:
-        """all molecules from reaction"""
+        """
+        :return: iterator of all reaction molecules
+        """
         return chain(self.__reactants, self.__products, self.__reagents)
 
     @property
