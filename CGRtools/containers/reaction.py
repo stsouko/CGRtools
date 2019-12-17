@@ -22,7 +22,7 @@ from itertools import chain
 from functools import reduce
 from hashlib import sha512
 from operator import or_
-from typing import Tuple, Dict, Iterable as TIterable, Optional
+from typing import Tuple, Dict, Iterable as TIterable, Optional, Iterator
 from .cgr import CGRContainer
 from .common import Graph
 from .molecule import MoleculeContainer
@@ -138,11 +138,11 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return self.__products
 
     @property
-    def molecules(self) -> Tuple[Graph, ...]:
+    def molecules(self) -> Iterator[Graph, ...]:
         """
         :return: iterator of all reaction molecules
         """
-        return chain(self.__reactants, self.__products, self.__reagents)
+        return chain(self.__reactants, self.__reagents, self.__products)
 
     @property
     def meta(self) -> Dict:
@@ -213,7 +213,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         :return: number of removed hydrogens
         """
         total = 0
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             if isinstance(m, MoleculeContainer):
                 total += m.implicify_hydrogens()
         if total:
@@ -227,7 +227,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         :return: number of added atoms
         """
         total = 0
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             if isinstance(m, MoleculeContainer):
                 total += m.explicify_hydrogens()
         if total:
@@ -240,7 +240,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return True if in any molecule found kekule ring
         """
         total = False
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             if isinstance(m, MoleculeContainer):
                 if m.thiele() and not not total:
                     total = True
@@ -254,7 +254,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         return True if in any molecule found aromatic ring
         """
         total = False
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             if isinstance(m, MoleculeContainer):
                 if m.kekule() and not total:
                     total = True
@@ -295,7 +295,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """
         recalculate 2d coordinates
         """
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             m.calculate2d()
         self.fix_positions()
 
@@ -427,7 +427,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     def flush_cache(self):
         self.__dict__.clear()
-        for m in chain(self.__reagents, self.__reactants, self.__products):
+        for m in self.molecules:
             m.flush_cache()
 
     @class_cached_property
