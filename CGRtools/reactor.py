@@ -20,7 +20,7 @@
 from collections import defaultdict
 from functools import reduce
 from itertools import chain, count, permutations, product
-from logging import warning, info
+from logging import info
 from operator import or_
 from typing import Union, Iterable
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
@@ -41,7 +41,7 @@ class BaseReactor:
         atoms = defaultdict(dict)
         for n, atom in products.atoms():
             if atom.neighbors or atom.hybridization:
-                warning('neighbors and hybridization for new atoms unusable')
+                info('neighbors and hybridization for new atoms unusable')
             atoms[n].update(charge=atom.charge, is_radical=atom.is_radical)
             elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
             if n not in reactants:
