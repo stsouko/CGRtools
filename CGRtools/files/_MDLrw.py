@@ -348,7 +348,7 @@ class RXNRead:
             except EmptyMolecule:
                 if not self.__ignore:
                     raise
-                self.__empty_skip = True
+                warning('empty molecule ignored')
                 if len(self.__molecules) < self.__reactants_count:
                     self.__reactants_count -= 1
                     self.__products_count -= 1
@@ -358,7 +358,10 @@ class RXNRead:
                     self.__reagents_count -= 1
                 elif len(self.__molecules) < self.__reagents_count:
                     self.__reagents_count -= 1
-                warning('empty molecule ignored')
+                    if len(self.__molecules) == self.__reagents_count:  # empty molecule is last in list
+                        self.__rend = True
+                        return True
+                self.__empty_skip = True
 
     def getvalue(self):
         if self.__rend:
