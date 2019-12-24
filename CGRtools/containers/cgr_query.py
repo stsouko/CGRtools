@@ -171,7 +171,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
         sub._atoms = ca = {}
         for n in atoms:
-            ca[n] = atom = sa[n].copy()
+            atom = sa[n].copy()
+            ca[n] = atom
             atom._attach_to_graph(sub, n)
         return sub
 
@@ -189,7 +190,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
-                    ua[n] = atom = atom.copy()
+                    atom = atom.copy()
+                    ua[n] = atom
                     atom._attach_to_graph(u, n)
             else:  # CGRContainer
                 un = u._neighbors
@@ -207,7 +209,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
-                    ua[n] = atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                    atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                    ua[n] = atom
                     atom._attach_to_graph(u, n)
 
             ub = u._bonds
@@ -242,7 +245,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles):
 
             ua = u._atoms
             for n, atom in other._atoms.items():
-                ua[n] = atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                ua[n] = atom
                 atom._attach_to_graph(u, n)
 
             ub = u._bonds

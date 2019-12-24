@@ -240,7 +240,8 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
                 hc[m] = sc[n]
                 hr[m] = sr[n]
                 hp[m] = sp[n]
-                ha[m] = atom = atom.copy()
+                atom = atom.copy()
+                ha[m] = atom
                 atom._attach_to_graph(h, m)
         else:
             hb = {}
@@ -304,7 +305,8 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
 
         copy._atoms = ca = {}
         for n, atom in self._atoms.items():
-            ca[n] = atom = atom.copy()
+            atom = atom.copy()
+            ca[n] = atom
             atom._attach_to_graph(copy, n)
         return copy
 
