@@ -9,7 +9,9 @@ python:
       extra_requirements:
         - mrv
 
-formats: all
-
 build:
   image: latest
+
+sphinx:
+  builder: html
+  configuration: doc/conf.py

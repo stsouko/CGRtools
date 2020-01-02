@@ -1,7 +1,4 @@
-Welcome to CGRtools's documentation!
-====================================
-
-Molecules, Reactions and CGR manipulation
+.. mdinclude:: ../README.md
 
 CGRtools package
 ================

@@ -6,12 +6,12 @@ if parent not in path:
     path.insert(0, parent)
 
 author = 'Dr. Ramil Nugmanov'
-copyright = '2014-2019, Dr. Ramil Nugmanov <stsouko@live.ru>'
+copyright = '2014-2020, Dr. Ramil Nugmanov <nougmanoff@protonmail.com>'
 version = '4.0'
 project = 'CGRtools'
 
-needs_sphinx = '1.6'
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'sphinx.ext.coverage']
+needs_sphinx = '1.8'
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'm2r']
 
 
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -20,13 +20,11 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 language = None
-pygments_style = 'sphinx'
+pygments_style = 'flasky'
 todo_include_todos = False
 autoclass_content = 'both'
 
-html_theme = 'alabaster'
 html_theme_options = {'github_user': 'cimm-kzn', 'github_repo': 'CGRtools', 'show_related': True}
-html_static_path = ['_static']
 html_show_copyright = True
 html_show_sourcelink = False
 html_sidebars = {

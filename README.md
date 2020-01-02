@@ -14,7 +14,7 @@ INSTALL
 =======
 
 Linux Debian based
-==================
+------------------
 
 * Install python3.7, virtualenv and git
 
@@ -30,7 +30,7 @@ Linux Debian based
     ```
 
 Mac
-===
+---
 * Install python3.7 and git using [brew](<https://brew.sh>)
 
     ```
@@ -52,7 +52,7 @@ Mac
     ```
     
 Windows
-=======
+-------
 
 * Install python3.7 and git using [Chocolatey](<https://chocolatey.org/>)
 
@@ -75,7 +75,7 @@ Windows
     ```
 
 General part
-============
+------------
 
 * **stable version will be available through PyPI**
 
@@ -104,22 +104,6 @@ General part
 
 **If you still have questions, please open issue within github.**
 
-COPYRIGHT
-=========
-
-2014-2019 Ramil Nugmanov <stsouko@live.ru> main developer  
-2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
-2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
-
-CONTRIBUTORS
-============
-
-* Dinar Batyrshin <batyrshin-dinar@mail.ru>
-* Timur Gimadiev <timur.gimadiev@gmail.com>
-* Adelia Fatykhova <adelik21979@gmail.com>
-* Tagir Akhmetshin <tagirshin@gmail.com>
-* Ravil Mukhametgaleev <sonic-mc@mail.ru>
-
 PACKAGING
 =========
 
@@ -131,3 +115,19 @@ On Linux additionally do repairing of package
 
     pip install auditwheel
     auditwheel repair dist/CGRtools-<version>-<python_version>-linux_x86_64.whl
+
+COPYRIGHT
+=========
+
+2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer  
+2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
+2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
+
+CONTRIBUTORS
+============
+
+* Dinar Batyrshin <batyrshin-dinar@mail.ru>
+* Timur Gimadiev <timur.gimadiev@gmail.com>
+* Adelia Fatykhova <adelik21979@gmail.com>
+* Tagir Akhmetshin <tagirshin@gmail.com>
+* Ravil Mukhametgaleev <sonic-mc@mail.ru>

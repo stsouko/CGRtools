@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Artem Mukanov <nostro32@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -67,22 +67,25 @@ delimiter = compile(r'[=:]')
 
 
 class SMILESRead(CGRRead):
-    """
-    SMILES separated per lines files reader. works similar to opened file object. support `with` context manager.
-    on initialization accept opened in text mode file, string path to file,
+    """SMILES separated per lines files reader. Works similar to opened file object. Support `with` context manager.
+    On initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object.
-    line should be start with SMILES string and
-    optionally continues with space/tab separated list of key:value [or key=value] data if header=None.
-        example:
-            C=C>>CC id:123 key=value
-    if header=True then first line of file should be space/tab separated list of keys including smiles column key.
-        example:
-            ignored_smi_key key1 key2
-            CCN 1 2
-    also possible to pass list of keys (without smiles_pseudo_key) for mapping space/tab separated list
-    of SMILES and values: header=['key1', 'key2'] # order depended
 
-    for reactions . [dot] in bonds should be used only for molecules separation.
+    Line should be start with SMILES string and optionally continues with space/tab separated list of
+    `key:value` [or `key=value`] data if `header=None`. For example::
+
+        C=C>>CC id:123 key=value
+
+    if `header=True` then first line of file should be space/tab separated list of keys including smiles column key.
+    For example::
+
+        ignored_smi_key key1 key2
+        CCN 1 2
+
+    Also possible to pass list of keys (without smiles_pseudo_key) for mapping space/tab separated list
+    of SMILES and values: `header=['key1', 'key2'] # order depended`.
+
+    For reactions . [dot] in bonds should be used only for molecules separation.
     """
     def __init__(self, file, *args, header=None, **kwargs):
         if isinstance(file, str):
@@ -112,7 +115,7 @@ class SMILESRead(CGRRead):
     @classmethod
     def create_parser(cls, *args, **kwargs):
         """
-        Create SMILES parser function configured same as SMILESRead object
+        Create SMILES parser function configured same as SMILESRead object.
         """
         obj = object.__new__(cls)
         obj._SMILESRead__header = None
@@ -121,9 +124,9 @@ class SMILESRead(CGRRead):
 
     def close(self, force=False):
         """
-        close opened file
+        Close opened file.
 
-        :param force: force closing of externally opened file or buffer
+        :param force: Force closing of externally opened file or buffer.
         """
         if not self.__is_buffer or force:
             self.__file.close()
@@ -136,9 +139,9 @@ class SMILESRead(CGRRead):
 
     def read(self) -> List[Union[MoleculeContainer, CGRContainer, ReactionContainer]]:
         """
-        parse whole file
+        Parse whole file.
 
-        :return: list of parsed molecules or reactions
+        :return: List of parsed molecules or reactions.
         """
         return list(iter(self))
 
@@ -149,7 +152,7 @@ class SMILESRead(CGRRead):
         return next(iter(self))
 
     def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
-        """SMILES string parser"""
+        """SMILES string parser."""
         smi, *data = smiles.split()
         if self.__header is None:
             meta = {}
