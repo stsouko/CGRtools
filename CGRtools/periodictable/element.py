@@ -708,7 +708,7 @@ class DynamicQueryElement(DynamicQuery):
             self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
 
 
-class AnyElement(Query):
+class AnyElement(Query):  # except Hydrogen!
     __slots__ = ()
 
     @property
@@ -732,7 +732,7 @@ class AnyElement(Query):
         compare attached to molecules elements and query elements
         """
         if isinstance(other, Element):
-            if self.charge == other.charge and self.is_radical == other.is_radical:
+            if other.atomic_number != 1 and self.charge == other.charge and self.is_radical == other.is_radical:
                 if self.neighbors:
                     if other.neighbors in self.neighbors:
                         if self.hybridization:
@@ -745,7 +745,11 @@ class AnyElement(Query):
                         return True
                 else:
                     return True
-        elif isinstance(other, (QueryElement, AnyElement)):
+        elif isinstance(other, QueryElement):
+            if other.atomic_number != 1 and self.charge == other.charge and self.is_radical == other.is_radical \
+                    and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+                return True
+        elif isinstance(other, AnyElement):
             if self.charge == other.charge and self.is_radical == other.is_radical \
                     and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
                 return True
@@ -759,7 +763,7 @@ class AnyElement(Query):
             self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-class DynamicAnyElement(DynamicQuery):
+class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
     __slots__ = ()
 
     @property
@@ -780,7 +784,7 @@ class DynamicAnyElement(DynamicQuery):
 
     def __eq__(self, other):
         if isinstance(other, DynamicElement):
-            if self.charge == other.charge and self.p_charge == other.p_charge and \
+            if other.atomic_number != 1 and self.charge == other.charge and self.p_charge == other.p_charge and \
                     self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical:
                 if self.neighbors:  # neighbors and p_neighbors all times paired
                     if (other.neighbors, other.p_neighbors) in zip(self.neighbors, self.p_neighbors):
@@ -795,7 +799,14 @@ class DynamicAnyElement(DynamicQuery):
                         return True
                 else:
                     return True
-        elif isinstance(other, (DynamicQueryElement, DynamicAnyElement)):
+        elif isinstance(other, DynamicQueryElement):
+            if other.atomic_number != 1 and self.charge == other.charge and self.p_charge == other.p_charge and \
+                    self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
+                    self.neighbors == other.neighbors and self.hybridization and other.hybridization and \
+                    self.p_neighbors == other.p_neighbors and self.p_hybridization and other.p_hybridization:
+                # equal query element has equal query marks
+                return True
+        elif isinstance(other, DynamicAnyElement):
             if self.charge == other.charge and self.p_charge == other.p_charge and \
                     self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
                     self.neighbors == other.neighbors and self.hybridization and other.hybridization and \
