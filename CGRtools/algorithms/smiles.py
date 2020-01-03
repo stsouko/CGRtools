@@ -231,7 +231,7 @@ class MoleculeSmiles(Smiles):
             smi = [atom.atomic_symbol]
 
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
+            smi.append('@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@')
             if ih:
                 smi.append('H')
             smi.insert(0, '[')
@@ -318,7 +318,7 @@ class QuerySmiles(Smiles):
             smi = ['[', atom.atomic_symbol]
 
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
+            smi.append('@' if self._translate_tetrahedron_sign(n, kwargs['adjacency'][n]) else '@@')
 
         if kwargs.get('hybridization', True) and hybridization:
             smi.append(';')

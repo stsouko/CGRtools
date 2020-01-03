@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -137,7 +137,7 @@ class Stereo:
                     if m not in other._atoms_stereo:  # self stereo atom not stereo in other
                         break
                     # translate stereo mark in other in order of self tetrahedron
-                    if stereo[n] != other._translate_tetrahedron_stereo(m, [mapping[x] for x in tetrahedrons[n]]):
+                    if stereo[n] != other._translate_tetrahedron_sign(m, [mapping[x] for x in tetrahedrons[n]]):
                         break
                 else:
                     yield mapping
@@ -150,7 +150,7 @@ class Stereo:
         wedge = []
         for n, s in self._atoms_stereo.items():
             order = sorted(self._tetrahedrons[n], key=self.atoms_order.get)
-            s = self._translate_tetrahedron_stereo(n, order)
+            s = self._translate_tetrahedron_sign(n, order)
             # need recalculation if XY changed
             if len(order) == 3:
                 v = _pyramid_sign((*plane[n], 0),
@@ -167,7 +167,7 @@ class Stereo:
                 wedge.append((n, order[0], -1 if v else 1))
         return tuple(wedge)
 
-    def _translate_tetrahedron_stereo(self, n, env):
+    def _translate_tetrahedron_sign(self, n, env):
         """
         get sign of chiral tetrahedron atom for specified neighbors order
 
@@ -177,12 +177,13 @@ class Stereo:
         s = self._atoms_stereo[n]
         order = self._tetrahedrons[n]
         if len(order) == 3:
-            if len(env) == 4:
+            if len(env) == 4:  # hydrogen atom passed to env
                 atoms = self._atoms
+                # hydrogen always last in order
                 order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
-            elif len(env) != 3:
+            elif len(env) != 3:  # pyramid or tetrahedron expected
                 raise ValueError('invalid atoms list')
-        elif len(env) not in (3, 4):
+        elif len(env) not in (3, 4):  # pyramid or tetrahedron expected
             raise ValueError('invalid atoms list')
 
         translate = tuple(order.index(x) for x in env[:3])
@@ -190,7 +191,7 @@ class Stereo:
             return not s
         return s
 
-    def _translate_cis_trans_stereo(self, n, m, nn, nm):
+    def _translate_cis_trans_sign(self, n, m, nn, nm):
         """
         get sign for specified opposite neighbors
 
@@ -213,7 +214,7 @@ class Stereo:
             return not s
         return s
 
-    def _translate_allene_stereo(self, c, nn, nm):
+    def _translate_allene_sign(self, c, nn, nm):
         """
         get sign for specified opposite neighbors
 
@@ -366,7 +367,7 @@ class MoleculeStereo(Stereo):
                 n1, m1 = self._cis_trans[nm][:2]
                 s = _cis_trans_sign(plane[n1], plane[n], plane[m], plane[m1])
                 if s:
-                    stereo[(n, m)] = s > 0
+                    stereo[nm] = s > 0
             if stereo:
                 cis_trans_stereo.update(stereo)
                 del self.__dict__['_MoleculeStereo__chiral_centers']
@@ -439,6 +440,7 @@ class MoleculeStereo(Stereo):
 
         morgan_update = {}
         while True:
+            # get obviously chiral centers
             chiral_t = {n for n, env in tetrahedrons.items() if len(set(morgan[x] for x in env)) == len(env)}
             chiral_c = set()
             chiral_a = set()
@@ -457,7 +459,7 @@ class MoleculeStereo(Stereo):
                 for group in grouped_stereo.values():
                     if not len(group) % 2:  # only even number of equal stereo atoms give new stereo center
                         s = [n for n in group
-                             if self._translate_tetrahedron_stereo(n, sorted(tetrahedrons[n], key=morgan.get))]
+                             if self._translate_tetrahedron_sign(n, sorted(tetrahedrons[n], key=morgan.get))]
                         if 0 < len(s) < len(group):  # RS pair required
                             for n in s:
                                 morgan_update[n] = -morgan[n]
@@ -487,7 +489,7 @@ class MoleculeStereo(Stereo):
                                 b = m1
                             else:
                                 b = min(m1, m2, key=morgan.get)
-                            if self._translate_cis_trans_stereo(n, m, a, b):
+                            if self._translate_cis_trans_sign(n, m, a, b):
                                 s.append(n)
                         if 0 < len(s) < len(group):  # RS pair required
                             for n in s:
@@ -513,7 +515,7 @@ class MoleculeStereo(Stereo):
                                 b = m1
                             else:
                                 b = min(m1, m2, key=morgan.get)
-                            if self._translate_allene_stereo(c, a, b):
+                            if self._translate_allene_sign(c, a, b):
                                 s.append(c)
                         if 0 < len(s) < len(group):  # RS pair required
                             for c in s:
