@@ -11,10 +11,11 @@ version = '4.0'
 project = 'CGRtools'
 
 needs_sphinx = '1.8'
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'm2r']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'm2r', 'nbsphinx']
 
+nbsphinx_kernel_name = 'python3'
 
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'
