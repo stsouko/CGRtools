@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -69,4 +69,10 @@ class IsNotConnectedAtom(Exception):
 class ValenceError(Exception):
     """
     atom has error in valence
+    """
+
+
+class IncorrectSmiles(ValueError):
+    """
+    SMILES string invalid
     """

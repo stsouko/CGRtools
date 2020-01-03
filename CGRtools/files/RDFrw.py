@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -40,13 +40,12 @@ class RDFRead(MDLRead):
     """
     def __init__(self, *args, indexable=False, **kwargs):
         """
-        :param indexable: if True:
-            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
-            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
-            the object behaves like a normal open file
-                        if False:
-            works like generator converting a record into ReactionContainer and returning each object in order,
-            records with errors are skipped
+        :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
+            dealing with a real file (the path to the file is specified) because the external grep utility is used,
+            supporting in unix-like OS the object behaves like a normal open file.
+
+            if False: works like generator converting a record into ReactionContainer and returning each object in
+            order, records with errors are skipped
         """
         super().__init__(*args, **kwargs)
         self._data = self.__reader()
@@ -140,8 +139,14 @@ class RDFRead(MDLRead):
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -160,8 +165,14 @@ class RDFRead(MDLRead):
             elif line.startswith('$MFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -186,8 +197,10 @@ class RDFRead(MDLRead):
                     if data:
                         meta[mkey].append(data)
             elif ir:
+                if ir == 3:  # parse mol or rxn title
+                    title = line.strip()
                 ir -= 1
-            elif not ir:
+            else:
                 try:
                     if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
@@ -207,8 +220,14 @@ class RDFRead(MDLRead):
                     yield None
         if record:
             record['meta'] = self._prepare_meta(meta)
+            if title:
+                record['title'] = title
             try:
-                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                if is_reaction:
+                    container, mapping = self._convert_reaction(record)
+                else:
+                    container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
@@ -236,7 +255,7 @@ class RDFWrite(MDLWrite):
             self._file.write('$MFMT\n')
             self._file.write(m)
         elif isinstance(data, ReactionContainer):
-            self._file.write('$RFMT\n$RXN\n\n\n\n'
+            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n'
                              f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)

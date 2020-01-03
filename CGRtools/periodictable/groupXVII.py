@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Alexander Nikanshin <17071996sasha@gmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
@@ -130,11 +130,11 @@ class I(Element, PeriodV, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({127: 1.0, 131: 0.})
+        return FrozenDict({125: 0., 127: 1.0, 131: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({127: 126.904468, 131: 130.906125})
+        return FrozenDict({125: 124.904630, 127: 126.904468, 131: 130.906125})
 
     @property
     def _common_valences(self):

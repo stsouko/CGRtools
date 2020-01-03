@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -154,7 +154,7 @@ class DepictMolecule(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, -mn_y)
 
-        if aromatic_space / cr_y < .65:
+        if cr_y and aromatic_space / cr_y < .65:
             if cr_y > 0:
                 r_y = aromatic_space
             else:
@@ -190,6 +190,11 @@ class DepictMolecule(Depict):
         font6 = .6 * font
         font8 = .8 * font
 
+        # for cumulenes
+        cumulenes = {}
+        if self.cumulenes:
+            cumulenes = {y for x in self.cumulenes for y in x[1:-1] if len(x) > 2}
+
         svg = []
         maps = []
         mask = []
@@ -197,7 +202,8 @@ class DepictMolecule(Depict):
             x, y = plane[n]
             y = -y
             symbol = atom.atomic_symbol
-            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope:
+            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope \
+                    or n in cumulenes:
                 h = hydrogens[n]
                 if h == 1:
                     h = 'H'
@@ -567,7 +573,7 @@ class DepictCGR(Depict):
         mr_x, mr_y = hypot(mn_x, mn_y), 0
         cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, -mn_y)
 
-        if aromatic_space / cr_y < .65:
+        if cr_y and aromatic_space / cr_y < .65:
             if cr_y > 0:
                 r_y = aromatic_space
             else:
@@ -689,6 +695,11 @@ class DepictQuery(Depict):
         font7 = .7 * font
         font8 = .8 * font
 
+        # for cumulenes
+        cumulenes = {}
+        if self.cumulenes:
+            cumulenes = {y for x in self.cumulenes for y in x[1:-1] if len(x) > 2}
+
         svg = []
         mask = []
         maps = []
@@ -699,7 +710,7 @@ class DepictQuery(Depict):
             y = -y
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
-            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
+            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical or n in cumulenes:
                 svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
                 svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
                            f'font-size="{font:.2f}">{symbol}</text>')

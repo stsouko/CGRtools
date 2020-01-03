@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -159,7 +159,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
 
         sub._atoms = ca = {}
         for n in atoms:
-            ca[n] = atom = sa[n].copy()
+            atom = sa[n].copy()
+            ca[n] = atom
             atom._attach_to_graph(sub, n)
         return sub
 
@@ -172,7 +173,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
-                    ua[n] = atom = atom.copy()
+                    atom = atom.copy()
+                    ua[n] = atom
                     atom._attach_to_graph(u, n)
             else:
                 un = u._neighbors
@@ -184,7 +186,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
 
                 ua = u._atoms
                 for n, atom in other._atoms.items():
-                    ua[n] = atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                    atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                    ua[n] = atom
                     atom._attach_to_graph(u, n)
 
             ub = u._bonds

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -23,22 +23,22 @@ from hashlib import sha512
 from itertools import count, product
 
 
-charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '++', 3: '+3', 4: '+4'}
+charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
 order_str = {1: '', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
 organic_set = {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
-dyn_order_str = {(None, 1): "[.>-]", (None, 2): "[.>=]", (None, 3): "[.>#]", (None, 4): "[.>:]", (None, 8): "[.>~]",
-                 (1, None): "[->.]", (1, 1): "", (1, 2): "[->=]", (1, 3): "[->#]", (1, 4): "[->:]", (1, 8): "[->~]",
-                 (2, None): "[=>.]", (2, 1): "[=>-]", (2, 2): "=", (2, 3): "[=>#]", (2, 4): "[=>:]", (2, 8): "[=>~]",
-                 (3, None): "[#>.]", (3, 1): "[#>-]", (3, 2): "[#>=]", (3, 3): "#", (3, 4): "[#>:]", (3, 8): "[#>~]",
-                 (4, None): "[:>.]", (4, 1): "[:>-]", (4, 2): "[:>=]", (4, 3): "[:>#]", (4, 4): ":", (4, 8): "[:>~]",
-                 (8, None): "[~>.]", (8, 1): "[~>-]", (8, 2): "[~>=]", (8, 3): "[~>#]", (8, 4): "[~>:]", (8, 8): "~"}
+dyn_order_str = {(None, 1): '[.>-]', (None, 2): '[.>=]', (None, 3): '[.>#]', (None, 4): '[.>:]', (None, 8): '[.>~]',
+                 (1, None): '[->.]', (1, 1): '', (1, 2): '[->=]', (1, 3): '[->#]', (1, 4): '[->:]', (1, 8): '[->~]',
+                 (2, None): '[=>.]', (2, 1): '[=>-]', (2, 2): '=', (2, 3): '[=>#]', (2, 4): '[=>:]', (2, 8): '[=>~]',
+                 (3, None): '[#>.]', (3, 1): '[#>-]', (3, 2): '[#>=]', (3, 3): '#', (3, 4): '[#>:]', (3, 8): '[#>~]',
+                 (4, None): '[:>.]', (4, 1): '[:>-]', (4, 2): '[:>=]', (4, 3): '[:>#]', (4, 4): ':', (4, 8): '[:>~]',
+                 (8, None): '[~>.]', (8, 1): '[~>-]', (8, 2): '[~>=]', (8, 3): '[~>#]', (8, 4): '[~>:]', (8, 8): '~'}
 
 dyn_charge_str = {(i, j): f'{charge_str[i]}>{charge_str[j]}' if i != j else charge_str[i]
                   for i, j in product(range(-4, 5), repeat=2)}
 dyn_charge_str[(0, 0)] = ''
 
-dyn_radical_str = {(True, True): "*", (True, False): "*>n", (False, True): "n>*"}
+dyn_radical_str = {(True, True): '*', (True, False): '*>^', (False, True): '^>*'}
 
 
 class Smiles:
@@ -46,7 +46,7 @@ class Smiles:
 
     @cached_method
     def __str__(self):
-        return self._smiles(self.atoms_order.get)
+        return ''.join(self._smiles(self.atoms_order.get))
 
     def __format__(self, format_spec):
         """
@@ -70,7 +70,7 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
-            return self._smiles(self.atoms_order.get, **kwargs)
+            return ''.join(self._smiles(self.atoms_order.get, **kwargs))
         return str(self)
 
     def __eq__(self, other):
@@ -84,9 +84,10 @@ class Smiles:
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
-    def _smiles(self, weights, *, asymmetric_closures=False, **kwargs):
+    def _smiles(self, weights, *, asymmetric_closures=False, open_parenthesis='(', close_parenthesis=')',
+                delimiter='.', **kwargs):
         if not self._atoms:
-            return ''
+            return []
         bonds = self._bonds
         atoms_set = set(self._atoms)
         cycles = count()
@@ -98,8 +99,19 @@ class Smiles:
         while True:
             start = min(atoms_set, key=weights)
 
+            seen = {start: 0}
+            queue = [(start, 1)]
+            while queue:
+                n, d = queue.pop(0)
+                for m in bonds[n].keys() - seen.keys():
+                    queue.append((m, d + 1))
+                    seen[m] = d
+
+            def mod_weights(x):
+                return weights(x), seen[x]
+
             # modified NX dfs with cycle detection
-            stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=weights)))]
+            stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=mod_weights)))]
             visited = {start: []}  # predecessors for stereo. atom: (visited[atom], *edges[atom])
             disconnected = set()
             edges = defaultdict(list)
@@ -117,7 +129,7 @@ class Smiles:
                         if depth_now > 1:
                             front = bonds[child].keys() - {parent}
                             if front:
-                                stack.append((child, depth_now - 1, iter(sorted(front, key=weights))))
+                                stack.append((child, depth_now - 1, iter(sorted(front, key=mod_weights))))
                     elif child not in disconnected:
                         disconnected.add(parent)
                         cycle = next(cycles)
@@ -167,6 +179,7 @@ class Smiles:
                     visited[token].extend(n for n, _ in tokens[token])
                 if token in edges:
                     visited[token].extend(edges[token])
+
             for token in smiles:
                 if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, adjacency=visited, **kwargs))
@@ -178,19 +191,24 @@ class Smiles:
                                     visited_bond.add((m, token))
                             else:
                                 string.append(self._format_bond(token, m, adjacency=visited, **kwargs))
-                            c = casted_cycles[c]
-                            string.append(str(c) if c < 10 else f'%{c}')
-                elif token in ('(', ')'):
-                    string.append(token)
+                            string.append(self._format_closure(casted_cycles[c]))
+                elif token == '(':
+                    string.append(open_parenthesis)
+                elif token == ')':
+                    string.append(close_parenthesis)
                 else:  # bonds
                     string.append(self._format_bond(*token, adjacency=visited, **kwargs))
 
             atoms_set.difference_update(visited)
             if atoms_set:
-                string.append('.')
+                string.append(delimiter)
             else:
                 break
-        return ''.join(string)
+        return string
+
+    @staticmethod
+    def _format_closure(c):
+        return str(c) if c < 10 else f'%{c}'
 
 
 class MoleculeSmiles(Smiles):
@@ -203,7 +221,7 @@ class MoleculeSmiles(Smiles):
             aromatics.update(ring)
         return aromatics
 
-    def _format_atom(self, n, **kwargs):
+    def _format_atom(self, n, adjacency=None, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
@@ -213,7 +231,7 @@ class MoleculeSmiles(Smiles):
             smi = [atom.atomic_symbol]
 
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
+            smi.append('@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@')
             if ih:
                 smi.append('H')
             smi.insert(0, '[')
@@ -245,6 +263,9 @@ class MoleculeSmiles(Smiles):
                 smi.append('H')
             elif ih:
                 smi.append(f'H{ih}')
+            smi.insert(0, '[')
+            smi.append(']')
+        elif len(smi) != 1:
             smi.insert(0, '[')
             smi.append(']')
         return ''.join(smi)

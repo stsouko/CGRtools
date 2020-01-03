@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Tansu Nasyrova <tansu.nasyrova@gmail.com>
@@ -71,6 +71,8 @@ class S(Element, PeriodIII, GroupXVI):
     @property
     def _valences_exceptions(self):
         return ((-1, False, 1, ()), (-2, False, 0, ()),
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'N'))),
                 (0, False, 0, ((2, 'O'), (2, 'C'))),
@@ -139,6 +141,8 @@ class Se(Element, PeriodIV, GroupXVI):
     @property
     def _valences_exceptions(self):
         return ((-1, False, 1, ()),
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'S'), (2, 'S'))),
 
@@ -158,6 +162,7 @@ class Te(Element, PeriodV, GroupXVI):
     def atomic_number(self):
         return 52
 
+    @property
     def isotopes_distribution(self):
         return FrozenDict({120: 0.0009, 122: 0.0255, 123: 0.0089, 124: 0.0474, 125: 0.0707, 126: 0.1884, 128: 0.3174,
                            130: 0.3408})
@@ -173,7 +178,9 @@ class Te(Element, PeriodV, GroupXVI):
 
     @property
     def _valences_exceptions(self):
-        return ((0, False, 0, ((2, 'O'), (2, 'O'))),
+        return ((1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (1, False, 0, ((1, 'C'), (2, 'C'))),
+                (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'))),
 
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),

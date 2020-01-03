@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -175,4 +175,4 @@ class CGRpreparer:
         return getattr(self.__obj, item)
 
 
-__all__ = ['CGRPreparer', 'CGRpreparer']
+__all__ = ['CGRPreparer']

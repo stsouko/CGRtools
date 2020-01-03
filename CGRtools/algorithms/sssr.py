@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,9 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property
+from CachedMethods import cached_property, FrozenDict
 from itertools import chain
-from typing import Set, List, Dict, Union, Any, Tuple
+from typing import Set, Dict, Union, Any, Tuple
 
 
 class SSSR:
@@ -35,7 +35,29 @@ class SSSR:
         """
         atoms of rings and rings linkers [without terminal atoms]
         """
-        return tuple(self.__shave(self._bonds))
+        return tuple(self._skin_graph(self._bonds))
+
+    @cached_property
+    def skin_graph(self):
+        """
+        graph without terminal atoms. only rings and linkers
+        """
+        return FrozenDict((n, frozenset(ms)) for n, ms in self._skin_graph(self._bonds).items())
+
+    @staticmethod
+    def _skin_graph(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Dict[int, Set[int]]:
+        """
+        graph without terminal nodes. only rings and linkers
+        """
+        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
+        while True:  # skip not-cycle chains
+            try:
+                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
+            except StopIteration:
+                break
+            for m in bonds.pop(n):
+                bonds[m].discard(n)
+        return bonds
 
     @cached_property
     def sssr(self) -> Tuple[Tuple[int, ...], ...]:
@@ -48,29 +70,16 @@ class SSSR:
         return self._sssr(self._bonds)
 
     @classmethod
-    def _sssr(cls, bonds: Dict[int, Union[List[int], Set[int], Tuple[int, ...], Dict[int, Any]]]) -> \
-            Tuple[Tuple[int, ...], ...]:
+    def _sssr(cls, bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings of any adjacency matrix
         """
-        bonds = cls.__shave(bonds)
+        bonds = cls._skin_graph(bonds)
         if bonds:
             terminated, n_sssr = cls.__bfs(bonds)
             if n_sssr:
-                return cls.__pid(terminated, n_sssr)
+                return cls.__rings_filter(cls.__pid(terminated), n_sssr, bonds)
         return ()
-
-    @staticmethod
-    def __shave(bonds):
-        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
-        while True:  # skip not-cycle chains
-            try:
-                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
-            except StopIteration:
-                break
-            for m in bonds.pop(n):
-                bonds[m].discard(n)
-        return bonds
 
     @staticmethod
     def __bfs(bonds):
@@ -134,7 +143,7 @@ class SSSR:
         return terminated, n_sssr
 
     @staticmethod
-    def __pid(terminated, n_sssr):
+    def __pid(terminated):
         pid1 = {}
         pid2 = {}
         for j, paths_ticks in terminated.items():
@@ -172,31 +181,40 @@ class SSSR:
                 c_set.append((dij, p1ij, None))
                 c_set.append((dij + 1, p1ij, p2ij))
 
-        c_sssr = {}
         for c_num, p1ij, p2ij in sorted(c_set):
             if c_num % 2:  # odd rings
                 c1 = p1ij[0]  # any shortest acceptable. sssr is not a unique set of rings
                 c11 = c1[1]
                 c12 = c1[-2]
                 for c2 in p2ij:
-                    if c11 == c2[1] or c12 == c2[-2]:
-                        continue
-                    c = c1 + c2[-2:0:-1]
-                    ck = tuple(sorted(c))
-                    if ck not in c_sssr:
-                        c_sssr[ck] = c
-                        if len(c_sssr) == n_sssr:
-                            return tuple(c_sssr.values())
+                    if c11 != c2[1] and c12 != c2[-2]:
+                        yield c1, c2
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
-                    if c1[1] == c2[1] or c1[-2] == c2[-2]:
-                        continue
-                    c = c1 + c2[-2:0:-1]
-                    ck = tuple(sorted(c))
-                    if ck not in c_sssr:
-                        c_sssr[ck] = c
-                        if len(c_sssr) == n_sssr:
-                            return tuple(c_sssr.values())
+                    if c1[1] != c2[1] and c1[-2] != c2[-2]:
+                        yield c1, c2
+
+    @staticmethod
+    def __rings_filter(rings, n_sssr, bonds):
+        c_sssr = []
+        hyper_rings = set()
+        for c1, c2 in rings:
+            c = c1 + c2[-2:0:-1]
+            ck = frozenset(c)
+            if ck not in hyper_rings:
+                new_hr = []
+                for hrk in hyper_rings:  # search for condensed hyperrings
+                    if not hrk.isdisjoint(ck):
+                        unique = hrk ^ ck
+                        common = hrk & ck
+                        unique |= {n for n in common if not unique.isdisjoint(bonds[n])}
+                        new_hr.append(unique)  # add hyperring
+
+                c_sssr.append(c)
+                hyper_rings.add(ck)
+                hyper_rings.update(new_hr)
+                if len(c_sssr) == n_sssr:
+                    return tuple(c_sssr)
 
 
 __all__ = ['SSSR']

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -35,13 +35,12 @@ class SDFRead(MDLRead):
     """
     def __init__(self, *args, indexable=False, **kwargs):
         """
-        :param indexable: if True:
-            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
-            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
-            the object behaves like a normal open file
-                        if False:
-            works like generator converting a record into MoleculeContainer and returning each object in order,
-            records with errors are skipped
+        :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
+            dealing with a real file (the path to the file is specified) because the external grep utility is used,
+            supporting in unix-like OS the object behaves like a normal open file.
+
+            if False: works like generator converting a record into MoleculeContainer and returning each object in
+            order, records with errors are skipped
         """
         super().__init__(*args, **kwargs)
         self._data = self.__reader()
@@ -108,8 +107,11 @@ class SDFRead(MDLRead):
             elif line.startswith("$$$$"):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        yield self._convert_structure(record)
+                        container, mapping = self._convert_structure(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         yield None
@@ -129,6 +131,8 @@ class SDFRead(MDLRead):
                     if data:
                         meta[mkey].append(data)
             elif im:
+                if im == 3:  # parse mol title
+                    title = line.strip()
                 im -= 1
             elif not im:
                 try:
@@ -145,8 +149,11 @@ class SDFRead(MDLRead):
 
         if record:  # True for MOL file only.
             record['meta'] = self._prepare_meta(meta)
+            if title:
+                record['title'] = title
             try:
-                yield self._convert_structure(record)
+                container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None

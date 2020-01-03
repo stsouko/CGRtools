@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -203,7 +203,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n]
-                ca[n] = atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
             sn = self._neighbors
@@ -214,7 +215,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._conformers = []
             sub._atoms = ca = {}
             for n in atoms:
-                ca[n] = atom = sa[n].copy()
+                atom = sa[n].copy()
+                ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
             # recalculate query marks
@@ -252,7 +254,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             ua = u._atoms
             for n, atom in other._atoms.items():
-                ua[n] = atom = atom.copy()
+                atom = atom.copy()
+                ua[n] = atom
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):

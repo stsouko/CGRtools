@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  This file is part of CGRtools.
@@ -539,7 +539,7 @@ class DynamicElement(Dynamic):
         get DynamicElement class by its symbol
         """
         try:
-            element = next(x for x in DynamicElement.__subclasses__() if x.__name__[7:] == symbol)
+            element = next(x for x in DynamicElement.__subclasses__() if x.__name__ == f'Dynamic{symbol}')
         except StopIteration:
             raise ValueError(f'DynamicElement with symbol "{symbol}" not found')
         return element
@@ -583,8 +583,10 @@ class QueryElement(Query):
         """
         get Element class by its symbol
         """
+        if symbol == 'A':
+            return AnyElement
         try:
-            element = next(x for x in QueryElement.__subclasses__() if x.__name__[5:] == symbol)
+            element = next(x for x in QueryElement.__subclasses__() if x.__name__ == f'Query{symbol}')
         except StopIteration:
             raise ValueError(f'QueryElement with symbol "{symbol}" not found')
         return element
@@ -594,6 +596,8 @@ class QueryElement(Query):
         """
         get Element class by its number
         """
+        if number == 0:
+            return AnyElement
         try:
             element = next(x for x in QueryElement.__subclasses__() if x.atomic_number.fget(None) == number)
         except StopIteration:
@@ -646,8 +650,10 @@ class DynamicQueryElement(DynamicQuery):
         """
         get Element class by its symbol
         """
+        if symbol == 'A':
+            return DynamicAnyElement
         try:
-            element = next(x for x in DynamicQueryElement.__subclasses__() if x.__name__[12:] == symbol)
+            element = next(x for x in DynamicQueryElement.__subclasses__() if x.__name__ == f'DynamicQuery{symbol}')
         except StopIteration:
             raise ValueError(f'DynamicQueryElement with symbol "{symbol}" not found')
         return element
@@ -657,6 +663,8 @@ class DynamicQueryElement(DynamicQuery):
         """
         get Element class by its number
         """
+        if number == 0:
+            return DynamicAnyElement
         try:
             element = next(x for x in DynamicQueryElement.__subclasses__() if x.atomic_number.fget(None) == number)
         except StopIteration:

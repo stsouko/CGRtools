@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Ravil Mukhametgaleev <sonic-mc@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -360,7 +360,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n]
-                ca[n] = atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
             sn = self._neighbors
@@ -374,7 +375,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         else:
             sub._atoms = ca = {}
             for n in atoms:
-                ca[n] = atom = sa[n].copy()
+                atom = sa[n].copy()
+                ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
             # recalculate query marks
@@ -445,7 +447,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
             ua = u._atoms
             for n, atom in other._atoms.items():
-                ua[n] = atom = atom.copy()
+                atom = atom.copy()
+                ua[n] = atom
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, molecule.MoleculeContainer):
@@ -463,7 +466,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
 
             ua = u._atoms
             for n, atom in other._atoms.items():
-                ua[n] = atom = DynamicElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                atom = DynamicElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                ua[n] = atom
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):  # Query or CGRQuery

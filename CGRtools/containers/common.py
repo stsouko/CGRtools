@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -30,8 +30,8 @@ from ..periodictable.element import Core
 
 
 class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
-    __slots__ = ('_atoms', '_bonds', '_meta', '_plane', '__dict__', '__weakref__', '_parsed_mapping', '_charges',
-                 '_radicals')
+    __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
+                 '__dict__', '__weakref__')
 
     def __init__(self):
         """
@@ -42,12 +42,14 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
         self._radicals: Dict[int, bool] = {}
         self._plane: Dict[int, Tuple[float, float]] = {}
         self._bonds: Dict[int, Dict[int, Union[Bond, DynamicBond]]] = {}
-        self._meta = {}
         self._parsed_mapping: Dict[int, int] = {}
+        self.__meta = {}
+        self.__name = ''
 
     def __getstate__(self):
-        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self._meta, 'plane': self._plane,
-                'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals}
+        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self.__meta, 'plane': self._plane,
+                'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals,
+                'name': self.__name}
 
     def __setstate__(self, state):
         self._atoms = state['atoms']
@@ -57,8 +59,9 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
         self._radicals = state['radicals']
         self._plane = state['plane']
         self._bonds = state['bonds']
-        self._meta = state['meta']
         self._parsed_mapping = state['parsed_mapping']
+        self.__meta = state['meta']
+        self.__name = state.get('name', '')  # 4.0.9 compatibility
 
     def __len__(self):
         return len(self._atoms)
@@ -129,7 +132,19 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
 
     @property
     def meta(self) -> Dict:
-        return self._meta
+        return self.__meta
+
+    @property
+    def name(self) -> str:
+        return self.__name
+
+    @name.setter
+    def name(self, name):
+        if not isinstance(name, str):
+            raise TypeError('name should be string up to 80 symbols')
+        if len(name) > 80:
+            raise ValueError('name should be string up to 80 symbols')
+        self.__name = name
 
     @abstractmethod
     def add_atom(self, atom, _map: Optional[int] = None, *, charge: int = 0,
@@ -212,7 +227,8 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
 
         if copy:
             h = self.__class__()
-            h._meta.update(self._meta)
+            h._Graph__meta.update(self.__meta)
+            h._Graph__name = self.__name
             hb = h._bonds
             ha = h._atoms
             hc = h._charges
@@ -224,7 +240,8 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
                 hc[m] = sc[n]
                 hr[m] = sr[n]
                 hp[m] = sp[n]
-                ha[m] = atom = atom.copy()
+                atom = atom.copy()
+                ha[m] = atom
                 atom._attach_to_graph(h, m)
         else:
             hb = {}
@@ -266,7 +283,12 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
         :param meta: include metadata
         """
         copy = object.__new__(self.__class__)
-        copy._meta = self._meta.copy() if meta else {}
+        if meta:
+            copy._Graph__meta = self.__meta.copy()
+            copy._Graph__name = self.__name
+        else:
+            copy._Graph__meta = {}
+            copy._Graph__name = ''
 
         copy._charges = self._charges.copy()
         copy._radicals = self._radicals.copy()
@@ -283,7 +305,8 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
 
         copy._atoms = ca = {}
         for n, atom in self._atoms.items():
-            ca[n] = atom = atom.copy()
+            atom = atom.copy()
+            ca[n] = atom
             atom._attach_to_graph(copy, n)
         return copy
 
@@ -301,7 +324,13 @@ class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
         sp = self._plane
         sb = self._bonds
 
-        sub._meta = self._meta.copy() if meta else {}
+        if meta:
+            sub._Graph__meta = self.__meta.copy()
+            sub._Graph__name = self.__name
+        else:
+            sub._Graph__meta = {}
+            sub._Graph__name = ''
+
         sub._charges = {n: sc[n] for n in atoms}
         sub._radicals = {n: sr[n] for n in atoms}
         sub._plane = {n: sp[n] for n in atoms}

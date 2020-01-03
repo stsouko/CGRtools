@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Adelia Fatykhova <adelik21979@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -19,8 +19,8 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count, islice, permutations, product
-from logging import warning, info
+from itertools import chain, count, permutations, product
+from logging import info
 from operator import or_
 from typing import Union, Iterable
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
@@ -41,7 +41,7 @@ class BaseReactor:
         atoms = defaultdict(dict)
         for n, atom in products.atoms():
             if atom.neighbors or atom.hybridization:
-                warning('neighbors and hybridization for new atoms unusable')
+                info('neighbors and hybridization for new atoms unusable')
             atoms[n].update(charge=atom.charge, is_radical=atom.is_radical)
             elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
             if n not in reactants:
@@ -146,17 +146,8 @@ class CGRReactor(BaseReactor):
     """
     CGR based editor for CGRs and molecules.
     generates transformation from input CGR/molecule
-    using template (CGRtools ReactionContainer)
-    -----------------------------------------------------
-    input: transformation template, CGR/molecule to edit
-    output: generator of edited CGRs/molecules
-    -----------------------------------------------------
-    template should contain one reactant and one product:
-    CGRReactor allows only 1 -> 1 transformation
-
-    CGRReactor init prepares the reactor container:
-
-    >> reactor = CGRReactor(template, delete_atoms=True)
+    using template (CGRtools ReactionContainer).
+    Template should contain one reactant and one product:
 
     CGRReactor calling transforms reactants to products and
     returns generator of all possible products.
@@ -204,16 +195,8 @@ class Reactor(BaseReactor):
     CGR based reactor for molecules/queries.
     generates reaction from input queries/molecules using
     transformation template (CGRtools ReactionContainer).
-    -----------------------------------------------------
-    input: transformation template, list of reactants
-    output: generator of reactions
-    -----------------------------------------------------
 
-    reactor init prepares the reactor container:
-
-    >> reactor = CGRreactor(template, delete_atoms=True)
-
-    reactor calling transforms reactants to products and
+    Reactor calling transforms reactants to products and
     returns generator of reaction transformations with all
     possible products
     """
@@ -260,7 +243,7 @@ class Reactor(BaseReactor):
                 if self.__split > 1:
                     new = new.split()
                     if len(new) != self.__split:
-                        info(f'expected {self.__split} molecules in reaction products, bun {len(new)} formed.\n'
+                        info(f'expected {self.__split} molecules in reaction products, but {len(new)} formed.\n'
                              'input molecules has disconnected components')
                 else:
                     new = [new]
