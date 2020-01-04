@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property
+from CachedMethods import cached_property, FrozenDict
 from collections import defaultdict
 from itertools import chain
-from typing import Tuple
+from typing import Tuple, Dict, Set, Any, Union
 from ..exceptions import ValenceError
 
 
@@ -28,6 +28,9 @@ class GraphComponents:
 
     @cached_property
     def connected_components(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Isolated components of single graph. E.g. salts as ion pair.
+        """
         if not self._atoms:
             return ()
         atoms = set(self._atoms)
@@ -41,6 +44,9 @@ class GraphComponents:
 
     @property
     def connected_components_count(self) -> int:
+        """
+        Number of components in graph
+        """
         return len(self.connected_components)
 
     def __component(self, start):
@@ -54,6 +60,56 @@ class GraphComponents:
                 queue.append(i)
                 seen.add(i)
 
+    @cached_property
+    def skin_atoms(self) -> Tuple[int, ...]:
+        """
+        Atoms of rings and rings linkers [without terminal atoms]
+        """
+        return tuple(self._skin_graph(self._bonds))
+
+    @cached_property
+    def skin_graph(self):
+        """
+        Graph without terminal atoms. Only rings and linkers
+        """
+        return FrozenDict((n, frozenset(ms)) for n, ms in self._skin_graph(self._bonds).items())
+
+    @staticmethod
+    def _skin_graph(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Dict[int, Set[int]]:
+        """
+        Graph without terminal nodes. Only rings and linkers
+        """
+        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
+        while True:  # skip not-cycle chains
+            try:
+                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
+            except StopIteration:
+                break
+            for m in bonds.pop(n):
+                bonds[m].discard(n)
+        return bonds
+
+    @cached_property
+    def connected_rings(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Rings groups with common atoms. E.g. naphthalene has two connected rings. Rings not atom ordered like sssr.
+        """
+        rings = self.sssr
+        if len(rings) <= 1:
+            return rings
+
+        rings = [set(r) for r in self.sssr]
+        out = []
+        for i in range(len(rings)):
+            r = rings[i]
+            for x in rings[i + 1:]:
+                if not r.isdisjoint(x):
+                    x.update(r)
+                    break
+            else:  # isolated ring[s] found
+                out.append(tuple(r))
+        return tuple(out)
+
 
 class StructureComponents:
     __slots__ = ()
@@ -61,7 +117,7 @@ class StructureComponents:
     @cached_property
     def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
         """
-        aromatic rings atoms numbers
+        Aromatic rings atoms numbers
         """
         bonds = self._bonds
         return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
@@ -70,7 +126,7 @@ class StructureComponents:
     @cached_property
     def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
         """
-        alkenes, allenes and cumulenes atoms numbers
+        Alkenes, allenes and cumulenes atoms numbers
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -113,7 +169,7 @@ class StructureComponents:
     @cached_property
     def tetrahedrons(self) -> Tuple[int, ...]:
         """
-        carbon sp3 atoms numbers
+        Carbon sp3 atoms numbers
         """
         atoms = self._atoms
         bonds = self._bonds

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property, FrozenDict
+from CachedMethods import cached_property
 from itertools import chain
 from typing import Set, Dict, Union, Any, Tuple
 
@@ -29,35 +29,6 @@ class SSSR:
         http://doi.org/10.1073/pnas.0813040106
     """
     __slots__ = ()
-
-    @cached_property
-    def skin_atoms(self) -> Tuple[int, ...]:
-        """
-        atoms of rings and rings linkers [without terminal atoms]
-        """
-        return tuple(self._skin_graph(self._bonds))
-
-    @cached_property
-    def skin_graph(self):
-        """
-        graph without terminal atoms. only rings and linkers
-        """
-        return FrozenDict((n, frozenset(ms)) for n, ms in self._skin_graph(self._bonds).items())
-
-    @staticmethod
-    def _skin_graph(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Dict[int, Set[int]]:
-        """
-        graph without terminal nodes. only rings and linkers
-        """
-        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
-        while True:  # skip not-cycle chains
-            try:
-                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
-            except StopIteration:
-                break
-            for m in bonds.pop(n):
-                bonds[m].discard(n)
-        return bonds
 
     @cached_property
     def sssr(self) -> Tuple[Tuple[int, ...], ...]:
