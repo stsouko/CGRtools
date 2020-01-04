@@ -231,6 +231,7 @@ class MoleculeSmiles(Smiles):
             smi = [atom.atomic_symbol]
 
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
+            # todo: extend to allenes
             smi.append('@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@')
             if ih:
                 smi.append('H')

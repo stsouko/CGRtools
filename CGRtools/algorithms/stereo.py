@@ -128,6 +128,7 @@ class Stereo:
     __slots__ = ()
 
     def get_mapping(self, other, **kwargs):
+        # todo: refactor
         stereo = self._atoms_stereo
         if stereo:
             tetrahedrons = self._tetrahedrons
@@ -150,6 +151,7 @@ class Stereo:
         wedge = []
         for n, s in self._atoms_stereo.items():
             order = sorted(self._tetrahedrons[n], key=self.atoms_order.get)
+            # todo: find not used wedge
             s = self._translate_tetrahedron_sign(n, order)
             # need recalculation if XY changed
             if len(order) == 3:
@@ -180,7 +182,10 @@ class Stereo:
             if len(env) == 4:  # hydrogen atom passed to env
                 atoms = self._atoms
                 # hydrogen always last in order
-                order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
+                try:
+                    order = (*order, next(x for x in env if atoms[x].atomic_number == 1))  # see translate scheme
+                except StopIteration:
+                    raise KeyError
             elif len(env) != 3:  # pyramid or tetrahedron expected
                 raise ValueError('invalid atoms list')
         elif len(env) not in (3, 4):  # pyramid or tetrahedron expected
@@ -200,17 +205,30 @@ class Stereo:
         :param nn: neighbor of first atom
         :param nm: neighbor of last atom
         """
+        atoms = self._atoms
         cis_trans_stereo = self._cis_trans_stereo
         try:
-            k = (n, m)
-            s = cis_trans_stereo[k]
+            s = cis_trans_stereo[(n, m)]
         except KeyError:
-            k = (m, n)
-            s = cis_trans_stereo[k]
+            s = cis_trans_stereo[(m, n)]
+            n, m = m, n  # in alkenes sign not order depended
+            nn, nm = nm, nn
 
-        order = self._cis_trans[k]
-        translate = (order.index(nn), order.index(nm))
-        if _alkene_translate[translate]:
+        n0, n1, n2, n3 = self._cis_trans[(n, m)]
+        if nn == n0:
+            t0 = 0
+        elif nn == n2 or n2 is None and atoms[nn].atomic_number == 1:
+            t0 = 2
+        else:
+            raise KeyError
+        if nm == n1:
+            t1 = 1
+        elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+            t1 = 3
+        else:
+            raise KeyError
+
+        if _alkene_translate[(t0, t1)]:
             return not s
         return s
 
@@ -222,15 +240,32 @@ class Stereo:
         :param nn: neighbor of first double bonded atom
         :param nm: neighbor of last double bonded atom
         """
+        atoms = self._atoms
         s = self._allenes_stereo[c]
-        order = self._allenes[c]
-        translate = (order.index(nn), order.index(nm))
-        if _alkene_translate[translate]:
+
+        n0, n1, n2, n3 = self._allenes[c]
+        if nn == n0:
+            t0 = 0
+        elif nn == n2 or n2 is None and atoms[nn].atomic_number == 1:
+            t0 = 2
+        else:
+            raise KeyError
+        if nm == n1:
+            t1 = 1
+        elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+            t1 = 3
+        else:
+            raise KeyError
+
+        if _alkene_translate[(t0, t1)]:
             return not s
         return s
 
     @cached_property
     def _cumulenes(self) -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
+        """
+        cumulenes which contains at least one non-hydrogen neighbor on both ends
+        """
         # 5       4
         #  \     /
         #   2---3
@@ -251,6 +286,9 @@ class Stereo:
 
     @cached_property
     def _tetrahedrons(self) -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
+        """
+        tetrahedrons which contains at least 3 non-hydrogen neighbors
+        """
         #    2
         #    |
         # 1--K--3
@@ -267,12 +305,15 @@ class Stereo:
 
     @cached_property
     def _cis_trans(self) -> Dict[Tuple[int, int], Tuple[int, int, Optional[int], Optional[int]]]:
+        """
+        cis-trans bonds which contains at least one non-hydrogen neighbor on both ends
+        """
         return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
 
     @cached_property
     def _allenes(self) -> Dict[int, Tuple[int, int, Optional[int], Optional[int]]]:
         """
-        dict of allenes centers valued with neighbors of terminal atoms
+        allenes which contains at least one non-hydrogen neighbor on both ends
         """
         return {path[len(path) // 2]: env for path, env in self._cumulenes.items() if len(path) % 2}
 
@@ -440,7 +481,7 @@ class MoleculeStereo(Stereo):
 
         morgan_update = {}
         while True:
-            # get obviously chiral centers
+            # get True-chiral centers
             chiral_t = {n for n, env in tetrahedrons.items() if len(set(morgan[x] for x in env)) == len(env)}
             chiral_c = set()
             chiral_a = set()
@@ -451,6 +492,8 @@ class MoleculeStereo(Stereo):
                     else:
                         chiral_c.add(path)
 
+            # separate equal constitutionally but unique by stereo type chiral centers
+            # need for searching depended chiral centers
             if atoms_stereo:
                 grouped_stereo = defaultdict(list)
                 for n in chiral_t:
@@ -533,60 +576,6 @@ class MoleculeStereo(Stereo):
 
 class QueryStereo(Stereo):  # todo: implement add_wedge, calculate_cis_trans_from_2d
     __slots__ = ()
-
-
-class NotUsed:
-    def __atropoisomers(self):
-        #     ___
-        #    |   |
-        # 7--3   5--9
-        #     \ /
-        #      1[n]
-        #      |
-        #      2[m]
-        #     / \
-        # 8--4   6--10
-        #    |___|
-        #
-        bonds = self._bonds
-        if len(self.sssr) < 2:
-            return {}
-        aromatic = self.aromatic_rings
-        if len(aromatic) < 2:
-            return {}
-
-        reduced_aromatic = [[x for x in x if len(bonds[x]) == 3] for x in aromatic]  # remove :[CH]: atoms
-        connections = {}
-        for rings in combinations(range(len(aromatic)), 2):
-            ring1, ring2 = rings
-            for n, m in product(reduced_aromatic[ring1], reduced_aromatic[ring2]):
-                if n in bonds[m]:
-                    if rings in connections:  # remove condensed rings or twice-bonded rings
-                        del connections[rings]
-                        break  # skip rings
-                    connections[rings] = (n, m)
-
-        atropos = {}
-        for (ring1, ring2), (n, m) in connections.items():
-            # neighbors of connection atoms in rings
-            a3, a5 = (x for x in bonds[n] if x != m)
-            a4, a6 = (x for x in bonds[m] if x != n)
-            # substituents of neighbors
-            a7 = next((x for x in bonds[a3] if x not in aromatic[ring1]), None)
-            a9 = next((x for x in bonds[a5] if x not in aromatic[ring1]), None)
-            a8 = next((x for x in bonds[a4] if x not in aromatic[ring2]), None)
-            a10 = next((x for x in bonds[a6] if x not in aromatic[ring2]), None)
-
-            # skip rings without substituents
-            # todo: rings bounded with chain
-            if not a7 and (not a9 or not a8 or not a10):
-                continue
-            elif not a9 and (not a8 or not a10):
-                continue
-            elif not a8 and not a10:
-                continue
-            atropos[(n, m)] = (a3, a4, a5, a6, a7, a8, a9, a10)
-        return atropos
 
 
 # 1  2
