@@ -110,6 +110,13 @@ class GraphComponents:
                 out.append(tuple(r))
         return tuple(out)
 
+    @cached_property
+    def ring_atoms(self):
+        """
+        Atoms in rings
+        """
+        return tuple(x for x in self.sssr for x in x)
+
 
 class StructureComponents:
     __slots__ = ()
