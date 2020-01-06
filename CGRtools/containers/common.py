@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond
+from ..algorithms.automorphism import Automorphism
 from ..algorithms.components import GraphComponents
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.mcs import MCS
@@ -29,7 +30,7 @@ from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
-class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
+class Graph(GraphComponents, Morgan, SSSR, Isomorphism, Automorphism, MCS, ABC):
     __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
                  '__dict__', '__weakref__')
 
