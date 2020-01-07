@@ -20,7 +20,6 @@ from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond
-from ..algorithms.automorphism import Automorphism
 from ..algorithms.components import GraphComponents
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.mcs import MCS
@@ -30,7 +29,7 @@ from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
-class Graph(GraphComponents, Morgan, SSSR, Isomorphism, Automorphism, MCS, ABC):
+class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
                  '__dict__', '__weakref__')
 
