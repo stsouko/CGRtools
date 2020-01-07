@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  This file is part of CGRtools.
@@ -31,9 +31,9 @@ class Core(ABC):
 
     def __init__(self, isotope: Optional[int] = None):
         """
-        element object with specified charge, isotope and multiplicity
+        Element object with specified charge, isotope and multiplicity
 
-        :param isotope: isotope number of element
+        :param isotope: Isotope number of element
         """
         if isinstance(isotope, int):
             if isotope not in self.isotopes_distribution:
@@ -60,7 +60,7 @@ class Core(ABC):
     @abstractmethod
     def atomic_number(self) -> int:
         """
-        element number
+        Element number
         """
 
     @property
@@ -78,14 +78,14 @@ class Core(ABC):
     @abstractmethod
     def isotopes_distribution(self) -> Dict[int, float]:
         """
-        isotopes distribution in earth
+        Isotopes distribution in earth
         """
 
     @property
     @abstractmethod
     def isotopes_masses(self) -> Dict[int, float]:
         """
-        isotopes distribution in earth
+        Isotopes distribution in earth
         """
 
     @property
@@ -124,22 +124,40 @@ class Core(ABC):
             raise IsNotConnectedAtom
 
     @property
-    def neighbors(self):
+    def neighbors(self) -> int:
+        """
+        Number of non-hydrogen neighbors of atom.
+        """
         try:
             return self._graph()._neighbors[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
-    def hybridization(self):
+    def hybridization(self) -> int:
+        """
+        1 - if atom has zero or only single bonded neighbors, 2 - if has only one double bonded neighbor and any amount
+        of single bonded, 3 - if has one triple bonded and any amount of double and single bonded neighbors or
+        two double bonded and any amount of single bonded neighbors, 4 - if atom in aromatic ring.
+        """
         try:
             return self._graph()._hybridizations[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
 
+    @property
+    def in_ring(self) -> bool:
+        """
+        Atom in any ring.
+        """
+        try:
+            return self._map in self._graph().ring_atoms
+        except AttributeError:
+            raise IsNotConnectedAtom
+
     def copy(self) -> 'Core':
         """
-        detached from graph copy of element
+        Detached from graph copy of element
         """
         copy = object.__new__(self.__class__)
         copy._Core__isotope = self.__isotope

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -29,7 +29,7 @@ from ..exceptions import AtomNotFound
 from ..periodictable.element import Core
 
 
-class Graph(Isomorphism, MCS, SSSR, Morgan, GraphComponents, ABC):
+class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
                  '__dict__', '__weakref__')
 
