@@ -44,7 +44,7 @@ class Isomorphism:
 
     def is_substructure(self, other) -> bool:
         """
-        test self is substructure of other
+        Test self is substructure of other
         """
         try:
             next(self.get_mapping(other))
@@ -54,7 +54,7 @@ class Isomorphism:
 
     def is_equal(self, other) -> bool:
         """
-        test self is structure of other
+        Test self is same structure as other
         """
         if len(self) != len(other):
             return False
@@ -67,7 +67,7 @@ class Isomorphism:
     @abstractmethod
     def get_mapping(self, other, *, automorphism_filter: bool = True) -> Iterator[Dict[int, int]]:
         """
-        get self to other substructure mapping generator
+        Get self to other substructure mapping generator
         """
         seen = set()
         components, closures = self.__compiled_query
@@ -162,7 +162,7 @@ class Isomorphism:
                     seen.add(front)
         return components, closures
 
-    def has_automorphism(self):
+    def is_automorphic(self):
         """
         Test for automorphism symmetry of graph.
         """
@@ -174,7 +174,7 @@ class Isomorphism:
 
     def get_automorphism_mapping(self) -> Iterator[Dict[int, int]]:
         """
-        Iterator of all possible automorphism groups.
+        Iterator of all possible automorphism mappings.
         """
         return self._get_automorphism_mapping(self.atoms_order, self._bonds)
 
