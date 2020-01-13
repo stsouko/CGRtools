@@ -241,7 +241,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         total = False
         for m in self.molecules():
             if isinstance(m, MoleculeContainer):
-                if m.thiele() and not not total:
+                if m.thiele() and not total:
                     total = True
         if total:
             self.flush_cache()
