@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Adelia Fatykhova <adelik21979@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -91,13 +91,14 @@ class BaseReactor:
 
             to_delete.update(delete)
 
-        new_atoms = {}
+        max_atom = max(charges) + 1
         for n, atom in self.__atom_attrs.items():
             if n in mapping:  # add matched atoms
                 m = mapping[n]
                 new.add_atom(elements[n].copy(), m, xy=plane[m], **atom)
             else:  # new atoms
-                new_atoms[n] = {'atom': elements[n].copy(), **atom}
+                mapping[n] = new.add_atom(elements[n].copy(), max_atom, **atom)
+                max_atom += 1
 
         old_atoms = set(new._atoms)
         if self.__is_cgr:
@@ -110,13 +111,10 @@ class BaseReactor:
                 if n not in old_atoms and n not in to_delete:
                     new.add_atom(atom.copy(), n, charge=charges[n], is_radical=radicals[n], xy=plane[n])
 
-        for n, atom in new_atoms.items():
-            mapping[n] = new.add_atom(**atom)
-
         for n, m, bond in self.__bond_attrs:  # add patch bonds
             n = mapping[n]
             m = mapping[m]
-            new.add_bond(n, m, bond)
+            new.add_bond(n, m, bond.copy())
 
         for n, m_bond in bonds.items():
             if n in to_delete:  # atoms for removing
@@ -125,7 +123,7 @@ class BaseReactor:
             for m, bond in m_bond.items():
                 if m in to_delete or n in old_atoms and m in old_atoms:
                     continue
-                new.add_bond(n, m, bond)
+                new.add_bond(n, m, bond.copy())
 
         # todo: calculate stereo mark based on new atom order
         return new
