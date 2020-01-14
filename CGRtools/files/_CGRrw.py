@@ -204,7 +204,7 @@ class CGRRead:
 
     def __prepare_structure(self, molecule, mapping):
         if 'query' in molecule:
-            if 'cgr'in molecule:
+            if 'cgr' in molecule:
                 raise ValueError('QueryCGR parsing not supported')
             g = self.__convert_query(molecule, mapping)
         elif 'cgr' in molecule:
