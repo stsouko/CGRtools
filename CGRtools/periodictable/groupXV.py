@@ -47,6 +47,10 @@ class N(Element, PeriodII, GroupXV):
     def _valences_exceptions(self):
         return (-1, False, 2, ()), (1, False, 4, ()), (0, True, 0, ((2, 'O'),))  # *NO
 
+    @property
+    def VW_rad(self):
+        return 155
+
 
 class P(Element, PeriodIII, GroupXV):
     __slots__ = ()
@@ -72,6 +76,10 @@ class P(Element, PeriodIII, GroupXV):
         return ((-1, False, 2, ()), (1, False, 4, (),),
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
+    @property
+    def VW_rad(self):
+        return 180
+
 
 class As(Element, PeriodIV, GroupXV):
     __slots__ = ()
@@ -96,6 +104,10 @@ class As(Element, PeriodIV, GroupXV):
     def _valences_exceptions(self):
         return (1, False, 4, ()),
 
+    @property
+    def VW_rad(self):
+        return 185
+
 
 class Sb(Element, PeriodV, GroupXV):
     __slots__ = ()
@@ -119,6 +131,10 @@ class Sb(Element, PeriodV, GroupXV):
     @property
     def _valences_exceptions(self):
         return (1, False, 4, ()),
+
+    @property
+    def VW_rad(self):
+        return 206
 
 
 class Bi(Element, PeriodVI, GroupXV):
@@ -159,6 +175,10 @@ class Bi(Element, PeriodVI, GroupXV):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))),
                 (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (2, 'O'))))
+
+    @property
+    def VW_rad(self):
+        return 207
 
 
 class Mc(Element, PeriodVII, GroupXV):

@@ -46,6 +46,10 @@ class Be(Element, PeriodII, GroupII):
     def _valences_exceptions(self):
         return (2, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 153
+
 
 class Mg(Element, PeriodIII, GroupII):
     __slots__ = ()
@@ -69,6 +73,10 @@ class Mg(Element, PeriodIII, GroupII):
     @property
     def _valences_exceptions(self):
         return (2, False, 0, ()), (1, False, 0, ((1, 'C'),)), (1, False, 0, ((1, 'O'),)), (1, False, 0, ((1, 'Br'),))
+
+    @property
+    def VW_rad(self):
+        return 173
 
 
 class Ca(Element, PeriodIV, GroupII):
@@ -94,6 +102,10 @@ class Ca(Element, PeriodIV, GroupII):
     def _valences_exceptions(self):
         return (2, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 231
+
 
 class Sr(Element, PeriodV, GroupII):
     __slots__ = ()
@@ -117,6 +129,10 @@ class Sr(Element, PeriodV, GroupII):
     @property
     def _valences_exceptions(self):
         return (2, False, 0, ()),
+
+    @property
+    def VW_rad(self):
+        return 249
 
 
 class Ba(Element, PeriodVI, GroupII):
@@ -144,6 +160,10 @@ class Ba(Element, PeriodVI, GroupII):
     def _valences_exceptions(self):
         return (2, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 268
+
 
 class Ra(Element, PeriodVII, GroupII):
     __slots__ = ()
@@ -167,6 +187,10 @@ class Ra(Element, PeriodVII, GroupII):
     @property
     def _valences_exceptions(self):
         return (2, False, 0, ()),
+
+    @property
+    def VW_rad(self):
+        return 283
 
 
 __all__ = ['Be', 'Mg', 'Ca', 'Sr', 'Ba', 'Ra']

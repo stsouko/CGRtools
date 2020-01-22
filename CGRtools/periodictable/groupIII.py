@@ -617,6 +617,10 @@ class U(Element, PeriodVII, GroupIII):
         return ((3, False, 0, ()), (4, False, 0, ()),
                 (2, False, 0, ((2, 'O'), (2, 'O'))))
 
+    @property
+    def VW_rad(self):
+        return 186
+
 
 class Np(Element, PeriodVII, GroupIII):
     __slots__ = ()

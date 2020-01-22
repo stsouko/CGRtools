@@ -45,6 +45,9 @@ class H(Element, PeriodI, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()), (0, True, 0, ()), (-1, False, 0, ())
 
+    @property
+    def VW_rad(self):
+        return 110 # or 120
 
 class Li(Element, PeriodII, GroupI):
     __slots__ = ()
@@ -69,6 +72,9 @@ class Li(Element, PeriodII, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 182
 
 class Na(Element, PeriodIII, GroupI):
     __slots__ = ()
@@ -93,6 +99,9 @@ class Na(Element, PeriodIII, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 227
 
 class K(Element, PeriodIV, GroupI):
     __slots__ = ()
@@ -117,6 +126,9 @@ class K(Element, PeriodIV, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 275
 
 class Rb(Element, PeriodV, GroupI):
     __slots__ = ()
@@ -141,6 +153,9 @@ class Rb(Element, PeriodV, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 303
 
 class Cs(Element, PeriodVI, GroupI):
     __slots__ = ()
@@ -165,6 +180,10 @@ class Cs(Element, PeriodVI, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 243
+
 
 class Fr(Element, PeriodVII, GroupI):
     __slots__ = ()
@@ -188,6 +207,10 @@ class Fr(Element, PeriodVII, GroupI):
     @property
     def _valences_exceptions(self):
         return (1, False, 0, ()),
+
+    @property
+    def VW_rad(self):
+        return 227
 
 
 __all__ = ['H', 'Li', 'Na', 'K', 'Rb', 'Cs', 'Fr']

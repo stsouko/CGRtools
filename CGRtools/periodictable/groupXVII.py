@@ -47,6 +47,10 @@ class F(Element, PeriodII, GroupXVII):
     def _valences_exceptions(self):
         return (-1, False, 0, ()),
 
+    @property
+    def VW_rad(self):
+        return 147
+
 
 class Cl(Element, PeriodIII, GroupXVII):
     __slots__ = ()
@@ -81,6 +85,10 @@ class Cl(Element, PeriodIII, GroupXVII):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # ClF5
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'))),  # ClOF3
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'))))  # ClO2F
+
+    @property
+    def VW_rad(self):
+        return 175
 
 
 class Br(Element, PeriodIV, GroupXVII):
@@ -119,6 +127,10 @@ class Br(Element, PeriodIV, GroupXVII):
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'))),  # BrO2F
 
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'), (2, 'O'))))  # BrO3F
+
+    @property
+    def VW_rad(self):
+        return 185
 
 
 class I(Element, PeriodV, GroupXVII):
@@ -165,6 +177,10 @@ class I(Element, PeriodV, GroupXVII):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'), (2, 'O'))),  # IO2F3
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'), (2, 'O'))))  # IO3F
 
+    @property
+    def VW_rad(self):
+        return 198
+
 
 class At(Element, PeriodVI, GroupXVII):
     __slots__ = ()
@@ -189,6 +205,10 @@ class At(Element, PeriodVI, GroupXVII):
     def _valences_exceptions(self):
         return ((1, False, 0, ()), (-1, False, 0, ()),
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))))
+
+    @property
+    def VW_rad(self):
+        return 202
 
 
 class Ts(Element, PeriodVII, GroupXVII):

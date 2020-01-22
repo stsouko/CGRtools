@@ -48,6 +48,10 @@ class B(Element, PeriodII, GroupXIII):
         return ((-1, False, 4, ()),
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
+    @property
+    def VW_rad(self):
+        return 192
+
 
 class Al(Element, PeriodIII, GroupXIII):
     __slots__ = ()
@@ -75,6 +79,10 @@ class Al(Element, PeriodIII, GroupXIII):
                 (-1, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))),
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (-3, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
+
+    @property
+    def VW_rad(self):
+        return 184
 
 
 class Ga(Element, PeriodIV, GroupXIII):
@@ -106,6 +114,10 @@ class Ga(Element, PeriodIV, GroupXIII):
                 (-1, False, 0, ((1, 'Br'), (1, 'Br'), (1, 'Br'), (1, 'Br'))),
                 (-1, False, 0, ((1, 'I'), (1, 'I'), (1, 'I'), (1, 'I'))))
 
+    @property
+    def VW_rad(self):
+        return 187
+
 
 class In(Element, PeriodV, GroupXIII):
     __slots__ = ()
@@ -132,6 +144,10 @@ class In(Element, PeriodV, GroupXIII):
                 (0, False, 0, ((1, 'Cl'),)), (0, False, 0, ((1, 'Br'),)), (0, False, 0, ((1, 'I'),)),
                 (0, False, 0, ((1, 'O'),)))
 
+    @property
+    def VW_rad(self):
+        return 193
+
 
 class Tl(Element, PeriodVI, GroupXIII):
     __slots__ = ()
@@ -157,6 +173,10 @@ class Tl(Element, PeriodVI, GroupXIII):
         return ((1, False, 0, ()), (3, False, 0, ()),
                 (-3, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))),
                 (1, False, 0, ((1, 'C'), (1, 'C'))))
+
+    @property
+    def VW_rad(self):
+        return 196
 
 
 class Nh(Element, PeriodVII, GroupXIII):
