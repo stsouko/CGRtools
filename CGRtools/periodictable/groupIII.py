@@ -699,10 +699,6 @@ class U(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 186
-
-    @property
-    def atomic_radius(self):
         return 2.17 #unknown, taken radius of previous element in group
 
 
