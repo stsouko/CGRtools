@@ -49,6 +49,7 @@ class H(Element, PeriodI, GroupI):
     def atomic_radius(self):
         return 0.53
 
+
 class Li(Element, PeriodII, GroupI):
     __slots__ = ()
 
@@ -75,6 +76,7 @@ class Li(Element, PeriodII, GroupI):
     @property
     def atomic_radius(self):
         return 167
+
 
 class Na(Element, PeriodIII, GroupI):
     __slots__ = ()
@@ -103,6 +105,7 @@ class Na(Element, PeriodIII, GroupI):
     def atomic_radius(self):
         return 1.9
 
+
 class K(Element, PeriodIV, GroupI):
     __slots__ = ()
 
@@ -130,6 +133,7 @@ class K(Element, PeriodIV, GroupI):
     def atomic_radius(self):
         return 2.43
 
+
 class Rb(Element, PeriodV, GroupI):
     __slots__ = ()
 
@@ -156,6 +160,8 @@ class Rb(Element, PeriodV, GroupI):
     @property
     def atomic_radius(self):
         return 2.65
+
+
 class Cs(Element, PeriodVI, GroupI):
     __slots__ = ()
 
