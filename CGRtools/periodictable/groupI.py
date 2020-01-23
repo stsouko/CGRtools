@@ -45,6 +45,10 @@ class H(Element, PeriodI, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()), (0, True, 0, ()), (-1, False, 0, ())
 
+    @property
+    def atomic_radius(self):
+        return 0.53
+
 
 class Li(Element, PeriodII, GroupI):
     __slots__ = ()
@@ -68,6 +72,10 @@ class Li(Element, PeriodII, GroupI):
     @property
     def _valences_exceptions(self):
         return (1, False, 0, ()),
+
+    @property
+    def atomic_radius(self):
+        return 167
 
 
 class Na(Element, PeriodIII, GroupI):
@@ -93,6 +101,10 @@ class Na(Element, PeriodIII, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def atomic_radius(self):
+        return 1.9
+
 
 class K(Element, PeriodIV, GroupI):
     __slots__ = ()
@@ -116,6 +128,10 @@ class K(Element, PeriodIV, GroupI):
     @property
     def _valences_exceptions(self):
         return (1, False, 0, ()),
+
+    @property
+    def atomic_radius(self):
+        return 2.43
 
 
 class Rb(Element, PeriodV, GroupI):
@@ -141,6 +157,10 @@ class Rb(Element, PeriodV, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def atomic_radius(self):
+        return 2.65
+
 
 class Cs(Element, PeriodVI, GroupI):
     __slots__ = ()
@@ -165,6 +185,10 @@ class Cs(Element, PeriodVI, GroupI):
     def _valences_exceptions(self):
         return (1, False, 0, ()),
 
+    @property
+    def atomic_radius(self):
+        return 2.98
+
 
 class Fr(Element, PeriodVII, GroupI):
     __slots__ = ()
@@ -188,6 +212,10 @@ class Fr(Element, PeriodVII, GroupI):
     @property
     def _valences_exceptions(self):
         return (1, False, 0, ()),
+
+    @property
+    def atomic_radius(self):
+        return 2.98 #unknown, taken radius of previous element in group
 
 
 __all__ = ['H', 'Li', 'Na', 'K', 'Rb', 'Cs', 'Fr']
