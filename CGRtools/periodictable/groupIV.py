@@ -186,7 +186,7 @@ class Rf(Element, PeriodVII, GroupIV):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 2.08 #unknown, taken radius of previous element in group
 
 
 __all__ = ['Ti', 'Zr', 'Hf', 'Rf']

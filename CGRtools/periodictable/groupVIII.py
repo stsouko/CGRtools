@@ -137,7 +137,7 @@ class Hs(Element, PeriodVII, GroupVIII):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.85 #unknown, taken radius of previous element in group
 
 
 __all__ = ['Fe', 'Ru', 'Os', 'Hs']

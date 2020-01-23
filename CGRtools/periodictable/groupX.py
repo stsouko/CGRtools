@@ -143,7 +143,7 @@ class Ds(Element, PeriodVII, GroupX):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.77 #unknown, taken radius of previous element in group
 
 
 __all__ = ['Ni', 'Pd', 'Pt', 'Ds']

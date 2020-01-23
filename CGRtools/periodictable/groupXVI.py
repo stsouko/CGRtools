@@ -263,7 +263,7 @@ class Lv(Element, PeriodVII, GroupXVI):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.35 #unknown, taken radius of previous element in group
 
 
 __all__ = ['O', 'S', 'Se', 'Te', 'Po', 'Lv']

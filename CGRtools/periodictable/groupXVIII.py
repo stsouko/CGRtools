@@ -226,7 +226,7 @@ class Og(Element, PeriodVII, GroupXVIII):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.2 #unknown, taken radius of previous element in group
 
 
 __all__ = ['He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn', 'Og']

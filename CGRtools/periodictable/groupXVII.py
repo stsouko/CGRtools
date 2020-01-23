@@ -236,7 +236,7 @@ class Ts(Element, PeriodVII, GroupXVII):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.27 #unknown, taken radius of previous element in group
 
 
 __all__ = ['F', 'Cl', 'Br', 'I', 'At', 'Ts']

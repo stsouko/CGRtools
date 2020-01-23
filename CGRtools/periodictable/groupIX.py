@@ -180,7 +180,7 @@ class Mt(Element, PeriodVII, GroupIX):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.8 #unknown, taken radius of previous element in group
 
 
 __all__ = ['Co', 'Rh', 'Ir', 'Mt']

@@ -190,7 +190,7 @@ class Ra(Element, PeriodVII, GroupII):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 2.53 #unknown, taken radius of previous element in group
 
 
 __all__ = ['Be', 'Mg', 'Ca', 'Sr', 'Ba', 'Ra']

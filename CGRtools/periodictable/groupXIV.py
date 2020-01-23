@@ -204,7 +204,7 @@ class Fl(Element, PeriodVII, GroupXIV):
 
     @property
     def atomic_radius(self):
-        return "N/A"
+        return 1.54 #unknown, taken radius of previous element in group
 
 
 __all__ = ['C', 'Si', 'Ge', 'Sn', 'Pb', 'Fl']
