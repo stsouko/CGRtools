@@ -47,8 +47,8 @@ class He(Element, PeriodI, GroupXVIII):
         return ()
 
     @property
-    def VW_rad(self):
-        return 140
+    def atomic_radius(self):
+        return .31
 
 
 class Ne(Element, PeriodII, GroupXVIII):
@@ -75,8 +75,8 @@ class Ne(Element, PeriodII, GroupXVIII):
         return ()
 
     @property
-    def VW_rad(self):
-        return 154
+    def atomic_radius(self):
+        return .38
 
 
 class Ar(Element, PeriodIII, GroupXVIII):
@@ -103,8 +103,8 @@ class Ar(Element, PeriodIII, GroupXVIII):
         return ()
 
     @property
-    def VW_rad(self):
-        return 188
+    def atomic_radius(self):
+        return .71
 
 
 class Kr(Element, PeriodIV, GroupXVIII):
@@ -131,8 +131,8 @@ class Kr(Element, PeriodIV, GroupXVIII):
         return ()
 
     @property
-    def VW_rad(self):
-        return 202
+    def atomic_radius(self):
+        return .87
 
 class Xe(Element, PeriodV, GroupXVIII):
     __slots__ = ()
@@ -169,8 +169,8 @@ class Xe(Element, PeriodV, GroupXVIII):
                 (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (2, 'O'), (2, 'O'))))
 
     @property
-    def VW_rad(self):
-        return 216
+    def atomic_radius(self):
+        return 1.08
 
 
 class Rn(Element, PeriodVI, GroupXVIII):
@@ -197,8 +197,8 @@ class Rn(Element, PeriodVI, GroupXVIII):
         return (0, False, 0, ((1, 'F'), (1, 'F'))), (1, False, 0, ((1, 'F'),))
 
     @property
-    def VW_rad(self):
-        return 220
+    def atomic_radius(self):
+        return 1.2
 
 
 class Og(Element, PeriodVII, GroupXVIII):
@@ -223,6 +223,10 @@ class Og(Element, PeriodVII, GroupXVIII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn', 'Og']

@@ -48,8 +48,8 @@ class C(Element, PeriodII, GroupXIV):
         return (0, True, 2, ()), (1, False, 3, ()), (-1, False, 3, ())
 
     @property
-    def VW_rad(self):
-        return 170
+    def atomic_radius(self):
+        return .67
 
 
 class Si(Element, PeriodIII, GroupXIV):
@@ -76,8 +76,8 @@ class Si(Element, PeriodIII, GroupXIV):
         return (-2, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
 
     @property
-    def VW_rad(self):
-        return 210
+    def atomic_radius(self):
+        return 1.11
 
 
 class Ge(Element, PeriodIV, GroupXIV):
@@ -104,8 +104,8 @@ class Ge(Element, PeriodIV, GroupXIV):
         return (-2, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
 
     @property
-    def VW_rad(self):
-        return 211
+    def atomic_radius(self):
+        return 1.25
 
 
 class Sn(Element, PeriodV, GroupXIV):
@@ -137,8 +137,8 @@ class Sn(Element, PeriodV, GroupXIV):
                 (-2, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))))
 
     @property
-    def VW_rad(self):
-        return 217
+    def atomic_radius(self):
+        return 1.45
 
 
 class Pb(Element, PeriodVI, GroupXIV):
@@ -175,8 +175,8 @@ class Pb(Element, PeriodVI, GroupXIV):
                 (0, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))))
 
     @property
-    def VW_rad(self):
-        return 202
+    def atomic_radius(self):
+        return 1.54
 
 
 class Fl(Element, PeriodVII, GroupXIV):
@@ -201,6 +201,10 @@ class Fl(Element, PeriodVII, GroupXIV):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['C', 'Si', 'Ge', 'Sn', 'Pb', 'Fl']

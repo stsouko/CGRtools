@@ -53,6 +53,10 @@ class Mn(Element, PeriodIV, GroupVII):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),  # [MnO4]2-
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'), (1, 'O'))))  # [MnO4]-
 
+    @property
+    def atomic_radius(self):
+        return 1.61
+
 
 class Tc(Element, PeriodV, GroupVII):
     __slots__ = ()
@@ -78,6 +82,10 @@ class Tc(Element, PeriodV, GroupVII):
         return ((0, False, 0, ((2, 'O'), (2, 'O'))),  # TcO2
                 (0, False, 0, ((2, 'S'), (2, 'S'))))  # TcS2
 
+    @property
+    def atomic_radius(self):
+        return 1.83
+
 
 class Re(Element, PeriodVI, GroupVII):
     __slots__ = ()
@@ -102,6 +110,10 @@ class Re(Element, PeriodVI, GroupVII):
     def _valences_exceptions(self):
         return ()
 
+    @property
+    def atomic_radius(self):
+        return 1.88
+
 
 class Bh(Element, PeriodVII, GroupVII):
     __slots__ = ()
@@ -125,6 +137,10 @@ class Bh(Element, PeriodVII, GroupVII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['Mn', 'Tc', 'Re', 'Bh']

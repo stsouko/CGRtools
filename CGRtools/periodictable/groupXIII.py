@@ -49,8 +49,8 @@ class B(Element, PeriodII, GroupXIII):
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
     @property
-    def VW_rad(self):
-        return 192
+    def atomic_radius(self):
+        return .87
 
 
 class Al(Element, PeriodIII, GroupXIII):
@@ -81,8 +81,8 @@ class Al(Element, PeriodIII, GroupXIII):
                 (-3, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
     @property
-    def VW_rad(self):
-        return 184
+    def atomic_radius(self):
+        return 1.18
 
 
 class Ga(Element, PeriodIV, GroupXIII):
@@ -115,8 +115,8 @@ class Ga(Element, PeriodIV, GroupXIII):
                 (-1, False, 0, ((1, 'I'), (1, 'I'), (1, 'I'), (1, 'I'))))
 
     @property
-    def VW_rad(self):
-        return 187
+    def atomic_radius(self):
+        return 1.36
 
 
 class In(Element, PeriodV, GroupXIII):
@@ -145,8 +145,8 @@ class In(Element, PeriodV, GroupXIII):
                 (0, False, 0, ((1, 'O'),)))
 
     @property
-    def VW_rad(self):
-        return 193
+    def atomic_radius(self):
+        return 1.56
 
 
 class Tl(Element, PeriodVI, GroupXIII):
@@ -175,8 +175,8 @@ class Tl(Element, PeriodVI, GroupXIII):
                 (1, False, 0, ((1, 'C'), (1, 'C'))))
 
     @property
-    def VW_rad(self):
-        return 196
+    def atomic_radius(self):
+        return 1.56
 
 
 class Nh(Element, PeriodVII, GroupXIII):
@@ -201,6 +201,10 @@ class Nh(Element, PeriodVII, GroupXIII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['B', 'Al', 'Ga', 'In', 'Tl', 'Nh']

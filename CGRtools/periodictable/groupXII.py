@@ -51,8 +51,8 @@ class Zn(Element, PeriodIV, GroupXII):
                 (-2, False, 0, ((1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'))))  # Zn[(SCN)4]2-
 
     @property
-    def VW_rad(self):
-        return 139
+    def atomic_radius(self):
+        return 1.42
 
 
 class Cd(Element, PeriodV, GroupXII):
@@ -85,8 +85,8 @@ class Cd(Element, PeriodV, GroupXII):
                 (-2, False, 0, ((1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'))))  # Cd[(SCN)4]2-
 
     @property
-    def VW_rad(self):
-        return 158
+    def atomic_radius(self):
+        return 1.61
 
 
 class Hg(Element, PeriodVI, GroupXII):
@@ -116,8 +116,8 @@ class Hg(Element, PeriodVI, GroupXII):
                 (-2, False, 0, ((1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'))))  # Hg[(SCN)4]2-
 
     @property
-    def VW_rad(self):
-        return 155
+    def atomic_radius(self):
+        return 1.71
 
 
 class Cn(Element, PeriodVII, GroupXII):
@@ -142,6 +142,10 @@ class Cn(Element, PeriodVII, GroupXII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['Zn', 'Cd', 'Hg', 'Cn']

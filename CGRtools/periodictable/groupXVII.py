@@ -48,8 +48,8 @@ class F(Element, PeriodII, GroupXVII):
         return (-1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 147
+    def atomic_radius(self):
+        return .42
 
 
 class Cl(Element, PeriodIII, GroupXVII):
@@ -87,8 +87,8 @@ class Cl(Element, PeriodIII, GroupXVII):
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'))))  # ClO2F
 
     @property
-    def VW_rad(self):
-        return 175
+    def atomic_radius(self):
+        return .79
 
 
 class Br(Element, PeriodIV, GroupXVII):
@@ -129,8 +129,8 @@ class Br(Element, PeriodIV, GroupXVII):
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'), (2, 'O'))))  # BrO3F
 
     @property
-    def VW_rad(self):
-        return 185
+    def atomic_radius(self):
+        return 0.94
 
 
 class I(Element, PeriodV, GroupXVII):
@@ -178,8 +178,8 @@ class I(Element, PeriodV, GroupXVII):
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'), (2, 'O'))))  # IO3F
 
     @property
-    def VW_rad(self):
-        return 198
+    def atomic_radius(self):
+        return 1.15
 
 
 class At(Element, PeriodVI, GroupXVII):
@@ -207,8 +207,8 @@ class At(Element, PeriodVI, GroupXVII):
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))))
 
     @property
-    def VW_rad(self):
-        return 202
+    def atomic_radius(self):
+        return 1.27
 
 
 class Ts(Element, PeriodVII, GroupXVII):
@@ -233,6 +233,10 @@ class Ts(Element, PeriodVII, GroupXVII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['F', 'Cl', 'Br', 'I', 'At', 'Ts']

@@ -49,8 +49,8 @@ class Ni(Element, PeriodIV, GroupX):
                 (0, False, 0, ((2, 'O'), (1, 'O'))))  # Ni2O3
 
     @property
-    def VW_rad(self):
-        return 163
+    def atomic_radius(self):
+        return 1.49
 
 class Pd(Element, PeriodV, GroupX):
     __slots__ = ()
@@ -83,8 +83,8 @@ class Pd(Element, PeriodV, GroupX):
                 (-2, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))))  # [PdCl4]2-
 
     @property
-    def VW_rad(self):
-        return 163
+    def atomic_radius(self):
+        return 1.69
 
 
 class Pt(Element, PeriodVI, GroupX):
@@ -114,8 +114,8 @@ class Pt(Element, PeriodVI, GroupX):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'))))  # PtO3
 
     @property
-    def VW_rad(self):
-        return 175
+    def atomic_radius(self):
+        return 1.77
 
 
 class Ds(Element, PeriodVII, GroupX):
@@ -140,6 +140,10 @@ class Ds(Element, PeriodVII, GroupX):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['Ni', 'Pd', 'Pt', 'Ds']

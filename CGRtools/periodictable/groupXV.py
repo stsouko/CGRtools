@@ -48,8 +48,8 @@ class N(Element, PeriodII, GroupXV):
         return (-1, False, 2, ()), (1, False, 4, ()), (0, True, 0, ((2, 'O'),))  # *NO
 
     @property
-    def VW_rad(self):
-        return 155
+    def atomic_radius(self):
+        return .56
 
 
 class P(Element, PeriodIII, GroupXV):
@@ -77,8 +77,8 @@ class P(Element, PeriodIII, GroupXV):
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
     @property
-    def VW_rad(self):
-        return 180
+    def atomic_radius(self):
+        return .98
 
 
 class As(Element, PeriodIV, GroupXV):
@@ -105,8 +105,8 @@ class As(Element, PeriodIV, GroupXV):
         return (1, False, 4, ()),
 
     @property
-    def VW_rad(self):
-        return 185
+    def atomic_radius(self):
+        return 1.14
 
 
 class Sb(Element, PeriodV, GroupXV):
@@ -133,8 +133,8 @@ class Sb(Element, PeriodV, GroupXV):
         return (1, False, 4, ()),
 
     @property
-    def VW_rad(self):
-        return 206
+    def atomic_radius(self):
+        return 1.33
 
 
 class Bi(Element, PeriodVI, GroupXV):
@@ -177,8 +177,8 @@ class Bi(Element, PeriodVI, GroupXV):
                 (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (2, 'O'))))
 
     @property
-    def VW_rad(self):
-        return 207
+    def atomic_radius(self):
+        return 1.43
 
 
 class Mc(Element, PeriodVII, GroupXV):
@@ -203,6 +203,10 @@ class Mc(Element, PeriodVII, GroupXV):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['N', 'P', 'As', 'Sb', 'Bi', 'Mc']

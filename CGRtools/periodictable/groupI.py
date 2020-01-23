@@ -46,8 +46,8 @@ class H(Element, PeriodI, GroupI):
         return (1, False, 0, ()), (0, True, 0, ()), (-1, False, 0, ())
 
     @property
-    def VW_rad(self):
-        return 110 # or 120
+    def atomic_radius(self):
+        return 0.53
 
 class Li(Element, PeriodII, GroupI):
     __slots__ = ()
@@ -73,8 +73,8 @@ class Li(Element, PeriodII, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 182
+    def atomic_radius(self):
+        return 167
 
 class Na(Element, PeriodIII, GroupI):
     __slots__ = ()
@@ -100,8 +100,8 @@ class Na(Element, PeriodIII, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 227
+    def atomic_radius(self):
+        return 1.9
 
 class K(Element, PeriodIV, GroupI):
     __slots__ = ()
@@ -127,8 +127,8 @@ class K(Element, PeriodIV, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 275
+    def atomic_radius(self):
+        return 2.43
 
 class Rb(Element, PeriodV, GroupI):
     __slots__ = ()
@@ -154,9 +154,8 @@ class Rb(Element, PeriodV, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 303
-
+    def atomic_radius(self):
+        return 2.65
 class Cs(Element, PeriodVI, GroupI):
     __slots__ = ()
 
@@ -181,8 +180,8 @@ class Cs(Element, PeriodVI, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 243
+    def atomic_radius(self):
+        return 2.98
 
 
 class Fr(Element, PeriodVII, GroupI):
@@ -209,8 +208,8 @@ class Fr(Element, PeriodVII, GroupI):
         return (1, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 227
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['H', 'Li', 'Na', 'K', 'Rb', 'Cs', 'Fr']

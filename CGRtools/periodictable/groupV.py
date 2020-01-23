@@ -65,6 +65,10 @@ class V(Element, PeriodIV, GroupV):
                 (0, False, 0, ((2, 'O'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (0, False, 0, ((2, 'O'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.71
+
 
 class Nb(Element, PeriodV, GroupV):
     __slots__ = ()
@@ -104,6 +108,10 @@ class Nb(Element, PeriodV, GroupV):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.98
+
 
 class Ta(Element, PeriodVI, GroupV):
     __slots__ = ()
@@ -133,6 +141,10 @@ class Ta(Element, PeriodVI, GroupV):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))))
 
+    @property
+    def atomic_radius(self):
+        return 2.0
+
 
 class Db(Element, PeriodVII, GroupV):
     __slots__ = ()
@@ -156,6 +168,10 @@ class Db(Element, PeriodVII, GroupV):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['V', 'Nb', 'Ta', 'Db']

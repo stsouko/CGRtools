@@ -47,8 +47,8 @@ class Be(Element, PeriodII, GroupII):
         return (2, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 153
+    def atomic_radius(self):
+        return 1.12
 
 
 class Mg(Element, PeriodIII, GroupII):
@@ -75,8 +75,8 @@ class Mg(Element, PeriodIII, GroupII):
         return (2, False, 0, ()), (1, False, 0, ((1, 'C'),)), (1, False, 0, ((1, 'O'),)), (1, False, 0, ((1, 'Br'),))
 
     @property
-    def VW_rad(self):
-        return 173
+    def atomic_radius(self):
+        return 1.45
 
 
 class Ca(Element, PeriodIV, GroupII):
@@ -103,8 +103,8 @@ class Ca(Element, PeriodIV, GroupII):
         return (2, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 231
+    def atomic_radius(self):
+        return 1.94
 
 
 class Sr(Element, PeriodV, GroupII):
@@ -131,8 +131,8 @@ class Sr(Element, PeriodV, GroupII):
         return (2, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 249
+    def atomic_radius(self):
+        return 2.19
 
 
 class Ba(Element, PeriodVI, GroupII):
@@ -161,8 +161,8 @@ class Ba(Element, PeriodVI, GroupII):
         return (2, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 268
+    def atomic_radius(self):
+        return 2.53
 
 
 class Ra(Element, PeriodVII, GroupII):
@@ -189,8 +189,8 @@ class Ra(Element, PeriodVII, GroupII):
         return (2, False, 0, ()),
 
     @property
-    def VW_rad(self):
-        return 283
+    def atomic_radius(self):
+        return "N/A"
 
 
 __all__ = ['Be', 'Mg', 'Ca', 'Sr', 'Ba', 'Ra']
