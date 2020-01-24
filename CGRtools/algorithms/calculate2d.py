@@ -19,7 +19,9 @@
 from array import array
 from CachedMethods import cached_property
 from collections import defaultdict
+from itertools import combinations
 from math import hypot, pi, acos, cos, sin, sqrt
+from numba import njit, f8, int64, jit
 from ..algorithms.depict import rotate_vector
 from random import uniform
 
@@ -33,66 +35,75 @@ def rotate_vector2(x1, y1, angle):
     return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
 
 
+# @jit(locals={'sum_sqr': f8, 'i': int64, 'g': f8, 'j': f8, 'a': int64, '_a': int64})
+def distances(atoms, matrix):
+    sum_sqr = 0.0
+    dists = []
+    i = 0
+    for a in atoms:
+        for _a in atoms[i + 1:]:
+            for g, j in zip(matrix[a], matrix[_a]):
+                sum_sqr += (int(g) - int(j)) ** 2
+            dists.append([a, _a, sqrt(sum_sqr)])
+    return dists
+
+
 class Calculate2D:
     __slots__ = ()
 
     def _update(self):
         atoms = self._atoms
-        bonds = list(self.bonds())
-        mapping = {}
-        dd = defaultdict(dict)
-        update_atoms = list(atoms)
+        bonds = self._bonds
+        mapping = []
+        dd = {k: {i: 1.32 if b.order == 8 or len(v) > 4 else .825 for i, b in v.items()} for k, v in bonds.items()}
         xyz_matrix = []
 
         # add virtual atoms
-        for i, (n, m, bond) in enumerate(bonds):
-            order1 = bond.order
-            dd[n][m] = dd[m][n] = 8.0 if order1 == 8 else 5.0
-            for _n, _m, _bond in bonds[i + 1:]:
-                order2 = _bond.order
-                dd[_n][_m] = dd[_m][_n] = 8.0 if order2 == 8 else 5.0
-                common = {n, m}.intersection({_n, _m})
-                if common:
-                    atom_number = list(common)[0]
-                    atom = atoms[atom_number]
-                    if atom.neighbors == 2 and \
-                            atom.atomic_number in (5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85) and not \
-                            (order1 == 1 and order2 == 3 or order1 == 3 and order2 == 1 or order1 == 2 and order2 == 2):
-                        dd[atom_number][0] = 5.0
-                        update_atoms.append(0)
+        for atm, neighbors in bonds.items():
+            if len(neighbors) == 2:
+                atom = atoms[atm]
+                if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}:
+                    (a1, bond1), (a2, bond2) = neighbors.items()
+                    order1, order2 = bond1.order, bond2.order
+                    if not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8):
+                        dd[atm][-atm] = .825
+                        dd[-atm] = {atm: .825}
+
+        # add virtual bonds
+        for atom, neighbors in dd.items():
+            if len(neighbors) == 3:
+                for n, m in combinations(neighbors, 2):
+                    dd[n][m] = dd[m][n] = 1.43
 
         # create matrix of coordinates
-        n = len(update_atoms)
-        n = n / 2
-        ind = 0
-        for atm in update_atoms:
-            if atm:
-                mapping[atm] = ind
+        n = len(dd)
+        for i, atm in enumerate(dd):
+            if atm > 0:
+                mapping.append((atm, i))
             xyz_matrix.append(array('f', [uniform(-n, n), uniform(-n, n), uniform(-n, n)]))
-            ind += 1
-        return update_atoms, mapping, dd, tuple(xyz_matrix)
+        return tuple(mapping), dd, tuple(xyz_matrix)
 
     @staticmethod
-    def _distances(atoms, matrix):
-        sum_sqr = 0
-        dists = []
-        for i, a in enumerate(atoms):
-            for _a in atoms[i + 1:]:
-                for g, j in zip(matrix[a], matrix[_a]):
-                    sum_sqr += (int(g) - int(j)) ** 2
-                dists.append([a, _a, sqrt(sum_sqr)])
-        return dists
-
-    def _repulsive_force(self):
-        pass
+    # @njit(locals={'n': int64, 'm': int64, 'distance': f8, 'c_rep': f8})
+    def _repulsive_force(d_matrix, adj, c_rep):
+        rep_forces = {k: 0.0 for k in adj}
+        for n, m, distance in d_matrix:
+            n_item = rep_forces[n]
+            m_item = rep_forces[m]
+            diff = c_rep / distance
+            rep_forces[n] = n_item + diff
+            rep_forces[m] = m_item - diff
+        return rep_forces
 
     def clean2d(self):
         """
         steps for calculate 2d coordinates
         :return: None
         """
-        up_atoms, mapping, adj, xyz = self._update()
-        dist = self._distances(up_atoms, xyz)
+        mapping, adj, xyz = self._update()
+        dist = tuple(distances(tuple(adj), xyz))
+        rep = self._repulsive_force(dist, adj, .04)
+        e = 7
         # stack = 1
         # steps = 1
         # primary_forces, dif_dist = self.__get_dist_forces()
