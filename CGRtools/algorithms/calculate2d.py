@@ -16,12 +16,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from array import array
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations
 from math import hypot, pi, acos, cos, sin, sqrt
-from numba import njit, f8, int64, jit
+from numba import njit, f8, i8, jit, u2
+from numpy import array, zeros
 from ..algorithms.depict import rotate_vector
 from random import uniform
 
@@ -35,23 +35,48 @@ def rotate_vector2(x1, y1, angle):
     return cos_rad * x1 + sin_rad * y1, -sin_rad * x1 + cos_rad * y1
 
 
-# @jit(locals={'sum_sqr': f8, 'i': int64, 'g': f8, 'j': f8, 'a': int64, '_a': int64})
-def distances(atoms, matrix):
-    sum_sqr = 0.0
-    dists = []
-    i = 0
-    for a in atoms:
-        for _a in atoms[i + 1:]:
-            for g, j in zip(matrix[a], matrix[_a]):
-                sum_sqr += (int(g) - int(j)) ** 2
-            dists.append([a, _a, sqrt(sum_sqr)])
-    return dists
+@njit(f8[:, :](f8[:, :], u2, f8),
+      {'i': u2, 'j': u2, 'n': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
+       'dy': f8, 'dz': f8, 'ni': f8, 'mi': f8, 'oi': f8, 'nj': f8, 'mj': f8, 'oj': f8})
+def repulsive_force(matrix, n, c_rep):
+    forces = zeros((n, 3))
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            xi, yi, zi = matrix[i]
+            xj, yj, zj = matrix[j]
+            dx, dy, dz = xi - xj, yi - yj, zi - zj
+            c = c_rep / (dx ** 2 + dy ** 2 + dz ** 2)
+
+            # calculate repulsive force for each dimension
+            rfx, rfy, rfz = dx * c, dy * c, dz * c
+            ni, mi, oi = forces[i]
+            nj, mj, oj = forces[j]
+            forces[i] = ni + rfx, i + rfy, oi + rfz
+            forces[j] = nj - rfx, mj - rfy, oj - rfz
+    return forces
+
+
+@njit(locals={'n': i8, 'm': i8, 'distance': f8, 'c_rep': f8})
+def spring_force(adj, xyz, mapping, c_bond):
+    forces = zeros((len(adj), 3))
+    for i, v in adj.items():
+        for j, r in v.items():
+            n, m = mapping[i], mapping[j]
+            nx, ny, nz = xyz[n]
+            mx, my, mz = xyz[m]
+            f = c_bond * (sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2) - r)
+
+            xi, yi, zi = forces[n]
+            xj, yj, zj = forces[m]
+            forces[n] = xi + f * nx, yi + f * ny, zi + f * nz
+            forces[m] = xj + f * mx, yj + f * my, zj + f * mz
+    return forces
 
 
 class Calculate2D:
     __slots__ = ()
 
-    def _update(self):
+    def __prepare(self):
         atoms = self._atoms
         bonds = self._bonds
         mapping = []
@@ -70,39 +95,30 @@ class Calculate2D:
                         dd[-atm] = {atm: .825}
 
         # add virtual bonds
+        springs = []
         for atom, neighbors in dd.items():
             if len(neighbors) == 3:
                 for n, m in combinations(neighbors, 2):
-                    dd[n][m] = dd[m][n] = 1.43
+                    springs.append((n, m))
+                    springs.append((m, n))
+        for i, j in springs:
+            dd[i][j] = dd[j][i] = 1.43
 
         # create matrix of coordinates
-        n = len(dd)
+        n = len(dd) / 2
         for i, atm in enumerate(dd):
-            if atm > 0:
-                mapping.append((atm, i))
-            xyz_matrix.append(array('f', [uniform(-n, n), uniform(-n, n), uniform(-n, n)]))
-        return tuple(mapping), dd, tuple(xyz_matrix)
-
-    @staticmethod
-    # @njit(locals={'n': int64, 'm': int64, 'distance': f8, 'c_rep': f8})
-    def _repulsive_force(d_matrix, adj, c_rep):
-        rep_forces = {k: 0.0 for k in adj}
-        for n, m, distance in d_matrix:
-            n_item = rep_forces[n]
-            m_item = rep_forces[m]
-            diff = c_rep / distance
-            rep_forces[n] = n_item + diff
-            rep_forces[m] = m_item - diff
-        return rep_forces
+            mapping.append((atm, i))
+            xyz_matrix.append([uniform(-n, n), uniform(-n, n), uniform(-n, n)])
+        return tuple(mapping), dd, array(xyz_matrix)
 
     def clean2d(self):
         """
         steps for calculate 2d coordinates
         :return: None
         """
-        mapping, adj, xyz = self._update()
-        dist = tuple(distances(tuple(adj), xyz))
-        rep = self._repulsive_force(dist, adj, .04)
+        mapping, adj, xyz = self.__prepare()
+        forces = repulsive_force(xyz, len(self._atoms), .04)
+        rep = spring_force(adj, xyz, mapping, .1)
         e = 7
         # stack = 1
         # steps = 1
