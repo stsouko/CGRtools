@@ -144,7 +144,7 @@ class Rg(Element, PeriodVII, GroupXI):
 
     @property
     def atomic_radius(self):
-        return 1.74 #unknown, taken radius of previous element in group
+        return 1.74  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Cu', 'Ag', 'Au', 'Rg']

@@ -206,7 +206,7 @@ class Mc(Element, PeriodVII, GroupXV):
 
     @property
     def atomic_radius(self):
-        return 1.43 #unknown, taken radius of previous element in group
+        return 1.43  # unknown, taken radius of previous element in group
 
 
 __all__ = ['N', 'P', 'As', 'Sb', 'Bi', 'Mc']

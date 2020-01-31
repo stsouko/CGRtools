@@ -145,7 +145,7 @@ class Cn(Element, PeriodVII, GroupXII):
 
     @property
     def atomic_radius(self):
-        return 1.71 #unknown, taken radius of previous element in group
+        return 1.71  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Zn', 'Cd', 'Hg', 'Cn']

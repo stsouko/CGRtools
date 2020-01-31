@@ -215,7 +215,7 @@ class Fr(Element, PeriodVII, GroupI):
 
     @property
     def atomic_radius(self):
-        return 2.98 #unknown, taken radius of previous element in group
+        return 2.98  # unknown, taken radius of previous element in group
 
 
 __all__ = ['H', 'Li', 'Na', 'K', 'Rb', 'Cs', 'Fr']

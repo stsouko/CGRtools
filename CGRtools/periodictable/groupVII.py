@@ -140,7 +140,7 @@ class Bh(Element, PeriodVII, GroupVII):
 
     @property
     def atomic_radius(self):
-        return 1.88 #unknown, taken radius of previous element in group
+        return 1.88  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Mn', 'Tc', 'Re', 'Bh']

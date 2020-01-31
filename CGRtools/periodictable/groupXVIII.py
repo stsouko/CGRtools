@@ -134,6 +134,7 @@ class Kr(Element, PeriodIV, GroupXVIII):
     def atomic_radius(self):
         return .87
 
+
 class Xe(Element, PeriodV, GroupXVIII):
     __slots__ = ()
 
@@ -226,7 +227,7 @@ class Og(Element, PeriodVII, GroupXVIII):
 
     @property
     def atomic_radius(self):
-        return 1.2 #unknown, taken radius of previous element in group
+        return 1.2  # unknown, taken radius of previous element in group
 
 
 __all__ = ['He', 'Ne', 'Ar', 'Kr', 'Xe', 'Rn', 'Og']

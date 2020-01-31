@@ -330,7 +330,7 @@ class Element(Core):
         dictionary with key = (charge, is_radical, sum_of_bonds) and
         value = list of possible neighbors and implicit H count
         """
-        elements_classes = {x.__name__: x for x in Element.__subclasses__()}
+        elements_classes = {x.__name__: x.atomic_number.fget(None) for x in Element.__subclasses__()}
 
         rules = defaultdict(list)
         if self._common_valences[0]:  # atom has implicit hydrogens by default

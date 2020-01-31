@@ -204,7 +204,7 @@ class Nh(Element, PeriodVII, GroupXIII):
 
     @property
     def atomic_radius(self):
-        return 1.56 #unknown, taken radius of previous element in group
+        return 1.56  # unknown, taken radius of previous element in group
 
 
 __all__ = ['B', 'Al', 'Ga', 'In', 'Tl', 'Nh']

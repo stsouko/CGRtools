@@ -104,7 +104,7 @@ class La(Element, PeriodVI, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.12 #unknown, taken radius of previous element in group
+        return 2.12  # unknown, taken radius of previous element in group
 
 
 class Ce(Element, PeriodVI, GroupIII):
@@ -136,7 +136,7 @@ class Ce(Element, PeriodVI, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.12 #unknown, taken radius of previous element in group
+        return 2.12  # unknown, taken radius of previous element in group
 
 
 class Pr(Element, PeriodVI, GroupIII):
@@ -607,7 +607,7 @@ class Ac(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Th(Element, PeriodVII, GroupIII):
@@ -640,7 +640,7 @@ class Th(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Pa(Element, PeriodVII, GroupIII):
@@ -670,7 +670,7 @@ class Pa(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class U(Element, PeriodVII, GroupIII):
@@ -699,7 +699,7 @@ class U(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Np(Element, PeriodVII, GroupIII):
@@ -729,7 +729,7 @@ class Np(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Pu(Element, PeriodVII, GroupIII):
@@ -767,7 +767,7 @@ class Pu(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Am(Element, PeriodVII, GroupIII):
@@ -795,7 +795,7 @@ class Am(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Cm(Element, PeriodVII, GroupIII):
@@ -823,7 +823,7 @@ class Cm(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Bk(Element, PeriodVII, GroupIII):
@@ -851,7 +851,7 @@ class Bk(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Cf(Element, PeriodVII, GroupIII):
@@ -879,7 +879,7 @@ class Cf(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Es(Element, PeriodVII, GroupIII):
@@ -907,7 +907,7 @@ class Es(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Fm(Element, PeriodVII, GroupIII):
@@ -935,7 +935,7 @@ class Fm(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Md(Element, PeriodVII, GroupIII):
@@ -963,7 +963,7 @@ class Md(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class No(Element, PeriodVII, GroupIII):
@@ -991,7 +991,7 @@ class No(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 class Lr(Element, PeriodVII, GroupIII):
@@ -1019,7 +1019,7 @@ class Lr(Element, PeriodVII, GroupIII):
 
     @property
     def atomic_radius(self):
-        return 2.17 #unknown, taken radius of previous element in group
+        return 2.17  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Sc', 'Y',

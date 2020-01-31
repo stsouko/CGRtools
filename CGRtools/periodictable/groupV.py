@@ -171,7 +171,7 @@ class Db(Element, PeriodVII, GroupV):
 
     @property
     def atomic_radius(self):
-        return 2.0 #unknown, taken radius of previous element in group
+        return 2.0  # unknown, taken radius of previous element in group
 
 
 __all__ = ['V', 'Nb', 'Ta', 'Db']
