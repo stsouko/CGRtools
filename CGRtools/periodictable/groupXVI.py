@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Tansu Nasyrova <tansu.nasyrova@gmail.com>
@@ -46,7 +46,9 @@ class O(Element, PeriodII, GroupXVI):
 
     @property
     def _valences_exceptions(self):
-        return (-1, False, 1, ()), (-2, False, 0, ()), (0, True, 1, ()), (1, False, 0, ((3, 'C'),))
+        return ((-1, False, 1, ()), (-2, False, 0, ()), (0, True, 1, ()),
+                (1, False, 0, ((3, 'C'),)),
+                (1, False, 0, ((1, 'O'), (2, 'O'))))
 
     @property
     def atomic_radius(self):
@@ -77,6 +79,8 @@ class S(Element, PeriodIII, GroupXVI):
         return ((-1, False, 1, ()), (-2, False, 0, ()),
                 (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
                 (1, False, 0, ((1, 'C'), (2, 'C'))),
+                (1, False, 0, ((2, 'O'), (1, 'C'), (1, 'C'), (1, 'C'))),
+
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'N'))),
                 (0, False, 0, ((2, 'O'), (2, 'C'))),
@@ -157,6 +161,7 @@ class Se(Element, PeriodIV, GroupXVI):
                 (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (1, 'Cl'), (1, 'Cl'))),
                 (0, False, 0, ((2, 'O'), (1, 'F'), (1, 'F'))),
+                (0, False, 0, ((2, 'O'), (1, 'C'), (1, 'C'))),
 
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'Cl'), (1, 'Cl'))),

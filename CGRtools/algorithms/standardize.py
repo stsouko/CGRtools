@@ -426,6 +426,19 @@ class Standardize:
         bonds_fix = ((1, 2, 3),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Ozone
+        #
+        # [O] -- O -- [O]  >>  O == [O+] -- [O-]
+        #
+
+        atoms = ({'atom': 'O', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 2},
+                 {'atom': 'O', 'neighbors': 1, 'is_radical': True})
+        bonds = ((1, 2, 1), (2, 3, 1))
+        atom_fix = {1: {'hybridization': 2, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 2},
+                    3: {'charge': -1, 'is_radical': False}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         return rules
 
 
