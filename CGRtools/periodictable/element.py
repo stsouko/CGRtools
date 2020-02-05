@@ -31,7 +31,7 @@ class Core(ABC):
 
     def __init__(self, isotope: Optional[int] = None):
         """
-        Element object with specified charge, isotope and multiplicity
+        Element object with specified isotope
 
         :param isotope: Isotope number of element
         """

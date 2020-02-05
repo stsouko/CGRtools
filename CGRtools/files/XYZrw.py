@@ -134,19 +134,85 @@ class XYZRead(CGRRead):
     def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0):
         mol = MoleculeContainer()
         atoms = mol._atoms
+        charges = mol._charges
+        radicals = mol._radicals
         conformer = {}
         mol._conformers.append(conformer)
 
         for a, x, y, z in matrix:
             conformer[mol.add_atom(a, xy=(x, y))] = (x, y, z)
 
-        dd = defaultdict(dict)  # distance matrix
+        possible_bonds = defaultdict(dict)  # distance matrix
         for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
             d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
             r = (atoms[n].atomic_radius + atoms[m].atomic_radius) * self.__radius
-            if d < r:
-                mol.add_bond(n, m, 1)
-                dd[n][m] = dd[m][n] = d
+            if d <= r:
+                possible_bonds[n][m] = possible_bonds[m][n] = d
+
+        while True:
+            saturation = defaultdict(set)
+            for n, env in possible_bonds.items():
+                el = len(env)
+                for (charge, is_radical, valence), rules in atoms[n]._compiled_valence_rules.items():
+                    if valence < el:
+                        continue  # skip impossible rules
+                    for _, d, h in rules:
+                        if d:  # todo: optimize
+                            env_atoms = defaultdict(int)
+                            for m in env:
+                                env_atoms[atoms[m].atomic_number] += 1
+                            bonds = 0
+                            for (b, a), c in d.items():  # stage 1
+                                bonds += b
+                                if a in env_atoms:
+                                    if env_atoms[a] < c:
+                                        break  # rule not matched
+                                    env_atoms[a] -= c
+                                else:  # rule not matched
+                                    break
+                            else:  # stage 2. found possible valence
+                                unmatched = sum(env_atoms.values())  # atoms outside rule
+                                implicit = valence - bonds + h  # implicit H in rule
+                                if unmatched:
+                                    if implicit >= unmatched:
+                                        # number of implicit H should be greater or equal to number of neighbors
+                                        # excess of implicit H saved as unsaturated atom
+                                        saturation[n].add((charge, is_radical, implicit - unmatched))
+                                else:  # pattern fully matched. save implicit H count as unsaturated atom.
+                                    saturation[n].add((charge, is_radical, implicit))
+                        elif el == valence:   # unspecific rule. found possible valence
+                            saturation[n].add((charge, is_radical, h))
+                if n not in saturation:  # valence not found
+                    break
+            else:  # all atoms passed
+                break
+            out = max(env.items(), key=lambda x: x[1])[0]
+            del possible_bonds[out][n]
+            del possible_bonds[n][out]
+
+        # set single bonds in molecule. collect unsaturated atoms
+        seen = set()
+        unsaturated = {}
+        for n, env in possible_bonds.items():
+            s = saturation[n]
+            if len(s) == 1:
+                c, r, h = s.pop()
+                if not h:
+                    seen.add(n)
+                    if c:
+                        charges[n] = c
+                    if r:
+                        radicals[n] = True
+                    for m in env:
+                        if m not in seen:
+                            mol.add_bond(n, m, 1)
+                else:
+                    unsaturated[n] = [(c, r, h)]
+            else:
+                unsaturated[n] = sorted(s, key=lambda x: (x[2], x[0] + 5 if x[0] else x[0], x[1]), reverse=True)
+
+        # create graph of unsaturated atoms
+        bonds = {n: {m for m in env if m in unsaturated} for n, env in possible_bonds.items() if n in unsaturated}
 
         return mol
 
