@@ -243,18 +243,27 @@ class Calculate2DCGR(Calculate2D):
     __slots__ = ()
 
     def _is_angle(self, bond1, bond2):
-        order2 = bond2.order
-        w_order = bond1.order
-        p_order = bond1.p_order
-        if w_order == 8:
-            order1 = p_order
-        elif p_order == 8:
-            order1 = w_order
+        w_order1, p_order1 = bond1.order, bond1.p_order
+        if w_order1 == 8:
+            order1 = p_order1
+        elif p_order1 == 8:
+            order1 = w_order1
         else:
-            if w_order > p_order:
-                order1 = w_order
+            if w_order1 > p_order1:
+                order1 = w_order1
             else:
-                order1 = p_order
+                order1 = p_order1
+
+        w_order2, p_order2 = bond2.order, bond2.p_order
+        if w_order2 == 8:
+            order2 = p_order2
+        elif p_order2 == 8:
+            order2 = w_order2
+        else:
+            if w_order2 > p_order2:
+                order2 = w_order2
+            else:
+                order2 = p_order2
         return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
 
 
