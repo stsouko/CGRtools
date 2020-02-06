@@ -49,7 +49,7 @@ setup(
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.1',
     cmdclass={'bdist_wheel': _bdist_wheel},
-    install_requires=['CachedMethods>=0.1.4,<0.2'],
+    install_requires=['CachedMethods>=0.1.4,<0.2', 'numpy>=1.18', 'numba>=0.46'],
     extras_require={'mrv': ['lxml>=4.1,<4.5']},
     data_files=[('lib', libinchi)],
     zip_safe=False,
