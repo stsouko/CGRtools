@@ -426,7 +426,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 for m, bond in bonds[n].items():
                     if m not in hi:
                         explicit_sum += bond.order
-                        explicit_dict[(bond.order, atoms[m].__class__)] += 1
+                        explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
 
                 if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
                        for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
@@ -475,7 +475,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     break
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             else:
                 try:
                     rules = atom.valence_rules(charge, is_radical, explicit_sum)
@@ -537,7 +537,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     return
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             try:
                 rules = atom.valence_rules(charge, is_radical, explicit_sum)
             except ValenceError:

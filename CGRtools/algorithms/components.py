@@ -115,7 +115,7 @@ class GraphComponents:
         """
         Atoms in rings
         """
-        return tuple(x for x in self.sssr for x in x)
+        return tuple({x for x in self.sssr for x in x})
 
 
 class StructureComponents:

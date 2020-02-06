@@ -17,7 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from itertools import chain
+from collections import defaultdict
+from itertools import chain, combinations
 from typing import Set, Dict, Union, Any, Tuple
 
 
@@ -117,75 +118,159 @@ class SSSR:
     def __pid(terminated):
         pid1 = {}
         pid2 = {}
+        pid1l = {}
         for j, paths_ticks in terminated.items():
             for paths, ticks in paths_ticks:
                 for path in chain((paths,), (paths[x:] for x in ticks)):
-                    i = path[0]
-                    k = (i, j)
+                    k = (path[0], j)
                     if k in pid1:
-                        ls = len(pid1[k][0])
+                        ls = pid1l[k]
                         lp = len(path)
                         if lp == ls:
-                            pid1[k].append(path)
+                            pid1[k].add(path)
                         elif ls - lp == 1:
-                            pid2[k], pid1[k] = pid1[k], [path]
+                            pid2[k], pid1[k] = pid1[k], {path}
+                            pid1l[k] = lp
                         elif lp - ls == 1:
-                            pid2[k].append(path)
+                            pid2[k].add(path)
                         elif lp < ls:
-                            pid1[k] = [path]
-                            pid2[k] = []
+                            pid1[k] = {path}
+                            pid2[k] = set()
+                            pid1l[k] = lp
                     else:
-                        pid1[k] = [path]
-                        pid2[k] = []
+                        pid1[k] = {path}
+                        pid2[k] = set()
+                        pid1l[k] = len(path)
+
+        pidk = defaultdict(list)
+        for k in pid1:
+            pidk[k[0]].append(k)
+
+        for k in list(pid1):
+            i, j = k
+            for path in chain(pid1[k], pid2[k]):
+                path = path[::-1]
+                for fk in pidk[i]:
+                    if fk == k:
+                        continue
+                    for fpath in chain(pid1[fk], pid2[fk]):
+                        m_path = path + fpath[1:]
+                        if len(set(m_path)) != len(m_path):
+                            continue  # skip noose
+                        mk = (j, fk[1])
+                        if mk in pid1:
+                            ls = pid1l[mk]
+                            lp = len(m_path)
+                            if lp == ls:
+                                pid1[mk].add(m_path)
+                            elif ls - lp == 1:
+                                pid2[mk], pid1[mk] = pid1[mk], {m_path}
+                                pid1l[mk] = lp
+                            elif lp - ls == 1:
+                                pid2[mk].add(m_path)
+                            elif lp < ls:
+                                pid1[mk] = {m_path}
+                                pid2[mk] = set()
+                                pid1l[mk] = lp
+                        else:
+                            pid1[mk] = {m_path}
+                            pid2[mk] = set()
+                            pid1l[mk] = len(m_path)
 
         c_set = []
         for k, p1ij in pid1.items():
-            dij = len(p1ij[0]) * 2 - 2
+            dij = pid1l[k] * 2 - 2
             p2ij = pid2[k]
             if len(p1ij) == 1:  # one shortest
                 if not p2ij:  # need shortest + 1 path
                     continue
-                c_set.append((dij + 1, p1ij, p2ij))
+                c_set.append((dij + 1, list(p1ij), p2ij))
             elif not p2ij:  # one or more odd rings
-                c_set.append((dij, p1ij, None))
+                c_set.append((dij, list(p1ij), None))
             else:  # odd and even rings found (e.g. bicycle)
+                p1ij = list(p1ij)
                 c_set.append((dij, p1ij, None))
                 c_set.append((dij + 1, p1ij, p2ij))
 
         for c_num, p1ij, p2ij in sorted(c_set):
             if c_num % 2:  # odd rings
                 c1 = p1ij[0]  # any shortest acceptable. sssr is not a unique set of rings
-                c11 = c1[1]
-                c12 = c1[-2]
                 for c2 in p2ij:
-                    if c11 != c2[1] and c12 != c2[-2]:
-                        yield c1, c2
+                    c = c1 + c2[-2:0:-1]
+                    if len(set(c)) == len(c):
+                        yield c
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
-                    if c1[1] != c2[1] and c1[-2] != c2[-2]:
-                        yield c1, c2
+                    c = c1 + c2[-2:0:-1]
+                    if len(set(c)) == len(c):
+                        yield c
 
     @staticmethod
     def __rings_filter(rings, n_sssr, bonds):
-        c_sssr = []
-        hyper_rings = set()
-        for c1, c2 in rings:
-            c = c1 + c2[-2:0:-1]
+        c_rings = {}
+        ck_filter = set()
+        hold_rings = {}
+        for c in rings:
             ck = frozenset(c)
-            if ck not in hyper_rings:
-                new_hr = []
-                for hrk in hyper_rings:  # search for condensed hyperrings
-                    if not hrk.isdisjoint(ck):
-                        unique = hrk ^ ck
-                        common = hrk & ck
-                        unique |= {n for n in common if not unique.isdisjoint(bonds[n])}
-                        new_hr.append(unique)  # add hyperring
+            if ck in ck_filter:
+                continue
+            ck_filter.add(ck)
 
-                c_sssr.append(c)
-                hyper_rings.add(ck)
-                hyper_rings.update(new_hr)
-                if len(c_sssr) == n_sssr:
-                    return tuple(c_sssr)
+            neighbors = [eck for eck in c_rings if not eck.isdisjoint(ck)]
+            if len(neighbors) > 1:
+                n_atoms = set(chain.from_iterable(neighbors))
+                if ck < n_atoms:
+                    hold_rings[ck] = c
+                else:
+                    c_rings[ck] = c
+                    if len(c_rings) == n_sssr:
+                        return tuple(c_rings.values())
+            else:
+                c_rings[ck] = c
+                if len(c_rings) == n_sssr:
+                    return tuple(c_rings.values())
+
+        for ck, c in hold_rings.items():
+            lc = len(c)
+            neighbors = {x: set() for x in c_rings if not x.isdisjoint(ck)}
+            for i, j in combinations(neighbors, 2):
+                if not i.isdisjoint(j):
+                    neighbors[i].add(j)
+                    neighbors[j].add(i)
+
+            # modified NX.dfs_labeled_edges
+            # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.traver\
+            # sal.depth_first_search.dfs_labeled_edges.html
+            depth_limit = len(neighbors) - 1
+            for start, nbrs in neighbors.items():
+                if not nbrs:
+                    continue
+                seen = {start}
+                stack = [(start, depth_limit, iter(neighbors[start]))]
+                while stack:
+                    parent, depth_now, children = stack[-1]
+                    try:
+                        child = next(children)
+                    except StopIteration:
+                        stack.pop()
+                    else:
+                        if child not in seen:
+                            seen.add(child)
+                            mc = parent ^ child
+                            mb = {n for n in parent & child if not mc.isdisjoint(bonds[n])}
+                            if len(mb) == 2:
+                                mc |= mb
+                                if ck == mc:  # macrocycle found
+                                    break
+                                if depth_now and len(mc) < lc:
+                                    stack.append((mc, depth_now - 1, iter(neighbors[child])))
+                else:
+                    continue
+                break
+            else:
+                c_rings[ck] = c
+                if len(c_rings) == n_sssr:
+                    return tuple(sorted(c_rings.values(), key=len))
 
 
 __all__ = ['SSSR']
