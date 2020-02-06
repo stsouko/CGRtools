@@ -229,6 +229,7 @@ class Calculate2D:
         xyz = steps(xyz, springs, springs_distances)
         for m, n in enumerate(atoms):
             plane[n] = (xyz[m, 0], xyz[m, 1])
+        self.__dict__.pop('__cached_method__repr_svg_', None)
 
 
 class Calculate2DMolecule(Calculate2D):
@@ -242,28 +243,28 @@ class Calculate2DMolecule(Calculate2D):
 class Calculate2DCGR(Calculate2D):
     __slots__ = ()
 
-    def _is_angle(self, bond1, bond2):
-        w_order1, p_order1 = bond1.order, bond1.p_order
-        if w_order1 == 8:
-            order1 = p_order1
-        elif p_order1 == 8:
-            order1 = w_order1
+    @staticmethod
+    def __primary(bond):
+        w_order, p_order = bond.order, bond.p_order
+        if w_order is None:
+            order = p_order
+        elif p_order is None:
+            order = w_order
         else:
-            if w_order1 > p_order1:
-                order1 = w_order1
+            if w_order == 8:
+                order = p_order
+            elif p_order == 8:
+                order = w_order
             else:
-                order1 = p_order1
+                if w_order > p_order:
+                    order = w_order
+                else:
+                    order = p_order
+        return order
 
-        w_order2, p_order2 = bond2.order, bond2.p_order
-        if w_order2 == 8:
-            order2 = p_order2
-        elif p_order2 == 8:
-            order2 = w_order2
-        else:
-            if w_order2 > p_order2:
-                order2 = w_order2
-            else:
-                order2 = p_order2
+    def _is_angle(self, bond1, bond2):
+        order1 = self.__primary(bond1)
+        order2 = self.__primary(bond2)
         return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
 
 
