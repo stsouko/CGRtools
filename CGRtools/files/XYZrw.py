@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
-from itertools import combinations
+from itertools import combinations, product
 from io import StringIO, TextIOWrapper
 from logging import warning
 from math import sqrt
@@ -92,7 +92,7 @@ class XYZRead(CGRRead):
     def __reader(self):
         failkey = True
         meta = False
-        xyz = charge = size = None
+        xyz = charge = size = radical = None
         for n, line in enumerate(self.__file):
             if failkey:
                 try:
@@ -104,17 +104,27 @@ class XYZRead(CGRRead):
                     failkey = False
                     xyz = []
             elif meta:  # second line
-                if line.startswith('charge='):
-                    try:
-                        charge = int(line[7:])
-                    except ValueError:
-                        failkey = True
-                        warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                        yield None
-                        continue
+                charge = 0
+                radical = 0
+                for x in line.split():
+                    if x.startswith('charge='):
+                        try:
+                            charge = int(line[7:])
+                        except ValueError:
+                            failkey = True
+                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield None
+                            break
+                    elif x.startswith('radical='):
+                        try:
+                            radical = int(line[8:])
+                        except ValueError:
+                            failkey = True
+                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield None
+                            break
                 else:
-                    charge = 0
-                meta = False
+                    meta = False
             elif len(xyz) < size:  # XYZ block
                 try:
                     symbol, x, y, z = line.split()
@@ -125,30 +135,82 @@ class XYZRead(CGRRead):
                     yield None
                 else:
                     if len(xyz) == size:
-                        yield self.from_xyz(xyz, charge)
+                        yield self.from_xyz(xyz, charge, radical)
                         failkey = True  # trigger end of XYZ
         if not failkey:  # cut XYZ
             warning('Last structure not finished')
             yield None
 
-    def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0):
+    def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
         mol = MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
         radicals = mol._radicals
-        conformer = {}
-        mol._conformers.append(conformer)
 
+        conformer = {}
         for a, x, y, z in matrix:
             conformer[mol.add_atom(a, xy=(x, y))] = (x, y, z)
+        mol._conformers.append(conformer)
 
+        possible_bonds = self.__get_possible_bonds(atoms, conformer)
+        saturation, possible_bonds = self.__remove_hypervalences(atoms, possible_bonds)
+
+        # set single bonds in molecule. collect unsaturated atoms
+        seen = set()
+        unsaturated = {}
+        for n, env in possible_bonds.items():
+            s = saturation[n]
+            if len(s) == 1:
+                c, r, h = s.pop()
+                if not h:
+                    seen.add(n)
+                    if c:
+                        charges[n] = c
+                    if r:
+                        radicals[n] = True
+                    for m in env:
+                        if m not in seen:
+                            mol.add_bond(n, m, 1)
+                else:
+                    unsaturated[n] = [(c, r, h)]
+            else:
+                unsaturated[n] = sorted(s, key=lambda x: (x[2], x[0] if x[0] else 5, x[1]), reverse=True)
+
+        # create graph of unsaturated atoms
+        bonds_graph = {n: {m for m in env if m in unsaturated} for n, env in possible_bonds.items() if n in unsaturated}
+        ua, sb, sa = self.__saturate(bonds_graph, unsaturated)
+        for n, m, b in sb:
+            mol.add_bond(n, m, b)
+        for n, c, r in sa:
+            if c:
+                charges[n] = c
+            if r:
+                radicals[n] = True
+
+        for s in product(*([(n, c, r) for c, r in s] for n, s in ua.items() if s)):
+            for n, c, r in s:
+                if c:
+                    charges[n] = c
+                if r:
+                    radicals[n] = True
+            if sum(charges.values()) == charge and sum(radicals.values()) == radical:
+                break
+        else:
+            warning('Charge and radical state not balanced.')
+        return mol
+
+    def __get_possible_bonds(self, atoms, conformer):
         possible_bonds = defaultdict(dict)  # distance matrix
         for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
             d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
             r = (atoms[n].atomic_radius + atoms[m].atomic_radius) * self.__radius
             if d <= r:
                 possible_bonds[n][m] = possible_bonds[m][n] = d
+        return possible_bonds
 
+    @staticmethod
+    def __remove_hypervalences(atoms, possible_bonds):
+        possible_bonds = {n: md.copy() for n, md in possible_bonds.items()}
         while True:
             saturation = defaultdict(set)
             for n, env in possible_bonds.items():
@@ -189,32 +251,87 @@ class XYZRead(CGRRead):
             out = max(env.items(), key=lambda x: x[1])[0]
             del possible_bonds[out][n]
             del possible_bonds[n][out]
+        return saturation, possible_bonds
 
-        # set single bonds in molecule. collect unsaturated atoms
-        seen = set()
-        unsaturated = {}
-        for n, env in possible_bonds.items():
-            s = saturation[n]
-            if len(s) == 1:
-                c, r, h = s.pop()
-                if not h:
-                    seen.add(n)
-                    if c:
-                        charges[n] = c
-                    if r:
-                        radicals[n] = True
-                    for m in env:
-                        if m not in seen:
-                            mol.add_bond(n, m, 1)
-                else:
-                    unsaturated[n] = [(c, r, h)]
+    @staticmethod
+    def __saturate(bonds, atoms):
+        # get isolated atoms. atoms should be charged or radical
+        dots = {}
+        saturation = []
+        electrons = []
+        while True:
+            new_dots = {n: [(c, r) for c, r, h in atoms[n] if not h] for n, env in bonds.items() if not env}
+            for n in new_dots:
+                del bonds[n]
+            dots.update(new_dots)
+            if not bonds:
+                break
+
+            try:  # get terminal atom
+                n = next(n for n, ms in bonds.items() if len(ms) == 1)
+            except StopIteration:
+                # get ring or linker atom
+                n, _ = min(bonds.items(), key=lambda x: len(x[1]))
+                m = bonds[n].pop()
+                bonds[m].discard(n)
+
+                for (nc, nr, nh), (i, (mc, mr, mh)) in product(atoms[n], enumerate(atoms[m])):
+                    if nh == mh:
+                        saturation.append((n, m, nh + 1))
+                        electrons.append((n, nc, nr))
+                        electrons.append((m, mc, mr))
+
+                        for x in bonds.pop(n):
+                            saturation.append((n, x, 1))
+                            bonds[x].discard(n)
+                        for x in bonds.pop(m):
+                            saturation.append((m, x, 1))
+                            bonds[x].discard(m)
+                        break
+                    elif nh < mh:
+                        electrons.append((n, nc, nr))
+                        saturation.append((n, m, nh + 1))
+                        atoms[m].pop(i)
+                        atoms[m].insert(i, (mc, mr, mh - nh))
+
+                        for x in bonds.pop(n):
+                            saturation.append((n, x, 1))
+                            bonds[x].discard(n)
+                        break
+                    elif nh > mh:
+                        electrons.append((m, mc, mr))
+                        saturation.append((n, m, mh + 1))
+                        atoms[n].pop(i)
+                        atoms[n].insert(i, (nc, nr, nh - mh))
+
+                        for x in bonds.pop(m):
+                            saturation.append((m, x, 1))
+                            bonds[x].discard(m)
+                        break
             else:
-                unsaturated[n] = sorted(s, key=lambda x: (x[2], x[0] + 5 if x[0] else x[0], x[1]), reverse=True)
+                m = bonds.pop(n).pop()
+                bonds[m].discard(n)
 
-        # create graph of unsaturated atoms
-        bonds = {n: {m for m in env if m in unsaturated} for n, env in possible_bonds.items() if n in unsaturated}
-
-        return mol
+                for (nc, nr, nh), (i, (mc, mr, mh)) in product(atoms[n], enumerate(atoms[m])):
+                    if nh == mh:
+                        saturation.append((n, m, nh + 1))
+                        electrons.append((n, nc, nr))
+                        electrons.append((m, mc, mr))
+                        for x in bonds.pop(m):
+                            saturation.append((m, x, 1))
+                            bonds[x].discard(m)
+                        break
+                    elif nh < mh and bonds[m]:
+                        electrons.append((n, nc, nr))
+                        saturation.append((n, m, nh + 1))
+                        atoms[m].pop(i)
+                        atoms[m].insert(i, (mc, mr, mh - nh))
+                        break
+                else:
+                    saturation.append((n, m, 1))
+                    if not bonds[m]:
+                        del bonds[m]
+        return dots, saturation, electrons
 
 
 __all__ = ['XYZRead']
