@@ -16,7 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import combinations
 from math import sqrt
@@ -25,12 +24,15 @@ from numpy import array, zeros, uint16, zeros_like
 from random import uniform
 
 
-@njit(f8[:, :](f8[:, :], f8),
+@njit(f8[:, :](f8[:, :], f8, f8, f8),
       {'n': u2, 'i': u2, 'j': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
        'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8, 'distance': f8})
-def repulsive_force(xyz, c_rep):
+def repulsive_force(xyz, coef, cut, inf):
     forces = zeros_like(xyz)
     n = len(xyz)
+    inf **= 2
+    cut **= 2
+
     for i in range(n - 1):
         xi, yi, zi = xyz[i]
         fxi, fyi, fzi = forces[i]
@@ -39,12 +41,12 @@ def repulsive_force(xyz, c_rep):
             dx, dy, dz = xi - xj, yi - yj, zi - zj
 
             distance = dx ** 2 + dy ** 2 + dz ** 2
-            if distance < .1:
-                c = c_rep * 10.
-            elif distance > 100:
+            if distance < cut:
+                c = coef / cut
+            elif distance > inf:
                 c = 0.
             else:
-                c = c_rep / distance
+                c = coef / distance
 
             # calculate repulsive force for each dimension
             dx, dy, dz = dx * c, dy * c, dz * c
@@ -59,13 +61,13 @@ def repulsive_force(xyz, c_rep):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], f8[:], u2, f8),
+@njit(f8[:, :](f8[:, :], u2[:, :], f8[:], f8),
       {'i': u2, 'n': u2, 'm': u2, 'r': f8, 'nx': f8, 'ny': f8, 'nz': f8, 'mx': f8, 'my': f8, 'mz': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'distance': f8, 'f': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8,
+       'dy': f8, 'dz': f8, 'distance': f8, 'f': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fdx': f8, 'fdy': f8, 'fdz': f8,
        'fxj': f8, 'fyj': f8, 'fzj': f8})
-def spring_force(xyz, springs, springs_distances, c, c_bond):
+def spring_force(xyz, springs, springs_distances, coef):
     forces = zeros((len(xyz), 3))
-    for i in range(c):
+    for i in range(len(springs)):
         n, m = springs[i]
         r = springs_distances[i]
         nx, ny, nz = xyz[n]
@@ -73,9 +75,14 @@ def spring_force(xyz, springs, springs_distances, c, c_bond):
 
         dx, dy, dz = nx - mx, ny - my, nz - mz
         distance = sqrt(dx ** 2 + dy ** 2 + dz ** 2)
-        f = c_bond * (distance - r) / distance
+        f = coef * (distance - r)
 
-        fdx, fdy, fdz = f * dx, f * dy, f * dz
+        if -.001 < distance < .001:
+            fdx, fdy, fdz = f, .0, .0
+        else:
+            f /= distance
+            fdx, fdy, fdz = f * dx, f * dy, f * dz
+
         fxi, fyi, fzi = forces[n]
         fxj, fyj, fzj = forces[m]
         forces[n] = fxi - fdx, fyi - fdy, fzi - fdz
@@ -85,7 +92,7 @@ def spring_force(xyz, springs, springs_distances, c, c_bond):
 
 
 @njit(f8[:, :](f8[:, :], f8[:, :], f8),
-      {'fc': f8, 'n': u2, 'i': u2, 'x': f8, 'y': f8, 'z': f8, 'fx': f8, 'fy': f8, 'fz': f8})
+      {'n': u2, 'ff': f8[:, :], 'i': u2, 'x': f8, 'y': f8, 'z': f8, 'fx': f8, 'fy': f8, 'fz': f8})
 def flattening(forces, xyz, fc):
     n = len(forces)
     ff = zeros_like(xyz)
@@ -103,25 +110,43 @@ def flattening(forces, xyz, fc):
     return ff
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], f8[:], u2))
-def steps(xyz, springs, springs_distances, bonds_count):
-    bonds_count = len(springs)
+@njit(f8[:, :](f8[:, :], f8), {'n': u2, 'dx': f8, 'dy': f8, 'dz': f8, 'distance': f8, 'f': f8})
+def cutoff(forces, cut):
+    for n in range(len(forces)):
+        dx, dy, dz = forces[n]
+        distance = sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+        if distance > cut:
+            f = cut / distance
+            forces[n] = f * dx, f * dy, f * dz
+    return forces
+
+
+@njit(f8[:, :](f8[:, :], u2[:, :], f8[:]))
+def steps(xyz, springs, springs_distances):
     # step 1
     for _ in range(1000):
-        r_forces = repulsive_force(xyz, 1.)
-        s_forces = spring_force(xyz, springs, springs_distances, bonds_count, .1)
-        xyz = r_forces + s_forces + xyz
+        r_forces = repulsive_force(xyz, .05, .2, 10)
+        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        forces = r_forces + s_forces
+        forces = cutoff(forces, .3)
+        xyz = forces + xyz
 
     # step 2
     for _ in range(1000):
-        forces = repulsive_force(xyz, .1) + spring_force(xyz, springs, springs_distances, bonds_count, .1)
+        r_forces = repulsive_force(xyz, .02, .3, 5)
+        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        forces = r_forces + s_forces
+        forces = flattening(forces, xyz, .2)
+        forces = cutoff(forces, .3)
         xyz = forces + xyz
 
     # step 3
-
     for _ in range(1000):
-        forces = repulsive_force(xyz, .1) + spring_force(xyz, springs, springs_distances, bonds_count, .1)
-        forces = flattening(forces, xyz, .1)
+        r_forces = repulsive_force(xyz, .005, .4, 2)
+        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        forces = r_forces + s_forces
+        forces = flattening(forces, xyz, .2)
+        forces = cutoff(forces, .3)
         xyz = forces + xyz
 
     return xyz
@@ -166,8 +191,7 @@ class Calculate2D:
                 atom = atoms[n]
                 if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}:
                     (a1, bond1), (a2, bond2) = m_bond.items()
-                    order1, order2 = bond1.order, bond2.order
-                    if not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8):
+                    if self._is_angle(bond1, bond2):
                         dd[n].append(-n)
                         dd[-n].append(n)
                         mapping[-n] = end
@@ -176,7 +200,6 @@ class Calculate2D:
                         springs_distances.append(.825)
                         end += 1
 
-        bonds_count = len(springs)
         # add virtual bonds and complement matrices of bonds and coordinates
         for n, m_bond in dd.items():
             if len(m_bond) == 3:
@@ -187,7 +210,10 @@ class Calculate2D:
                             springs.append((i, j))
                             springs_distances.append(1.43)
 
-        return mapping, array(xyz_matrix), array(list(springs), dtype=uint16), array(springs_distances), bonds_count
+        return array(xyz_matrix), array(list(springs), dtype=uint16), array(springs_distances)
+
+    def _is_angle(self, bond1, bond2):
+        pass
 
     def clean2d(self):
         """
@@ -199,11 +225,37 @@ class Calculate2D:
         plane = self._plane
         atoms = self._atoms
 
-        mapping, xyz, springs, springs_distances, bonds_count = self.__prepare()
-        xyz = steps(xyz, springs, springs_distances, bonds_count)
-        for n in atoms:
-            m = mapping[n]
+        xyz, springs, springs_distances = self.__prepare()
+        xyz = steps(xyz, springs, springs_distances)
+        for m, n in enumerate(atoms):
             plane[n] = (xyz[m, 0], xyz[m, 1])
 
 
-__all__ = ['Calculate2D']
+class Calculate2DMolecule(Calculate2D):
+    __slots__ = ()
+
+    def _is_angle(self, bond1, bond2):
+        order1, order2 = bond1.order, bond2.order
+        return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
+
+
+class Calculate2DCGR(Calculate2D):
+    __slots__ = ()
+
+    def _is_angle(self, bond1, bond2):
+        order2 = bond2.order
+        w_order = bond1.order
+        p_order = bond1.p_order
+        if w_order == 8:
+            order1 = p_order
+        elif p_order == 8:
+            order1 = w_order
+        else:
+            if w_order > p_order:
+                order1 = w_order
+            else:
+                order1 = p_order
+        return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
+
+
+__all__ = ['Calculate2DMolecule', 'Calculate2DCGR']

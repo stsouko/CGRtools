@@ -23,7 +23,7 @@ from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
-from ..algorithms.calculate2d import Calculate2D
+from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
@@ -34,7 +34,7 @@ from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2D):
+                        DepictMolecule, Calculate2DMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
