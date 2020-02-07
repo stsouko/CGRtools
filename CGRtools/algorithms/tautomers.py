@@ -36,15 +36,16 @@ class Tautomers:
         radicals = self._radicals
         hydrogens = self._hydrogens
 
-        ent_atoms = list()
-        for i in atoms:
-            if hydrogens[i] == 1:
-                ent_atoms.append(i)
-            elif charges[i] == -1:
-                ent_atoms.append(i)
-            elif radicals[i]:
-                ent_atoms.append(i)
-        return ent_atoms
+        ent_atoms = []
+        for i, a in atoms.items():
+            if a.atomic_number in {5, 6, 7, 8, 14, 15, 16, 33, 34, 35, 52, 53, 85}:
+                if radicals[i]:
+                    ent_atoms.append((a, 0))
+                elif charges[i] < 0:
+                    ent_atoms.append((a, 1))
+                elif hydrogens[i]:
+                    ent_atoms.append((a, 2))
+            return ent_atoms
 
 
 
