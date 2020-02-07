@@ -577,6 +577,23 @@ class StandardizeReaction:
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
 
+        # Sulphate addition
+        #
+        #      O [3]            O -- * [2]
+        #     //               /
+        # * = S - *   >>  * = S - *
+        #     |               \\
+        #     O- [2]           O [3]
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        p_atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                   {'atom': 'O', 'neighbors': 2}, {'atom': 'O', 'neighbors': 1})
+        p_bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
+
         return rules
 
 
