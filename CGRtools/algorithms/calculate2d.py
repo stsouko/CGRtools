@@ -171,13 +171,14 @@ def get_angles(xyz, springs, bonds_count):
 @njit(f8[:, :](f8[:, :], u2, f8, f8),
       {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8})
 def rotate(xyz, atoms_count, shift_x, angle):
+    cos_rad = cos(angle)
+    sin_rad = sin(angle)    
     xy = zeros((atoms_count, 2))
+
     dx, dy = xyz[0, :2]
     for p in range(1, atoms_count):
         px, py = xyz[p, :2]
         px, py = px - dx, py - dy
-        cos_rad = cos(angle)
-        sin_rad = sin(angle)
         xy[p] = cos_rad * px - sin_rad * py, sin_rad * px + cos_rad * py
 
     shift_y = xy[:, 1].mean()
