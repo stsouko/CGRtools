@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
