@@ -189,10 +189,8 @@ class XYZRead(CGRRead):
 
         for s in product(*([(n, c, r) for c, r in s] for n, s in ua.items() if s)):
             for n, c, r in s:
-                if c:
-                    charges[n] = c
-                if r:
-                    radicals[n] = True
+                charges[n] = c
+                radicals[n] = r
             if sum(charges.values()) == charge and sum(radicals.values()) == radical:
                 break
         else:
