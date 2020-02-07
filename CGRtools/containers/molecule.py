@@ -29,12 +29,13 @@ from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.tautomers import Tautomers
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule):
+                        DepictMolecule, Calculate2DMolecule, Tautomers):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
