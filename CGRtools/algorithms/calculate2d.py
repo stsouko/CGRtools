@@ -153,9 +153,9 @@ def steps(xyz, springs, springs_distances):
     return xyz
 
 
-@njit(f8[:](f8[:, :], u2, u2[:, :]),
+@njit(f8[:](f8[:, :], u2[:, :], u2),
       {'angles': f8[:], 'i': u2, 'n': u2, 'm': u2, 'nx': f8, 'ny': f8, 'mx': f8, 'my': f8, 'nm': f8})
-def get_angles(xyz, bonds_count, springs):
+def get_angles(xyz, springs, bonds_count):
     angles = zeros(bonds_count)
     for i in range(bonds_count):
         n, m = springs[i]
@@ -168,9 +168,10 @@ def get_angles(xyz, bonds_count, springs):
     return angles
 
 
-@njit(f8[:, :](f8[:, :], f8[:, :], f8, u2, f8),
+@njit(f8[:, :](f8[:, :], u2, f8, f8),
       {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8})
-def rotate(xyz, xy, shift_x, atoms_count, angle):
+def rotate(xyz, atoms_count, shift_x, angle):
+    xy = zeros((atoms_count, 2))
     dx, dy = xyz[0, :2]
     for p in range(1, atoms_count):
         px, py = xyz[p, :2]
@@ -257,8 +258,7 @@ class Calculate2D:
 
     @staticmethod
     def __finish_xyz(xyz, springs, atoms_count, bonds_count, shift_x):
-        xy = zeros((atoms_count, 2))
-        angles = get_angles(xyz, bonds_count, springs)
+        angles = get_angles(xyz, springs, bonds_count)
 
         clusters = {}
         bonds = list(range(bonds_count))
@@ -275,13 +275,13 @@ class Calculate2D:
 
         angles = max((x for x in clusters.items()), key=lambda x: len(x[1]))[1]
         angle = sum(angles) / len(angles)
-        xy = rotate(xyz, xy, shift_x, atoms_count, angle)
-
+        xy = rotate(xyz, atoms_count, shift_x, angle)
         return xy, xy[:, 0].max() + .825
 
     def clean2d(self):
-        """
-        reference for using article:
+        """Calculate 2d layout of graph.
+
+        Idea from article:
         Frączek, T. (2016). Simulation-Based Algorithm for Two-Dimensional Chemical Structure Diagram Generation of
         Complex Molecules and Ligand–Protein Interactions. Journal of Chemical Information and Modeling, 56(12),
         2320–2335. doi:10.1021/acs.jcim.6b00391 (https://doi.org/10.1021/acs.jcim.6b00391)
