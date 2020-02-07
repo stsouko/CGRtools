@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2019, 2020 Dinar Batyrshin <batyrshin-dinar@mail.ru>
+#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 #
 from collections import defaultdict
 from itertools import combinations
-from math import sqrt
+from math import sqrt, pi, atan2, cos, sin
 from numba import njit, f8, u2
 from numpy import array, zeros, uint16, zeros_like
 from random import uniform
@@ -67,7 +67,7 @@ def repulsive_force(xyz, coef, cut, inf):
        'dy': f8, 'dz': f8, 'distance': f8, 'f': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fdx': f8, 'fdy': f8, 'fdz': f8,
        'fxj': f8, 'fyj': f8, 'fzj': f8})
 def spring_force(xyz, springs, springs_distances, coef):
-    forces = zeros((len(xyz), 3))
+    forces = zeros_like(xyz)
     for i in range(len(springs)):
         n, m = springs[i]
         r = springs_distances[i]
@@ -153,10 +153,44 @@ def steps(xyz, springs, springs_distances):
     return xyz
 
 
+@njit(f8[:](f8[:, :], u2, u2[:, :]),
+      {'angles': f8[:], 'i': u2, 'n': u2, 'm': u2, 'nx': f8, 'ny': f8, 'mx': f8, 'my': f8, 'nm': f8})
+def get_angles(xyz, bonds_count, springs):
+    angles = zeros(bonds_count)
+    for i in range(bonds_count):
+        n, m = springs[i]
+        nx, ny = xyz[n, :2]
+        mx, my = xyz[m, :2]
+        nm = atan2(mx - nx, my - ny)
+        if nm < 0:
+            nm += pi
+        angles[i] = nm
+    return angles
+
+
+@njit(f8[:, :](f8[:, :], f8[:, :], f8, u2, f8),
+      {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8})
+def rotate(xyz, xy, shift_x, atoms_count, angle):
+    dx, dy = xyz[0, :2]
+    for p in range(1, atoms_count):
+        px, py = xyz[p, :2]
+        px, py = px - dx, py - dy
+        cos_rad = cos(angle)
+        sin_rad = sin(angle)
+        xy[p] = cos_rad * px - sin_rad * py, sin_rad * px + cos_rad * py
+
+    shift_y = xy[:, 1].mean()
+    shift_r = shift_x - xy[:, 0].min()
+    for p in range(atoms_count):
+        px, py = xy[p]
+        xy[p] = px + shift_r, py - shift_y
+    return xy
+
+
 class Calculate2D:
     __slots__ = ()
 
-    def __prepare(self):
+    def __prepare(self, component):
         atoms = self._atoms
         bonds = self._bonds
 
@@ -167,13 +201,15 @@ class Calculate2D:
         dd = defaultdict(list)
 
         # create matrix of coordinates
-        cube = len(atoms)
-        for i, n in enumerate(atoms):
+        cube = len(component)
+        for i, n in enumerate(component):
             mapping[n] = i
             xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
 
         # create matrix of connecting, springs and springs distances
         for n, m_bond in bonds.items():
+            if n not in component:
+                continue
             i = mapping[n]
             for m, b in m_bond.items():
                 dd[n].append(m)
@@ -185,9 +221,12 @@ class Calculate2D:
                     else:
                         springs_distances.append(.825)
 
+        bonds_count = len(springs_distances)
         # add virtual atoms and complement matrices of bonds and coordinates
-        end = len(atoms)
+        end = cube
         for n, m_bond in bonds.items():
+            if n not in component:
+                continue
             if len(m_bond) == 2:
                 atom = atoms[n]
                 if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}:
@@ -211,10 +250,34 @@ class Calculate2D:
                             springs.append((i, j))
                             springs_distances.append(1.43)
 
-        return array(xyz_matrix), array(list(springs), dtype=uint16), array(springs_distances)
+        return array(xyz_matrix), array(list(springs), dtype=uint16), array(springs_distances), cube, bonds_count
 
     def _is_angle(self, bond1, bond2):
         pass
+
+    @staticmethod
+    def __finish_xyz(xyz, springs, atoms_count, bonds_count, shift_x):
+        xy = zeros((atoms_count, 2))
+        angles = get_angles(xyz, bonds_count, springs)
+
+        clusters = {}
+        bonds = list(range(bonds_count))
+        d = pi / 60
+        while bonds:
+            n = bonds.pop(0)
+            nm = angles[n]
+            values = [nm]
+            for m in range(1, len(bonds)):
+                m = angles[-m]
+                if nm - d <= m <= nm + d:
+                    values.append(m)
+            clusters[n] = values
+
+        angles = max((x for x in clusters.items()), key=lambda x: len(x[1]))[1]
+        angle = sum(angles) / len(angles)
+        xy = rotate(xyz, xy, shift_x, atoms_count, angle)
+
+        return xy, xy[:, 0].max() + .825
 
     def clean2d(self):
         """
@@ -224,12 +287,19 @@ class Calculate2D:
         2320–2335. doi:10.1021/acs.jcim.6b00391 (https://doi.org/10.1021/acs.jcim.6b00391)
         """
         plane = self._plane
-        atoms = self._atoms
 
-        xyz, springs, springs_distances = self.__prepare()
-        xyz = steps(xyz, springs, springs_distances)
-        for m, n in enumerate(atoms):
-            plane[n] = (xyz[m, 0], xyz[m, 1])
+        shift_x = .0
+        for component in self.connected_components:
+            if len(component) == 1:
+                plane[component[0]] = (shift_x, .0)
+                shift_x += .825
+            else:
+                xyz, springs, springs_distances, atoms_count, bonds_count = self.__prepare(component)
+                xyz = steps(xyz, springs, springs_distances)
+                xy, shift_x = self.__finish_xyz(xyz, springs, atoms_count, bonds_count, shift_x)
+
+                for i, n in enumerate(component):
+                    plane[n] = tuple(xy[i])
         self.__dict__.pop('__cached_method__repr_svg_', None)
 
 
