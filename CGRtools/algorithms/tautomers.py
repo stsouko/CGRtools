@@ -29,5 +29,23 @@ class Tautomers:
         hydrogens = self._hydrogens
         yield self
 
+    def input_atom(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+        radicals = self._radicals
+        hydrogens = self._hydrogens
+
+        ent_atoms = list()
+        for i in atoms:
+            if hydrogens[i] == 1:
+                ent_atoms.append(i)
+            elif charges[i] == -1:
+                ent_atoms.append(i)
+            elif radicals[i]:
+                ent_atoms.append(i)
+        return ent_atoms
+
+
 
 __all__ = ['Tautomers']
