@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -469,6 +469,15 @@ class StandardizeReaction:
         """
         fix atom-to-atom mapping of some functional groups. return True if found AAM errors
         """
+        groups = self.__groups_fixing()
+        mapping = self.__mapping_fixing()
+
+        if groups or mapping:
+            self.flush_cache()
+            return True
+        return False
+
+    def __groups_fixing(self):
         seen = set()
         for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
             found = []
@@ -494,10 +503,9 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+        return bool(seen)
 
-        if seen:
-            self.flush_cache()
-            return True
+    def __mapping_fixing(self):
         return False
 
     @staticmethod

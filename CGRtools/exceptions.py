@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -76,3 +76,7 @@ class IncorrectSmiles(ValueError):
     """
     SMILES string invalid
     """
+
+
+class RulesNotSet(Exception):
+    """AAM fixing rules not set"""

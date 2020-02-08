@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -29,6 +29,7 @@ from .molecule import MoleculeContainer
 from .query import QueryContainer
 from ..algorithms.depict import DepictReaction
 from ..algorithms.standardize import StandardizeReaction
+from ..exceptions import RulesNotSet
 
 
 class ReactionContainer(StandardizeReaction, DepictReaction):
@@ -430,6 +431,17 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         self.__dict__.clear()
         for m in self.molecules():
             m.flush_cache()
+
+    @classmethod
+    def load_remapping_rules(cls, reactions: Iterable[Tuple['ReactionContainer', 'ReactionContainer']]):
+        rules = []
+        for bad, good in reactions:
+            ...
+        cls.__class_cache__[cls] = {'_remapping_compiled_rules': rules}
+
+    @class_cached_property
+    def _remapping_compiled_rules(self):
+        raise RulesNotSet
 
     @class_cached_property
     def _standardize_compiled_rules(self):
