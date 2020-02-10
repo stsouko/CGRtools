@@ -433,6 +433,11 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     @classmethod
     def load_remapping_rules(cls, reactions: TIterable[Tuple['ReactionContainer', 'ReactionContainer']]):
+        """
+        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
+        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Products should be equal but with different atom numbers.
+        """
         rules = []
         for bad, good in reactions:
             if bad != good:
@@ -442,29 +447,16 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
             gc = ~good
             atoms = set(bc.center_atoms + gc.center_atoms)
 
-            reactants = []
-            products = []
-            ra = set()
-            pa = set()
-            for m in bad.reactants:  # get reactants patterns
-                a = atoms.intersection(m)
-                ra.update(a)
-                reactants.append(m.substructure(a, as_query=True))
-
-            for m in bad.products:  # get products patterns
-                a = atoms.intersection(m)
-                pa.update(a)
-                products.append(m.substructure(a, as_query=True))
-
-            mapping = ra & pa  # common atoms (exclude living and coming groups)
+            bad_query = bc.substructure(atoms.intersection(bc), as_query=True)
+            good_query = gc.substructure(atoms.intersection(gc), as_query=True)
 
             fix = {}
             for mb, mg in zip(bad.products, good.products):  # get fix map
                 fx = min((m for m in
                          ({k: v for k, v in m.items() if k != v} for m in mb.get_mapping(mg, automorphism_filter=False))
-                         if mapping.issuperset(m)), key=len)
+                         if atoms.issuperset(m)), key=len)
                 fix.update(fx)
-            rules.append((reactants, products, mapping, fix))
+            rules.append((bad_query, good_query, fix))
 
         cls.__class_cache__[cls] = {'_remapping_compiled_rules': tuple(rules)}
 

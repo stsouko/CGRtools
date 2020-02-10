@@ -506,22 +506,26 @@ class StandardizeReaction:
         return bool(seen)
 
     def __mapping_fixing(self):
-        for reactants, products, common, fix in self._remapping_compiled_rules:
-            for rc in permutations(self.reactants, len(reactants)):
-                for rm in product(*(x.get_mapping(y, automorphism_filter=False) for x, y in zip(reactants, rc))):
-                    r_mapping = rm[0]
-                    for m in rm[1:]:
-                        r_mapping.update(m)
-                    r_mapping = {n: r_mapping[n] for n in common}
-                    for pc in permutations(self.products, len(products)):
-                        for pm in product(*(x.get_mapping(y, automorphism_filter=False) for x, y in zip(products, pc))):
-                            p_mapping = pm[0]
-                            for m in pm[1:]:
-                                p_mapping.update(m)
-                            p_mapping = {n: p_mapping[n] for n in common}
-                            if p_mapping != r_mapping:
-                                continue
-                            print('found')
+        cgr = ~self
+        del self.__dict__['__cached_method_compose']
+
+        for bad_query, good_query, fix in self._remapping_compiled_rules:
+            set_fix = set(fix)
+            for mapping in bad_query.get_mapping(cgr):
+                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
+                reverse = {m: n for n, m in mapping.items()}
+                for m in self.products:
+                    m.remap(mapping)
+
+                check = ~self
+                if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
+                    return True
+
+                # restore old mapping
+                for m in self.products:
+                    m.remap(reverse)
+                del self.__dict__['__cached_method_compose']
+
         return False
 
     @staticmethod
