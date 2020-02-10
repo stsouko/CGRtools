@@ -76,7 +76,3 @@ class IncorrectSmiles(ValueError):
     """
     SMILES string invalid
     """
-
-
-class RulesNotSet(Exception):
-    """AAM fixing rules not set"""

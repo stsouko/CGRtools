@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import chain
+from itertools import chain, permutations, product
 
 
 class Standardize:
@@ -506,6 +506,22 @@ class StandardizeReaction:
         return bool(seen)
 
     def __mapping_fixing(self):
+        for reactants, products, common, fix in self._remapping_compiled_rules:
+            for rc in permutations(self.reactants, len(reactants)):
+                for rm in product(*(x.get_mapping(y, automorphism_filter=False) for x, y in zip(reactants, rc))):
+                    r_mapping = rm[0]
+                    for m in rm[1:]:
+                        r_mapping.update(m)
+                    r_mapping = {n: r_mapping[n] for n in common}
+                    for pc in permutations(self.products, len(products)):
+                        for pm in product(*(x.get_mapping(y, automorphism_filter=False) for x, y in zip(products, pc))):
+                            p_mapping = pm[0]
+                            for m in pm[1:]:
+                                p_mapping.update(m)
+                            p_mapping = {n: p_mapping[n] for n in common}
+                            if p_mapping != r_mapping:
+                                continue
+                            print('found')
         return False
 
     @staticmethod

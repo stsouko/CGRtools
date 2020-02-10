@@ -29,7 +29,6 @@ from .molecule import MoleculeContainer
 from .query import QueryContainer
 from ..algorithms.depict import DepictReaction
 from ..algorithms.standardize import StandardizeReaction
-from ..exceptions import RulesNotSet
 
 
 class ReactionContainer(StandardizeReaction, DepictReaction):
@@ -433,15 +432,45 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
             m.flush_cache()
 
     @classmethod
-    def load_remapping_rules(cls, reactions: Iterable[Tuple['ReactionContainer', 'ReactionContainer']]):
+    def load_remapping_rules(cls, reactions: TIterable[Tuple['ReactionContainer', 'ReactionContainer']]):
         rules = []
         for bad, good in reactions:
-            ...
-        cls.__class_cache__[cls] = {'_remapping_compiled_rules': rules}
+            if bad != good:
+                raise ValueError('bad and good reaction should be equal')
+
+            bc = ~bad
+            gc = ~good
+            atoms = set(bc.center_atoms + gc.center_atoms)
+
+            reactants = []
+            products = []
+            ra = set()
+            pa = set()
+            for m in bad.reactants:  # get reactants patterns
+                a = atoms.intersection(m)
+                ra.update(a)
+                reactants.append(m.substructure(a, as_query=True))
+
+            for m in bad.products:  # get products patterns
+                a = atoms.intersection(m)
+                pa.update(a)
+                products.append(m.substructure(a, as_query=True))
+
+            mapping = ra & pa  # common atoms (exclude living and coming groups)
+
+            fix = {}
+            for mb, mg in zip(bad.products, good.products):  # get fix map
+                fx = min((m for m in
+                         ({k: v for k, v in m.items() if k != v} for m in mb.get_mapping(mg, automorphism_filter=False))
+                         if mapping.issuperset(m)), key=len)
+                fix.update(fx)
+            rules.append((reactants, products, mapping, fix))
+
+        cls.__class_cache__[cls] = {'_remapping_compiled_rules': tuple(rules)}
 
     @class_cached_property
     def _remapping_compiled_rules(self):
-        raise RulesNotSet
+        return ()
 
     @class_cached_property
     def _standardize_compiled_rules(self):
