@@ -257,11 +257,9 @@ class Calculate2D:
                 if n not in dd[m]:
                     b = b.order
                     if b == 8 or len(m_bond) > 4:
-                        dd[n].update({m: 1.32})
-                        dd[m].update({n: 1.32})
+                        dd[n][m] = dd[m][n] = True
                     else:
-                        dd[n].update({m: .825})
-                        dd[m].update({n: .825})
+                        dd[n][m] = dd[m][n] = False
 
             # for angle = 180'
             if len(m_bond) == 2:
@@ -276,7 +274,11 @@ class Calculate2D:
                 j = mapping[m]
                 if (j, i) not in springs:
                     springs.append((i, j))
-                    springs_distances.append(dist)
+                    if dist:
+                        distance = 1.32
+                    else:
+                        distance = .825
+                    springs_distances.append(distance)
 
         bonds_count = len(springs_distances)
         # add virtual atoms and complement matrices of bonds and coordinates
@@ -290,8 +292,7 @@ class Calculate2D:
                     (a1, bond1), (a2, bond2) = m_bond.items()
                     if self._is_angle(bond1, bond2):
                         mapping[-n] = end
-                        dd[n].update({-n: .825})
-                        dd[-n].update({n: .825})
+                        dd[n][-n] = dd[-n][n] = False
                         xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
                         springs.append((mapping[n], end))
                         springs_distances.append(.825)
@@ -305,7 +306,7 @@ class Calculate2D:
                         i, j = mapping[m1], mapping[m2]
                         if (j, i) not in springs or (i, j) not in springs:
                             springs.append((i, j))
-                            long1, long2 = m_bond[m1] == 1.32, m_bond[m2] == 1.32
+                            long1, long2 = m_bond[m1], m_bond[m2]
                             if m1 in ac and m2 in ac:
                                 springs_distances.append(1.17)
                             elif not long1 and not long2:
