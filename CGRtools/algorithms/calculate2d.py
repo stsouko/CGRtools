@@ -225,7 +225,6 @@ class Calculate2D:
     def __prepare(self, component):
         atoms = self._atoms
         bonds = self._bonds
-        sssr = self.sssr
 
         mapping = {}
         springs = []
@@ -235,7 +234,7 @@ class Calculate2D:
         dd = defaultdict(dict)
 
         # for cycles of 4 atoms
-        ac = set(a for c in sssr if len(c) == 4 for a in c)
+        ac = set(a for c in self.sssr if len(c) == 4 for a in c)
 
         # create matrix of coordinates
         cube = len(component)
