@@ -235,13 +235,7 @@ class Calculate2D:
         dd = defaultdict(dict)
 
         # for cycles of 4 atoms
-        ac = set()
-        dc = defaultdict(list)
-        for c in sssr:
-            if len(c) == 4:
-                for a in c:
-                    dc[a].append(len(c))
-                    ac.add(a)
+        ac = set(a for c in sssr if len(c) == 4 for a in c)
 
         # create matrix of coordinates
         cube = len(component)
@@ -274,11 +268,7 @@ class Calculate2D:
                 j = mapping[m]
                 if (j, i) not in springs:
                     springs.append((i, j))
-                    if dist:
-                        distance = 1.32
-                    else:
-                        distance = .825
-                    springs_distances.append(distance)
+                    springs_distances.append(1.32 if dist else .825)
 
         bonds_count = len(springs_distances)
         # add virtual atoms and complement matrices of bonds and coordinates
