@@ -90,13 +90,14 @@ class Depict:
 
     def depict_settings(self, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8'):
-        self._render_config['font'] = font
-        self._render_config['carbon'] = carbon
-        self._render_config['mapping'] = mapping
-        self._render_config['bond_color'] = bond_color
-        self._render_config['bond_width'] = bond_width
-        self._render_config['query_color'] = query_color
-        self._render_config['mapping_color'] = mapping_color
+        config = self._render_config
+        config['font'] = font
+        config['carbon'] = carbon
+        config['mapping'] = mapping
+        config['bond_color'] = bond_color
+        config['bond_width'] = bond_width
+        config['query_color'] = query_color
+        config['mapping_color'] = mapping_color
 
     @cached_method
     def _repr_svg_(self):
