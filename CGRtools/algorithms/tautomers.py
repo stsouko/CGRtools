@@ -29,7 +29,7 @@ class Tautomers:
         hydrogens = self._hydrogens
         yield self
 
-    def input_atom(self):
+    def input_atoms(self):
         atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
@@ -37,16 +37,18 @@ class Tautomers:
         hydrogens = self._hydrogens
 
         ent_atoms = []
-        for i, a in atoms.items():
-            if a.atomic_number in {5, 6, 7, 8, 14, 15, 16, 33, 34, 35, 52, 53, 85}:
-                if radicals[i]:
-                    ent_atoms.append((a, 0))
-                elif charges[i] < 0:
-                    ent_atoms.append((a, 1))
-                elif hydrogens[i]:
-                    ent_atoms.append((a, 2))
-            return ent_atoms
-
+        for i, atom in atoms.items():
+            if bonds[i]:
+                if radicals[i]:             # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
+                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
+                        ent_atoms.append((atom, 0)) # 0 - radical
+                elif charges[i] < 0:        # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
+                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
+                        ent_atoms.append((atom, 1)) # 1 - has a charge
+                elif hydrogens[i]:          # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
+                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
+                        ent_atoms.append((atom, 2)) # 2 - has a hydrogens
+        return ent_atoms
 
 
 __all__ = ['Tautomers']
