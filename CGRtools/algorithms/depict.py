@@ -294,17 +294,16 @@ class DepictReaction:
 
         r_max_x = r_max_y = r_min_y = 0
         for ml in self.molecules():
-            for m in ml:
-                atoms, bonds, masks, min_x, min_y, max_x, max_y = m.depict(embedding=True)
-                r_atoms.extend(atoms)
-                r_bonds.extend(bonds)
-                r_masks.extend(masks)
-                if max_x > r_max_x:
-                    r_max_x = max_x
-                if max_y > r_max_y:
-                    r_max_y = max_y
-                if min_y < r_min_y:
-                    r_min_y = min_y
+            atoms, bonds, masks, min_x, min_y, max_x, max_y = m.depict(embedding=True)
+            r_atoms.extend(atoms)
+            r_bonds.extend(bonds)
+            r_masks.extend(masks)
+            if max_x > r_max_x:
+                r_max_x = max_x
+            if max_y > r_max_y:
+                r_max_y = max_y
+            if min_y < r_min_y:
+                r_min_y = min_y
 
         config = Depict._render_config
         font = config['font']
