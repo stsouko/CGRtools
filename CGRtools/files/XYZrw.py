@@ -197,6 +197,7 @@ class XYZRead(CGRRead):
 
         for n in unsaturated:
             mol._calc_implicit(n)
+        mol.neutralize()
         mol._conformers.append(conformer)
         return mol
 
