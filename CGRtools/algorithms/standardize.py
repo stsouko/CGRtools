@@ -113,7 +113,7 @@ class Standardize:
             seen.add(current)
             diff = -1 if depth % 2 else 1
             stack.extend((current, n, depth, b) for n, b in  # I want 3.8
-                         ((n, b.order + diff) for n, b in bonds[current].items() if n in constrains)
+                         ((n, b.order + diff) for n, b in bonds[current].items() if n not in seen and n in constrains)
                          if 1 <= b <= 3)
 
     def __entries(self):
