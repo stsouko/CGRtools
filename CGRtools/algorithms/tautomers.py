@@ -48,7 +48,7 @@ class Tautomers:
                 elif hydrogens[i]:          # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
                     if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
                         ent_atoms.append((atom, i, 2)) # 2 - has a hydrogens
-        return ent_atoms
+        return ent_atoms, bonds
 
     def get_paths(self, ent_atoms):
         bonds = self._bonds
@@ -70,6 +70,10 @@ class Tautomers:
                     if (ngbb[c].order < 3) and (ngbb[c].order != b):
                         stack.append((c, d + 1, ngbb[c].order))
                         path.append(cur)
+                    else:
+                        path.append(cur)
+                        if len(path) > 2:
+                            paths.append(path)
                 if not ngb:
                     path.append(cur)
                     if len(path) > 2:
