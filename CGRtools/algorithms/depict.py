@@ -364,7 +364,7 @@ class DepictReaction:
 
 
 class DepictCGR(Depict):
-    def _render_bonds(self):
+    def _render_bonds(self, aromatic=True):
         svg = []
         plane = self._plane
         config = self._render_config
@@ -585,23 +585,24 @@ class DepictCGR(Depict):
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
                                f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
 
-        for ring in self.aromatic_rings:
-            cx = sum(plane[x][0] for x in ring) / len(ring)
-            cy = sum(plane[x][1] for x in ring) / len(ring)
+        if aromatic:
+            for ring in self.aromatic_rings:
+                cx = sum(plane[x][0] for x in ring) / len(ring)
+                cy = sum(plane[x][1] for x in ring) / len(ring)
 
-            for n, m in zip(ring, ring[1:]):
+                for n, m in zip(ring, ring[1:]):
+                    nx, ny = plane[n]
+                    mx, my = plane[m]
+                    aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy, ar_bond_colors[n].get(m))
+                    if aromatic:
+                        svg.append(aromatic)
+
+                n, m = ring[-1], ring[0]
                 nx, ny = plane[n]
                 mx, my = plane[m]
                 aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy, ar_bond_colors[n].get(m))
                 if aromatic:
                     svg.append(aromatic)
-
-            n, m = ring[-1], ring[0]
-            nx, ny = plane[n]
-            mx, my = plane[m]
-            aromatic = self.__render_aromatic_bond(nx, ny, mx, my, cx, cy, ar_bond_colors[n].get(m))
-            if aromatic:
-                svg.append(aromatic)
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
@@ -801,6 +802,74 @@ class DepictQuery(Depict):
         return svg, mask
 
 
+class DepictQueryCGR(Depict):
+    def _render_bonds(self):
+        return DepictCGR._render_bonds(self, aromatic=False)
+
+    def _render_atoms(self):
+        plane = self._plane
+        carbon = self._render_config['carbon']
+        atoms_colors = self._render_config['atoms_colors']
+        font = self._render_config['font']
+        font2 = .2 * font
+        font3 = .3 * font
+        font4 = .4 * font
+        font6 = .6 * font
+        font7 = .7 * font
+        font8 = .8 * font
+
+        svg = []
+        mask = []
+        nghbrs = []
+        hbrdztns = []
+        for n, atom in self._atoms.items():
+            x, y = plane[n]
+            y = -y
+            single = not self._bonds[n]
+            symbol = atom.atomic_symbol
+            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
+                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
+                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
+                           f'font-size="{font:.2f}">{symbol}</text>')
+
+                if atom.charge:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
+                               f'{"↑" if atom.is_radical else ""}</text>')
+                elif atom.is_radical:
+                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
+                               f'font-size="{font6:.2f}">↑</text>')
+                svg.append('    </g>')
+                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
+
+            level = 1
+            if atom.neighbors:
+                level = 1.6
+                nn = [str(x) for x in atom.neighbors]
+                pn = [str(x) for x in atom.p_neighbors] if atom.p_neighbors else None
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
+                              f'text-anchor="start">{"".join(nn)}»{"".join(pn) if pn else 0}</text>')
+
+            if atom.hybridization:
+                hh = [_render_hybridization[x] for x in atom.hybridization]
+                ph = [_render_hybridization[x] for x in atom.p_hybridization] if atom.p_hybridization else None
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
+                                f'text-anchor="start">{"".join(hh)}»{"".join(ph) if ph else 0}</text>')
+        if nghbrs:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(nghbrs)
+            if hbrdztns:
+                svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        elif hbrdztns:
+            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        return svg, mask
+
+
 _render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
 _render_charge = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
 _render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
@@ -812,4 +881,4 @@ _render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '
                     3: {-3: '3»-3', -2: '3»-2', -1: '3»-', 0: '3»0', 1: '3»+', 2: '3»2'}}
 
 
-__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery']
+__all__ = ['DepictMolecule', 'DepictReaction', 'DepictCGR', 'DepictQuery', 'DepictQueryCGR']
