@@ -88,7 +88,8 @@ class Depict:
         svg.append('</svg>')
         return '\n'.join(svg)
 
-    def depict_settings(self, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+    @staticmethod
+    def depict_settings(*, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
                         cgr_aromatic_space=.14):
@@ -112,7 +113,7 @@ class Depict:
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
         """
 
-        config = self._render_config
+        config = Depict._render_config
         config['font'] = font
         config['carbon'] = carbon
         config['dashes'] = dashes
@@ -357,6 +358,18 @@ class DepictReaction:
 
         svg.append('</svg>')
         return '\n'.join(svg)
+
+    @staticmethod
+    def depict_settings(*, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+                        bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
+                        triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
+                        cgr_aromatic_space=.14):
+
+        Depict.depict_settings(carbon=carbon, bond_color=bond_color, triple_space=triple_space, mapping=mapping,
+                               mapping_color=mapping_color, dashes=dashes, bond_width=bond_width, font=font,
+                               query_color=query_color, atoms_colors=atoms_colors, aromatic_space=aromatic_space,
+                               double_space=double_space, broken_color=broken_color, formed_color=formed_color,
+                               cgr_aromatic_space=cgr_aromatic_space)
 
     @cached_method
     def _repr_svg_(self):
