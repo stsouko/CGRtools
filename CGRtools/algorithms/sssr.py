@@ -48,40 +48,10 @@ class SSSR:
         """
         bonds = cls._skin_graph(bonds)
         if bonds:
-            terminated, n_sssr, predecessor = cls.__bfs(bonds)
+            terminated, n_sssr = cls.__bfs(bonds)
             if n_sssr:
-                return cls.__rings_filter(cls.__pid(terminated, predecessor), n_sssr, bonds)
+                return cls.__rings_filter(cls.__pid(terminated), n_sssr, bonds)
         return ()
-
-    @staticmethod
-    def __make_pid(bonds):
-        pid1 = defaultdict(lambda: defaultdict(set))
-        pid2 = defaultdict(lambda: defaultdict(set))
-
-        distances = defaultdict(lambda: defaultdict(lambda: len(bonds)))
-        for n, ms in bonds.items():
-            for m in ms:
-                distances[n][m] = 1
-
-        for k in bonds:
-            new_distances = defaultdict(dict)
-            dk = distances[k]
-            for i in bonds:
-                di = distances[i]
-                ndi = new_distances[i]
-                for j in bonds:
-                    ij = di[j]
-                    ikj = di[k] + dk[j]
-                    if ij > ikj:
-                        ...
-                    elif ij == ikj:
-                        ...
-                    elif ikj - ij == 1:
-                        pid2[i][j] = 0
-                    else:
-                        ndi[j] = ij
-            distances = new_distances
-        return pid1, pid2, distances
 
     @staticmethod
     def __bfs(bonds):
@@ -90,7 +60,6 @@ class SSSR:
         terminated = {}
         tail = atoms.pop()
         next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
-        predecessor = {tail}
 
         while True:
             next_front = set()
@@ -104,7 +73,6 @@ class SSSR:
                     if n in found_odd:
                         continue
                     next_broom = [((*path, n), ticks) for path, ticks in broom]
-                    predecessor.add(tail)
                     if n in stack:  # odd rings
                         found_odd.add(tail)
                         if n in next_stack:
@@ -123,7 +91,6 @@ class SSSR:
                         if n in found_odd:
                             continue
                         next_broom = [((*path, n), (*ticks, len(path) - 1)) for path, ticks in broom]
-                        predecessor.add(tail)
                         if n in stack:  # odd rings
                             found_odd.add(tail)
                             if n in next_stack:
@@ -145,10 +112,10 @@ class SSSR:
                 n_sssr += 1
                 tail = atoms.pop()
                 next_stack = {x: [((tail, x), ())] for x in bonds[tail] & atoms}
-        return terminated, n_sssr, predecessor
+        return terminated, n_sssr
 
     @staticmethod
-    def __pid(terminated, predecessor):
+    def __pid(terminated):
         # collect shortest and +1 paths
         pid1 = {}
         pid2 = {}
@@ -177,53 +144,17 @@ class SSSR:
                         pid2[k] = {}
                         pid1l[k] = lp
 
-        pidk = defaultdict(list)
-        for k in pid1:
-            pidk[k[0]].append(k)
-
-        for k in list(pid1):
-            i, j = k
-            if j in predecessor:  # skip normal
-                continue
-            for path in chain(pid1[k], pid2[k]):
-                path = path[::-1]
-                for fk in pidk[i]:
-                    if fk == k:
-                        continue
-                    for fpath in chain(pid1[fk], pid2[fk]):
-                        m_path = path + fpath[1:]
-                        if len(set(m_path)) != len(m_path):
-                            continue  # skip noose
-                        mk = (j, fk[1])
-                        if mk in pid1:
-                            ls = pid1l[mk]
-                            lp = len(m_path)
-                            if lp == ls:
-                                pid1[mk].add(m_path)
-                            elif ls - lp == 1:
-                                pid2[mk], pid1[mk] = pid1[mk], {m_path}
-                                pid1l[mk] = lp
-                            elif lp - ls == 1:
-                                pid2[mk].add(m_path)
-                            elif lp < ls:
-                                pid1[mk] = {m_path}
-                                pid2[mk] = set()
-                                pid1l[mk] = lp
-                        else:
-                            pid1[mk] = {m_path}
-                            pid2[mk] = set()
-                            pid1l[mk] = len(m_path)
-
         c_set = []
         for k, p1ij in pid1.items():
             dij = pid1l[k] * 2 - 2
-            p2ij = pid2[k]
+            p1ij = list(p1ij.values())
+            p2ij = list(pid2[k].values())
             if len(p1ij) == 1:  # one shortest
                 if not p2ij:  # need shortest + 1 path
                     continue
-                c_set.append((dij + 1, list(p1ij), p2ij))
+                c_set.append((dij + 1, p1ij, p2ij))
             elif not p2ij:  # one or more odd rings
-                c_set.append((dij, list(p1ij), None))
+                c_set.append((dij, p1ij, None))
             else:  # odd and even rings found (e.g. bicycle)
                 p1ij = list(p1ij)
                 c_set.append((dij, p1ij, None))
@@ -231,11 +162,11 @@ class SSSR:
 
         for c_num, p1ij, p2ij in sorted(c_set):
             if c_num % 2:  # odd rings
-                c1 = p1ij[0]  # any shortest acceptable. sssr is not a unique set of rings
-                for c2 in p2ij:
-                    c = c1 + c2[-2:0:-1]
-                    if len(set(c)) == len(c):
-                        yield c
+                for c1 in p1ij:
+                    for c2 in p2ij:
+                        c = c1 + c2[-2:0:-1]
+                        if len(set(c)) == len(c):
+                            yield c
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
                     c = c1 + c2[-2:0:-1]
