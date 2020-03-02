@@ -352,6 +352,10 @@ class Calculate2D:
             if len(component) == 1:
                 plane[component[0]] = (shift_x, .0)
                 shift_x += .825
+            elif len(component) == 2:
+                plane[component[0]] = (shift_x, .0)
+                plane[component[1]] = (shift_x, .825)
+                shift_x += .825
             else:
                 xyz, springs, straights, springs_distances, atoms_count, bonds_count = self.__prepare(component)
                 xyz = steps(xyz, springs, straights, springs_distances)
