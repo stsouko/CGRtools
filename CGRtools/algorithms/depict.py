@@ -88,7 +88,8 @@ class Depict:
         svg.append('</svg>')
         return '\n'.join(svg)
 
-    def depict_settings(self, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+    @classmethod
+    def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
                         cgr_aromatic_space=.14, ar_dashes=(.05, .05)):
@@ -113,7 +114,7 @@ class Depict:
         ar_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is long of invisible line
         """
 
-        config = self._render_config
+        config = cls._render_config
         config['font'] = font
         config['carbon'] = carbon
         config['dashes'] = dashes
