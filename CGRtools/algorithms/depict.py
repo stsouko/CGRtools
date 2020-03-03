@@ -362,6 +362,18 @@ class DepictReaction:
     def _repr_svg_(self):
         return self.depict()
 
+    @staticmethod
+    def depict_settings(*, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+                        bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
+                        triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
+                        cgr_aromatic_space=.14, ar_dashes=(.05, .05)):
+
+        Depict.depict_settings(carbon=carbon, bond_color=bond_color, triple_space=triple_space, mapping=mapping,
+                               mapping_color=mapping_color, dashes=dashes, bond_width=bond_width, font=font,
+                               query_color=query_color, atoms_colors=atoms_colors, aromatic_space=aromatic_space,
+                               double_space=double_space, broken_color=broken_color, formed_color=formed_color,
+                               cgr_aromatic_space=cgr_aromatic_space, ar_dashes=ar_dashes)
+
 
 class DepictCGR(Depict):
     def _render_bonds(self):
