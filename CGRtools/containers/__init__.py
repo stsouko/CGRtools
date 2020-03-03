@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,9 +19,10 @@
 """
 Data classes
 """
-from .cgr import *
 from .molecule import *
+from .cgr import *
 from .query import *
+from .cgr_query import *
 from .reaction import *
 
 

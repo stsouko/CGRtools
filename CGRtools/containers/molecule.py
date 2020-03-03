@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,172 +16,628 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_args_method, cached_property, class_cached_property
 from collections import defaultdict
-from networkx.algorithms.isomorphism import GraphMatcher
-from networkx.classes.function import frozen
-from .common import BaseContainer
-from ..algorithms import Aromatize, Calculate2D, Compose, DepictMolecule, Morgan, Smiles, Standardize
-from ..attributes import Atom, Bond
-from ..cache import cached_args_method
-from ..periodictable import H
+from typing import List, Union, Tuple, Optional, Dict
+from . import cgr, query  # cyclic imports resolve
+from .bonds import Bond, DynamicBond
+from .common import Graph
+from ..algorithms.aromatics import Aromatize
+from ..algorithms.calculate2d import Calculate2DMolecule
+from ..algorithms.components import StructureComponents
+from ..algorithms.depict import DepictMolecule
+from ..algorithms.smiles import MoleculeSmiles
+from ..algorithms.standardize import Standardize
+from ..algorithms.stereo import MoleculeStereo
+from ..exceptions import ValenceError, MappingError
+from ..periodictable import Element, QueryElement
 
 
-class MoleculeContainer(Aromatize, Calculate2D, Compose, Morgan, Smiles, Standardize, DepictMolecule, BaseContainer):
-    """
-    storage for Molecules
+class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
+                        DepictMolecule, Calculate2DMolecule):
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
+    __class_cache__ = {}
 
-    new molecule object creation or copy of data object
-    """
-    node_attr_dict_factory = Atom
-    edge_attr_dict_factory = Bond
+    def __init__(self):
+        self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
+        self._neighbors: Dict[int, int] = {}
+        self._hybridizations: Dict[int, int] = {}
+        self._hydrogens: Dict[int, Optional[int]] = {}
+        self._atoms_stereo: Dict[int, bool] = {}
+        super().__init__()
 
-    def reset_query_marks(self):
+    def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
+        if not isinstance(atom, Element):
+            if isinstance(atom, str):
+                atom = Element.from_symbol(atom)()
+            elif isinstance(atom, int):
+                atom = Element.from_atomic_number(atom)()
+            else:
+                raise TypeError('Element object expected')
+
+        _map = super().add_atom(atom, *args, charge=charge, is_radical=is_radical, **kwargs)
+        self._neighbors[_map] = 0
+        self._hybridizations[_map] = 1
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
+
+        if atom.atomic_number != 1:
+            try:
+                rules = atom.valence_rules(charge, is_radical, 0)
+            except ValenceError:
+                self._hydrogens[_map] = None
+            else:
+                for s, d, h in rules:
+                    if h and not s:
+                        self._hydrogens[_map] = h
+                        break
+                else:
+                    self._hydrogens[_map] = 0
+        else:
+            self._hydrogens[_map] = 0
+        return _map
+
+    def add_bond(self, n, m, bond: Union[Bond, int]):
+        if not isinstance(bond, Bond):
+            bond = Bond(bond)
+
+        super().add_bond(n, m, bond)
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
+
+        self._calc_implicit(n)
+        self._calc_implicit(m)
+
+        # calc query marks dynamically.
+        if self._atoms[n].atomic_number != 1:  # not hydrogen
+            self._neighbors[m] += 1
+            self._calc_hybridization(m)
+        if self._atoms[m].atomic_number != 1:  # not hydrogen
+            self._neighbors[n] += 1
+            self._calc_hybridization(n)
+        self._fix_stereo()
+
+    def delete_atom(self, n):
+        old_bonds = self._bonds[n]  # save bonds
+        isnt_hydrogen = self._atoms[n].atomic_number != 1
+        super().delete_atom(n)
+
+        sn = self._neighbors
+
+        del sn[n]
+        del self._hybridizations[n]
+        del self._hydrogens[n]
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
+
+        if isnt_hydrogen:
+            for m in old_bonds:
+                self._calc_hybridization(m)
+                sn[m] -= 1
+
+        for m in old_bonds:
+            self._calc_implicit(m)
+        self._fix_stereo()
+
+    def delete_bond(self, n, m):
+        super().delete_bond(n, m)
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
+
+        self._calc_implicit(n)
+        self._calc_implicit(m)
+
+        # neighbors query marks fix. ignore removed hydrogen
+        if self._atoms[n].atomic_number != 1:
+            self._calc_hybridization(m)
+            self._neighbors[m] -= 1
+        if self._atoms[m].atomic_number != 1:
+            self._calc_hybridization(n)
+            self._neighbors[n] -= 1
+        self._fix_stereo()
+
+    def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
+        h = super().remap(mapping, copy=copy)
+        mg = mapping.get
+        sn = self._neighbors
+        shg = self._hydrogens
+
+        if copy:
+            hn = h._neighbors
+            hh = h._hybridizations
+            hhg = h._hydrogens
+            hc = h._conformers
+            has = h._atoms_stereo
+        else:
+            hn = {}
+            hh = {}
+            hhg = {}
+            hc = []
+            has = {}
+
+        for n, hyb in self._hybridizations.items():
+            m = mg(n, n)
+            hn[m] = sn[n]
+            hh[m] = hyb
+            hhg[m] = shg[n]
+
+        hc.extend({mg(n, n): x for n, x in c.items()} for c in self._conformers)
+
+        for n, stereo in self._atoms_stereo.items():
+            has[mg(n, n)] = stereo
+
+        if copy:
+            return h
+
+        self._neighbors = hn
+        self._hybridizations = hh
+        self._hydrogens = hhg
+        self._conformers = hc
+        self._atoms_stereo = has
+        return self
+
+    def copy(self, **kwargs) -> 'MoleculeContainer':
+        copy = super().copy(**kwargs)
+        copy._neighbors = self._neighbors.copy()
+        copy._hybridizations = self._hybridizations.copy()
+        copy._hydrogens = self._hydrogens.copy()
+        copy._conformers = [c.copy() for c in self._conformers]
+        copy._atoms_stereo = self._atoms_stereo.copy()
+        return copy
+
+    def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
+                                                                                'query.QueryContainer']:
         """
-        set or reset hyb and neighbors marks to atoms.
+        create substructure containing atoms from atoms list
+
+        :param atoms: list of atoms numbers of substructure
+        :param meta: if True metadata will be copied to substructure
+        :param as_query: return Query object based on graph substructure
         """
-        for i, atom in self.atoms():
-            neighbors = 0
-            hybridization = 1
-            # hybridization 1- sp3; 2- sp2; 3- sp1; 4- aromatic
-            for j, bond in self._adj[i].items():
-                if self._node[j].element != 'H':
-                    neighbors += 1
+        sub, atoms = super().substructure(atoms, query.QueryContainer if as_query else self.__class__, **kwargs)
+        sa = self._atoms
+        sb = self._bonds
 
-                if hybridization in (3, 4):
-                    continue
-                order = bond.order
-                if order == 4:
-                    hybridization = 4
-                elif order == 3:
-                    hybridization = 3
-                elif order == 2:
-                    if hybridization == 2:
-                        hybridization = 3
-                    else:
-                        hybridization = 2
+        if as_query:
+            lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
+            not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
+            sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
+            sub._atoms = ca = {}
+            for n in atoms:
+                atom = sa[n]
+                atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
+                ca[n] = atom
+                atom._attach_to_graph(sub, n)
 
-            atom._neighbors = neighbors
-            atom._hybridization = hybridization
-        self.flush_cache()
+            sn = self._neighbors
+            sh = self._hybridizations
+            sub._neighbors = {n: (sn[n],) for n in atoms}
+            sub._hybridizations = {n: (sh[n],) for n in atoms}
+        else:
+            sub._conformers = []
+            sub._atoms = ca = {}
+            for n in atoms:
+                atom = sa[n].copy()
+                ca[n] = atom
+                atom._attach_to_graph(sub, n)
 
-    def implicify_hydrogens(self):
+            # recalculate query marks
+            sub._neighbors = sn = {}
+            sub._hybridizations = {}
+            sub._hydrogens = {}
+            atoms = sub._atoms
+            for n, m_bonds in sub._bonds.items():
+                sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
+                sub._calc_hybridization(n)
+                sub._calc_implicit(n)
+            sub._atoms_stereo = self._atoms_stereo
+            sub._fix_stereo()
+        return sub
+
+    def union(self, other):
+        if isinstance(other, MoleculeContainer):
+            u = super().union(other)
+            u._conformers.clear()
+
+            u._neighbors.update(other._neighbors)
+            u._hybridizations.update(other._hybridizations)
+            u._hydrogens.update(other._hydrogens)
+            u._atoms_stereo.update(other._atoms_stereo)
+
+            ub = u._bonds
+            for n in other._bonds:
+                ub[n] = {}
+            seen = set()
+            for n, m_bond in other._bonds.items():
+                seen.add(n)
+                for m, bond in m_bond.items():
+                    if m not in seen:
+                        ub[n][m] = ub[m][n] = bond.copy()
+
+            ua = u._atoms
+            for n, atom in other._atoms.items():
+                atom = atom.copy()
+                ua[n] = atom
+                atom._attach_to_graph(u, n)
+            return u
+        elif isinstance(other, Graph):
+            return other.union(self)
+        else:
+            raise TypeError('Graph expected')
+
+    def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
+        """
+        compose 2 graphs to CGR
+        """
+        sa = self._atoms
+        sc = self._charges
+        sr = self._radicals
+        sp = self._plane
+        sb = self._bonds
+
+        bonds = []
+        adj = defaultdict(lambda: defaultdict(lambda: [None, None]))
+
+        if isinstance(other, MoleculeContainer):
+            oa = other._atoms
+            oc = other._charges
+            or_ = other._radicals
+            op = other._plane
+            ob = other._bonds
+            common = sa.keys() & other
+            h = cgr.CGRContainer()
+            atoms = h._atoms
+
+            for n in sa.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
+                for m, bond in sb[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is broken bond
+                            order = bond.order
+                            bond = object.__new__(DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
+                        bonds.append((n, m, bond))
+            for n in other._atoms.keys() - common:  # coupling atoms
+                h.add_atom(oa[n], n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=oc[n], p_is_radical=or_[n])
+                for m, bond in ob[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is formed bond
+                            order = bond.order
+                            bond = object.__new__(DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
+                        bonds.append((n, m, bond))
+            for n in common:
+                an = adj[n]
+                for m, bond in sb[n].items():
+                    if m in common:
+                        an[m][0] = bond.order
+                for m, bond in ob[n].items():
+                    if m in common:
+                        an[m][1] = bond.order
+            for n in common:
+                san = sa[n]
+                if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
+                    raise MappingError(f'atoms with number {{{n}}} not equal')
+                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=oc[n], p_is_radical=or_[n])
+                for m, (o1, o2) in adj[n].items():
+                    if m not in atoms:
+                        bond = object.__new__(DynamicBond)
+                        bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
+                        bonds.append((n, m, bond))
+        elif isinstance(other, cgr.CGRContainer):
+            oa = other._atoms
+            oc = other._charges
+            or_ = other._radicals
+            opc = other._p_charges
+            opr = other._p_radicals
+            op = other._plane
+            ob = other._bonds
+            common = sa.keys() & other
+            h = other.__class__()  # subclasses support
+            atoms = h._atoms
+
+            for n in sa.keys() - common:  # cleavage atoms
+                h.add_atom(sa[n], n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=sc[n], p_is_radical=sr[n])
+                for m, bond in sb[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is broken bond
+                            order = bond.order
+                            bond = object.__new__(DynamicBond)
+                            bond._DynamicBond__order, bond._DynamicBond__p_order = order, None
+                        bonds.append((n, m, bond))
+            for n in other._atoms.keys() - common:  # coupling atoms
+                h.add_atom(oa[n].copy(), n, charge=oc[n], is_radical=or_[n], xy=op[n], p_charge=opc[n],
+                           p_is_radical=opr[n])
+                for m, bond in ob[n].items():
+                    if m not in atoms:
+                        if m in common:  # bond to common atoms is formed bond
+                            order = bond.p_order
+                            if order:  # skip broken bond. X>None => None>None
+                                bond = object.__new__(DynamicBond)
+                                bond._DynamicBond__order, bond._DynamicBond__p_order = None, order
+                                bonds.append((n, m, bond))
+                        else:
+                            bonds.append((n, m, bond))
+            for n in common:
+                an = adj[n]
+                for m, bond in sb[n].items():
+                    if m in common:
+                        an[m][0] = bond.order
+                for m, bond in ob[n].items():
+                    if m in an or m in common and bond.p_order:
+                        # self has nm bond or other bond not broken
+                        an[m][1] = bond.p_order
+            for n in common:
+                san = sa[n]
+                if san.atomic_number != oa[n].atomic_number or san.isotope != oa[n].isotope:
+                    raise MappingError(f'atoms with number {{{n}}} not equal')
+                h.add_atom(san, n, charge=sc[n], is_radical=sr[n], xy=sp[n], p_charge=opc[n], p_is_radical=opr[n])
+                for m, (o1, o2) in adj[n].items():
+                    if m not in atoms:
+                        bond = object.__new__(DynamicBond)
+                        bond._DynamicBond__order, bond._DynamicBond__p_order = o1, o2
+                        bonds.append((n, m, bond))
+        else:
+            raise TypeError('MoleculeContainer or CGRContainer expected')
+
+        for n, m, bond in bonds:
+            h.add_bond(n, m, bond)
+        return h
+
+    def __xor__(self, other):
+        """
+        G ^ H is CGR generation
+        """
+        return self.compose(other)
+
+    def get_mapping(self, other: 'MoleculeContainer', **kwargs):
+        if isinstance(other, MoleculeContainer):
+            return super().get_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer expected')
+
+    def get_mcs_mapping(self, other: 'MoleculeContainer', **kwargs):
+        if isinstance(other, MoleculeContainer):
+            return super().get_mcs_mapping(other, **kwargs)
+        raise TypeError('MoleculeContainer expected')
+
+    def implicify_hydrogens(self) -> int:
         """
         remove explicit hydrogen if possible
 
         :return: number of removed hydrogens
         """
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
         explicit = defaultdict(list)
-        c = 0
-        for n, atom in self.atoms():
-            if atom.element == 'H':
-                for m in self.neighbors(n):
-                    if self._node[m].element != 'H':
+        for n, atom in atoms.items():
+            if atom.atomic_number == 1:
+                for m in bonds[n]:
+                    if atoms[m].atomic_number != 1:
                         explicit[m].append(n)
 
-        for n, h in explicit.items():
-            atom = self._node[n]
-            len_h = len(h)
+        to_remove = set()
+        for n, hs in explicit.items():
+            atom = atoms[n]
+            charge = charges[n]
+            is_radical = radicals[n]
+            len_h = len(hs)
             for i in range(len_h, 0, -1):
-                hi = h[:i]
-                if atom.get_implicit_h([y.order for x, y in self._adj[n].items() if x not in hi]) == i:
-                    for x in hi:
-                        self.remove_node(x)
-                        c += 1
+                hi = hs[:i]
+                explicit_sum = 0
+                explicit_dict = defaultdict(int)
+                for m, bond in bonds[n].items():
+                    if m not in hi:
+                        explicit_sum += bond.order
+                        explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
+
+                if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
+                       for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
+                    to_remove.update(hi)
                     break
+        for n in to_remove:
+            self.delete_atom(n)
+        return len(to_remove)
 
-        self.flush_cache()
-        return c
-
-    def explicify_hydrogens(self):
+    def explicify_hydrogens(self) -> int:
         """
         add explicit hydrogens to atoms
 
         :return: number of added atoms
         """
-        tmp = []
-        for n, atom in self.atoms():
-            if atom.element != 'H':
-                for _ in range(atom.get_implicit_h([x.order for x in self._adj[n].values()])):
-                    tmp.append(n)
-        for n in tmp:
-            self.add_bond(n, self.add_atom(H), Bond())
+        to_add = []
+        for n, h in self._hydrogens.items():
+            try:
+                to_add.extend([n] * h)
+            except TypeError:
+                raise ValenceError(f'atom {{{n}}} has valence error')
+        for n in to_add:
+            self.add_bond(n, self.add_atom('H'), 1)
+        return len(to_add)
 
-        self.flush_cache()
-        return len(tmp)
-
-    def substructure(self, atoms, meta=False, as_view=True):
-        """
-        create substructure containing atoms from nbunch list
-
-        :param atoms: list of atoms numbers of substructure
-        :param meta: if True metadata will be copied to substructure
-        :param as_view: If True, the returned graph-view provides a read-only view
-            of the original structure scaffold without actually copying any data.
-        """
-        s = super().substructure(atoms, meta, as_view)
-        if as_view:
-            s.check_valence = s.explicify_hydrogens = s.implicify_hydrogens = s.reset_query_marks = frozen
-            s.standardize = s.aromatize = frozen
-        return s
-
-    @cached_args_method
-    def atom_implicit_h(self, atom):
-        return self._node[atom].get_implicit_h([x.order for x in self._adj[atom].values()])
-
-    @cached_args_method
-    def atom_explicit_h(self, atom):
-        return sum(self._node[x].element == 'H' for x in self.neighbors(atom))
-
-    @cached_args_method
-    def atom_total_h(self, atom):
-        return self.atom_explicit_h(atom) + self.atom_implicit_h(atom)
-
-    def check_valence(self):
+    def check_valence(self) -> List[int]:
         """
         check valences of all atoms
 
+        works only on molecules with aromatic rings in Kekule form
         :return: list of invalid atoms
         """
-        return [x for x, atom in self.atoms() if not atom.check_valence(self.environment(x))]
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+        errors = set(atoms)
+        for n, atom in atoms.items():
+            charge = charges[n]
+            is_radical = radicals[n]
+            explicit_sum = 0
+            explicit_dict = defaultdict(int)
+            for m, bond in bonds[n].items():
+                order = bond.order
+                if order == 4:  # aromatic rings not supported
+                    break
+                elif order != 8:  # any bond used for complexes
+                    explicit_sum += order
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
+            else:
+                try:
+                    rules = atom.valence_rules(charge, is_radical, explicit_sum)
+                except ValenceError:
+                    pass
+                else:
+                    for s, d, h in rules:
+                        if s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                            errors.discard(n)
+                            break
+        return list(errors)
 
-    def _matcher(self, other):
+    @cached_property
+    def molecular_charge(self):
         """
-        return VF2 GraphMatcher
+        total charge of molecule
+        """
+        return sum(self._charges.values())
 
-        MoleculeContainer < MoleculeContainer
-        MoleculeContainer < CGRContainer
+    def __int__(self):
         """
-        if isinstance(other, (self._get_subclass('CGRContainer'), MoleculeContainer)):
-            return GraphMatcher(other, self, lambda x, y: x == y, lambda x, y: x == y)
-        raise TypeError('only cgr-cgr possible')
+        total charge of molecule
+        """
+        return self.molecular_charge
+
+    @cached_property
+    def molecular_mass(self):
+        return sum(x.atomic_mass for x in self._atoms.values())
+
+    def __float__(self):
+        return self.molecular_mass
+
+    @cached_args_method
+    def _explicit_hydrogens(self, n: int) -> int:
+        """
+        number of explicit hydrogen atoms connected to atom.
+
+        take into account any type of bonds with hydrogen atoms.
+        """
+        atoms = self._atoms
+        return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
+
+    @cached_args_method
+    def _total_hydrogens(self, n: int) -> int:
+        return self._hydrogens[n] + self._explicit_hydrogens(n)
+
+    def _calc_implicit(self, n: int) -> Optional[int]:
+        atoms = self._atoms
+        atom = atoms[n]
+        if atom.atomic_number != 1:
+            charge = self._charges[n]
+            is_radical = self._radicals[n]
+            explicit_sum = 0
+            explicit_dict = defaultdict(int)
+            for m, bond in self._bonds[n].items():
+                order = bond.order
+                if order == 4:  # aromatic rings not supported
+                    self._hydrogens[n] = None
+                    return
+                elif order != 8:  # any bond used for complexes
+                    explicit_sum += order
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
+            try:
+                rules = atom.valence_rules(charge, is_radical, explicit_sum)
+            except ValenceError:
+                self._hydrogens[n] = None
+                return
+            for s, d, h in rules:
+                if h and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                    self._hydrogens[n] = h
+                    return h
+        self._hydrogens[n] = 0
+        return 0
+
+    def _calc_hybridization(self, n: int) -> int:
+        atoms = self._atoms
+        hybridization = 1
+        for m, bond in self._bonds[n].items():
+            if atoms[m].atomic_number == 1:  # ignore hydrogen
+                continue
+            order = bond.order
+            if order == 4:
+                self._hybridizations[n] = 4
+                return 4
+            elif order == 3:
+                if hybridization != 3:
+                    hybridization = 3
+            elif order == 2:
+                if hybridization == 2:
+                    hybridization = 3
+                elif hybridization == 1:
+                    hybridization = 2
+        self._hybridizations[n] = hybridization
+        return hybridization
+
+    @class_cached_property
+    def _standardize_compiled_rules(self):
+        rules = []
+        for atoms, bonds, atom_fix, bonds_fix in self._standardize_rules():
+            q = query.QueryContainer()
+            for a in atoms:
+                q.add_atom(**a)
+            for n, m, b in bonds:
+                q.add_bond(n, m, b)
+            rules.append((q, atom_fix, bonds_fix))
+        return rules
+
+    def __getstate__(self):
+        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
 
     def __setstate__(self, state):
         if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
-            node = {}
-            for n, atom in state['_node'].items():
-                a = node[n] = Atom()
-                a.element = atom['element']
-                a.mapping = atom['map']
-                a.x = atom['s_x']
-                a.y = atom['s_y']
-                a.z = atom['s_z']
-                if atom['s_charge']:
-                    a.charge = atom['s_charge']
-                if 's_radical' in atom:
-                    a.multiplicity = atom['s_radical']
-                if 'isotope' in atom:
-                    a.isotope = atom['isotope']
+            state['atoms'] = {n: Element.from_symbol(a['element'])(a.get('isotope')) for n, a in state['_node'].items()}
+            state['charges'] = {n: a['s_charge'] for n, a in state['_node'].items()}
+            state['radicals'] = {n: bool(a['s_radical']) for n, a in state['_node'].items()}
+            state['plane'] = {n: (a['s_x'], a['s_y']) for n, a in state['node'].items()}
 
-            adj = defaultdict(dict)
-            seen = set()
+            state['bonds'] = bonds = {}
             for n, m_bond in state['_adj'].items():
-                seen.add(n)
+                bonds[n] = bn = {}
                 for m, bond in m_bond.items():
-                    if m not in seen:
-                        b = adj[n][m] = adj[m][n] = Bond()
-                        b.order = bond['s_bond'] if bond['s_bond'] != 9 else 5
-            state = {'meta': state['_BaseContainer__meta'], 'node': node, 'adj': dict(adj)}
+                    if m in bonds:
+                        bn[m] = bonds[m][n]
+                    else:
+                        bn[m] = Bond(bond['s_bond'] if bond['s_bond'] != 9 else 5)
+
+            state['conformers'] = []
+            state['atoms_stereo'] = {}
+            state['meta'] = state['_BaseContainer__meta']
+            state['parsed_mapping'] = {}
+        elif 'node' in state:  # 3.1 compatibility.
+            state['atoms'] = {n: a.atom.copy() for n, a in state['node'].items()}
+            state['charges'] = {n: a.charge for n, a in state['node'].items()}
+            state['radicals'] = {n: a.is_radical for n, a in state['node'].items()}
+            state['plane'] = {n: a.xy for n, a in state['node'].items()}
+            state['parsed_mapping'] = {n: a.parsed_mapping for n, a in state['node'].items() if a.parsed_mapping}
+
+            state['bonds'] = bonds = {}
+            for n, m_bond in state['adj'].items():
+                bonds[n] = bn = {}
+                for m, bond in m_bond.items():
+                    if m in bonds:
+                        bn[m] = bonds[m][n]
+                    else:
+                        bn[m] = Bond(bond.order)
+
+            state['conformers'] = []
+            state['atoms_stereo'] = {}
+
         super().__setstate__(state)
+        self._conformers = state['conformers']
+        self._atoms_stereo = state['atoms_stereo']
+
+        # restore query and hydrogen marks
+        self._neighbors = sn = {}
+        self._hybridizations = {}
+        self._hydrogens = {}
+        atoms = state['atoms']
+        for n, m_bonds in state['bonds'].items():
+            sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
+            self._calc_hybridization(n)
+            self._calc_implicit(n)
 
 
 __all__ = ['MoleculeContainer']

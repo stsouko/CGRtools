@@ -14,7 +14,7 @@ INSTALL
 =======
 
 Linux Debian based
-==================
+------------------
 
 * Install python3.7, virtualenv and git
 
@@ -30,7 +30,7 @@ Linux Debian based
     ```
 
 Mac
-===
+---
 * Install python3.7 and git using [brew](<https://brew.sh>)
 
     ```
@@ -52,9 +52,9 @@ Mac
     ```
     
 Windows
-=======
+-------
 
-* Install python3.7 and git using [Chocolately](<https://chocolatey.org/>)
+* Install python3.7 and git using [Chocolatey](<https://chocolatey.org/>)
 
     ```
     choco install git
@@ -75,22 +75,15 @@ Windows
     ```
 
 General part
-============
-* Into activated environment install networkx library (Currently DEV version, due to special 
-parts of code that was contributed to networkx and will appear in next release)
+------------
 
-    ```
-    pip install -U git+https://github.com/networkx/networkx.git@master#egg=networkx
-    ```
-    
-* **stable version will be available through PyPI (The same as DEV for now)**
+* **stable version will be available through PyPI**
 
     ```
     pip install CGRTools
     ```    
     
-* Install CGRtools library DEV version for features that are not well tested (Currently DEV version and stable version is the same as 
-bugs fixing is going on)
+* Install CGRtools library DEV version for features that are not well tested
 
     ```
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
@@ -111,18 +104,30 @@ bugs fixing is going on)
 
 **If you still have questions, please open issue within github.**
 
+PACKAGING
+=========
+
+For wheel generation just type next command in source root
+
+    python setup.py bdist_wheel
+
+On Linux additionally do repairing of package
+
+    pip install auditwheel
+    auditwheel repair dist/CGRtools-<version>-<python_version>-linux_x86_64.whl
+
 COPYRIGHT
 =========
 
-2014-2019 Ramil Nugmanov <stsouko@live.ru> main developer  
+2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer  
 2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 
 CONTRIBUTORS
 ============
 
-* Timur Gimadiev <timur.gimadiev@gmail.com>
-* Ravil Mukhametgaleev <sonic-mc@mail.ru>
-* Tagir Akhmetshin <tagirshin@gmail.com>
-* Adelia Fatykhova <adelik21979@gmail.com>
 * Dinar Batyrshin <batyrshin-dinar@mail.ru>
+* Timur Gimadiev <timur.gimadiev@gmail.com>
+* Adelia Fatykhova <adelik21979@gmail.com>
+* Tagir Akhmetshin <tagirshin@gmail.com>
+* Ravil Mukhametgaleev <sonic-mc@mail.ru>

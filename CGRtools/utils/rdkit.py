@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,42 +18,56 @@
 #
 from rdkit.Chem import BondType, Atom, RWMol, SanitizeMol, Conformer
 from ..containers import MoleculeContainer
+from ..periodictable import Element
 
 
 def from_rdkit_molecule(data):
     """
     RDKit molecule object to MoleculeContainer converter
     """
-    m = MoleculeContainer()
+    mol = MoleculeContainer()
+    parsed_mapping = mol._parsed_mapping
+    mol_conformers = mol._conformers
+
     atoms, mapping = [], []
     for a in data.GetAtoms():
-        atom = {'element': a.GetSymbol(), 'charge': a.GetFormalCharge()}
+        e = Element.from_symbol(a.GetSymbol())
+        isotope = a.GetIsotope()
+        if isotope:
+            e = e(isotope)
+        else:
+            e = e()
+        atom = {'atom': e, 'charge': a.GetFormalCharge()}
+
+        radical = a.GetNumRadicalElectrons()
+        if radical:
+            atom['is_radical'] = True
+
         atoms.append(atom)
         mapping.append(a.GetAtomMapNum())
 
-        isotope = a.GetIsotope()
-        if isotope:
-            atom['isotope'] = isotope
-        radical = a.GetNumRadicalElectrons()
-        if radical:
-            atom['multiplicity'] = radical + 1
+    conformers = []
+    c = data.GetConformers()
+    if c:
+        for atom, (x, y, _) in zip(atoms, c[0].GetPositions()):
+            atom['xy'] = (x, y)
+        for c in c:
+            if c.Is3D():
+                conformers.append(c.GetPositions())
 
-    conformers = data.GetConformers()
-    if conformers:
-        for atom, (x, y, z) in zip(atoms, conformers[0].GetPositions()):
-            atom['x'] = x
-            atom['y'] = y
-            atom['z'] = z
-
-    for atom, mapping in zip(atoms, mapping):
-        a = m.add_atom(atom)
-        if mapping:
-            m.atom(a)._parsed_mapping = mapping
+    new_map = []
+    for a, n in zip(atoms, mapping):
+        a = mol.add_atom(**a)
+        new_map.append(a)
+        parsed_mapping[a] = n
 
     for bond in data.GetBonds():
-        m.add_bond(bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1, _rdkit_bond_map[bond.GetBondType()])
+        mol.add_bond(new_map[bond.GetBeginAtomIdx()], new_map[bond.GetEndAtomIdx()],
+                     _rdkit_bond_map[bond.GetBondType()])
 
-    return m
+    for c in conformers:
+        mol_conformers.append({k: tuple(v) for k, v in zip(new_map, c)})
+    return mol
 
 
 def to_rdkit_molecule(data):
@@ -61,29 +75,34 @@ def to_rdkit_molecule(data):
     MoleculeContainer to RDKit molecule object converter
     """
     mol = RWMol()
-    conf = Conformer()
     mapping = {}
-    is_3d = False
+
     for n, a in data.atoms():
-        ra = Atom(a.number)
+        ra = Atom(a.atomic_number)
         ra.SetAtomMapNum(n)
         if a.charge:
             ra.SetFormalCharge(a.charge)
-        if a.isotope != a.common_isotope:
+        if a.isotope:
             ra.SetIsotope(a.isotope)
-        if a.radical:
-            ra.SetNumRadicalElectrons(a.radical)
-        mapping[n] = m = mol.AddAtom(ra)
-        conf.SetAtomPosition(m, (a.x, a.y, a.z))
-        if a.z:
-            is_3d = True
-    if not is_3d:
-        conf.Set3D(False)
+        if a.is_radical:
+            ra.SetNumRadicalElectrons(1)
+        mapping[n] = mol.AddAtom(ra)
 
     for n, m, b in data.bonds():
         mol.AddBond(mapping[n], mapping[m], _bond_map[b.order])
 
+    conf = Conformer()
+    for n, a in data.atoms():
+        conf.SetAtomPosition(mapping[n], (a.x, a.y, 0))
+    conf.Set3D(False)
     mol.AddConformer(conf)
+
+    for c in data._conformers:
+        conf = Conformer()
+        for n, xyz in c.items():
+            conf.SetAtomPosition(mapping[n], xyz)
+        mol.AddConformer(conf)
+
     SanitizeMol(mol)
     return mol
 

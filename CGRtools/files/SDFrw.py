@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -23,28 +23,26 @@ from logging import warning
 from subprocess import check_output
 from sys import platform
 from traceback import format_exc
-from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, prepare_meta
+from warnings import warn
+from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
 
 
-class SDFread(CGRread, WithMixin, MDLread):
+class SDFRead(MDLRead):
     """
     MDL SDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, indexable=False, **kwargs):
+    def __init__(self, *args, indexable=False, **kwargs):
         """
-        :param indexable: if True:
-            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
-            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
-            the object behaves like a normal open file
-                        if False:
-            works like generator converting a record into MoleculeContainer and returning each object in order,
-            records with errors are skipped
+        :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
+            dealing with a real file (the path to the file is specified) because the external grep utility is used,
+            supporting in unix-like OS the object behaves like a normal open file.
+
+            if False: works like generator converting a record into MoleculeContainer and returning each object in
+            order, records with errors are skipped
         """
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -108,9 +106,12 @@ class SDFread(CGRread, WithMixin, MDLread):
 
             elif line.startswith("$$$$"):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        yield self._convert_structure(record)
+                        container, mapping = self._convert_structure(record)
+                        yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         yield None
@@ -130,13 +131,15 @@ class SDFread(CGRread, WithMixin, MDLread):
                     if data:
                         meta[mkey].append(data)
             elif im:
+                if im == 3:  # parse mol title
+                    title = line.strip()
                 im -= 1
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLread(line)
+                        parser = MOLRead(line)
                     elif 'V3000' in line:
-                        parser = EMOLread()
+                        parser = EMOLRead()
                     else:
                         raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -145,35 +148,80 @@ class SDFread(CGRread, WithMixin, MDLread):
                     yield None
 
         if record:  # True for MOL file only.
-            record['meta'] = prepare_meta(meta)
+            record['meta'] = self._prepare_meta(meta)
+            if title:
+                record['title'] = title
             try:
-                yield self._convert_structure(record)
+                container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
 
 
-class SDFwrite(MOLwrite, WithMixin):
+class SDFWrite(MDLWrite):
     """
     MDL SDF files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
-
     def write(self, data):
         """
         write single molecule into file
         """
-        m = self._convert_structure(data)
-        self._file.write(self._format_mol(*m))
-        self._file.write('M  END\n')
+        mol = self._convert_structure(data)
+        if isinstance(mol, list):
+            self._file.write('$$$$\n'.join(mol))
+        else:
+            self._file.write(mol)
 
         for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')
         self._file.write('$$$$\n')
 
 
-__all__ = ['SDFread', 'SDFwrite']
+class SDFread:
+    def __init__(self, *args, **kwargs):
+        warn('SDFread deprecated. Use SDFRead instead', DeprecationWarning)
+        warning('SDFread deprecated. Use SDFRead instead')
+        self.__obj = SDFRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __getitem__(self, item):
+        return self.__obj[item]
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+    def __len__(self):
+        return len(self.__obj)
+
+
+class SDFwrite:
+    def __init__(self, *args, **kwargs):
+        warn('SDFwrite deprecated. Use SDFWrite instead', DeprecationWarning)
+        warning('SDFwrite deprecated. Use SDFWrite instead')
+        self.__obj = SDFWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
+__all__ = ['SDFRead', 'SDFWrite', 'SDFread', 'SDFwrite']

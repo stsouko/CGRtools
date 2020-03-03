@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,11 +17,13 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from functools import reduce
+from logging import warning
 from operator import or_
+from warnings import warn
 from .containers import MoleculeContainer, CGRContainer, ReactionContainer
 
 
-class CGRpreparer:
+class CGRPreparer:
     def __init__(self, cgr_type='0'):
         """
         CGR creation
@@ -59,6 +61,9 @@ class CGRpreparer:
 
     @staticmethod
     def decompose(data):
+        """
+        decompose CGR into reaction
+        """
         if not isinstance(data, CGRContainer):
             raise TypeError('CGR only supported')
         r, p = ~data
@@ -160,4 +165,14 @@ class CGRpreparer:
         return reduce(or_, data) if data else MoleculeContainer()
 
 
-__all__ = ['CGRpreparer']
+class CGRpreparer:
+    def __init__(self, *args, **kwargs):
+        warn('CGRpreparer deprecated. Use CGRPreparer instead', DeprecationWarning)
+        warning('CGRpreparer deprecated. Use CGRPreparer instead')
+        self.__obj = CGRPreparer(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+
+__all__ = ['CGRPreparer']

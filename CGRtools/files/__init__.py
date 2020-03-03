@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -24,6 +24,7 @@ from .MRVrw import *
 from .RDFrw import *
 from .SDFrw import *
 from .SMILESrw import *
+from .XYZrw import *
 
 
-__all__ = [x for x in locals() if x.endswith(('read', 'write'))]
+__all__ = [x for x in locals() if x.endswith(('Read', 'Write'))]

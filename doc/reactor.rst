@@ -1,7 +1,7 @@
-CGRtools\.attributes package
+CGRtools\.reactor package
 ============================
 
-.. automodule:: CGRtools.attributes
+.. automodule:: CGRtools.reactor
     :members:
     :undoc-members:
     :show-inheritance:

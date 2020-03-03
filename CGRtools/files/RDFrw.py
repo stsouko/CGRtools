@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -26,30 +26,28 @@ from subprocess import check_output
 from sys import platform
 from time import strftime
 from traceback import format_exc
-from ._CGRrw import WithMixin, CGRread, CGRwrite
-from ._MDLrw import MOLwrite, MOLread, MDLread, EMOLread, RXNread, ERXNread, prepare_meta
-from ..containers.common import BaseContainer
-from ..exceptions import InvalidFileType
+from warnings import warn
+from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
+from ..containers import ReactionContainer
+from ..containers.common import Graph
 
 
-class RDFread(CGRread, WithMixin, MDLread):
+class RDFRead(MDLRead):
     """
     MDL RDF files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, file, *args, indexable=False, **kwargs):
+    def __init__(self, *args, indexable=False, **kwargs):
         """
-        :param indexable: if True:
-            supported methods seek, tell, object size and subscription, it only works when dealing with a real file
-            (the path to the file is specified) because the external grep utility is used, supporting in unix-like OS
-            the object behaves like a normal open file
-                        if False:
-            works like generator converting a record into ReactionContainer and returning each object in order,
-            records with errors are skipped
+        :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
+            dealing with a real file (the path to the file is specified) because the external grep utility is used,
+            supporting in unix-like OS the object behaves like a normal open file.
+
+            if False: works like generator converting a record into ReactionContainer and returning each object in
+            order, records with errors are skipped
         """
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -123,7 +121,7 @@ class RDFread(CGRread, WithMixin, MDLread):
             is_reaction = meta = None
             yield True
         else:
-            raise InvalidFileType
+            raise ValueError('invalid file')
 
         for line in self.__file:
             if failed and not line.startswith(('$RFMT', '$MFMT')):
@@ -140,9 +138,15 @@ class RDFread(CGRread, WithMixin, MDLread):
                     yield None
             elif line.startswith('$RFMT'):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -160,9 +164,15 @@ class RDFread(CGRread, WithMixin, MDLread):
                 meta = defaultdict(list)
             elif line.startswith('$MFMT'):
                 if record:
-                    record['meta'] = prepare_meta(meta)
+                    record['meta'] = self._prepare_meta(meta)
+                    if title:
+                        record['title'] = title
                     try:
-                        seek = yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                        if is_reaction:
+                            container, mapping = self._convert_reaction(record)
+                        else:
+                            container, mapping = self._convert_structure(record)
+                        seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
                         seek = yield None
@@ -187,19 +197,21 @@ class RDFread(CGRread, WithMixin, MDLread):
                     if data:
                         meta[mkey].append(data)
             elif ir:
+                if ir == 3:  # parse mol or rxn title
+                    title = line.strip()
                 ir -= 1
-            elif not ir:
+            else:
                 try:
                     if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
-                            parser = ERXNread(line, self._ignore)
+                            parser = ERXNRead(line, self._ignore)
                         else:
-                            parser = RXNread(line, self._ignore)
+                            parser = RXNRead(line, self._ignore)
                     else:
                         if 'V2000' in line:
-                            parser = MOLread(line)
+                            parser = MOLRead(line)
                         elif 'V3000' in line:
-                            parser = EMOLread()
+                            parser = EMOLRead()
                         else:
                             raise ValueError('invalid MOL entry')
                 except ValueError:
@@ -207,9 +219,15 @@ class RDFread(CGRread, WithMixin, MDLread):
                     warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
                     yield None
         if record:
-            record['meta'] = prepare_meta(meta)
+            record['meta'] = self._prepare_meta(meta)
+            if title:
+                record['title'] = title
             try:
-                yield self._convert_reaction(record) if is_reaction else self._convert_structure(record)
+                if is_reaction:
+                    container, mapping = self._convert_reaction(record)
+                else:
+                    container, mapping = self._convert_structure(record)
+                yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
                 yield None
@@ -217,15 +235,17 @@ class RDFread(CGRread, WithMixin, MDLread):
     __already_seeked = False
 
 
-class RDFwrite(MOLwrite, WithMixin):
+class RDFWrite(MDLWrite):
     """
     MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        super(CGRwrite, self).__init__(file, 'w')
+    def __init__(self, file, *, write3d: bool = False):
+        """
+        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
+        """
+        super().__init__(file, write3d=int(write3d))
 
     def write(self, data):
         """
@@ -236,22 +256,66 @@ class RDFwrite(MOLwrite, WithMixin):
         self.write = self.__write
 
     def __write(self, data):
-        if isinstance(data, BaseContainer):
+        if isinstance(data, Graph):
             m = self._convert_structure(data)
             self._file.write('$MFMT\n')
-            self._file.write(self._format_mol(*m['structure']))
-            self._file.write('M  END\n')
-        else:
-            self._file.write('$RFMT\n$RXN\n\n\n\n'
+            self._file.write(m)
+        elif isinstance(data, ReactionContainer):
+            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n'
                              f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)
                 self._file.write('$MOL\n')
-                self._file.write(self._format_mol(*m))
-                self._file.write('M  END\n')
+                self._file.write(m)
+        else:
+            raise TypeError('Graph or Reaction object expected')
 
         for k, v in data.meta.items():
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
 
-__all__ = ['RDFread', 'RDFwrite']
+class RDFread:
+    def __init__(self, *args, **kwargs):
+        warn('RDFread deprecated. Use RDFRead instead', DeprecationWarning)
+        warning('RDFread deprecated. Use RDFRead instead')
+        self.__obj = RDFRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __getitem__(self, item):
+        return self.__obj[item]
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+    def __len__(self):
+        return len(self.__obj)
+
+
+class RDFwrite:
+    def __init__(self, *args, **kwargs):
+        warn('RDFwrite deprecated. Use RDFWrite instead', DeprecationWarning)
+        warning('RDFwrite deprecated. Use RDFWrite instead')
+        self.__obj = RDFWrite(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
+
+
+__all__ = ['RDFRead', 'RDFWrite', 'RDFread', 'RDFwrite']

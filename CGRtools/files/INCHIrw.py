@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,78 +17,136 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POINTER, Structure, cdll, byref
+from distutils.util import get_platform
+from io import StringIO, TextIOWrapper
 from logging import warning
+from os import name
+from pathlib import Path
 from re import split
-from sys import platform
+from sys import prefix, exec_prefix
 from traceback import format_exc
+from typing import List, Optional
 from warnings import warn
-from ._CGRrw import CGRread, WithMixin
-from . import __path__ as files_path
-from ..periodictable import common_isotopes
+from ._CGRrw import CGRRead, common_isotopes
+from ..containers import MoleculeContainer
 
 
-class INCHIread(CGRread, WithMixin):
+class INCHIRead(CGRRead):
     """
     INCHI separated per lines files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object.
     line should be start with INCHI string and
-    optionally continues with space/tab separated list of key:value [or key=value] data.
-    AuxInfo also can be stored in data.
-
-    example:
-    InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 AuxInfo=1/0/N:1,2/CRV:1+1/rA:2C+C/rB:s1;/rC:-8,4583,1,1250,0;-7,1247,1,8950,0;
-    id:123 key=value\n
+    optionally continues with space/tab separated list of key:value [or key=value] data if header=None.
+        example:
+            InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 id:123 key=value
+    if header=True then first line of file should be space/tab separated list of keys including INCHI column key.
+        example:
+            ignored_inchi_key key1 key2
+            InChI=1S/C2H5/c1-2/h1H2,2H3/q+1 1 2
+    also possible to pass list of keys (without inchi_pseudo_key) for mapping space/tab separated list
+    of INCHI and values: header=['key1', 'key2'] # order depended
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, *args, header=None, **kwargs):
+        if isinstance(file, str):
+            self.__file = open(file)
+            self.__is_buffer = False
+        elif isinstance(file, Path):
+            self.__file = file.open()
+            self.__is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self.__file = file
+            self.__is_buffer = True
+        else:
+            raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(*args, **kwargs)
-        super(CGRread, self).__init__(file)
-        self.__data = self.__reader()
 
-    def read(self):
+        if header is True:
+            self.__header = next(self.__file).split()[1:]
+        elif header:
+            if not isinstance(header, (list, tuple)) or not all(isinstance(x, str) for x in header):
+                raise TypeError('expected list (tuple) of strings')
+            self.__header = header
+        else:
+            self.__header = None
+
+        self._data = (self.parse(line) for line in self.__file)
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create INCHI parser function configured same as INCHIRead object
+        """
+        obj = object.__new__(cls)
+        obj._INCHIRead__header = None
+        super(INCHIRead, obj).__init__(*args, **kwargs)
+        return obj.parse
+
+    def close(self, force=False):
+        """
+        close opened file
+
+        :param force: force closing of externally opened file or buffer
+        """
+        if not self.__is_buffer or force:
+            self.__file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    def read(self) -> List[Optional[MoleculeContainer]]:
         """
         parse whole file
 
         :return: list of parsed molecules
         """
-        return list(self.__data)
+        return list(iter(self))
 
     def __iter__(self):
-        return self.__data
+        return (x for x in self._data if x is not None)
 
     def __next__(self):
-        return next(self.__data)
+        return next(iter(self))
 
-    def __reader(self):
-        for line in self._file:
-            inchi, *data = line.split()
+    def parse(self, inchi: str) -> Optional[MoleculeContainer]:
+        """
+        convert INCHI string into MoleculeContainer object. string should be start with INCHI and
+        optionally continues with space/tab separated list of key:value [or key=value] data.
+        """
+        inchi, *data = inchi.split()
+        if self.__header is None:
             meta = {}
-            aux = None
             for x in data:
-                if x.startswith('AuxInfo='):
-                    aux = x
-                else:
-                    try:
-                        k, v = split('[=:]', x, 1)
-                        meta[k.strip()] = v.strip()
-                    except ValueError:
-                        warning(f'invalid metadata entry: {x}')
-            try:
-                record = self.__parse_aux(aux) if aux else self.__parse_inchi(inchi)
-            except ValueError:
-                warning(f'line: {inchi} {aux}\nconsist errors:\n{format_exc()}')
-                continue
+                try:
+                    k, v = split('[=:]', x, 1)
+                    meta[k] = v
+                except ValueError:
+                    warning(f'invalid metadata entry: {x}')
+        else:
+            meta = dict(zip(self.__header, data))
 
-            record['meta'] = meta
-            try:
-                yield self._convert_structure(record)
-            except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
+        try:
+            record = self.__parse_inchi(inchi)
+        except ValueError:
+            warning(f'string: {inchi}\nconsist errors:\n{format_exc()}')
+            return
+
+        record['meta'] = meta
+        try:
+            container, mapping = self._convert_structure(record)
+            return container
+        except ValueError:
+            warning(f'record consist errors:\n{format_exc()}')
 
     @staticmethod
     def __parse_inchi(string):
         structure = INCHIStructure()
-        lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure))
+        if lib.GetStructFromINCHI(byref(InputINCHI(string)), byref(structure)):
+            lib.FreeStructFromINCHI(byref(structure))
+            raise ValueError('invalid INCHI')
 
         atoms, bonds = [], []
         seen = set()
@@ -105,7 +163,7 @@ class INCHIread(CGRread, WithMixin):
 
             atoms.append({'element': element, 'charge': int.from_bytes(atom.charge, byteorder='big', signed=True),
                           'mapping': 0, 'x': atom.x, 'y': atom.y, 'z': atom.z, 'isotope': isotope,
-                          'multiplicity': int.from_bytes(atom.radical, byteorder='big') or None})
+                          'is_radical': bool(int.from_bytes(atom.radical, byteorder='big'))})
 
             for k in range(atom.num_bonds):
                 m = atom.neighbor[k]
@@ -114,20 +172,9 @@ class INCHIread(CGRread, WithMixin):
                 order = atom.bond_type[k]
                 if order:
                     bonds.append((n, m, order))
-        lib.FreeStructFromINCHI(byref(structure))
-        return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
 
-    @staticmethod
-    def __parse_aux(string):
-        atoms, bonds = [], []
-        for n in range(structure.num_atoms):
-            atom = structure.atom[n]
-            print(atom.x)
-            atoms.append({'element': atom.elname, 'charge': atom.charge, 'mapping': 0, 'x': atom.x, 'y': atom.y,
-                          'z': atom.z, 'mark': None, 'isotope': atom.isotopic_mass, 'multiplicity': atom.radical})
-            # (b['a0'], b['a1'], {'order': self.__bond_map[b['order']]}, None)
-        print(atoms)
-        return {'atoms': atoms, 'extra': [], 'cgr': [], 'bonds': bonds}
+        lib.FreeStructFromINCHI(byref(structure))
+        return {'atoms': atoms, 'bonds': bonds}
 
 
 class InputINCHI(Structure):
@@ -184,20 +231,62 @@ class INCHIStructure(Structure):
                 ]
 
 
-class AUXStructure(Structure):
-    pass
+class INCHIread:
+    def __init__(self, *args, **kwargs):
+        warn('INCHIread deprecated. Use INCHIRead instead', DeprecationWarning)
+        warning('INCHIread deprecated. Use INCHIRead instead')
+        self.__obj = INCHIRead(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self.__obj, item)
+
+    def __iter__(self):
+        return iter(self.__obj)
+
+    def __next__(self):
+        return next(self.__obj)
+
+    def __enter__(self):
+        return self.__obj.__enter__()
+
+    def __exit__(self, _type, value, traceback):
+        return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['INCHIread']
+def getsitepackages():
+    """returns a list containing all global site-packages directories. stolen and modified site.py function
+    """
+    sitepackages = []
+    for pr in {prefix, exec_prefix}:
+        pr = Path(pr)
+        if name == 'posix':
+            sitepackages.append(pr / 'local/lib')
+        else:
+            sitepackages.append(pr)
+        sitepackages.append(pr / 'lib')
+    return sitepackages
 
-if platform == 'linux':
-    opt_flag = '-'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.so')
 
-elif platform == 'win32':
-    opt_flag = '/'
-    lib = cdll.LoadLibrary(f'{files_path[0]}/dll/libinchi.dll')
+platform = get_platform()
+if platform in ('linux-x86_64', 'win-amd64'):
+    if platform == 'win-amd64':
+        opt_flag = '/'
+        libname = 'libinchi.dll'
+    else:
+        opt_flag = '-'
+        libname = 'libinchi.so'
+
+    for site in getsitepackages():
+        lib_path = site / libname
+        if lib_path.exists():
+            lib = cdll.LoadLibrary(str(lib_path))
+            __all__ = ['INCHIRead', 'INCHIread']
+            break
+    else:
+        warn('broken package installation. libinchi not found', ImportWarning)
+        __all__ = []
+        del INCHIRead, INCHIread
 else:
     warn('unsupported platform', ImportWarning)
     __all__ = []
-    del INCHIread
+    del INCHIRead, INCHIread

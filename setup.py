@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,25 +17,43 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from distutils.util import get_platform
 from pathlib import Path
 from setuptools import setup
+from wheel.bdist_wheel import bdist_wheel
+
+
+platform = get_platform()
+if platform == 'win-amd64':
+    libinchi = ['INCHI/libinchi.dll']
+elif platform == 'linux-x86_64':
+    libinchi = ['INCHI/libinchi.so']
+else:
+    libinchi = []
+
+
+class _bdist_wheel(bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False
 
 
 setup(
     name='CGRtools',
-    version='3.1.5',
-    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.attributes', 'CGRtools.containers', 'CGRtools.files',
-              'CGRtools.files.dll', 'CGRtools.periodictable', 'CGRtools.utils'],
+    version='4.0.17',
+    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
+              'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
-    author_email='stsouko@live.ru',
+    author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.1',
-    install_requires=['networkx>=2.3rc1.dev,<2.4', 'lxml>=4.1.1,<4.3'],
-    extras_require={'smiles': ['coho>=0.4,<0.5']},
-    package_data={'CGRtools.files.dll': ['LICENCE', 'readme.txt', 'libinchi.so', 'libinchi.dll']},
+    cmdclass={'bdist_wheel': _bdist_wheel},
+    install_requires=['CachedMethods>=0.1.4,<0.2', 'numpy>=1.18', 'numba>=0.46'],
+    extras_require={'mrv': ['lxml>=4.1,<4.5']},
+    data_files=[('lib', libinchi)],
     zip_safe=False,
-    long_description=(Path(__file__).parent / 'README.md').open().read(),
+    long_description=(Path(__file__).parent / 'README.md').read_text(),
     classifiers=['Environment :: Plugins',
                  'Intended Audience :: Science/Research',
                  'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',

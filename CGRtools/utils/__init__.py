@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -25,6 +25,5 @@ __all__ = []
 
 
 if find_spec('rdkit'):
-    from . import rdkit
     from .rdkit import *
-    __all__.extend(rdkit.__all__)
+    __all__.extend(['from_rdkit_molecule', 'to_rdkit_molecule'])

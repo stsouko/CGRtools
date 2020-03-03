@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017, 2018 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -22,18 +22,57 @@ class EmptyMolecule(ValueError):
     """
     bad files parsing
     """
-    pass
 
 
 class MappingError(ValueError):
     """
     bad files parsing
     """
-    pass
 
 
-class InvalidFileType(TypeError):
+class AtomNotFound(KeyError):
     """
-    bad files parsing
+    bad atom number
     """
-    pass
+
+
+class NotChiral(KeyError):
+    """
+    bad atom number
+    """
+
+
+class IsChiral(KeyError):
+    """
+    bad atom number
+    """
+
+
+class InvalidAromaticRing(ValueError):
+    """
+    aromatic ring has impossible kekule structure
+    """
+
+
+class IsConnectedAtom(Exception):
+    """
+    atom already attached to graph
+    """
+
+
+class IsNotConnectedAtom(Exception):
+    """
+    atom already attached to graph
+    """
+
+
+class ValenceError(Exception):
+    """
+    atom has error in valence
+    """
+
+
+class IncorrectSmiles(ValueError):
+    """
+    SMILES string invalid
+    """

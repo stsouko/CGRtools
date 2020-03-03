@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <stsouko@live.ru>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -17,431 +17,676 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
-from itertools import permutations, repeat
-from ..attributes import QueryAtom, Bond
+from itertools import chain
 
 
 class Standardize:
-    def standardize(self):
-        """
-        standardize functional groups
+    __slots__ = ()
 
-        :return: number of found groups
+    def standardize(self) -> bool:
         """
-        self.reset_query_marks()
-        seen = set()
-        total = 0
-        for n, atom in self.atoms():
-            if n in seen:
+        Standardize functional groups. Return True if any not canonical group found.
+        """
+        neutralized = self.neutralize()
+        atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
+        bonds = self._bonds
+        hs = set()
+        for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
+            for mapping in pattern.get_mapping(self):
+                hs.update(mapping.values())
+
+                for n, fix in atom_fix.items():
+                    n = mapping[n]
+                    for key, value in fix.items():
+                        atom_map[key][n] = value
+                for n, m, b in bonds_fix:
+                    bonds[mapping[n]][mapping[m]]._Bond__order = b
+        if hs:
+            if not neutralized:
+                self.flush_cache()
+            for n in hs:
+                self._calc_implicit(n)
+            return True
+        return False
+
+    def neutralize(self) -> bool:
+        """
+        Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
+        """
+        charges = self._charges
+        radicals = self._radicals
+        entries, exits, rads, constrains = self.__entries()
+        hs = set()
+        while len(rads) > 1:
+            n = rads.pop()
+            path = self.__find_delocalize_path(n, rads, constrains)
+            if path:
+                self.__patch_path(path)
+                m = path[-1][1]
+                radicals[n] = radicals[m] = False
+                rads.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+        while entries and exits:
+            n = entries.pop()
+            path = self.__find_delocalize_path(n, exits, constrains)
+            if path:
+                self.__patch_path(path)
+                m = path[-1][1]
+                charges[n] += 1
+                charges[m] -= 1
+                exits.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+        if hs:
+            self.flush_cache()
+            for n in hs:
+                self._calc_implicit(n)
+                self._calc_hybridization(n)
+            return True
+        return False
+
+    def __patch_path(self, path):
+        bonds = self._bonds
+        for n, m, b in path:
+            bonds[n][m]._Bond__order = b
+
+    def __find_delocalize_path(self, start, finish, constrains):
+        bonds = self._bonds
+        stack = [(start, n, 0, b.order + 1) for n, b in bonds[start].items() if n in constrains and b.order < 3]
+        path = []
+        seen = {start}
+        while stack:
+            last, current, depth, order = stack.pop()
+            if len(path) > depth:
+                seen.difference_update(x for _, x, _ in path[depth:])
+                path = path[:depth]
+
+            path.append((last, current, order))
+
+            if current in finish:
+                if depth:  # one bonded ignored. we search double bond transfer! A=A-A >> A-A=A.
+                    return path
+                continue  # stop grow
+
+            depth += 1
+            seen.add(current)
+            diff = -1 if depth % 2 else 1
+            stack.extend((current, n, depth, b) for n, b in  # I want 3.8
+                         ((n, b.order + diff) for n, b in bonds[current].items() if n not in seen and n in constrains)
+                         if 1 <= b <= 3)
+
+    def __entries(self):
+        charges = self._charges
+        radicals = self._radicals
+        atoms = self._atoms
+
+        transfer = set()
+        entries = set()
+        exits = set()
+        rads = set()
+        for n, a in atoms.items():
+            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}:  # filter non-organic set and halogens
                 continue
-            for k, center in central.items():
-                if center != atom:
-                    continue
-                shell = tuple((bond, self._node[m]) for m, bond in self._adj[n].items())
-                for shell_query, shell_patch, atom_patch in query_patch[k]:
-                    if shell_query != shell:
-                        continue
-                    total += 1
-                    for attr_name, attr_value in atom_patch.items():
-                        setattr(atom, attr_name, attr_value)
-                    for (bond_patch, atom_patch), (bond, atom) in zip(shell_patch, shell):
-                        bond.update(bond_patch)
-                        for attr_name, attr_value in atom_patch.items():
-                            setattr(atom, attr_name, attr_value)
-                    seen.add(n)
-                    seen.update(self._adj[n])
-                    break
-                else:
-                    continue
-                break
+            transfer.add(n)
+            if charges[n] == -1:
+                entries.add(n)
+            elif charges[n] == 1:
+                exits.add(n)
+            elif radicals[n]:
+                rads.add(n)
+        return entries, exits, rads, transfer
+
+    @staticmethod
+    def _standardize_rules():
+        rules = []
+
+        # Nitrone
+        #
+        #      O          O-
+        #     //         /
+        # C = N  >> C = N+
+        #      \         \
+        #       C         C
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O'}, {'atom': 'C', 'hybridization': 2}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrone
+        #
+        # N = N = O >> N = N+ - O-
+        #     |            |
+        #     C            C
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O'}, {'atom': 'N', 'hybridization': 2}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrone
+        #
+        # N- - N+ = O >> N = N+ - O-
+        #      |             |
+        #      C             C
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O'},
+                 {'atom': 'N', 'charge': -1, 'hybridization': 1}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 1), (1, 4, 1))
+        atom_fix = {2: {'charge': -1, 'hybridization': 1}, 3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 1), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitro
+        #
+        #      O         O
+        #     //        //
+        # C = N  >> C - N+
+        #      \         \
+        #       OH        O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O'},
+                 {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1}, 4: {'hybridization': 1}}
+        bonds_fix = ((1, 4, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitro
+        #
+        #       O-         O-
+        #      /          /
+        # C = N+  >>  C - N+
+        #      \          \\
+        #       OH         O
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
+        atom_fix = {3: {'hybridization': 2}, 4: {'hybridization': 1}}
+        bonds_fix = ((1, 3, 2), (1, 4, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitro
+        #
+        #   O          O-
+        #  //         /
+        #  N  >> C - N+
+        #  \\        \\
+        #   O         O
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 3}, {'atom': 'O'}, {'atom': 'O'})
+        bonds = ((1, 2, 2), (1, 3, 2))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        #  N- - N+ # N  >>  N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2},
+                 {'atom': 'N', 'charge': -1, 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 3))
+        atom_fix = {2: {'charge': 0, 'hybridization': 2}, 3: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        #  N+ # N = N-  >>  N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
+                 {'atom': 'N', 'charge': -1, 'neighbors': 1})
+        bonds = ((1, 2, 3), (1, 3, 2))
+        atom_fix = {1: {'charge': 1}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        # N = N # N >> N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2},
+                 {'atom': 'N', 'neighbors': 2, 'hybridization': 2}, {'atom': 'N', 'neighbors': 1})
+        bonds = ((1, 2, 2), (1, 3, 3))
+        atom_fix = {1: {'charge': 1}, 3: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 3, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        # - N = N = N >> - N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2},
+                 {'atom': 'N', 'neighbors': 2, 'hybridization': 2}, {'atom': 'N', 'neighbors': 1})
+        bonds = ((1, 2, 2), (1, 3, 2))
+        atom_fix = {1: {'charge': 1}, 3: {'charge': -1}}
+        bonds_fix = ()
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Azide
+        #
+        # - NH - N # N >> - N = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2},
+                 {'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 3))
+        atom_fix = {1: {'charge': 1}, 2: {'hybridization': 2}, 3: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrile oxide
+        #
+        # - C # N = O >> - C # N+ - O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'O'}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 3))
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Tetriary N-oxide
+        #
+        #    C          C
+        #    |          |
+        #  - N -  >>  - N+ -
+        #    \\         |
+        #     O         O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 2}, {'atom': 'O'}, {'atom': 'C'})
+        bonds = ((1, 2, 2), (1, 3, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Diazo
+        #
+        #  C- - N+ # N  >>  C = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2}, {'atom': 'N', 'neighbors': 1},
+                 {'atom': 'C', 'charge': -1, 'hybridization': 1})
+        bonds = ((1, 2, 3), (1, 3, 1))
+        atom_fix = {2: {'charge': -1, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Diazo
+        #
+        # C = N # N >> C = N+ = N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 3), (1, 3, 2))
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Diazonium
+        #
+        #  C - N = N+  >>  C - N+ # N
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 1},
+                 {'atom': 'C', 'hybridization': 1})
+        bonds = ((1, 2, 2), (1, 3, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 3}}
+        bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Isocyanate
+        #
+        #  N+ - C- = O  >>  N = C = O
+        #
+        atoms = ({'atom': 'C', 'charge': -1, 'neighbors': 2},
+                 {'atom': 'N', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 1}, {'atom': 'O'})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Aromatic N-Oxide
+        #
+        #  : N :  >>  : N+ :
+        #    \\          \
+        #     O           O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O'})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitroso
+        #
+        # - N+ - O-  >>  - N = O
+        #
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2, 'hybridization': 1}, {'atom': 'O', 'charge': -1})
+        bonds = ((1, 2, 1),)
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Iminium
+        #
+        #  C+ - N  >> C = N+
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 1}, {'atom': 'C', 'charge': 1, 'hybridization': 1})
+        bonds = ((1, 2, 1),)
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrilium
+        #
+        #  C+ = N  >>  C # N+
+        #
+        atoms = ({'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'C', 'charge': 1, 'neighbors': 2})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'charge': 1, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 3}}
+        bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Phosphonic
+        #
+        #      O                O
+        #      |                |
+        #  C - P+ - O-  >>  C - P = O
+        #      |                |
+        #      O                O
+        #
+        atoms = ({'atom': 'P', 'charge': 1, 'neighbors': 4}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'},
+                 {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Phosphonium ylide
+        #
+        #      C                C
+        #      |                |
+        #  C - P- - C+  >>  C - P = C
+        #      |                |
+        #      C                C
+        #
+        atoms = ({'atom': 'P', 'charge': -1, 'neighbors': 4}, {'atom': 'C', 'charge': 1}, {'atom': 'C'}, {'atom': 'C'},
+                 {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfoxide
+        #
+        #      C                C
+        #      |                |
+        #  O = S+ - O-  >>  O = S = O
+        #      |                |
+        #      C                C
+        #
+        atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 4},
+                 {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfoxonium ylide
+        #
+        #      C                C
+        #      |                |
+        #  C = S+ - O-  >>  C = S = O
+        #      |                |
+        #      C                C
+        #
+        atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 4},
+                 {'atom': 'O', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfon
+        #
+        #        C           C
+        #       /           /
+        # O- - S+  >>  O = S
+        #       \           \
+        #        C           C
+        #
+        atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 3},
+                 {'atom': 'O', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfonium ylide
+        #
+        #  C - S- - C+  >>  C - S = C
+        #      |                |
+        #      C                C
+        #
+        atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3},
+                 {'atom': 'C', 'charge': 1, 'hybridization': 1}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfine
+        #
+        #  O- - S+ = C  >>  O = S = C
+        #
+        atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 2},
+                 {'atom': 'O', 'charge': -1}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Silicate Selenite
+        #
+        #        O            O
+        #       /            /
+        # O- - Si+  >>  O = Si
+        #       \            \
+        #        O            O
+        #
+        atoms = ({'atom': 'Si', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        atoms = ({'atom': 'Se', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Carbon Monoxide
+        #
+        # [CX1] = O  >> С- # O+
+        #
+
+        atoms = ({'atom': 'C', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 2), )
+        atom_fix = {1: {'charge': -1, 'hybridization': 3, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 3}}
+        bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Ozone
+        #
+        # [O] -- O -- [O]  >>  O == [O+] -- [O-]
+        #
+
+        atoms = ({'atom': 'O', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 2},
+                 {'atom': 'O', 'neighbors': 1, 'is_radical': True})
+        bonds = ((1, 2, 1), (2, 3, 1))
+        atom_fix = {1: {'hybridization': 2, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 2},
+                    3: {'charge': -1, 'is_radical': False}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        return rules
+
+
+class StandardizeReaction:
+    __slots__ = ()
+
+    def standardize(self, fix_mapping: bool = True) -> bool:
+        """
+        Standardize functional groups. Works only for Molecules.
+        Return True if in any molecule found not canonical group.
+
+        :param fix_mapping: Search AAM errors of functional groups.
+        """
+        total = False
+        for m in self.molecules():
+            if hasattr(m, 'standardize'):
+                if m.standardize() and not total:
+                    total = True
+
+        if fix_mapping and self.fix_mapping():
+            return True
+
         if total:
             self.flush_cache()
         return total
 
+    def fix_mapping(self) -> bool:
+        """
+        Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors
+        """
+        seen = set()
+        for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
+            found = []
+            for m in self.reactants:
+                for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
+                    if mapping[1] not in seen:
+                        found.append(({fix.get(k, k): v for k, v in mapping.items()},
+                                      {mapping[k]: mapping[v] for k, v in fix.items()}))
 
-def _prepare(q, p):
-    d = len(q) - len(p) + 1
-    if d:
-        p.extend([({}, {})] * d)
-    doubles = []
-    for q, p, c in zip(permutations(q), permutations(p[1:]), repeat(p[0])):
-        if q in doubles:
-            continue
-        doubles.append(q)
-        yield q, p, c
+            if not found:
+                continue
+            for m in self.products:
+                for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
+                    atom = mapping[1]
+                    if atom in seen:
+                        continue
+                    for n, (k, v) in enumerate(found):
+                        if k == mapping:
+                            break
+                    else:
+                        continue
 
+                    del found[n]
+                    m.remap(v)
+                    seen.add(atom)
 
-central = {}
-query_patch = defaultdict(list)
+        if seen:
+            self.flush_cache()
+            return True
+        return False
 
-# patterns
-b1 = Bond()
-b2 = Bond()
-b3 = Bond()
-b4 = Bond()
-b2.order = 2
-b3.order = 3
-b4.order = 4
+    @staticmethod
+    def _standardize_rules():
+        rules = []
 
+        # Nitro
+        #
+        #      O
+        #     //
+        # * - N+
+        #      \
+        #       O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'charge': 1},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
-# 1. Nitro
-#
-#       O          O-
-#      //         /
-#  A - N  >> A - N+
-#      \\        \\
-#       O         O
-#
-a = QueryAtom()
-o = QueryAtom()
-n33 = QueryAtom()
-o.update(element='O')
-n33.update(element='N', neighbors=3, hybridization=3)
-central['N3;3'] = n33
-query_patch['N3;3'].extend(_prepare([(b2, o), (b2, o), (b1, a)],
-                                    [{'charge': 1, '_hybridization': 2},
-                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+        # Carbonate
+        #
+        #      O
+        #     //
+        # * - C
+        #      \
+        #       O-
+        #
+        atoms = ({'atom': 'C', 'neighbors': 3, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
+        # Carbon Acid
+        #
+        #      O
+        #     //
+        # * - C
+        #      \
+        #       OH
+        #
+        atoms = ({'atom': 'C', 'neighbors': 3, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
-# 2. Aromatic N-Oxide
-#
-#  A : N : A  >>  A : N+ : A
-#      \\             |
-#       O             O-
-#
-n34 = QueryAtom()
-n34.update(element='N', neighbors=3, hybridization=4)
-central['N3;4'] = n34
-query_patch['N3;4'].extend(_prepare([(b2, o), (b4, a), (b4, a)],
-                                    [{'charge': 1},
-                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
+        # Phosphate
+        #
+        #      *
+        #      |
+        #  * - P = O
+        #      |
+        #      OH
+        #
+        atoms = ({'atom': 'P', 'neighbors': 4, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (atoms, bonds), fix))
 
+        # Nitro addition
+        #
+        #      O             O -- *
+        #     //            /
+        # * - N+   >>  * = N+
+        #      \            \
+        #       O-           O-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        p_atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                   {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 2})
+        p_bonds = ((1, 2, 1), (1, 3, 1))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
 
-# 3. Azide
-#
-#  N- - N+ # N  >>  N = N+ = N-
-#
-nn21 = QueryAtom()
-np23 = QueryAtom()
-n1_ = QueryAtom()
-nn21.update(element='N', charge=-1, neighbors=2, hybridization=1)
-np23.update(element='N', charge=1, neighbors=2, hybridization=3)
-n1_.update(element='N', neighbors=1)
-central['N+2;3'] = np23
-query_patch['N+2;3'].extend(_prepare([(b1, nn21), (b3, n1_)],
-                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
-                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
+        # Sulphate addition
+        #
+        #      O [3]            O -- * [2]
+        #     //               /
+        # * = S - *   >>  * = S - *
+        #     |               \\
+        #     O- [2]           O [3]
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        p_atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                   {'atom': 'O', 'neighbors': 2}, {'atom': 'O', 'neighbors': 1})
+        p_bonds = ((1, 2, 1), (1, 3, 2))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
 
-
-# 3.1. Azide ChemAxoned
-#
-#  N+ # N = N-  >>  N = N+ = N-
-#
-n23 = QueryAtom()
-nn12 = QueryAtom()
-n23.update(element='N', neighbors=2, hybridization=3)
-nn12.update(element='N', charge=-1, neighbors=1, hybridization=2)
-central['N2;3'] = n23
-query_patch['N2;3'].extend(_prepare([(b3, np23), (b2, nn12)],
-                                    [{'charge': 1}, ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 4. Diazo
-#
-#  C- - N+ # N  >>  C = N+ = N-
-#
-cn_1 = QueryAtom()
-cn_1.update(element='C', charge=-1, hybridization=1)
-query_patch['N+2;3'].extend(_prepare([(b1, cn_1), (b3, n1_)],
-                                     [{}, ({'order': 2}, {'charge': 0, '_hybridization': 2}),
-                                      ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
-
-
-# 5. Diazonium
-#
-#  C - N = N+  >>  C - N+ # N
-#
-c = QueryAtom()
-n22 = QueryAtom()
-np1_ = QueryAtom()
-c.update(element='C')
-n22.update(element='N', neighbors=2, hybridization=2)
-np1_.update(element='N', charge=1, neighbors=1)
-central['N2;2'] = n22
-query_patch['N2;2'].extend(_prepare([(b2, np1_), (b1, c)],
-                                    [{'charge': 1, '_hybridization': 3},
-                                     ({'order': 3}, {'charge': 0, '_hybridization': 3})]))
-
-
-# 6. Iminium
-#
-#  C+ - N  >> C = N+
-#
-cp_1 = QueryAtom()
-n31 = QueryAtom()
-cp_1.update(element='C', charge=1, hybridization=1)
-n31.update(element='N', neighbors=3, hybridization=1)
-central['N3;1'] = n31
-query_patch['N3;1'].extend(_prepare([(b1, cp_1), (b1, a), (b1, a)],
-                                    [{'charge': 1, '_hybridization': 2},
-                                     ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 7. Isocyanate
-#
-#  N+ - C- = O  >>  N = C = O
-#
-np121 = QueryAtom()
-cn22 = QueryAtom()
-np121.update(element='N', charge=1, neighbors=(1, 2), hybridization=1)
-cn22.update(element='C', charge=-1, neighbors=2, hybridization=2)
-central['C-2;2'] = cn22
-query_patch['C-2;2'].extend(_prepare([(b1, np121), (b2, o)],
-                                     [{'charge': 0, '_hybridization': 3},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
+        return rules
 
 
-# 8. Nitrilium
-#
-#  C+ = N  >>  C # N+
-#
-cp22 = QueryAtom()
-n122 = QueryAtom()
-cp22.update(element='C', charge=1, neighbors=2, hybridization=2)
-n122.update(element='N', neighbors=(1, 2), hybridization=2)
-central['C+2;2'] = cp22
-query_patch['C+2;2'].extend(_prepare([(b2, n122), (b1, a)],
-                                     [{'charge': 0, '_hybridization': 3},
-                                      ({'order': 3}, {'charge': 1, '_hybridization': 3})]))
-
-
-# 9. Nitrone
-#
-#      O          O-
-#     //         /
-# C = N  >> C = N+
-#      \         \
-#       C         C
-#
-c_2 = QueryAtom()
-c_2.update(element='C', hybridization=2)
-query_patch['N3;3'].extend(_prepare([(b2, o), (b2, c_2), (b1, c)],
-                                    [{'charge': 1, '_hybridization': 2},
-                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
-
-
-# 10. Nitronate
-#
-#      O         O
-#     //        //
-# C = N  >> C - N+
-#      \         \
-#       OH        O-
-#
-o1_ = QueryAtom()
-o1_.update(element='O', neighbors=1)
-query_patch['N3;3'].extend(_prepare([(b2, c_2), (b1, o1_), (b2, o)],
-                                    [{'charge': 1, '_hybridization': 2},
-                                     ({'order': 1}, {'_hybridization': 1}), ({}, {'charge': -1})]))
-
-
-# 10.1 Nitronate ChemAxoned
-#
-#       O-         O-
-#      /          /
-# C = N+  >>  C - N+
-#      \          \\
-#       OH         O
-#
-np32 = QueryAtom()
-np32.update(element='N', charge=1, neighbors=3, hybridization=2)
-on = QueryAtom()
-on.update(element='O', charge=-1)
-central['N+3;2'] = np32
-query_patch['N+3;2'].extend(_prepare([(b2, c_2), (b1, o1_), (b1, on)],
-                                     [{}, ({'order': 1}, {'_hybridization': 1}),
-                                      ({'order': 2}, {'_hybridization': 2})]))
-
-
-# 11. Nitroso
-#
-# C - N+ - O-  >>  C - N = O
-#
-np21 = QueryAtom()
-on = QueryAtom()
-np21.update(element='N', charge=1, neighbors=2, hybridization=1)
-on.update(element='O', charge=-1)
-central['N+2;1'] = np21
-query_patch['N+2;1'].extend(_prepare([(b1, on), (b1, c)], [{'charge': 0, '_hybridization': 2},
-                                                           ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-# 12. Tetriary N-oxide
-#
-#      C              C
-#      |              |
-#  A - N - A  >>  A - N+ - A
-#      \\             |
-#       O             O-
-#
-n42 = QueryAtom()
-n42.update(element='N', neighbors=4, hybridization=2)
-central['N4;2'] = n42
-query_patch['N4;2'].extend(_prepare([(b2, o), (b1, c), (b1, a), (b1, a)],
-                                    [{'charge': 1, '_hybridization': 1},
-                                     ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
-
-
-# 13. Phosphonic
-#
-#      O                O
-#      |                |
-#  C - P+ - O-  >>  C - P = O
-#      |                |
-#      O                O
-#
-pp41 = QueryAtom()
-pp41.update(element='P', charge=1, neighbors=4, hybridization=1)
-central['P+4;1'] = pp41
-query_patch['P+4;1'].extend(_prepare([(b1, on), (b1, c), (b1, o), (b1, o)],
-                                     [{'charge': 0, '_hybridization': 2},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 14. Phosphonium ylide
-#
-#      C                C
-#      |                |
-#  C - P- - C+  >>  C - P = C
-#      |                |
-#      C                C
-#
-pn41 = QueryAtom()
-pn41.update(element='P', charge=-1, neighbors=4, hybridization=1)
-central['P-4;1'] = pn41
-query_patch['P-4;1'].extend(_prepare([(b1, cp_1), (b1, c), (b1, c), (b1, c)],
-                                     [{'charge': 0, '_hybridization': 2},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-# 15. Silicate Selenite
-#
-#        O            O
-#       /            /
-# O- - Si+  >>  O = Si
-#       \            \
-#        O            O
-#
-sesip31 = QueryAtom()
-sesip31.update(element=('Se', 'Si'), charge=1, neighbors=3, hybridization=1)
-central['SeSi+3;1'] = sesip31
-query_patch['SeSi+3;1'].extend(_prepare([(b1, on), (b1, o), (b1, o)],
-                                        [{'charge': 0, '_hybridization': 2},
-                                         ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 16. Sulfine
-#
-#  O- - S+ = C  >>  O = S = C
-#
-sp22 = QueryAtom()
-sp22.update(element='S', charge=1, neighbors=2, hybridization=2)
-central['S+2;2'] = sp22
-query_patch['S+2;2'].extend(_prepare([(b1, on), (b2, c_2)],
-                                     [{'charge': 0, '_hybridization': 3},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 17. Sulfon
-#
-#        C           C
-#       /           /
-# O- - S+  >>  O = S
-#       \           \
-#        C           C
-#
-sp31 = QueryAtom()
-sp31.update(element='S', charge=1, neighbors=3, hybridization=1)
-central['S+3;1'] = sp31
-query_patch['S+3;1'].extend(_prepare([(b1, on), (b1, c), (b1, c)],
-                                     [{'charge': 0, '_hybridization': 2},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 18. Sulfonium ylide
-#
-#  C - S- - C+  >>  C - S = C
-#      |                |
-#      C                C
-#
-sn31 = QueryAtom()
-sn31.update(element='S', charge=-1, neighbors=3, hybridization=1)
-central['S-3;1'] = sn31
-query_patch['S-3;1'].extend(_prepare([(b1, cp_1), (b1, c), (b1, c)],
-                                     [{'charge': 0, '_hybridization': 2},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 19. Sulfoxide
-#
-#      C                C
-#      |                |
-#  O = S+ - O-  >>  O = S = O
-#      |                |
-#      C                C
-#
-sp42 = QueryAtom()
-sp42.update(element='S', charge=1, neighbors=4, hybridization=2)
-central['S+4;2'] = sp42
-query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, o)],
-                                     [{'charge': 0, '_hybridization': 3},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 20. Sulfoxonium ylide
-#
-#      C                C
-#      |                |
-#  C = S+ - O-  >>  C = S = O
-#      |                |
-#      C                C
-#
-query_patch['S+4;2'].extend(_prepare([(b1, on), (b1, c), (b1, c), (b2, c_2)],
-                                     [{'charge': 0, '_hybridization': 3},
-                                      ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-# 21
-#
-# N = N # N >> N = N+ = N-
-#
-central['N2;3'] = n23
-query_patch['N2;3'].extend(_prepare([(b3, n1_), (b2, n22)],
-                                    [{'charge': 1}, ({'order': 2}, {'charge': -1, '_hybridization': 2})]))
-
-
-# 22
-#
-# N = N = O >> N = N+ - O-
-#     |            |
-#     C            C
-#
-o12 = QueryAtom()
-o12.update(element='O', neighbors=1, hybridization=2)
-central['N3;3'] = n33
-query_patch['N3;3'].extend(_prepare([(b2, o12), (b2, n22), (b1, c)],
-                                    [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1})]))
-
-
-# 23
-#
-# N- - N+ = O >> N = N+ - O-
-#      |             |
-#      C             C
-#
-central['N+3;2'] = np32
-query_patch['N+3;2'].extend(_prepare([(b2, o12), (b1, nn21), (b1, c)],
-                                     [{'charge': 1}, ({'order': 1}, {'charge': -1, '_hybridization': 1}),
-                                     ({'order': 2}, {'charge': 0, '_hybridization': 2})]))
-
-
-__all__ = ['Standardize']
+__all__ = ['Standardize', 'StandardizeReaction']
