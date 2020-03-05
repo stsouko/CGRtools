@@ -88,11 +88,10 @@ class Depict:
         svg.append('</svg>')
         return '\n'.join(svg)
 
-    @classmethod
-    def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+    def depict_settings(self, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
-                        cgr_aromatic_space=.14, ar_dashes=(.05, .05)):
+                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05)):
         """
         Settings for depict of chemical structures
 
@@ -111,10 +110,10 @@ class Depict:
         broken_color: str: only CGRContainer: color of broken bond
         formed_color: str: only CGRContainer: color of formed bond
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
-        ar_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is long of invisible line
+        aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is long of invisible line
         """
 
-        config = cls._render_config
+        config = self._render_config
         config['font'] = font
         config['carbon'] = carbon
         config['dashes'] = dashes
@@ -130,7 +129,7 @@ class Depict:
         config['mapping_color'] = mapping_color
         config['aromatic_space'] = aromatic_space
         config['cgr_aromatic_space'] = cgr_aromatic_space
-        config['ar_dashes'] = ar_dashes
+        config['aromatic_dashes'] = aromatic_dashes
 
     @cached_method
     def _repr_svg_(self):
@@ -139,7 +138,7 @@ class Depict:
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
                       'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
                       'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
-                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'ar_dashes': (.05, .05)}
+                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'aromatic_dashes': (.05, .05)}
 
 
 class DepictMolecule(Depict):
@@ -191,7 +190,7 @@ class DepictMolecule(Depict):
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
         aromatic_space = self._render_config['aromatic_space']
-        dash3, dash4 = self._render_config['ar_dashes']
+        dash3, dash4 = self._render_config['aromatic_dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -616,7 +615,7 @@ class DepictCGR(Depict):
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
         aromatic_space = self._render_config['cgr_aromatic_space']
-        dash3, dash4 = self._render_config['ar_dashes']
+        dash3, dash4 = self._render_config['aromatic_dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -707,7 +706,7 @@ class DepictQuery(Depict):
         double_space = config['double_space']
         triple_space = config['triple_space']
         dash1, dash2 = config['dashes']
-        dash3, dash4 = config['ar_dashes']
+        dash3, dash4 = config['aromatic_dashes']
         for n, m, bond in self.bonds():
             order = bond.order
             nx, ny = plane[n]
@@ -823,7 +822,7 @@ class DepictQueryCGR(Depict):
         double_space = config['double_space']
         triple_space = config['triple_space']
         dash1, dash2 = config['dashes']
-        dash3, dash4 = config['ar_dashes']
+        dash3, dash4 = config['aromatic_dashes']
         broken = config['broken_color']
         formed = config['formed_color']
 
