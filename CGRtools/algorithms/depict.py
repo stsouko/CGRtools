@@ -45,12 +45,13 @@ class Depict:
         min_y = min(y for _, y in values)
         max_y = max(y for _, y in values)
 
+        config = self._render_config
         bonds = self._render_bonds()
         atoms, masks = self._render_atoms()
         if embedding:
             return atoms, bonds, masks, min_x, min_y, max_x, max_y
 
-        font = self._render_config['font']
+        font = config['font']
         font125 = 1.25 * font
         width = max_x - min_x + 3.0 * font
         height = max_y - min_y + 2.5 * font
@@ -68,15 +69,14 @@ class Depict:
                            f'      <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
                 svg.extend(masks)
-                svg.append(f'      </g>\n    </mask>\n  </defs>\n  <g fill="none" '
-                           f'stroke="{self._render_config["bond_color"]}" '
-                           f'stroke-width="{self._render_config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
+                svg.append(f'      </g>\n    </mask>\n  </defs>\n  <g fill="none" stroke="{config["bond_color"]}" '
+                           f'stroke-width="{config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
                 if len(bonds) == 1:  # SVG BUG adhoc
                     svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
                                f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
             else:
-                svg.append(f'  <g fill="none" stroke="{self._render_config["bond_color"]}" '
-                           f'stroke-width="{self._render_config["bond_width"]:.2f}">')
+                svg.append(f'  <g fill="none" stroke="{config["bond_color"]}" '
+                           f'stroke-width="{config["bond_width"]:.2f}">')
             svg.extend(bonds)
             svg.append('  </g>')
 
@@ -111,7 +111,8 @@ class Depict:
         broken_color: str: only CGRContainer: color of broken bond
         formed_color: str: only CGRContainer: color of formed bond
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
-        aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is long of invisible line
+        aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is
+                                                               long of invisible line
         """
 
         config = cls._render_config
@@ -148,9 +149,11 @@ class DepictMolecule(Depict):
     def _render_bonds(self):
         svg = []
         plane = self._plane
-        double_space = self._render_config['double_space']
-        triple_space = self._render_config['triple_space']
-        dash1, dash2 = self._render_config['dashes']
+        config = self._render_config
+
+        double_space = config['double_space']
+        triple_space = config['triple_space']
+        dash1, dash2 = config['dashes']
         for n, m, bond in self.bonds():
             order = bond.order
             nx, ny = plane[n]
@@ -190,8 +193,10 @@ class DepictMolecule(Depict):
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y):
-        aromatic_space = self._render_config['aromatic_space']
-        dash3, dash4 = self._render_config['aromatic_dashes']
+        config = self._render_config
+
+        aromatic_space = config['aromatic_space']
+        dash3, dash4 = config['aromatic_dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -224,11 +229,12 @@ class DepictMolecule(Depict):
         hydrogens = self._hydrogens
         charges = self._charges
         radicals = self._radicals
+        config = self._render_config
 
-        mapping = self._render_config['mapping']
-        carbon = self._render_config['carbon']
-        atoms_colors = self._render_config['atoms_colors']
-        font = self._render_config['font']
+        mapping = config['mapping']
+        carbon = config['carbon']
+        atoms_colors = config['atoms_colors']
+        font = config['font']
         font2 = .2 * font
         font3 = .3 * font
         font5 = .5 * font
@@ -278,7 +284,7 @@ class DepictMolecule(Depict):
             elif mapping:
                 maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle">{n}</text>')
         if mapping:
-            svg.append(f'    <g fill="{self._render_config["mapping_color"]}" font-size="{font8:.2f}">')
+            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{font8:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
         return svg, mask
@@ -371,6 +377,7 @@ class DepictCGR(Depict):
         svg = []
         plane = self._plane
         config = self._render_config
+
         double_space = config['double_space']
         triple_space = config['triple_space']
         dash1, dash2 = config['dashes']
@@ -407,9 +414,8 @@ class DepictCGR(Depict):
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
                 else:
                     dx, dy = rv(double_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{my - dy:.2f}" stroke-dasharray="{dash1:.2f} '
-                               f'{dash2:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{formed}"/>')
                     svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
             elif order == 4:
@@ -437,6 +443,7 @@ class DepictCGR(Depict):
                     ar_bond_colors[n][m] = ar_bond_colors[m][n] = broken
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
                 else:
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = None
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
             elif order == 2:
                 if p_order == 2:
@@ -473,9 +480,8 @@ class DepictCGR(Depict):
                                f'x2="{mx - dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
                 else:
                     dx, dy = rv(triple_space)
-                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" '
-                               f'x2="{mx + dx:.2f}" y2="{my - dy:.2f}" stroke-dasharray="{dash1:.2f} '
-                               f'{dash2:.2f}" stroke="{formed}"/>')
+                    svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}" '
+                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{formed}"/>')
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{broken}"/>')
                     svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{my + dy:.2f}" stroke="{broken}"/>')
@@ -553,7 +559,7 @@ class DepictCGR(Depict):
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
                                f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{formed}"/>')
             else:
-                if p_order == 5:
+                if p_order == 8:
                     svg.append(f'      <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
                                f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
                 elif p_order == 1:
@@ -563,6 +569,7 @@ class DepictCGR(Depict):
                     svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" '
                                f'x2="{mx - dx:.2f}" y2="{my + dy:.2f}" stroke="{formed}"/>')
                 elif p_order == 4:
+                    ar_bond_colors[n][m] = ar_bond_colors[m][n] = None
                     svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" stroke="{formed}"/>')
                 elif p_order == 2:
                     dx, dy = rv(triple_space)
@@ -575,9 +582,8 @@ class DepictCGR(Depict):
                     dx, dy = rv(double_space)
                     dx3 = 3 * dx
                     dy3 = 3 * dy
-                    svg.append(f'    <line x1="{nx + dx3:.2f}" y1="{ny - dy3:.2f}" '
-                               f'x2="{mx + dx3:.2f}" y2="{my - dy3:.2f}" '
-                               f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
+                    svg.append(f'    <line x1="{nx + dx3:.2f}" y1="{ny - dy3:.2f}" x2="{mx + dx3:.2f}" '
+                               f'y2="{my - dy3:.2f}" stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
                     svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" '
                                f'x2="{mx + dx:.2f}" y2="{my - dy:.2f}" stroke="{formed}"/>')
                     svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" '
@@ -608,8 +614,11 @@ class DepictCGR(Depict):
         return svg
 
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
-        aromatic_space = self._render_config['cgr_aromatic_space']
-        dash1, dash2 = self._render_config['dashes']
+        config = self._render_config
+
+        aromatic_space = config['cgr_aromatic_space']
+        dash1, dash2 = config['dashes']
+        dash3, dash4 = config['aromatic_dashes']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -631,11 +640,12 @@ class DepictCGR(Depict):
             an_x, an_y = rotate_vector(ar_x, r_y, mn_x, mn_y)
             bn_x, bn_y = rotate_vector(br_x, r_y, mn_x, mn_y)
             if color:
-                return f'    <line x1="{an_x + n_x:.2f}" y1="{-an_y - n_y:.2f}"' \
-                       f' x2="{bn_x + n_x:.2f}" y2="{-bn_y - n_y:.2f}" ' \
-                       f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{color}"/>'
+                return f'    <line x1="{an_x + n_x:.2f}" y1="{-an_y - n_y:.2f}" x2="{bn_x + n_x:.2f}" ' \
+                       f'y2="{-bn_y - n_y:.2f}" stroke-dasharray="{dash3:.2f} {dash4:.2f}" stroke="{color}"/>'
+            elif color is None:
+                dash3, dash4 = dash1, dash2
             return f'    <line x1="{an_x + n_x:.2f}" y1="{-an_y - n_y:.2f}"' \
-                   f' x2="{bn_x + n_x:.2f}" y2="{-bn_y - n_y:.2f}" stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>'
+                   f' x2="{bn_x + n_x:.2f}" y2="{-bn_y - n_y:.2f}" stroke-dasharray="{dash3:.2f} {dash4:.2f}"/>'
 
     def _render_atoms(self):
         bonds = self._bonds
@@ -644,10 +654,11 @@ class DepictCGR(Depict):
         p_charges = self._p_charges
         radicals = self._radicals
         p_radicals = self._p_radicals
+        config = self._render_config
 
-        carbon = self._render_config['carbon']
-        atoms_colors = self._render_config['atoms_colors']
-        font = self._render_config['font']
+        carbon = config['carbon']
+        atoms_colors = config['atoms_colors']
+        font = config['font']
         font2 = .2 * font
         font3 = .3 * font
         font5 = .5 * font
@@ -695,9 +706,12 @@ class DepictQuery(Depict):
     def _render_bonds(self):
         svg = []
         plane = self._plane
-        double_space = self._render_config['double_space']
-        triple_space = self._render_config['triple_space']
-        dash1, dash2 = self._render_config['dashes']
+        config = self._render_config
+
+        double_space = config['double_space']
+        triple_space = config['triple_space']
+        dash1, dash2 = config['dashes']
+        dash3, dash4 = config['aromatic_dashes']
         for n, m, bond in self.bonds():
             order = bond.order
             nx, ny = plane[n]
@@ -709,7 +723,7 @@ class DepictQuery(Depict):
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}" '
-                           f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
+                           f'stroke-dasharray="{dash3:.2f} {dash4:.2f}"/>')
             elif order == 2:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
@@ -726,10 +740,12 @@ class DepictQuery(Depict):
 
     def _render_atoms(self):
         plane = self._plane
-        mapping = self._render_config['mapping']
-        carbon = self._render_config['carbon']
-        atoms_colors = self._render_config['atoms_colors']
-        font = self._render_config['font']
+        config = self._render_config
+
+        mapping = config['mapping']
+        carbon = config['carbon']
+        atoms_colors = config['atoms_colors']
+        font = config['font']
         font2 = .2 * font
         font3 = .3 * font
         font4 = .4 * font
@@ -785,19 +801,19 @@ class DepictQuery(Depict):
                 hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
                                 f'text-anchor="start">{"".join(hh)}</text>')
         if nghbrs:
-            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(nghbrs)
             if hbrdztns:
                 svg.extend(hbrdztns)
             svg.append('    </g>')
 
         elif hbrdztns:
-            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(hbrdztns)
             svg.append('    </g>')
 
         if mapping:
-            svg.append(f'    <g fill="{self._render_config["mapping_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{font7:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
 
@@ -1062,9 +1078,11 @@ class DepictQueryCGR(Depict):
 
     def _render_atoms(self):
         plane = self._plane
-        carbon = self._render_config['carbon']
-        atoms_colors = self._render_config['atoms_colors']
-        font = self._render_config['font']
+        config = self._render_config
+
+        carbon = config['carbon']
+        atoms_colors = config['atoms_colors']
+        font = config['font']
         font2 = .2 * font
         font3 = .3 * font
         font4 = .4 * font
@@ -1110,14 +1128,14 @@ class DepictQueryCGR(Depict):
                 hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
                                 f'text-anchor="start">{"".join(hh)}»{"".join(ph) if ph else 0}</text>')
         if nghbrs:
-            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(nghbrs)
             if hbrdztns:
                 svg.extend(hbrdztns)
             svg.append('    </g>')
 
         elif hbrdztns:
-            svg.append(f'    <g fill="{self._render_config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
             svg.extend(hbrdztns)
             svg.append('    </g>')
 
