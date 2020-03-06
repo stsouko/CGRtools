@@ -88,10 +88,11 @@ class Depict:
         svg.append('</svg>')
         return '\n'.join(svg)
 
-    def depict_settings(self, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+    @classmethod
+    def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
-                        cgr_aromatic_space=.14):
+                        cgr_aromatic_space=.14, unknown_bond_color='blue'):
         """
         Settings for depict of chemical structures
 
@@ -110,9 +111,10 @@ class Depict:
         broken_color: str: only CGRContainer: color of broken bond
         formed_color: str: only CGRContainer: color of formed bond
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
+        unknown_bond_color: str: 8th type of bond's color
         """
 
-        config = self._render_config
+        config = cls._render_config
         config['font'] = font
         config['carbon'] = carbon
         config['dashes'] = dashes
@@ -128,6 +130,7 @@ class Depict:
         config['mapping_color'] = mapping_color
         config['aromatic_space'] = aromatic_space
         config['cgr_aromatic_space'] = cgr_aromatic_space
+        config['unknown_bond_color'] = unknown_bond_color
 
     @cached_method
     def _repr_svg_(self):
@@ -136,7 +139,7 @@ class Depict:
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
                       'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
                       'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
-                      'formed_color': 'green', 'cgr_aromatic_space': .14}
+                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'unknown_bond_color': 'blue'}
 
 
 class DepictMolecule(Depict):
@@ -361,6 +364,18 @@ class DepictReaction:
     @cached_method
     def _repr_svg_(self):
         return self.depict()
+
+    @staticmethod
+    def depict_settings(*, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
+                        bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
+                        triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
+                        cgr_aromatic_space=.14, unknown_bond_color='blue'):
+
+        Depict.depict_settings(carbon=carbon, bond_color=bond_color, triple_space=triple_space, mapping=mapping,
+                               mapping_color=mapping_color, dashes=dashes, bond_width=bond_width, font=font,
+                               query_color=query_color, atoms_colors=atoms_colors, aromatic_space=aromatic_space,
+                               double_space=double_space, broken_color=broken_color, formed_color=formed_color,
+                               cgr_aromatic_space=cgr_aromatic_space, unknown_bond_color=unknown_bond_color)
 
 
 class DepictCGR(Depict):
