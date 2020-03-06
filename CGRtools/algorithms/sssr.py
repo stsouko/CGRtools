@@ -179,6 +179,9 @@ class SSSR:
 
         # step 1: collect isolated rings
         c = next(rings)
+        if n_sssr == 1:
+            return c,
+
         ck = frozenset(c)
         ck_filter = {ck}
         c_rings = {ck: c}
