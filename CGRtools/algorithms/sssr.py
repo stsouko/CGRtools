@@ -175,31 +175,35 @@ class SSSR:
 
     @staticmethod
     def __rings_filter(rings, n_sssr, bonds):
-        c_rings = {}
-        ck_filter = set()
-        hold_rings = {}
+        hold_rings = {}  # rings with neighbours
+
+        # step 1: collect isolated rings
+        c = next(rings)
+        ck = frozenset(c)
+        ck_filter = {ck}
+        c_rings = {ck: c}
         for c in rings:
             ck = frozenset(c)
             if ck in ck_filter:
                 continue
             ck_filter.add(ck)
 
-            neighbors = [eck for eck in c_rings if not eck.isdisjoint(ck)]
-            if len(neighbors) > 1:
-                n_atoms = set(chain.from_iterable(neighbors))
-                if ck < n_atoms:
-                    hold_rings[ck] = c
-                else:
-                    c_rings[ck] = c
-                    if len(c_rings) == n_sssr:
-                        return tuple(c_rings.values())
+            if any(True for eck in c_rings if not eck.isdisjoint(ck)):
+                hold_rings[ck] = c
             else:
                 c_rings[ck] = c
                 if len(c_rings) == n_sssr:
                     return tuple(c_rings.values())
 
+        # check if current ring is combination of existing. (123654) is combo of (1254) and (2365)
+        #
+        # 1--2--3
+        # |  |  |
+        # 4--5--6
+        #
         for ck, c in hold_rings.items():
             lc = len(c)
+            # create graph of connected neighbour rings
             neighbors = {x: set() for x in c_rings if not x.isdisjoint(ck)}
             for i, j in combinations(neighbors, 2):
                 if not i.isdisjoint(j):
