@@ -121,17 +121,7 @@ class GraphComponents:
 class StructureComponents:
     __slots__ = ()
 
-    @cached_property
-    def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
-        """
-        Aromatic rings atoms numbers
-        """
-        bonds = self._bonds
-        return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
-                     and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:])))
-
-    @cached_property
-    def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
+    def cumulenes(self, atoms_numbers=(6, )) -> Tuple[Tuple[int, ...], ...]:
         """
         Alkenes, allenes and cumulenes atoms numbers
         """
@@ -139,7 +129,7 @@ class StructureComponents:
         bonds = self._bonds
         adj = defaultdict(set)  # carbon double bonds adjacency matrix
         for n, atom in atoms.items():
-            if atom.atomic_number == 6:
+            if atom.atomic_number in atoms_numbers:
                 adj_n = adj[n].add
                 b_sum = 0
                 a_sum = 0
@@ -149,7 +139,7 @@ class StructureComponents:
                         a_sum += 1
                     elif order != 8:  # ignore special bond
                         b_sum += order
-                    if order == 2 and atoms[m].atomic_number == 6:
+                    if order == 2 and atoms[m].atomic_number in atoms_numbers:
                         adj_n(m)
                 if a_sum:
                     b_sum += a_sum + 1
@@ -172,6 +162,15 @@ class StructureComponents:
                 # check for carbon only double-bonded chains.
                 cumulenes.append(tuple(path))
         return cumulenes
+
+    @cached_property
+    def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Aromatic rings atoms numbers
+        """
+        bonds = self._bonds
+        return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
+                     and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:])))
 
     @cached_property
     def tetrahedrons(self) -> Tuple[int, ...]:
