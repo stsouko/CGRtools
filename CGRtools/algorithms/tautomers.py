@@ -29,56 +29,55 @@ class Tautomers:
         hydrogens = self._hydrogens
         yield self
 
+
     def input_atoms(self):
         atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
-        radicals = self._radicals
         hydrogens = self._hydrogens
 
         ent_atoms = []
         for i, atom in atoms.items():
             if bonds[i]:
-                if radicals[i]:             # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
-                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
-                        ent_atoms.append((atom, i, 0)) # 0 - radical
-                elif charges[i] < 0:        # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
-                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
-                        ent_atoms.append((atom, i, 1)) # 1 - has a charge
-                elif hydrogens[i]:          # [B, C, N, O, Si, P, S, Cl, As, Se, Br, Te, I, At]
-                    if atom.atomic_number in {5, 6, 7, 8, 14, 15, 16, 17, 33, 34, 35, 52, 53, 85}: # ???
-                        ent_atoms.append((atom, i, 2)) # 2 - has a hydrogens
-        return ent_atoms, bonds
+                if charges[i] < 0:         # [C, N, O, Si, P,  S,  As, Se, Te]
+                    if atom.atomic_number in {6, 7, 8, 14, 15, 16, 33, 34, 52}:
+                        ent_atoms.append((atom, i, 1))
+                elif hydrogens[i]:         # [N, O, Si, P,  S,  As, Se, Te]
+                    if atom.atomic_number in {7, 8, 14, 15, 16, 33, 34, 52}:
+                        ent_atoms.append((atom, i, 2))
+        return ent_atoms
+
 
     def get_paths(self, ent_atoms):
         bonds = self._bonds
-        paths = []
-        for z in ent_atoms:
-            a = z[1]
-            path = [a]
-            stack = []
-            for i, n in bonds[a].items():
-                if n.order < 3:
-                    stack.append((i, 1, n.order))
+
+        for a in ent_atoms:
+            path = [a[1]]
+            stack = [(i, n.order, 1) for i, n in bonds[a[1]].items() if n.order < 3]
+
             while stack:
-                cur, d, b = stack.pop()
+                cur, b, d = stack.pop()
+
                 if len(path) > d:
                     path = path[:d]
-                ngbb = bonds[cur]
-                ngb = set(ngbb.keys()).difference(path)
-                for c in ngb:
-                    if (ngbb[c].order < 3) and (ngbb[c].order != b):
-                        stack.append((c, d + 1, ngbb[c].order))
-                        path.append(cur)
-                    else:
-                        path.append(cur)
-                        if len(path) > 2:
-                            paths.append(path)
-                if not ngb:
+
+                if set(bonds[cur].keys()).difference(path):
+                    for x in bonds[cur].values():
+                        if (x.order < 3) and (x.order != b):
+                            path.append(cur)
+
+                            if len(path) % 2:
+                                yield path
+                            break
+
+                elif not len(path) % 2:
                     path.append(cur)
-                    if len(path) > 2:
-                        paths.append(path)
-        return paths
+                    yield path
+
+                d += 1
+                nbg = [(x, y.order, d) for x, y in bonds[cur].items() if (y.order < 3) and (y.order != b)]
+                stack.extend(nbg)
+
 
 
 __all__ = ['Tautomers']
