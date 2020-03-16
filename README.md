@@ -2,7 +2,7 @@ CGRTools
 ========
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
-Basic opertions:
+Basic operations:
    - Read /write /convert formats MDL .RDF and .SDF, SMILES, .MRV
    - Standardize reactions and valid structures checker.
    - Produce CGRs.
@@ -131,3 +131,4 @@ CONTRIBUTORS
 * Adelia Fatykhova <adelik21979@gmail.com>
 * Tagir Akhmetshin <tagirshin@gmail.com>
 * Ravil Mukhametgaleev <sonic-mc@mail.ru>
+
