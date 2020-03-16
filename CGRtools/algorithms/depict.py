@@ -243,8 +243,9 @@ class DepictMolecule(Depict):
 
         # for cumulenes
         cumulenes = {}
-        if self._cumulenes(heteroatoms=True):
-            cumulenes = {y for x in self._cumulenes(heteroatoms=True) for y in x[1:-1] if len(x) > 2}
+        res = self._cumulenes(heteroatoms=True)
+        if res:
+            cumulenes = {y for x in res for y in x[1:-1] if len(x) > 2}
 
         svg = []
         maps = []
@@ -755,8 +756,9 @@ class DepictQuery(Depict):
 
         # for cumulenes
         cumulenes = {}
-        if self._cumulenes((6, 7, 8)):
-            cumulenes = {y for x in self._cumulenes((6, 7, 8)) for y in x[1:-1] if len(x) > 2}
+        res = self._cumulenes(heteroatoms=True)
+        if res:
+            cumulenes = {y for x in res for y in x[1:-1] if len(x) > 2}
 
         svg = []
         mask = []

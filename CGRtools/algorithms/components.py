@@ -159,9 +159,10 @@ class StructureComponents:
         atoms = self._atoms
         bonds = self._bonds
 
-        atoms_numbers = [6]
         if heteroatoms:
-            atoms_numbers = [5, 6, 7, 15, 16, 33, 34, 52]
+            atoms_numbers = {5, 6, 7, 15, 16, 33, 34, 52}
+        else:
+            atoms_numbers = {6}
 
         adj = defaultdict(set)  # carbon double bonds adjacency matrix
         for n, atom in atoms.items():
