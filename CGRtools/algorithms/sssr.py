@@ -182,37 +182,67 @@ class SSSR:
         if n_sssr == 1:
             return c,
 
-        ck = frozenset(c)
-        ck_filter = {ck}
-        c_rings = {ck: c}
+        c_rings = {frozenset(c): c}
         for c in rings:
             ck = frozenset(c)
-            if ck in ck_filter:
-                continue
-            ck_filter.add(ck)
 
-            if any(True for eck in c_rings if not eck.isdisjoint(ck)):
+            if any(len(eck.intersection(ck)) > 1 for eck in c_rings):  # hold potential bicycle rings
                 hold_rings[ck] = c
             else:
                 c_rings[ck] = c
                 if len(c_rings) == n_sssr:
                     return tuple(c_rings.values())
 
-        # check if current ring is combination of existing. (123654) is combo of (1254) and (2365)
-        #
-        # 1--2--3
-        # |  |  |
-        # 4--5--6
-        #
+        # filter hold rings
         for ck, c in hold_rings.items():
-            lc = len(c)
+            flag = False
+            neighbors = {x: set() for x in c_rings if len(x.intersection(ck)) > 1}
+
+            # check for bicycle with dead ends.
+            # for example bfs found (124653) and (12478953) with lengths 6 and 8, but (478956) is smaller.
+            #
+            #   2 -- 4 -- 7
+            #  /      \    \
+            # 1       6     8
+            #  \      /    /
+            #   3 -- 5 -- 9
+            for eck in neighbors:
+                mc = ck ^ eck
+                if len(mc) < len(c) - 2:
+                    mb = {n for n in eck & ck if not mc.isdisjoint(bonds[n])}
+                    if len(mb) == 2:
+                        ck = mc | mb
+                        c = tuple(n for n in c if n in ck)
+                        ec = tuple(n for n in c_rings[eck] if n in ck)
+                        if len(ec) < 3:
+                            continue
+                        elif ec[0] == c[0]:
+                            if ec[-1] != c[-1]:
+                                continue
+                            c += ec[-2: 0: -1]
+                        else:
+                            if ec[0] != c[-1] or ec[-1] != c[0]:
+                                continue
+                            c += ec[1:-1]
+                        if not flag:
+                            flag = True
+            if flag:
+                c_rings[ck] = c
+                if len(c_rings) == n_sssr:
+                    return tuple(sorted(c_rings.values(), key=len))
+                continue
+
             # create graph of connected neighbour rings
-            neighbors = {x: set() for x in c_rings if not x.isdisjoint(ck)}
             for i, j in combinations(neighbors, 2):
-                if not i.isdisjoint(j):
+                if len(i.intersection(j)) > 1:
                     neighbors[i].add(j)
                     neighbors[j].add(i)
-
+            # check if hold rings is combination of existing. (123654) is combo of (1254) and (2365)
+            #
+            # 1--2--3
+            # |  |  |
+            # 4--5--6
+            #
             # modified NX.dfs_labeled_edges
             # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.traver\
             # sal.depth_first_search.dfs_labeled_edges.html
@@ -237,7 +267,7 @@ class SSSR:
                                 mc |= mb
                                 if ck == mc:  # macrocycle found
                                     break
-                                if depth_now and len(mc) < lc:
+                                if depth_now and len(mc) < len(c):
                                     stack.append((mc, depth_now - 1, iter(neighbors[child])))
                 else:
                     continue
