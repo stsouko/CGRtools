@@ -2,7 +2,7 @@ CGRTools
 ========
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
-Basic opertions:
+Basic operations:
    - Read /write /convert formats MDL .RDF and .SDF, SMILES, .MRV
    - Standardize reactions and valid structures checker.
    - Produce CGRs.
@@ -120,8 +120,8 @@ COPYRIGHT
 =========
 
 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer  
-2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
-2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
+2014-2020 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
+2014-2020 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 
 CONTRIBUTORS
 ============
