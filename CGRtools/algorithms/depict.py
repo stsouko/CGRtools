@@ -242,7 +242,7 @@ class DepictMolecule(Depict):
         font8 = .8 * font
 
         # for cumulenes
-        cumulenes = {y for x in self._cumulenes(heteroatoms=True) for y in x[1:-1] if len(x) > 2}
+        cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
         svg = []
         maps = []
@@ -752,7 +752,7 @@ class DepictQuery(Depict):
         font8 = .8 * font
 
         # for cumulenes
-        cumulenes = {y for x in self._cumulenes(heteroatoms=True) for y in x[1:-1] if len(x) > 2}
+        cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
         svg = []
         mask = []
