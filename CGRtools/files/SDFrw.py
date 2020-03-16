@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -169,11 +169,7 @@ class SDFWrite(MDLWrite):
         """
         write single molecule into file
         """
-        mol = self._convert_structure(data)
-        if isinstance(mol, list):
-            self._file.write('$$$$\n'.join(mol))
-        else:
-            self._file.write(mol)
+        self._file.write(self._convert_structure(data))
 
         for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')

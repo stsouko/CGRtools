@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -589,11 +589,7 @@ class MDLRead(CGRRead, metaclass=MDLReadMeta):
 
 
 class MDLWrite:
-    def __init__(self, file, *, write3d: int = 0):
-        """
-        :param write3d: write for Molecules 3D coordinates instead 2D if exists.
-            if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
-        """
+    def __init__(self, file):
         if isinstance(file, str):
             self._file = open(file, 'w')
             self._is_buffer = False
@@ -606,13 +602,7 @@ class MDLWrite:
         else:
             raise TypeError('invalid file. '
                             'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
-
-        if not isinstance(write3d, int):
-            raise TypeError('int expected')
-        elif write3d not in (0, 1, 2):
-            raise ValueError('only 0, 1 and 2 expected')
         self.__write = True
-        self.__write3d = write3d
 
     def close(self, force=False):
         """
@@ -649,68 +639,28 @@ class MDLWrite:
         else:
             raise TypeError('Graph expected')
 
-        head = f'{g.name}\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n'
-
+        gp = g._plane
         gc = g._charges
         gr = g._radicals
         props = []
-        for n, (m, a) in enumerate(g._atoms.items(), start=1):
-            if a.isotope:
-                props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
-            if gr[m]:
-                props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
-            c = gc[m]
-            if c in (-4, 4):
-                props.append(f'M  CHG  1 {n:3d} {c:3d}\n')
-
-        if self.__write3d and isinstance(g, MoleculeContainer) and g._conformers:
-            if self.__write3d == 2:
-                out = [self.__merge(head, self.__convert_atoms3d(g, xyz), bonds, props) for xyz in g._conformers]
-            else:
-                out = self.__merge(head, self.__convert_atoms3d(g, g._conformers[0]), bonds, props)
-        else:
-            out = self.__merge(head, self.__convert_atoms2d(g), bonds, props)
-        return out
-
-    @staticmethod
-    def __merge(head, atoms, bonds, props):
-        out = [head]
-        out.extend(atoms)
-        out.extend(bonds)
-        out.extend(props)
-        out.append('M  END\n')
-        return ''.join(out)
-
-    @classmethod
-    def __convert_atoms2d(cls, g):
-        gc = g._charges
-        gp = g._plane
-
-        out = []
+        out = [f'{g.name}\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n']
         for n, (m, a) in enumerate(g._atoms.items(), start=1):
             x, y = gp[m]
             c = gc[m]
             if c in (-4, 4):
                 out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+                props.append(f'M  CHG  1 {n:3d} {c:3d}\n')
             else:
-                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
+                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
                            f'  0  0  0{m:3d}  0  0\n')
-        return out
-
-    @classmethod
-    def __convert_atoms3d(cls, g, xyz):
-        gc = g._charges
-
-        out = []
-        for n, (m, a) in enumerate(g._atoms.items(), start=1):
-            x, y, z = xyz[m]
-            c = gc[m]
-            if c in (-4, 4):
-                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
-            else:
-                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
-                           f'  0  0  0{m:3d}  0  0\n')
-        return out
+            if a.isotope:
+                props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
+            if gr[m]:
+                props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
+        out.extend(bonds)
+        out.extend(props)
+        out.append('M  END\n')
+        return ''.join(out)
 
     @classmethod
     def __convert_molecule(cls, g):

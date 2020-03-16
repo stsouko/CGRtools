@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -241,12 +241,6 @@ class RDFWrite(MDLWrite):
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *, write3d: bool = False):
-        """
-        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
-        """
-        super().__init__(file, write3d=int(write3d))
-
     def write(self, data):
         """
         write single molecule or reaction into file

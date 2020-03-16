@@ -150,6 +150,7 @@ class XYZRead(CGRRead):
         conformer = {}
         for a, x, y, z in matrix:
             conformer[mol.add_atom(a, xy=(x, y))] = (x, y, z)
+        mol._conformers.append(conformer)
 
         possible_bonds = self.__get_possible_bonds(atoms, conformer)
         saturation, possible_bonds = self.__remove_hypervalences(atoms, possible_bonds)
@@ -194,11 +195,6 @@ class XYZRead(CGRRead):
                 break
         else:
             warning('Charge and radical state not balanced.')
-
-        for n in unsaturated:
-            mol._calc_implicit(n)
-        mol.neutralize()
-        mol._conformers.append(conformer)
         return mol
 
     def __get_possible_bonds(self, atoms, conformer):
