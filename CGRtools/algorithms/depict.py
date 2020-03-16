@@ -755,8 +755,8 @@ class DepictQuery(Depict):
 
         # for cumulenes
         cumulenes = {}
-        if self.cumulenes:
-            cumulenes = {y for x in self.cumulenes(atoms_numbers=(6, 7, 8)) for y in x[1:-1] if len(x) > 2}
+        if self._cumulenes((6, 7, 8)):
+            cumulenes = {y for x in self.cumulenes((6, 7, 8)) for y in x[1:-1] if len(x) > 2}
 
         svg = []
         mask = []
