@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property, FrozenDict
+from CachedMethods import cached_property, FrozenDict, cached_args_method
 from collections import defaultdict
 from itertools import chain
 from typing import Tuple, Dict, Set, Any, Union
@@ -135,7 +135,7 @@ class StructureComponents:
         """
         Alkenes, allenes and cumulenes atoms numbers
         """
-        return self._cumulenes((6, ))
+        return self._cumulenes()
 
     @cached_property
     def tetrahedrons(self) -> Tuple[int, ...]:
@@ -155,9 +155,14 @@ class StructureComponents:
                     tetra.append(n)
         return tetra
 
-    def _cumulenes(self, atoms_numbers):
+    def _cumulenes(self, heteroatoms=False):
         atoms = self._atoms
         bonds = self._bonds
+
+        atoms_numbers = [6]
+        if heteroatoms:
+            atoms_numbers = [5, 6, 7, 15, 16, 33, 34, 52]
+
         adj = defaultdict(set)  # carbon double bonds adjacency matrix
         for n, atom in atoms.items():
             if atom.atomic_number in atoms_numbers:
