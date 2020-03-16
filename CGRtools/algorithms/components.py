@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property, FrozenDict, cached_args_method
+from CachedMethods import cached_property, FrozenDict
 from collections import defaultdict
 from itertools import chain
 from typing import Tuple, Dict, Set, Any, Union
