@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -92,7 +92,7 @@ class Depict:
     def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
-                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05)):
+                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05), atom_radius=-.2):
         """
         Settings for depict of chemical structures
 
@@ -113,6 +113,7 @@ class Depict:
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
         aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is
                                                                long of invisible line
+        atom_radius: float: radius of atoms spheres in depict3d. if negative is multiplier to covalent radii
         """
 
         config = cls._render_config
@@ -132,6 +133,7 @@ class Depict:
         config['aromatic_space'] = aromatic_space
         config['cgr_aromatic_space'] = cgr_aromatic_space
         config['aromatic_dashes'] = aromatic_dashes
+        config['atom_radius'] = atom_radius
 
     @cached_method
     def _repr_svg_(self):
@@ -140,7 +142,8 @@ class Depict:
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
                       'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
                       'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
-                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'aromatic_dashes': (.05, .05)}
+                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'aromatic_dashes': (.05, .05),
+                      'atom_radius': -.2}
 
 
 class DepictMolecule(Depict):

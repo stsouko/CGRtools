@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -29,12 +29,13 @@ from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule):
+                        DepictMolecule, Calculate2DMolecule, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
