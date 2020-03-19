@@ -23,34 +23,41 @@ from logging import warning
 from math import sqrt
 from pathlib import Path
 from traceback import format_exc
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Optional
 from warnings import warn
-from ._CGRrw import CGRRead
 from ..containers import MoleculeContainer
 
 
-class XYZ(CGRRead):
-    def __init__(self, radius_multiplier=1.25, **kwargs):
+class XYZ:
+    def __init__(self, radius_multiplier=1.25):
+        """
+        :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
+        """
         self.__radius = radius_multiplier
-        super().__init__(**kwargs)
 
-    def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+    def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float]], charge=0, radical=0):
         mol = MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
         radicals = mol._radicals
 
         conformer = {}
-        for a, x, y, z in matrix:
-            conformer[mol.add_atom(a, xy=(x, y))] = (x, y, z)
+        defined_charges = {}
+        for a, c, x, y, z in matrix:
+            n = mol.add_atom(a, xy=(x, y))
+            conformer[n] = (x, y, z)
+            defined_charges[n] = c
 
-        possible_bonds = self.__get_possible_bonds(atoms, conformer)
-        saturation, possible_bonds = self.__remove_hypervalences(atoms, possible_bonds)
+        if any(x is not None for x in defined_charges.values()):
+            charge = sum(defined_charges.values())
+
+        bonds = self.__get_neighbors(atoms, conformer)
+        saturation, bonds = self.__get_atom_states_and_bonds(atoms, bonds, defined_charges)
 
         # set single bonds in molecule. collect unsaturated atoms
         seen = set()
         unsaturated = {}
-        for n, env in possible_bonds.items():
+        for n, env in bonds.items():
             s = saturation[n]
             if len(s) == 1:
                 c, r, h = s.pop()
@@ -69,7 +76,7 @@ class XYZ(CGRRead):
                 unsaturated[n] = sorted(s, key=lambda x: (x[2], x[0] if x[0] else 5, x[1]), reverse=True)
 
         # create graph of unsaturated atoms
-        bonds_graph = {n: {m for m in env if m in unsaturated} for n, env in possible_bonds.items() if n in unsaturated}
+        bonds_graph = {n: {m for m in env if m in unsaturated} for n, env in bonds.items() if n in unsaturated}
         ua, sb, sa = self.__saturate(bonds_graph, unsaturated)
         for n, m, b in sb:
             mol.add_bond(n, m, b)
@@ -94,7 +101,7 @@ class XYZ(CGRRead):
         mol._conformers.append(conformer)
         return mol
 
-    def __get_possible_bonds(self, atoms, conformer):
+    def __get_neighbors(self, atoms, conformer):
         possible_bonds = defaultdict(dict)  # distance matrix
         for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
             d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
@@ -104,14 +111,15 @@ class XYZ(CGRRead):
         return possible_bonds
 
     @staticmethod
-    def __remove_hypervalences(atoms, possible_bonds):
+    def __get_atom_states_and_bonds(atoms, possible_bonds, charges):
         possible_bonds = {n: md.copy() for n, md in possible_bonds.items()}
         while True:
             saturation = defaultdict(set)
             for n, env in possible_bonds.items():
                 el = len(env)
+                dc = charges[n]
                 for (charge, is_radical, valence), rules in atoms[n]._compiled_valence_rules.items():
-                    if valence < el:
+                    if valence < el or dc is not None and dc != charge:
                         continue  # skip impossible rules
                     for _, d, h in rules:
                         if d:  # todo: optimize
@@ -243,10 +251,6 @@ class XYZRead(XYZ):
 
     """
     def __init__(self, file, **kwargs):
-        """
-        :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
-        :param ignore: Skip some checks of data or try to fix some errors.
-        """
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -342,10 +346,13 @@ class XYZRead(XYZ):
             warning('Last structure not finished')
             yield None
 
-    def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+    def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+        return super()._convert_structure([(e, None, x, y, z) for e, x, y, z in matrix], charge, radical)
+
+    def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge: int = 0, radical: int = 0):
         return self._convert_structure(matrix, charge, radical)
 
-    def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+    def from_xyz(self, matrix, charge=0, radical=0):
         warn('.from_xyz() deprecated. Use .parse() instead', DeprecationWarning)
         return self._convert_structure(matrix, charge, radical)
 
