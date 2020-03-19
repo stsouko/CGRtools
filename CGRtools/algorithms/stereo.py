@@ -131,7 +131,7 @@ class Stereo:
         # todo: refactor
         stereo = self._atoms_stereo
         if stereo:
-            tetrahedrons = self._tetrahedrons
+            tetrahedrons = self._stereo_tetrahedrons
             for mapping in super().get_mapping(other, **kwargs):
                 for n in stereo.keys() & mapping.keys():
                     m = mapping[n]
@@ -150,7 +150,7 @@ class Stereo:
         plane = self._plane
         wedge = []
         for n, s in self._atoms_stereo.items():
-            order = sorted(self._tetrahedrons[n], key=self.atoms_order.get)
+            order = sorted(self._stereo_tetrahedrons[n], key=self.atoms_order.get)
             # todo: find not used wedge
             s = self._translate_tetrahedron_sign(n, order)
             # need recalculation if XY changed
@@ -171,13 +171,13 @@ class Stereo:
 
     def _translate_tetrahedron_sign(self, n, env):
         """
-        get sign of chiral tetrahedron atom for specified neighbors order
+        Get sign of chiral tetrahedron atom for specified neighbors order
 
         :param n: stereo atom
         :param env: neighbors order
         """
         s = self._atoms_stereo[n]
-        order = self._tetrahedrons[n]
+        order = self._stereo_tetrahedrons[n]
         if len(order) == 3:
             if len(env) == 4:  # hydrogen atom passed to env
                 atoms = self._atoms
@@ -198,7 +198,7 @@ class Stereo:
 
     def _translate_cis_trans_sign(self, n, m, nn, nm):
         """
-        get sign for specified opposite neighbors
+        Get sign for specified opposite neighbors
 
         :param n: first double bonded atom
         :param m: last double bonded atom
@@ -262,9 +262,9 @@ class Stereo:
         return s
 
     @cached_property
-    def _cumulenes(self) -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
+    def _stereo_cumulenes(self) -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
         """
-        cumulenes which contains at least one non-hydrogen neighbor on both ends
+        Cumulenes which contains at least one non-hydrogen neighbor on both ends
         """
         # 5       4
         #  \     /
@@ -285,9 +285,9 @@ class Stereo:
         return cumulenes
 
     @cached_property
-    def _tetrahedrons(self) -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
+    def _stereo_tetrahedrons(self) -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
         """
-        tetrahedrons which contains at least 3 non-hydrogen neighbors
+        Tetrahedrons which contains at least 3 non-hydrogen neighbors
         """
         #    2
         #    |
@@ -306,24 +306,24 @@ class Stereo:
     @cached_property
     def _cis_trans(self) -> Dict[Tuple[int, int], Tuple[int, int, Optional[int], Optional[int]]]:
         """
-        cis-trans bonds which contains at least one non-hydrogen neighbor on both ends
+        Cis-trans bonds which contains at least one non-hydrogen neighbor on both ends
         """
-        return {(n, m): env for (n, *mid, m), env in self._cumulenes.items() if not len(mid) % 2}
+        return {(n, m): env for (n, *mid, m), env in self._stereo_cumulenes.items() if not len(mid) % 2}
 
     @cached_property
     def _allenes(self) -> Dict[int, Tuple[int, int, Optional[int], Optional[int]]]:
         """
-        allenes which contains at least one non-hydrogen neighbor on both ends
+        Allenes which contains at least one non-hydrogen neighbor on both ends
         """
-        return {path[len(path) // 2]: env for path, env in self._cumulenes.items() if len(path) % 2}
+        return {path[len(path) // 2]: env for path, env in self._stereo_cumulenes.items() if len(path) % 2}
 
     @cached_property
     def _allenes_centers(self) -> Dict[int, int]:
         """
-        allene terminal atom to center mapping
+        Allene terminal atom to center mapping
         """
         terminals = {}
-        for path, env in self._cumulenes.items():
+        for path, env in self._stereo_cumulenes.items():
             if len(path) % 2:
                 c = path[len(path) // 2]
                 terminals[path[0]] = terminals[path[-1]] = c
@@ -332,10 +332,10 @@ class Stereo:
     @cached_property
     def _allenes_terminals(self) -> Dict[int, Tuple[int, int]]:
         """
-        allene center atom to terminals mapping
+        Allene center atom to terminals mapping
         """
         terminals = {}
-        for path, env in self._cumulenes.items():
+        for path, env in self._stereo_cumulenes.items():
             if len(path) % 2:
                 c = path[len(path) // 2]
                 terminals[c] = (path[0], path[-1])
@@ -357,9 +357,9 @@ class MoleculeStereo(Stereo):
                 raise AtomNotFound
 
             if self._atoms[m].atomic_number == 1:
-                s = _pyramid_sign((*plane[m], mark), *((*plane[x], 0) for x in self._tetrahedrons[n]))
+                s = _pyramid_sign((*plane[m], mark), *((*plane[x], 0) for x in self._stereo_tetrahedrons[n]))
             else:
-                order = [(*plane[x], mark if x == m else 0) for x in self._tetrahedrons[n]]
+                order = [(*plane[x], mark if x == m else 0) for x in self._stereo_tetrahedrons[n]]
                 if len(order) == 3:
                     s = _pyramid_sign((*plane[n], 0), *order)
                 else:
@@ -429,7 +429,7 @@ class MoleculeStereo(Stereo):
             if set(env) != set(self._bonds[n]):
                 raise AtomNotFound
 
-            translate = tuple(env.index(x) for x in self._tetrahedrons[n][:3])
+            translate = tuple(env.index(x) for x in self._stereo_tetrahedrons[n][:3])
             if _tetrahedron_translate[translate]:
                 mark = not mark
 
@@ -470,14 +470,39 @@ class MoleculeStereo(Stereo):
         return self.__chiral_centers[2]
 
     @cached_property
+    def _axises_connected_rings_cumulenes(self):
+        """
+        Get all axises in rings with attached cumulenes
+        """
+        morgan = self.atoms_order
+        bonds = self._bonds
+
+        out = []
+        for c in self.connected_rings_cumulenes:
+            axises = []
+            for m in self._get_automorphism_mapping({n: morgan[n] for n in c},
+                                                    {n: {m: b for m, b in bonds[n].items() if m in c} for n in c}):
+                # get self-matched atoms connected with automorphic atoms
+                sym = {k for k, v in m.items() if k != v}
+                ax = {k for k in m.keys() - sym if not sym.isdisjoint(bonds[k])}
+                if len(ax) > 1:
+                    axises.append(ax)
+            tmp = []
+            for ax in sorted(axises):
+                if all(x.isdisjoint(ax) for x in tmp):
+                    tmp.append(ax)
+            out.extend(tuple(x) for x in tmp)
+        return out
+
+    @cached_property
     def __chiral_centers(self):
         atoms_stereo = self._atoms_stereo
         cis_trans_stereo = self._cis_trans_stereo
         allenes_stereo = self._allenes_stereo
 
         morgan = self.atoms_order
-        tetrahedrons = self._tetrahedrons.copy()
-        cumulenes = self._cumulenes.copy()
+        tetrahedrons = self._stereo_tetrahedrons.copy()
+        cumulenes = self._stereo_cumulenes.copy()
 
         morgan_update = {}
         while True:

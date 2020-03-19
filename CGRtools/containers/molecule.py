@@ -45,6 +45,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._neighbors: Dict[int, int] = {}
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
+
         self._atoms_stereo: Dict[int, bool] = {}
         self._allenes_stereo: Dict[int, bool] = {}
         self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
