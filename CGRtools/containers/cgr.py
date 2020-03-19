@@ -23,13 +23,14 @@ from typing import List, Union, Tuple, Dict, Optional
 from . import cgr_query as query, molecule  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
+from ..algorithms.calculate2d import Calculate2DCGR
 from ..algorithms.depict import DepictCGR
 from ..algorithms.smiles import CGRSmiles
 from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
 
-class CGRContainer(Graph, CGRSmiles, DepictCGR):
+class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR):
     __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):

@@ -241,7 +241,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         total = False
         for m in self.molecules():
             if isinstance(m, MoleculeContainer):
-                if m.thiele() and not not total:
+                if m.thiele() and not total:
                     total = True
         if total:
             self.flush_cache()
@@ -292,12 +292,12 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """
         return self.compose()
 
-    def calculate2d(self):
+    def clean2d(self):
         """
         recalculate 2d coordinates
         """
         for m in self.molecules():
-            m.calculate2d()
+            m.clean2d()
         self.fix_positions()
 
     def fix_positions(self):

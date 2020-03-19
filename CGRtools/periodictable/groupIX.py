@@ -74,6 +74,10 @@ class Co(Element, PeriodIV, GroupIX):
                 (-4, False, 0, ((1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'), (1, 'S'))),  # [Co(NCS)6]4-
                 (-4, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))))  # [Co(OH)6]4-
 
+    @property
+    def atomic_radius(self):
+        return 1.52
+
 
 class Rh(Element, PeriodV, GroupIX):
     __slots__ = ()
@@ -106,6 +110,10 @@ class Rh(Element, PeriodV, GroupIX):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (0, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'), (1, 'H'))),  # HRh(CO)4
                 (0, False, 0, ((1, 'P'), (1, 'P'), (1, 'P'), (1, 'C'), (1, 'H'))))  # HRh(CO)[P(Ph)3]3
+
+    @property
+    def atomic_radius(self):
+        return 1.73
 
 
 class Ir(Element, PeriodVI, GroupIX):
@@ -142,6 +150,10 @@ class Ir(Element, PeriodVI, GroupIX):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (-3, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.8
+
 
 class Mt(Element, PeriodVII, GroupIX):
     __slots__ = ()
@@ -165,6 +177,10 @@ class Mt(Element, PeriodVII, GroupIX):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return 1.8  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Co', 'Rh', 'Ir', 'Mt']

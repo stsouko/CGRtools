@@ -47,6 +47,7 @@ class Cr(Element, PeriodIV, GroupVI):
     def _valences_exceptions(self):
         return ((2, False, 0, ()), (3, False, 0, ()),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),  # CrO2
+                (0, False, 0, ((2, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # CrF4
                 (0, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))),  # CrC4
 
@@ -54,6 +55,10 @@ class Cr(Element, PeriodIV, GroupVI):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'Cl'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'Cl'), (1, 'Cl'))))
+
+    @property
+    def atomic_radius(self):
+        return 1.66
 
 
 class Mo(Element, PeriodV, GroupVI):
@@ -94,6 +99,10 @@ class Mo(Element, PeriodV, GroupVI):
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (0, False, 0, ((2, 'O'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.90
+
 
 class W(Element, PeriodVI, GroupVI):
     __slots__ = ()
@@ -123,6 +132,10 @@ class W(Element, PeriodVI, GroupVI):
                 (0, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))),
                 (0, False, 0, ((2, 'O'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.93
+
 
 class Sg(Element, PeriodVII, GroupVI):
     __slots__ = ()
@@ -146,6 +159,10 @@ class Sg(Element, PeriodVII, GroupVI):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return 1.93  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Cr', 'Mo', 'W', 'Sg']

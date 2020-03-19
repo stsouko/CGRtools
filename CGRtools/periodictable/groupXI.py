@@ -49,6 +49,10 @@ class Cu(Element, PeriodIV, GroupXI):
                 (-1, False, 0, ((1, 'Cl'), (1, 'Cl'))),  # CuCl2^-
                 (-3, False, 0, ((1, 'S'), (1, 'S'))))  # CuS2^3- - это характерный комплекс для одновалентной меди
 
+    @property
+    def atomic_radius(self):
+        return 1.45
+
 
 class Ag(Element, PeriodV, GroupXI):
     __slots__ = ()
@@ -75,6 +79,10 @@ class Ag(Element, PeriodV, GroupXI):
                 (-1, False, 0, ((1, 'O'), (1, 'O'))),  # Ag(OH)2^1-
                 (-1, False, 0, ((1, 'S'), (1, 'S'))),  # AgS2^1-
                 (-1, False, 0, ((1, 'C'), (1, 'C'))))  # Ag(CN)2^1-
+
+    @property
+    def atomic_radius(self):
+        return 1.65
 
 
 class Au(Element, PeriodVI, GroupXI):
@@ -106,6 +114,10 @@ class Au(Element, PeriodVI, GroupXI):
                 (-1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'), (1, 'C'))),  # Au(CN)4^1-
                 (-1, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))))  # AuCl4^1-
 
+    @property
+    def atomic_radius(self):
+        return 1.74
+
 
 class Rg(Element, PeriodVII, GroupXI):
     __slots__ = ()
@@ -129,6 +141,10 @@ class Rg(Element, PeriodVII, GroupXI):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return 1.74  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Cu', 'Ag', 'Au', 'Rg']

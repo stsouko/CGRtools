@@ -77,6 +77,10 @@ class Ti(Element, PeriodIV, GroupIV):
                 (0, False, 0, ((2, 'N'), (1, 'N'))),
                 (0, False, 0, ((3, 'N'),)))
 
+    @property
+    def atomic_radius(self):
+        return 1.76
+
 
 class Zr(Element, PeriodV, GroupIV):
     __slots__ = ()
@@ -116,6 +120,10 @@ class Zr(Element, PeriodV, GroupIV):
                 (0, False, 0, ((1, 'N'), (1, 'N'))),  # Zr2N3
                 (0, False, 0, ((2, 'N'),)))
 
+    @property
+    def atomic_radius(self):
+        return 2.06
+
 
 class Hf(Element, PeriodVI, GroupIV):
     __slots__ = ()
@@ -148,6 +156,10 @@ class Hf(Element, PeriodVI, GroupIV):
                 (0, False, 0, ((2, 'N'), (1, 'N'))),
                 (0, False, 0, ((3, 'N'),)))
 
+    @property
+    def atomic_radius(self):
+        return 2.08
+
 
 class Rf(Element, PeriodVII, GroupIV):
     __slots__ = ()
@@ -171,6 +183,10 @@ class Rf(Element, PeriodVII, GroupIV):
     @property
     def _valences_exceptions(self):
         return (4, False, 0, ()),
+
+    @property
+    def atomic_radius(self):
+        return 2.08  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Ti', 'Zr', 'Hf', 'Rf']

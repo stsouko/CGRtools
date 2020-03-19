@@ -115,7 +115,7 @@ class GraphComponents:
         """
         Atoms in rings
         """
-        return tuple(x for x in self.sssr for x in x)
+        return tuple({x for x in self.sssr for x in x})
 
 
 class StructureComponents:
@@ -135,11 +135,38 @@ class StructureComponents:
         """
         Alkenes, allenes and cumulenes atoms numbers
         """
+        return self._cumulenes()
+
+    @cached_property
+    def tetrahedrons(self) -> Tuple[int, ...]:
+        """
+        Carbon sp3 atoms numbers
+        """
         atoms = self._atoms
         bonds = self._bonds
+        tetra = []
+        for n, atom in atoms.items():
+            if atom.atomic_number == 6 and not self._charges[n]:
+                env = bonds[n]
+                if all(x.order == 1 for x in env.values()):
+                    b_sum = sum(x.order for x in env.values())
+                    if b_sum > 4:
+                        raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
+                    tetra.append(n)
+        return tetra
+
+    def _cumulenes(self, heteroatoms=False):
+        atoms = self._atoms
+        bonds = self._bonds
+
+        if heteroatoms:
+            atoms_numbers = {5, 6, 7, 15, 16, 33, 34, 52}
+        else:
+            atoms_numbers = {6}
+
         adj = defaultdict(set)  # carbon double bonds adjacency matrix
         for n, atom in atoms.items():
-            if atom.atomic_number == 6:
+            if atom.atomic_number in atoms_numbers:
                 adj_n = adj[n].add
                 b_sum = 0
                 a_sum = 0
@@ -149,7 +176,7 @@ class StructureComponents:
                         a_sum += 1
                     elif order != 8:  # ignore special bond
                         b_sum += order
-                    if order == 2 and atoms[m].atomic_number == 6:
+                    if order == 2 and atoms[m].atomic_number in atoms_numbers:
                         adj_n(m)
                 if a_sum:
                     b_sum += a_sum + 1
@@ -172,24 +199,6 @@ class StructureComponents:
                 # check for carbon only double-bonded chains.
                 cumulenes.append(tuple(path))
         return cumulenes
-
-    @cached_property
-    def tetrahedrons(self) -> Tuple[int, ...]:
-        """
-        Carbon sp3 atoms numbers
-        """
-        atoms = self._atoms
-        bonds = self._bonds
-        tetra = []
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6 and not self._charges[n]:
-                env = bonds[n]
-                if all(x.order == 1 for x in env.values()):
-                    b_sum = sum(x.order for x in env.values())
-                    if b_sum > 4:
-                        raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-                    tetra.append(n)
-        return tetra
 
 
 __all__ = ['GraphComponents', 'StructureComponents']

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -23,17 +23,19 @@ from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
+from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule):
+                        DepictMolecule, Calculate2DMolecule, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
     __class_cache__ = {}
@@ -428,7 +430,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 for m, bond in bonds[n].items():
                     if m not in hi:
                         explicit_sum += bond.order
-                        explicit_dict[(bond.order, atoms[m].__class__)] += 1
+                        explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
 
                 if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
                        for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
@@ -477,7 +479,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     break
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             else:
                 try:
                     rules = atom.valence_rules(charge, is_radical, explicit_sum)
@@ -539,7 +541,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     return
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             try:
                 rules = atom.valence_rules(charge, is_radical, explicit_sum)
             except ValenceError:
