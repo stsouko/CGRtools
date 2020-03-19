@@ -24,124 +24,17 @@ from math import sqrt
 from pathlib import Path
 from traceback import format_exc
 from typing import List, Iterable, Tuple
+from warnings import warn
 from ._CGRrw import CGRRead
 from ..containers import MoleculeContainer
 
 
-class XYZRead(CGRRead):
-    """XYZ files reader. Works similar to opened file object. Support `with` context manager.
-    On initialization accept opened in text mode file, string path to file,
-    pathlib.Path object or another buffered reader object.
-
-    Supported multiple structures in same file. In second line possible to store total charge of system. Example::
-
-        2
-        charge=-1
-        O 0.0 0.0 0.0
-        H 1.0 0.0 0.0
-
-    """
-    def __init__(self, file, *args, radius_multiplier=1.25, **kwargs):
-        """
-        :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
-        """
-        if isinstance(file, str):
-            self.__file = open(file)
-            self.__is_buffer = False
-        elif isinstance(file, Path):
-            self.__file = file.open()
-            self.__is_buffer = False
-        elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
-            self.__is_buffer = True
-        else:
-            raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
-        super().__init__(*args, **kwargs)
+class XYZ(CGRRead):
+    def __init__(self, radius_multiplier=1.25, **kwargs):
         self.__radius = radius_multiplier
-        self._data = self.__reader()
+        super().__init__(**kwargs)
 
-    def close(self, force=False):
-        """
-        Close opened file
-
-        :param force: Force closing of externally opened file or buffer
-        """
-        if not self.__is_buffer or force:
-            self.__file.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, _type, value, traceback):
-        self.close()
-
-    def read(self) -> List[MoleculeContainer]:
-        """
-        Parse whole file
-
-        :return: list of parsed molecules
-        """
-        return list(iter(self))
-
-    def __iter__(self):
-        return (x for x in self._data if x is not None)
-
-    def __next__(self):
-        return next(iter(self))
-
-    def __reader(self):
-        failkey = True
-        meta = False
-        xyz = charge = size = radical = None
-        for n, line in enumerate(self.__file):
-            if failkey:
-                try:
-                    size = int(line)
-                except ValueError:
-                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                else:
-                    meta = True
-                    failkey = False
-                    xyz = []
-            elif meta:  # second line
-                charge = 0
-                radical = 0
-                for x in line.split():
-                    if x.startswith('charge='):
-                        try:
-                            charge = int(line[7:])
-                        except ValueError:
-                            failkey = True
-                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield None
-                            break
-                    elif x.startswith('radical='):
-                        try:
-                            radical = int(line[8:])
-                        except ValueError:
-                            failkey = True
-                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield None
-                            break
-                else:
-                    meta = False
-            elif len(xyz) < size:  # XYZ block
-                try:
-                    symbol, x, y, z = line.split()
-                    xyz.append((symbol, float(x), float(y), float(z)))
-                except ValueError:
-                    failkey = True
-                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                    yield None
-                else:
-                    if len(xyz) == size:
-                        yield self.from_xyz(xyz, charge, radical)
-                        failkey = True  # trigger end of XYZ
-        if not failkey:  # cut XYZ
-            warning('Last structure not finished')
-            yield None
-
-    def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+    def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
         mol = MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
@@ -336,4 +229,125 @@ class XYZRead(CGRRead):
         return dots, saturation, electrons
 
 
-__all__ = ['XYZRead']
+class XYZRead(XYZ):
+    """XYZ files reader. Works similar to opened file object. Support `with` context manager.
+    On initialization accept opened in text mode file, string path to file,
+    pathlib.Path object or another buffered reader object.
+
+    Supported multiple structures in same file. In second line possible to store total charge of system. Example::
+
+        2
+        charge=-1
+        O 0.0 0.0 0.0
+        H 1.0 0.0 0.0
+
+    """
+    def __init__(self, file, **kwargs):
+        """
+        :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
+        :param ignore: Skip some checks of data or try to fix some errors.
+        """
+        if isinstance(file, str):
+            self.__file = open(file)
+            self.__is_buffer = False
+        elif isinstance(file, Path):
+            self.__file = file.open()
+            self.__is_buffer = False
+        elif isinstance(file, (TextIOWrapper, StringIO)):
+            self.__file = file
+            self.__is_buffer = True
+        else:
+            raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
+        super().__init__(**kwargs)
+        self._data = self.__reader()
+
+    def close(self, force=False):
+        """
+        Close opened file
+
+        :param force: Force closing of externally opened file or buffer
+        """
+        if not self.__is_buffer or force:
+            self.__file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    def read(self) -> List[MoleculeContainer]:
+        """
+        Parse whole file
+
+        :return: list of parsed molecules
+        """
+        return list(iter(self))
+
+    def __iter__(self):
+        return (x for x in self._data if x is not None)
+
+    def __next__(self):
+        return next(iter(self))
+
+    def __reader(self):
+        failkey = True
+        meta = False
+        xyz = charge = size = radical = None
+        for n, line in enumerate(self.__file):
+            if failkey:
+                try:
+                    size = int(line)
+                except ValueError:
+                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                else:
+                    meta = True
+                    failkey = False
+                    xyz = []
+            elif meta:  # second line
+                charge = 0
+                radical = 0
+                for x in line.split():
+                    if x.startswith('charge='):
+                        try:
+                            charge = int(line[7:])
+                        except ValueError:
+                            failkey = True
+                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield None
+                            break
+                    elif x.startswith('radical='):
+                        try:
+                            radical = int(line[8:])
+                        except ValueError:
+                            failkey = True
+                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield None
+                            break
+                else:
+                    meta = False
+            elif len(xyz) < size:  # XYZ block
+                try:
+                    symbol, x, y, z = line.split()
+                    xyz.append((symbol, float(x), float(y), float(z)))
+                except ValueError:
+                    failkey = True
+                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                    yield None
+                else:
+                    if len(xyz) == size:
+                        yield self._convert_structure(xyz, charge, radical)
+                        failkey = True  # trigger end of XYZ
+        if not failkey:  # cut XYZ
+            warning('Last structure not finished')
+            yield None
+
+    def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+        return self._convert_structure(matrix, charge, radical)
+
+    def from_xyz(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
+        warn('.from_xyz() deprecated. Use .parse() instead', DeprecationWarning)
+        return self._convert_structure(matrix, charge, radical)
+
+
+__all__ = ['XYZRead', 'XYZ']

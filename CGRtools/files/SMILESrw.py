@@ -87,7 +87,11 @@ class SMILESRead(CGRRead):
 
     For reactions . [dot] in bonds should be used only for molecules separation.
     """
-    def __init__(self, file, *args, header=None, **kwargs):
+    def __init__(self, file, header=None, **kwargs):
+        """
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
+        """
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -99,7 +103,7 @@ class SMILESRead(CGRRead):
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
         if header is True:
             self.__header = next(self.__file).split()[1:]
