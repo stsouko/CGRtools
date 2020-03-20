@@ -120,7 +120,7 @@ COPYRIGHT
 =========
 
 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer  
-2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
+2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> features and API discussion  
 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 
 CONTRIBUTORS
