@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -40,6 +40,9 @@ class Bond:
     def __int__(self):
         return self.__order
 
+    def __hash__(self):
+        return self.__order
+
     @property
     def order(self) -> int:
         return self.__order
@@ -77,7 +80,10 @@ class DynamicBond:
         return f'{self.__class__.__name__}({self.__order}, {self.__p_order})'
 
     def __int__(self):
-        return (self.__order or 0) << 4 | (self.__p_order or 0)
+        return hash(self)
+
+    def __hash__(self):
+        return (self.__order or 0) * 10 + (self.__p_order or 0)
 
     @property
     def order(self) -> Optional[int]:
