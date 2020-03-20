@@ -95,15 +95,13 @@ General part
     pip install CGRTools[mrv]
     ```
 
-* Install CGRtools with structures `clean2d` support \[only DEV\]
-
-    optimized version \[numba and numpy used\]
+* Install CGRtools with structures `clean2d` support \[only DEV\] optimized version \[numba and numpy used\]
 
     ```
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRTools[clean2djit]
     ```
 
-    or slow version \[numpy used\]
+* Install CGRtools with structures `clean2d` support \[only DEV\] slow version \[numpy used\]
 
     ```
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools[clean2d]
