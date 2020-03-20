@@ -20,9 +20,15 @@ from io import StringIO, TextIOWrapper
 from logging import warning
 from pathlib import Path
 from traceback import format_exc
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Optional
 from .XYZrw import XYZ
 from ..containers import MoleculeContainer
+
+
+res_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG',
+             'SER', 'THR', 'VAL', 'TRP', 'TYR',  # Amino acids
+             'DA', 'DC', 'DG', 'DT', 'DI',  # Deoxyribonucleotides
+             'A', 'C', 'G', 'U', 'I'}  # Ribonucleotides
 
 
 class PDBRead(XYZ):
@@ -33,7 +39,10 @@ class PDBRead(XYZ):
     Supported multiple structures in same file separated by ENDMDL. Supported only ATOM and HETATM parsing.
     TER required for chains and ligands separating. END or ENDMDL required in the end
     """
-    def __init__(self, file, **kwargs):
+    def __init__(self, file, ignore=False, **kwargs):
+        """
+        :param ignore: Skip some checks of data or try to fix some errors.
+        """
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -46,6 +55,7 @@ class PDBRead(XYZ):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__ignore = ignore
         self._data = self.__reader()
 
     def close(self, force=False):
@@ -112,15 +122,44 @@ class PDBRead(XYZ):
                         failkey = True
                         yield None
                 else:
-                    charge = 0
+                    charge = None
                 try:
                     x, y, z = float(line[30:38]), float(line[38:46]), float(line[46:54])
                 except ValueError:
                     warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                     failkey = True
+                    atoms = []
+                    molecules = []
                     yield None
-                else:
-                    atoms.append((line[76:78].strip(), charge, x, y, z, line[17:20].strip()))
+                    continue
+
+                element = line[76:78].strip()
+                residue = line[17:20].strip()
+                atom_name = line[12:16].strip(' 0123456789')
+                if residue in res_names:  # bio-polymers
+                    atom_name = atom_name[0]
+                elif residue == 'MSE':
+                    if atom_name.startswith('SE'):
+                        atom_name = 'Se'
+                    else:
+                        atom_name = atom_name[0]
+                elif residue == 'CBR':
+                    if atom_name.startswith('BR'):
+                        atom_name = 'Br'
+                    else:
+                        atom_name = atom_name[0]
+                else:  # ligands
+                    atom_name = atom_name.capitalize()
+
+                if atom_name != element:
+                    warning('Atom name and Element symbol not equal')
+                    if not self.__ignore:
+                        failkey = True
+                        atoms = []
+                        molecules = []
+                        yield None
+                        continue
+                atoms.append((atom_name, charge, x, y, z, residue))
             elif line.startswith('TER'):
                 # The TER record indicates the end of a list of ATOM/HETATM records for a chain.
                 # COLUMNS        DATA  TYPE    FIELD           DEFINITION
@@ -153,7 +192,7 @@ class PDBRead(XYZ):
             warning('PDB not finished')
             yield None
 
-    def _convert_structure(self, matrix: Iterable[Tuple[str, int, float, float, float, str]]):
+    def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float, str]]):
         mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
         mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}
         return mol

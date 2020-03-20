@@ -28,6 +28,9 @@ from warnings import warn
 from ..containers import MoleculeContainer
 
 
+charge_priority = {0: 0, -1: 1, 1: 2, 2: 3, 3: 4, -2: 5, -3: 6, 4: 7, -4: 8}
+
+
 class XYZ:
     def __init__(self, radius_multiplier=1.25):
         """
@@ -48,7 +51,7 @@ class XYZ:
             conformer[n] = (x, y, z)
             defined_charges[n] = c
 
-        if any(x is not None for x in defined_charges.values()):
+        if all(x is not None for x in defined_charges.values()):
             charge = sum(defined_charges.values())
 
         bonds = self.__get_neighbors(atoms, conformer)
@@ -73,7 +76,10 @@ class XYZ:
                 else:
                     unsaturated[n] = [(c, r, h)]
             else:
-                unsaturated[n] = sorted(s, key=lambda x: (x[2], x[0] if x[0] else 5, x[1]), reverse=True)
+                # radicals is the lowest priority
+                # hydrogens is the highest priority
+                unsaturated[n] = sorted(s, key=lambda x: (x[1], -x[2] + x[0] if x[0] > 0 else -x[2],
+                                                          charge_priority[x[0]]))
 
         # create graph of unsaturated atoms
         bonds_graph = {n: {m for m in env if m in unsaturated} for n, env in bonds.items() if n in unsaturated}
@@ -86,7 +92,18 @@ class XYZ:
             if r:
                 radicals[n] = True
 
-        for s in product(*([(n, c, r) for c, r in s] for n, s in ua.items() if s)):
+        combo_ua = []
+        for n, s in ua.items():
+            if len(s) == 1:
+                c, r = s[0]
+                if c:
+                    charges[n] = c
+                if r:
+                    radicals[n] = True
+            elif s:
+                combo_ua.append([(n, c, r) for c, r in s])
+
+        for s in product(*combo_ua):
             for n, c, r in s:
                 charges[n] = c
                 radicals[n] = r
@@ -102,7 +119,7 @@ class XYZ:
         return mol
 
     def __get_neighbors(self, atoms, conformer):
-        possible_bonds = defaultdict(dict)  # distance matrix
+        possible_bonds = {n: {} for n in atoms}  # distance matrix
         for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
             d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
             r = (atoms[n].atomic_radius + atoms[m].atomic_radius) * self.__radius
@@ -158,11 +175,11 @@ class XYZ:
 
     @staticmethod
     def __saturate(bonds, atoms):
-        # get isolated atoms. atoms should be charged or radical
         dots = {}
         saturation = []
         electrons = []
         while True:
+            # get isolated atoms. atoms should be charged or radical
             new_dots = {n: [(c, r) for c, r, h in atoms[n] if not h] for n, env in bonds.items() if not env}
             for n in new_dots:
                 del bonds[n]
