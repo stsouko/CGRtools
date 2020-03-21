@@ -426,9 +426,9 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR):
                 sph[n] = p_hybridization
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, CGRContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
             u._neighbors.update(other._neighbors)
@@ -453,7 +453,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR):
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, molecule.MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
             u._neighbors.update(other._neighbors)
@@ -472,7 +472,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR):
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):  # Query or CGRQuery
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 

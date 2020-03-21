@@ -37,7 +37,7 @@ class PDBRead(XYZ):
     pathlib.Path object or another buffered reader object.
 
     Supported multiple structures in same file separated by ENDMDL. Supported only ATOM and HETATM parsing.
-    TER required for chains and ligands separating. END or ENDMDL required in the end
+    END or ENDMDL required in the end.
     """
     def __init__(self, file, ignore=False, **kwargs):
         """
@@ -73,7 +73,7 @@ class PDBRead(XYZ):
     def __exit__(self, _type, value, traceback):
         self.close()
 
-    def read(self) -> List[Tuple[MoleculeContainer, ...]]:
+    def read(self) -> List[MoleculeContainer]:
         """
         Parse whole file
 
@@ -90,7 +90,6 @@ class PDBRead(XYZ):
     def __reader(self):
         failkey = False
         atoms = []
-        molecules = []
         for n, line in enumerate(self.__file):
             if failkey:
                 if line.startswith('ENDMDL'):
@@ -120,6 +119,7 @@ class PDBRead(XYZ):
                     except ValueError:
                         warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                         failkey = True
+                        atoms = []
                         yield None
                 else:
                     charge = None
@@ -129,7 +129,6 @@ class PDBRead(XYZ):
                     warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                     failkey = True
                     atoms = []
-                    molecules = []
                     yield None
                     continue
 
@@ -156,39 +155,17 @@ class PDBRead(XYZ):
                     if not self.__ignore:
                         failkey = True
                         atoms = []
-                        molecules = []
                         yield None
                         continue
                 atoms.append((atom_name, charge, x, y, z, residue))
-            elif line.startswith('TER'):
-                # The TER record indicates the end of a list of ATOM/HETATM records for a chain.
-                # COLUMNS        DATA  TYPE    FIELD           DEFINITION
-                # -------------------------------------------------------------------------
-                #  1 -  6        Record name   "TER   "
-                #  7 - 11        Integer       serial          Serial number.
-                # 18 - 20        Residue name  resName         Residue name.
-                # 22             Character     chainID         Chain identifier.
-                # 23 - 26        Integer       resSeq          Residue sequence number.
-                # 27             AChar         iCode           Insertion code.
-                if atoms:
-                    molecules.append(self._convert_structure(atoms))
-                    atoms = []
-                else:
-                    warning(f'Line [{n}] {line}: TER before ATOM or HETATM')
-                    failkey = True
-                    molecules = []  # two TER in sequence
-                    yield None
             elif line.startswith('END'):  # EOF or end of complex
                 if atoms:  # convert collected atoms
-                    molecules.append(self._convert_structure(atoms))
+                    yield self._convert_structure(atoms)
                     atoms = []
-                if molecules:
-                    yield tuple(molecules)
-                    molecules = []
                 else:
                     warning(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
                     yield None
-        if atoms or molecules:  # ENDMDL or END not found
+        if atoms:  # ENDMDL or END not found
             warning('PDB not finished')
             yield None
 

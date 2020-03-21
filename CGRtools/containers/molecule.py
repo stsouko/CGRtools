@@ -231,9 +231,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._fix_stereo()
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._conformers.clear()
 
             u._neighbors.update(other._neighbors)
@@ -258,7 +258,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 
