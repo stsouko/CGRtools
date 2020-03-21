@@ -211,7 +211,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
-            sub._conformers = []
+            sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n].copy()
