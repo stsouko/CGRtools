@@ -3,13 +3,16 @@ CGRTools
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
 Basic operations:
-   - Read /write /convert formats MDL .RDF and .SDF, SMILES, .MRV
-   - Standardize reactions and valid structures checker.
+   - Read/write/convert formats: MDL .RDF and .SDF, .MRV, SMILES, INCHI (Linux and Windows), .XYZ, .PDB
+   - Standardize molecules and reactions and valid structures checker.
    - Produce CGRs.
    - Perform subgraph search.
-   - Build /correct molecules and reactions.
-   - Produce template based reactions.
-    
+   - Build/edit molecules and reactions.
+   - Produce template based reactions and molecules.
+   - Atom-to-atom mapping checker and rule-based fixer.
+   - Perform MCS search.
+   - 2d depiction.
+
 INSTALL
 =======
 
