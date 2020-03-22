@@ -18,17 +18,49 @@
 #
 
 
+class JupyterWidget:
+    def __init__(self, xml, width, height):
+        self.xml = xml
+        self.width = width
+        self.height = height
+
+    def _repr_html_(self):
+        return ("<script type='text/javascript' src='https://www.x3dom.org/download/x3dom.js'></script>" 
+                "<link rel='stylesheet' type='text/css' href='https://www.x3dom.org/download/x3dom.css'>"
+                f'<div style="width: {self.width}; height: {self.height}">{self.xml}</div>')
+
+    def __html__(self):
+        return self._repr_html_()
+
+
 class X3dom:
     __slots__ = ()
 
     def depict3d(self, index: int = 0) -> str:
         """Get X3DOM XML string.
+
         :param index: index of conformer
         """
-        return f'<x3d width=100% height=100%>\n  <scene>\n{self.__render_atoms(index)}{self._render_3d_bonds(index)}' \
-               '  </scene>\n</x3d>'
+        xyz = self._conformers[index]
+        mx = sum(x for x, _, _ in xyz.values()) / len(xyz)
+        my = sum(y for _, y, _ in xyz.values()) / len(xyz)
+        mz = sum(z for _, _, z in xyz.values()) / len(xyz)
+        xyz = {n: (x - mx, y - my, z - mz) for n, (x, y, z) in xyz.items()}
+        atoms = self.__render_atoms(xyz)
+        bonds = self._render_3d_bonds(xyz)
+        return f'<x3d width=100% height=100%>\n  <scene>\n{atoms}{bonds}  </scene>\n</x3d>'
 
-    def __render_atoms(self, index):
+    def view3d(self, index: int = 0, width='600px', height='400px'):
+        """
+        Jupyter widget for 3D visualization.
+
+        :param index: index of conformer
+        :param width: widget width
+        :param height: widget height
+        """
+        return JupyterWidget(self.depict3d(index), width, height)
+
+    def __render_atoms(self, xyz):
         config = self._render_config
         colors = config['atoms_colors']
         mapping_color = config['mapping_color']
@@ -41,7 +73,6 @@ class X3dom:
         elif not radius:
             multiplier = .2
 
-        xyz = self._conformers[index]
         atoms = []
         if carbon:
             for n, a in self._atoms.items():
@@ -73,18 +104,16 @@ class X3dom:
 class X3domMolecule(X3dom):
     __slots__ = ()
 
-    def _render_3d_bonds(self, index):
+    def _render_3d_bonds(self, xyz):
         config = self._render_config
-        xyz = self._conformers[index]
         return ''
 
 
 class X3domCGR(X3dom):
     __slots__ = ()
 
-    def _render_3d_bonds(self, index):
+    def _render_3d_bonds(self, xyz):
         config = self._render_config
-        xyz = self._conformers[index]
         return ''
 
 
