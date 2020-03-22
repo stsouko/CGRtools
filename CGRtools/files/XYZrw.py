@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from importlib.util import find_spec
 from itertools import combinations, product
 from io import StringIO, TextIOWrapper
 from logging import warning
@@ -26,6 +27,52 @@ from traceback import format_exc
 from typing import List, Iterable, Tuple, Optional
 from warnings import warn
 from ..containers import MoleculeContainer
+
+if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
+    from numpy import array, uint16, empty
+    from numba import njit, f8, u2, u4
+    from numba.types import Tuple as nTuple
+
+    @njit(nTuple((u2[:, :], f8[:]))(f8[:, :], f8[:], f8),
+          {'size': u2, 'max_bonds': u4, 'c': u4, 'n': u2, 'm': u2, 'rn': f8, 'r': f8, 'd': f8,
+           'nx': f8, 'ny': f8, 'nz': f8, 'mx': f8, 'my': f8, 'mz': f8}, cache=True)
+    def _get_possible_bonds(xyz, radii, multiplier):
+        size = len(xyz)
+        max_bonds = size * 10  # each atom has less then 10 neighbors approximately
+        nm = empty((max_bonds, 2), dtype=uint16)
+        ds = empty(max_bonds)
+        c = 0
+        for n in range(size - 1):
+            nx, ny, nz = xyz[n]
+            rn = radii[n]
+            for m in range(n + 1, size):
+                mx, my, mz = xyz[m]
+                d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
+                r = (rn + radii[m]) * multiplier
+                if d <= r:
+                    nm[c] = n + 1, m + 1
+                    ds[c] = d
+                    c += 1
+        return nm[:c], ds[:c]
+
+    def get_possible_bonds(atoms, conformer, multiplier):
+        possible_bonds = {n: {} for n in atoms}  # distance matrix
+        radii = array([a.atomic_radius for a in atoms.values()])
+        xyz = array(list(conformer.values()))
+        nm, ds = _get_possible_bonds(xyz, radii, multiplier)
+        for (n, m), d in zip(nm.tolist(), ds.tolist()):
+            possible_bonds[n][m] = possible_bonds[m][n] = d
+        return possible_bonds
+else:
+    def get_possible_bonds(atoms, conformer, multiplier):
+        possible_bonds = {n: {} for n in atoms}  # distance matrix
+        radii = {n: a.atomic_radius for n, a in atoms.items()}
+        for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
+            d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
+            r = (radii[n] + radii[m]) * multiplier
+            if d <= r:
+                possible_bonds[n][m] = possible_bonds[m][n] = d
+        return possible_bonds
 
 
 charge_priority = {0: 0, -1: 1, 1: 2, 2: 3, 3: 4, -2: 5, -3: 6, 4: 7, -4: 8}
@@ -54,7 +101,7 @@ class XYZ:
         if all(x is not None for x in defined_charges.values()):
             charge = sum(defined_charges.values())
 
-        bonds = self.__get_neighbors(atoms, conformer)
+        bonds = get_possible_bonds(atoms, conformer, self.__radius)
         saturation, bonds = self.__get_atom_states_and_bonds(atoms, bonds, defined_charges)
 
         # set single bonds in molecule. collect unsaturated atoms
@@ -117,15 +164,6 @@ class XYZ:
         mol.neutralize()
         mol._conformers.append(conformer)
         return mol
-
-    def __get_neighbors(self, atoms, conformer):
-        possible_bonds = {n: {} for n in atoms}  # distance matrix
-        for (n, (nx, ny, nz)), (m, (mx, my, mz)) in combinations(conformer.items(), 2):
-            d = sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
-            r = (atoms[n].atomic_radius + atoms[m].atomic_radius) * self.__radius
-            if d <= r:
-                possible_bonds[n][m] = possible_bonds[m][n] = d
-        return possible_bonds
 
     @staticmethod
     def __get_atom_states_and_bonds(atoms, possible_bonds, charges):
