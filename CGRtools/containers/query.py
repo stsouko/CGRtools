@@ -165,9 +165,9 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
             atom._attach_to_graph(sub, n)
         return sub
 
-    def union(self, other) -> 'QueryContainer':
+    def union(self, other, **kwargs) -> 'QueryContainer':
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             if isinstance(other, QueryContainer):
                 u._neighbors.update(other._neighbors)
                 u._hybridizations.update(other._hybridizations)
@@ -206,7 +206,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         elif isinstance(other, cgr.CGRContainer):
             raise TypeError('QueryContainer and CGRContainer unite impossible')
         elif isinstance(other, Graph):
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 

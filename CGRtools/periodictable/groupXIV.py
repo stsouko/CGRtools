@@ -134,6 +134,10 @@ class Sn(Element, PeriodV, GroupXIV):
         return ((2, False, 0, ()),
                 (0, False, 0, ((2, 'O'),)), (0, False, 0, ((1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'S'),)),
+
+                (1, False, 0, ((1, 'C'), (1, 'C'), (1, 'C'))),
+                (0, False, 1, ((1, 'C'), (1, 'C'), (1, 'C'))),
+
                 (-2, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))))
 
     @property

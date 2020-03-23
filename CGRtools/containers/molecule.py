@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -30,12 +30,13 @@ from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
 from ..algorithms.tautomers import Tautomers
+from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, Tautomers):
+                        DepictMolecule, Calculate2DMolecule, Tautomers, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
@@ -211,7 +212,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
-            sub._conformers = []
+            sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n].copy()
@@ -231,9 +232,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._fix_stereo()
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._conformers.clear()
 
             u._neighbors.update(other._neighbors)
@@ -258,7 +259,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -33,7 +33,7 @@ class SDFRead(MDLRead):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, *args, indexable=False, **kwargs):
+    def __init__(self, file, indexable=False, **kwargs):
         """
         :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
             dealing with a real file (the path to the file is specified) because the external grep utility is used,
@@ -41,8 +41,10 @@ class SDFRead(MDLRead):
 
             if False: works like generator converting a record into MoleculeContainer and returning each object in
             order, records with errors are skipped
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(file, **kwargs)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -169,7 +171,11 @@ class SDFWrite(MDLWrite):
         """
         write single molecule into file
         """
-        self._file.write(self._convert_structure(data))
+        mol = self._convert_structure(data)
+        if isinstance(mol, list):
+            self._file.write('$$$$\n'.join(mol))
+        else:
+            self._file.write(mol)
 
         for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')
