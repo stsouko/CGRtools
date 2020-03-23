@@ -118,4 +118,4 @@ CONTRIBUTORS
 * Ravil Mukhametgaleev <sonic-mc@mail.ru>
 * Tagir Akhmetshin <tagirshin@gmail.com>
 * Adelia Fatykhova <adelik21979@gmail.com>
-* Dinar Batyrshin <batyrshin-dinar@mail.ru>
+* Dinar Batyrshin <batyrshin-dinar@mail.ru> 
