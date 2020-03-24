@@ -26,6 +26,7 @@ from ..algorithms.aromatics import Aromatize
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
+from ..algorithms.pharmacophore import Pharmacophore
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
@@ -35,7 +36,7 @@ from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, X3domMolecule):
+                        DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
