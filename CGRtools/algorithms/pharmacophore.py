@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 class Pharmacophore:
@@ -50,10 +50,12 @@ class Pharmacophore:
                         elif all(hybridizations[m] not in (2, 3) for m in bonds[n]):  # secondary and third amines
                             if sum(hybridizations[m] == 4 for m in bonds[n]) <= 1:  # only one Aryl neighbor
                                 out.append(n)
-                    # pyridine, imidazole
+                    # imidazole, pyrroline, guanidine
+                    elif hybridizations[n] == 2:
+                        out.append(n)
+                    # pyridine
                     elif hybridizations[n] == 4:
-                        if neighbors[n] == 2:
-                            out.append(n)
+                        out.append(n)
                 elif a.atomic_number == 8:  # O
                     if hybridizations[n] == 2:  # carbonyl
                         out.append(n)
@@ -67,9 +69,32 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
+    def hydrogen_donors(self) -> Tuple[Tuple[int, Optional[int]], ...]:
+        """
+        NH, OH, SH groups.
+        """
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+        hybridizations = self._hybridizations
+        neighbors = self._neighbors
+
+        out = []
+        for n, a in atoms.items():
+            if hybridizations[n] == 1:  # amines, alcoholes, phenoles, thioles
+                if a.atomic_number in (8, 16) and not charges[n] and neighbors[n] == 1 or \
+                        a.atomic_number == 7 and (not charges[n] and neighbors[n] in (1, 2) or
+                                                  charges[n] == 1 and neighbors[n] in (1, 2, 3)):
+                    out.append((n, next((m for m in bonds[n] if atoms[m].atomic_number == 1), None)))
+            # imine, guanidine
+            elif hybridizations[n] == 2 and a.atomic_number == 7 and not charges[n] and neighbors[n] == 1:
+                out.append((n, next((m for m in bonds[n] if atoms[m].atomic_number == 1), None)))
+        return tuple(out)
+
+    @cached_property
     def halogen_donors(self) -> Tuple[Tuple[int, int], ...]:
         """
-        Halogen(I)-Carbon pairs.
+        Carbon - Halogen(I) pairs.
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -80,42 +105,75 @@ class Pharmacophore:
                 if len(env) == 1:
                     m = next(iter(env))
                     if atoms[m].atomic_number == 6:
-                        out.append((n, m))
+                        out.append((m, n))
         return tuple(out)
 
     @cached_property
     def halogen_acceptors(self) -> Tuple[Tuple[int, int], ...]:
         """
-        (O,N,S)-(C,N,P,S) pairs.
+        (C,N,P,S) - Terminal(O,N,S) pairs.
         """
         bonds = self._bonds
         atoms = self._atoms
         charges = self._charges
         out = []
         for n, a in atoms.items():
-            if a.atomic_number in (7, 8, 16) and not charges[n]:
+            if a.atomic_number in (7, 8, 16) and charges[n] <= 0:
                 env = [m for m in bonds[n] if atoms[m].atomic_number in (6, 7, 15, 16)]
                 if len(env) == 1:
-                    out.append((n, env[0]))
+                    out.append((env[0], n))
         return tuple(out)
 
     @cached_property
     def positive_charged(self) -> Tuple[int, ...]:
         """
-        Atoms with positive formal charge, except zwitterions
+        Atoms with positive formal charge, except zwitterions.
+        Guanidines-H+ and same ions which have delocalization of charge will be added fully.
+        Supported delocalization between S, O, N atoms
         """
+        atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
-        return tuple(n for n, c in charges.items() if c > 0 and not any(charges[m] < 0 for m in bonds[n]))
+        neighbors = self._neighbors
+        hybridizations = self._hybridizations
+
+        out = set()
+        for n, c in charges.items():
+            if not neighbors[n]:  # skip [NH4-], etc
+                continue
+            if c > 0 and not any(charges[m] < 0 for m in bonds[n]):
+                out.add(n)
+                if atoms[n].atomic_number == 7 and hybridizations[n] == 2:
+                    m = next(m for m, b in bonds[n].items() if b.order == 2)
+                    for x, b in bonds[m].items():
+                        if x != n and b.oreder == 1 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
+                            out.add(x)
+        return tuple(out)
 
     @cached_property
     def negative_charged(self) -> Tuple[int, ...]:
         """
-        Atoms with negative formal charge, except zwitterions
+        Atoms with negative formal charge, except zwitterions.
+        Carboxyles and same ions which have delocalization of charge will be added fully.
+        Supported delocalization between S, O, N atoms
         """
+        atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
-        return tuple(n for n, c in charges.items() if c < 0 and not any(charges[m] > 0 for m in bonds[n]))
+        neighbors = self._neighbors
+
+        out = set()
+        for n, c in charges.items():
+            if not neighbors[n]:  # skip [OH-], etc
+                continue
+            if c < 0 and not any(charges[m] > 0 for m in bonds[n]):
+                out.add(n)
+                if atoms[n].atomic_number in (8, 16):
+                    m = next(iter(bonds[n]))
+                    for x, b in bonds[m].items():
+                        if x != n and b.oreder == 2 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
+                            out.add(x)
+        return tuple(out)
 
     @cached_property
     def metal_ligands(self):
