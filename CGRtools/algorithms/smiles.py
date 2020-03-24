@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, cached_property
+from CachedMethods import cached_method
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count, product
@@ -214,13 +214,6 @@ class Smiles:
 class MoleculeSmiles(Smiles):
     __slots__ = ()
 
-    @cached_property
-    def __aromatic_atoms(self):
-        aromatics = set()
-        for ring in self.aromatic_rings:
-            aromatics.update(ring)
-        return aromatics
-
     def _format_atom(self, n, adjacency=None, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
@@ -251,13 +244,6 @@ class MoleculeSmiles(Smiles):
                 smi.append(f'H{ih}')
             smi.insert(0, '[')
             smi.append(']')
-        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P'):  # heterocycles
-            if ih == 1:
-                smi.append('H]')
-                smi.insert(0, '[')
-            elif ih:
-                smi.append(f'H{ih}]')
-                smi.insert(0, '[')
         elif atom.atomic_symbol not in organic_set:
             if ih == 1:
                 smi.append('H')
