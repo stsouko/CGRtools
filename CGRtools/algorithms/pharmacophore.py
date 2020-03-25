@@ -17,11 +17,55 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from typing import Tuple, Optional
+from enum import Enum
+from itertools import product
+from math import sqrt
+from typing import Tuple, Optional, List, NamedTuple
+
+
+class ContactType(Enum):
+    hydrogen = 1
+    halogen = 2
+    hydrophobic = 3
+
+
+class Contact(NamedTuple):
+    host: int
+    guest: int
+    type: ContactType
 
 
 class Pharmacophore:
     __slots__ = ()
+
+    def find_contacts(self, other: 'Pharmacophore') -> List[Contact]:
+        """
+        Find pharmocophore contacts in 3d. Required explicit hydrogens.
+        """
+        contacts = []
+        contacts.extend(self.__hydrophobic_interactions(other))
+        return contacts
+
+    def __distance(self, n, xyz):
+        nx, ny, nz = self._conformers[0][n]
+        mx, my, mz = xyz
+        return sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
+
+    def __hydrophobic_interactions(self, other):
+        """
+        Detection of hydrophobic contacts.
+        """
+        config = self._pharmacophore_config
+        min_dist = config['min_dist']
+        hydroph_dist_max = config['hydroph_dist_max']
+
+        contacts = []
+        xyz = other._conformers[0]
+        for n, m in product(self.hydrophobic_centers, other.hydrophobic_centers):
+            e = self.__distance(n, xyz[m])
+            if min_dist < e < hydroph_dist_max:
+                contacts.append(Contact(n, m, ContactType.hydrophobic))
+        return contacts
 
     @cached_property
     def hydrogen_acceptors(self) -> Tuple[int, ...]:
@@ -125,7 +169,7 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
-    def positive_charged(self) -> Tuple[int, ...]:
+    def positive_charged_centers(self) -> Tuple[int, ...]:
         """
         Atoms with positive formal charge, except zwitterions.
         Guanidines-H+ and same ions which have delocalization of charge will be added fully.
@@ -146,7 +190,7 @@ class Pharmacophore:
                 if atoms[n].atomic_number == 7 and hybridizations[n] == 2:
                     m = next(m for m, b in bonds[n].items() if b.order == 2)
                     for x, b in bonds[m].items():
-                        if x != n and b.oreder == 1 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
+                        if x != n and b.order == 1 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
                             out.add(x)
         return tuple(out)
 
@@ -172,7 +216,7 @@ class Pharmacophore:
                 if atoms[n].atomic_number in (8, 16):
                     m = next(iter(bonds[n]))
                     for x, b in bonds[m].items():
-                        if x != n and b.oreder == 2 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
+                        if x != n and b.order == 2 and not charges[x] and atoms[x].atomic_number in (7, 8, 16):
                             out.add(x)
         return tuple(out)
 
@@ -232,6 +276,8 @@ class Pharmacophore:
         S: R-SH, R-S-R
         """
         raise NotImplemented
+
+    _pharmacophore_config = {'min_dist': .5, 'hydroph_dist_max': 4.}
 
 
 __all__ = ['Pharmacophore']
