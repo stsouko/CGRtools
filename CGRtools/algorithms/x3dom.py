@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from math import acos, sqrt
 
 
 class JupyterWidget:
@@ -25,7 +26,7 @@ class JupyterWidget:
         self.height = height
 
     def _repr_html_(self):
-        return ("<script type='text/javascript' src='https://www.x3dom.org/download/x3dom.js'></script>" 
+        return ("<script type='text/javascript' src='https://www.x3dom.org/download/x3dom.js'></script>"
                 "<link rel='stylesheet' type='text/css' href='https://www.x3dom.org/download/x3dom.css'>"
                 f'<div style="width: {self.width}; height: {self.height}">{self.xml}</div>')
 
@@ -106,7 +107,22 @@ class X3domMolecule(X3dom):
 
     def _render_3d_bonds(self, xyz):
         config = self._render_config
-        return ''
+        bonds = []
+        for n, m, bond in self.bonds():
+            nx, ny, nz = xyz[n]
+            mx, my, mz = xyz[m]
+            _nx, _ny, _nz = 0, 0, 0
+
+            nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+            ncx, ncy, ncz = 0, 0, 1
+            angle = acos((nmx * ncx + nmy * ncy + nmz * ncz) / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
+
+            bonds.append(f'    <transform translation="{nx:.2f} {ny:.2f} {nz:.2f}" rotation="{nmy:.2f} {- nmx:.2f} {0} '
+                         f'{angle:.2f}">\n      <shape\n>        <appearance\n>          <material diffusecolor="0 1 1"'
+                         f' ambientintensity="0.2" emissivecolor="0,0,0" shininess="0.2" specularcolor="0,0,0"\n>'
+                         f'          </material\n>        </appearance\n>        <cylinder radius=".04" height=".825"\n>'
+                         f'        </cylinder\n>      </shape\n>    </transform>\n')
+        return ''.join(bonds)
 
 
 class X3domCGR(X3dom):
