@@ -151,9 +151,10 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
-    def negative_charged(self) -> Tuple[int, ...]:
+    def negative_charged_centers(self) -> Tuple[int, ...]:
         """
         Atoms with negative formal charge, except zwitterions.
+
         Carboxyles and same ions which have delocalization of charge will be added fully.
         Supported delocalization between S, O, N atoms
         """
@@ -176,6 +177,53 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
+    def hydrophobic_centers(self) -> Tuple[int, ...]:
+        """
+        Hydrophobic atoms.
+
+        Hydrocarbons atoms.
+        """
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+
+        out = []
+        for n, a in atoms.items():
+            if a.atomic_number == 6 and not charges[n] and all(atoms[m].atomic_number in (1, 6) for m in bonds[n]):
+                out.append(n)
+        return tuple(out)
+
+    @cached_property
+    def aromatic_centers(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Aromatic rings atoms.
+
+        Ignored compounds like N1C=CC=C2C=CC=C12.
+        """
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+        hybridizations = self._hybridizations
+        aroma = self.aromatic_rings
+
+        # search pyroles
+        pyroles = []
+        for ring in self.sssr:
+            if len(ring) == 5 and ring not in aroma and all(not charges[n] for n in ring):
+                sp2 = 0
+                pa = None
+                for n in ring:
+                    if hybridizations[n] in (2, 4):
+                        sp2 += 1
+                    elif atoms[n].atomic_number in (7, 8, 15, 16):
+                        pa = n
+                if sp2 == 4 and pa:
+                    pyroles.append(ring)
+        if pyroles:
+            aroma = aroma + tuple(pyroles)
+        return aroma
+
+    @cached_property
     def metal_ligands(self):
         """
         Atoms that could possibly be involved in chelating a metal ion.
@@ -183,7 +231,7 @@ class Pharmacophore:
         N: N(Ar, not pyrole), R-NR2
         S: R-SH, R-S-R
         """
-        return
+        raise NotImplemented
 
 
 __all__ = ['Pharmacophore']
