@@ -18,8 +18,10 @@
 #
 from CachedMethods import cached_property
 from itertools import product
-from math import sqrt, acos
+from math import sqrt, acos, pi
 from typing import Tuple, Optional, List, NamedTuple, Union
+
+pi2 = pi / 2
 
 
 class Hydrophobic(NamedTuple):
@@ -28,10 +30,16 @@ class Hydrophobic(NamedTuple):
     distance: float
 
 
-class HydrogenDonor(NamedTuple):
+class Salts(NamedTuple):
     source: int
     target: int
     distance: float
+
+
+class HydrogenDonor(NamedTuple):
+    source: int
+    target: int
+    distance: float  # between atoms connected by hydrogen
     acceptor_distance: float  # acceptor-H bond length
     donor_distance: float  # donor-H bond length
     angle: float
@@ -40,10 +48,49 @@ class HydrogenDonor(NamedTuple):
 class HydrogenAcceptor(NamedTuple):
     source: int
     target: int
-    distance: float
+    distance: float  # between atoms connected by hydrogen
     acceptor_distance: float  # acceptor-H bond length
     donor_distance: float  # donor-H bond length
     angle: float
+
+
+class PiStack(NamedTuple):
+    source: Tuple[int, ...]
+    target: Tuple[int, ...]
+    distance: float  # distance between centers
+    angle: float  # angle between plains
+    t_shaped: bool
+    offset: float  # distance of projected centers
+
+
+class PiCation(NamedTuple):
+    source: Tuple[int, ...]
+    target: int
+    distance: float  # distance between centers
+    offset: float  # distance of projected centers
+
+
+class CationPi(NamedTuple):
+    source: int
+    target: Tuple[int, ...]
+    distance: float  # distance between centers
+    offset: float  # distance of projected centers
+
+
+class HalogenAcceptor(NamedTuple):
+    source: int
+    target: int
+    distance: float
+    acceptor_angle: float  # acceptor group to halogen atom angle
+    donor_angle: float  # halogen donor group to halogen acceptor atom angle
+
+
+class HalogenDonor(NamedTuple):
+    source: int
+    target: int
+    distance: float
+    acceptor_angle: float  # acceptor group to halogen atom angle
+    donor_angle: float  # halogen donor group to halogen acceptor atom angle
 
 
 def distance(n, m):
@@ -52,40 +99,103 @@ def distance(n, m):
     return sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
 
 
-def angle(n, m, k):
-    """
-    m----n
-          \
-           k
-    """
+def points_angle(n, m, k):
+    # m<---n
+    #       \
+    #        v
+    #        k
+
     nx, ny, nz = n
     mx, my, mz = m
     kx, ky, kz = k
-    nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-    nkx, nky, nkz = kx - nx, ky - ny, kz - nz
-    return acos((nmx * nkx + nmy * nky + nmz * nkz) / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
+    return vectors_angle((mx - nx, my - ny, mz - nz), (kx - nx, ky - ny, kz - nz))
+
+
+def vectors_angle(n, m):
+    # n<---0
+    #       \
+    #        v
+    #        m
+    nmx, nmy, nmz = n
+    nkx, nky, nkz = m
+
+    nmd = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+    nkd = sqrt(nkx ** 2 + nky ** 2 + nkz ** 2)
+
+    # normalization
+    nmx /= nmd
+    nmy /= nmd
+    nmz /= nmd
+    nkx /= nkd
+    nky /= nkd
+    nkz /= nkd
+    return acos(nmx * nkx + nmy * nky + nmz * nkz)
+
+
+def ring_math(ring, xyz):
+    # ring center
+    cx, cy, cz = xyz[ring[0]]
+    for n in ring[1:]:
+        x, y, z = xyz[n]
+        cx += x
+        cy += y
+        cz += z
+    lr = len(ring)
+    cx /= lr
+    cy /= lr
+    cz /= lr
+
+    # ring vector
+    r1x, r1y, r1z = x - cx, y - cy, z - cz
+    x, y, z = xyz[ring[0]]
+    r2x, r2y, r2z = x - cx, y - cy, z - cz
+    nx = r1y * r2z - r1z * r2y
+    ny = r1z * r2x - r1x * r2z
+    nz = r1x * r2y - r1y * r2x
+    return (cx, cy, cz), (nx, ny, nz)
+
+
+def projected_distance(normal, centroid, point):
+    nx, ny, nz = normal
+
+    cx, cy, cz = centroid
+    px, py, pz = point
+
+    cpx = px - cx
+    cpy = py - cy
+    cpz = pz - cz
+
+    sn = cpx * nx + cpy * ny + cpz * nz
+    sd = nx ** 2 + ny ** 2 + nz ** 2
+    sb = sn / sd
+    x, y, z = cpx - nx * sb, cpy - ny * sb, cpz - nz * sb
+    return sqrt(x ** 2 + y ** 2 + z ** 2)
 
 
 class Pharmacophore:
     __slots__ = ()
 
-    def find_contacts(self, other: 'Pharmacophore') -> List[Union[Hydrophobic, HydrogenDonor, HydrogenAcceptor]]:
+    def find_contacts(self, other: 'Pharmacophore') -> List[Union[Hydrophobic, Salts, HydrogenDonor, HydrogenAcceptor,
+                                                                  PiStack, PiCation, CationPi, HalogenAcceptor,
+                                                                  HalogenDonor]]:
         """
         Find pharmocophore contacts in 3d. Required explicit hydrogens.
         """
         contacts = []
-        contacts.extend(self.__hydrophobic_interactions(other))
+        contacts.extend(self.__electrostatic_interactions(other))
+        contacts.extend(self.__hydrogen_bond_interactions(other))
+        contacts.extend(self.__pi_interactions(other))
+        contacts.extend(self.__halogen_bond_interactions(other))
         return contacts
 
-    def __hydrophobic_interactions(self, other):
+    def __electrostatic_interactions(self, other):
         """
-        Detection of hydrophobic contacts.
-
-        Definition: All pairs of qualified carbon atoms within a distance of hydroph_dist_max
+        Detection of electrostatic contacts.
         """
         config = self._pharmacophore_config
         min_dist = config['min_dist']
         hydroph_dist_max = config['hydroph_dist_max']
+        salt_bridge_dist_max = config['salt_bridge_dist_max']
 
         contacts = []
         s_xyz = self._conformers[0]
@@ -94,6 +204,14 @@ class Pharmacophore:
             d = distance(s_xyz[n], o_xyz[m])
             if min_dist < d < hydroph_dist_max:
                 contacts.append(Hydrophobic(n, m, d))
+        for n, m in product(self.positive_charged_centers, self.negative_charged_centers):
+            d = distance(s_xyz[n], o_xyz[m])
+            if min_dist < d < salt_bridge_dist_max:
+                contacts.append(Salts(n, m, d))
+        for n, m in product(self.negative_charged_centers, self.positive_charged_centers):
+            d = distance(s_xyz[n], o_xyz[m])
+            if min_dist < d < salt_bridge_dist_max:
+                contacts.append(Salts(n, m, d))
         return contacts
 
     def __hydrogen_bond_interactions(self, other):
@@ -113,28 +231,130 @@ class Pharmacophore:
         contacts = []
         s_xyz = self._conformers[0]
         o_xyz = other._conformers[0]
-        for (n, h), m in product(self.hydrogen_donors, other.hydrogen_acceptors):
+        for (n, h), m in product(self.hydrogen_donor_centers, other.hydrogen_acceptor_centers):
             dist_nm = distance(s_xyz[n], o_xyz[m])
             if min_dist < dist_nm < hbond_dist_max:
-                a = angle(s_xyz[h], s_xyz[n], o_xyz[m])
+                a = points_angle(s_xyz[h], s_xyz[n], o_xyz[m])
                 if a >= hbond_don_angle_min:
                     seen.add((n, m))
                     contacts.append(HydrogenDonor(n, m, dist_nm, distance(s_xyz[h], o_xyz[m]),
                                                   distance(s_xyz[n], s_xyz[h]), a))
 
-        for n, (m, h) in product(self.hydrogen_acceptors, other.hydrogen_donors):
+        for n, (m, h) in product(self.hydrogen_acceptor_centers, other.hydrogen_donor_centers):
             if (n, m) in seen:
                 continue
             dist_nm = distance(s_xyz[n], o_xyz[m])
             if min_dist < dist_nm < hbond_dist_max:
-                a = angle(o_xyz[h], o_xyz[m], s_xyz[n])
-                if a >= hbond_don_angle_min:
+                a = points_angle(o_xyz[h], o_xyz[m], s_xyz[n])
+                if a > hbond_don_angle_min:
                     contacts.append(HydrogenAcceptor(n, m, dist_nm, distance(o_xyz[h], s_xyz[n]),
                                                      distance(o_xyz[m], o_xyz[h]), a))
         return contacts
 
+    def __pi_interactions(self, other):
+        """
+        Detection of pi-stackings between aromatic ring systems and pi-Cation interaction between aromatic rings and
+        positively charged groups.
+
+        For tertiary and quaternary amines, check also the angle between the ring and the nitrogen.
+        """
+        config = self._pharmacophore_config
+        min_dist = config['min_dist']
+        pi_stack_dist_max = config['pi_stack_dist_max']
+        pi_stack_ang_dev = config['pi_stack_ang_dev']
+        pi_stack_offset_max = config['pi_stack_offset_max']
+        pi_cation_dist_max = config['pi_cation_dist_max']
+        pi_stack_ang_dev_perp = pi2 - pi_stack_ang_dev
+
+        contacts = []
+        s_xyz = self._conformers[0]
+        o_xyz = other._conformers[0]
+
+        s_centers = []
+        s_normals = []
+        for r in self.aromatic_centers:
+            c, n = ring_math(r, s_xyz)
+            s_centers.append(c)
+            s_normals.append(n)
+        o_centers = []
+        o_normals = []
+        for r in other.aromatic_centers:
+            c, n = ring_math(r, o_xyz)
+            o_centers.append(c)
+            o_normals.append(n)
+
+        for (nr, nc, nn), (mr, mc, mn) in product(zip(self.aromatic_centers, s_centers, s_normals),
+                                                  zip(other.aromatic_centers, o_centers, o_normals)):
+            d = distance(nc, mc)
+            if min_dist < d < pi_stack_dist_max:
+                a = vectors_angle(nn, mn)
+                if a > pi2:
+                    a = pi - a
+                if a < pi_stack_ang_dev:
+                    t_shaped = False
+                elif a > pi_stack_ang_dev_perp:
+                    t_shaped = True
+                else:
+                    continue
+
+                offset = min(projected_distance(nn, nc, mc), projected_distance(mn, mc, nc))
+                if offset < pi_stack_offset_max:
+                    contacts.append(PiStack(nr, mr, d, a, t_shaped, offset))
+
+        for (nr, nc, nn), m in product(zip(self.aromatic_centers, s_centers, s_normals),
+                                       other.positive_charged_centers):
+            d = distance(nc, o_xyz[m])
+            if min_dist < d < pi_cation_dist_max:
+                offset = projected_distance(nn, nc, o_xyz[m])
+                if offset < pi_stack_offset_max:
+                    contacts.append(PiCation(nr, m, d, offset))
+        for (mr, mc, mn), n in product(zip(other.aromatic_centers, o_centers, o_normals),
+                                       self.positive_charged_centers):
+            d = distance(mc, s_xyz[n])
+            if min_dist < d < pi_cation_dist_max:
+                offset = projected_distance(mn, mc, s_xyz[n])
+                if offset < pi_stack_offset_max:
+                    contacts.append(CationPi(n, mr, d, offset))
+        return contacts
+
+    def __halogen_bond_interactions(self, other):
+        """
+        Detect all halogen bonds of the type Y-O...X-C
+        """
+        config = self._pharmacophore_config
+        min_dist = config['min_dist']
+        halogen_dist_max = config['halogen_dist_max']
+        halogen_angle_dev = config['halogen_angle_dev']
+        halogen_acc_angle = config['halogen_acc_angle']
+        halogen_don_angle = config['halogen_don_angle']
+        acc_ap = halogen_acc_angle + halogen_angle_dev
+        acc_am = halogen_acc_angle - halogen_angle_dev
+        don_ap = halogen_don_angle + halogen_angle_dev
+        don_am = halogen_don_angle - halogen_angle_dev
+
+        contacts = []
+        s_xyz = self._conformers[0]
+        o_xyz = other._conformers[0]
+        for (an, a), (hn, h) in product(self.halogen_acceptor_centers, other.halogen_donor_centers):
+            d = distance(s_xyz[a], o_xyz[h])
+            if min_dist < d < halogen_dist_max:
+                acc_angle = points_angle(s_xyz[a], s_xyz[an], o_xyz[h])
+                if acc_am < acc_angle < acc_ap:
+                    don_angle = points_angle(o_xyz[h], s_xyz[a], o_xyz[hn])
+                    if don_am < don_angle < don_ap:
+                        contacts.append(HalogenAcceptor(a, h, d, acc_angle, don_angle))
+        for (an, a), (hn, h) in product(other.halogen_acceptor_centers, self.halogen_donor_centers):
+            d = distance(s_xyz[a], o_xyz[h])
+            if min_dist < d < halogen_dist_max:
+                acc_angle = points_angle(s_xyz[a], s_xyz[an], o_xyz[h])
+                if acc_am < acc_angle < acc_ap:
+                    don_angle = points_angle(o_xyz[h], s_xyz[a], o_xyz[hn])
+                    if don_am < don_angle < don_ap:
+                        contacts.append(HalogenDonor(h, a, d, acc_angle, don_angle))
+        return contacts
+
     @cached_property
-    def hydrogen_acceptors(self) -> Tuple[int, ...]:
+    def hydrogen_acceptor_centers(self) -> Tuple[int, ...]:
         """
         Atom that could form hydrogen bonds.
 
@@ -179,7 +399,7 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
-    def hydrogen_donors(self) -> Tuple[Tuple[int, Optional[int]], ...]:
+    def hydrogen_donor_centers(self) -> Tuple[Tuple[int, Optional[int]], ...]:
         """
         NH, OH, SH groups.
         """
@@ -202,7 +422,7 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
-    def halogen_donors(self) -> Tuple[Tuple[int, int], ...]:
+    def halogen_donor_centers(self) -> Tuple[Tuple[int, int], ...]:
         """
         Carbon - Halogen(I) pairs.
         """
@@ -219,7 +439,7 @@ class Pharmacophore:
         return tuple(out)
 
     @cached_property
-    def halogen_acceptors(self) -> Tuple[Tuple[int, int], ...]:
+    def halogen_acceptor_centers(self) -> Tuple[Tuple[int, int], ...]:
         """
         (C,N,P,S) - Terminal(O,N,S) pairs.
         """
@@ -249,7 +469,7 @@ class Pharmacophore:
 
         out = set()
         for n, c in charges.items():
-            if not neighbors[n]:  # skip [NH4-], etc
+            if not neighbors[n]:  # skip [NH4+], etc
                 continue
             if c > 0 and not any(charges[m] < 0 for m in bonds[n]):
                 out.add(n)
@@ -311,7 +531,6 @@ class Pharmacophore:
         Ignored compounds like N1C=CC=C2C=CC=C12.
         """
         atoms = self._atoms
-        bonds = self._bonds
         charges = self._charges
         hybridizations = self._hybridizations
         aroma = self.aromatic_rings
@@ -334,7 +553,7 @@ class Pharmacophore:
         return aroma
 
     @cached_property
-    def metal_ligands(self):
+    def metal_ligands_centers(self):
         """
         Atoms that could possibly be involved in chelating a metal ion.
         O: R-OH, R-O-R, C(=O)-OH, C(=O)-O-R, R-C(=O)H, R-C(=O)-R C(=O)-NR2
@@ -344,7 +563,10 @@ class Pharmacophore:
         raise NotImplemented
 
     _pharmacophore_config = {'min_dist': .5, 'hydroph_dist_max': 4., 'hbond_dist_max': 4.1,
-                             'hbond_don_angle_min': 1.75}
+                             'hbond_don_angle_min': 1.75, 'pi_stack_dist_max': 5.5, 'pi_stack_ang_dev': 0.52,
+                             'pi_stack_offset_max': 2.0, 'salt_bridge_dist_max': 5.5, 'halogen_dist_max': 4.0,
+                             'halogen_angle_dev': 0.52, 'halogen_acc_angle': 2.1, 'halogen_don_angle': 2.88,
+                             'pi_cation_dist_max': 6.}
 
 
 __all__ = ['Pharmacophore']
