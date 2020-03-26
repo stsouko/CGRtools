@@ -119,8 +119,7 @@ class X3domMolecule(X3dom):
 
             bonds.append(f'    <transform translation="{nx + nmx / 2:.2f} {ny + nmy / 2:.2f} {nz + nmz / 2:.2f}" '
                          f'rotation="{nmz:.2f} {0} {-nmx:.2f} {angle:.2f}">\n      <shape>\n        <appearance>\n'
-                         f'          <material diffusecolor="0 1 1" ambientintensity="0.2" emissivecolor="0,0,0" '
-                         f'shininess="0.2" specularcolor="0,0,0">\n          </material>\n        </appearance>\n'
+                         f'          <material diffusecolor="0 1 1">\n          </material>\n        </appearance>\n'
                          f'        <cylinder radius=".04" height="{sqrt(nmx**2 + nmy**2 + nmz**2):.2f}">\n'
                          f'        </cylinder>\n      </shape>\n    </transform>\n')
         return ''.join(bonds)
