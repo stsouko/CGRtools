@@ -114,8 +114,8 @@ class X3domMolecule(X3dom):
             _nx, _ny, _nz = 0, 0, 0
 
             nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-            ncx, ncy, ncz = 0, 1, 0
-            angle = acos((nmx * ncx + nmy * ncy + nmz * ncz) / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
+            # norm_x, norm_y, norm_z = 0, 1, 0
+            angle = acos(nmy / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
 
             bonds.append(f'    <transform translation="{nx + nmx / 2:.2f} {ny + nmy / 2:.2f} {nz + nmz / 2:.2f}" '
                          f'rotation="{nmz:.2f} {0} {-nmx:.2f} {angle:.2f}">\n      <shape>\n        <appearance>\n'
