@@ -17,28 +17,59 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from enum import Enum
 from itertools import product
-from math import sqrt
-from typing import Tuple, Optional, List, NamedTuple
+from math import sqrt, acos
+from typing import Tuple, Optional, List, NamedTuple, Union
 
 
-class ContactType(Enum):
-    hydrogen = 1
-    halogen = 2
-    hydrophobic = 3
+class Hydrophobic(NamedTuple):
+    source: int
+    target: int
+    distance: float
 
 
-class Contact(NamedTuple):
-    host: int
-    guest: int
-    type: ContactType
+class HydrogenDonor(NamedTuple):
+    source: int
+    target: int
+    distance: float
+    acceptor_distance: float  # acceptor-H bond length
+    donor_distance: float  # donor-H bond length
+    angle: float
+
+
+class HydrogenAcceptor(NamedTuple):
+    source: int
+    target: int
+    distance: float
+    acceptor_distance: float  # acceptor-H bond length
+    donor_distance: float  # donor-H bond length
+    angle: float
+
+
+def distance(n, m):
+    nx, ny, nz = n
+    mx, my, mz = m
+    return sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
+
+
+def angle(n, m, k):
+    """
+    m----n
+          \
+           k
+    """
+    nx, ny, nz = n
+    mx, my, mz = m
+    kx, ky, kz = k
+    nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+    nkx, nky, nkz = kx - nx, ky - ny, kz - nz
+    return acos((nmx * nkx + nmy * nky + nmz * nkz) / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
 
 
 class Pharmacophore:
     __slots__ = ()
 
-    def find_contacts(self, other: 'Pharmacophore') -> List[Contact]:
+    def find_contacts(self, other: 'Pharmacophore') -> List[Union[Hydrophobic, HydrogenDonor, HydrogenAcceptor]]:
         """
         Find pharmocophore contacts in 3d. Required explicit hydrogens.
         """
@@ -46,25 +77,60 @@ class Pharmacophore:
         contacts.extend(self.__hydrophobic_interactions(other))
         return contacts
 
-    def __distance(self, n, xyz):
-        nx, ny, nz = self._conformers[0][n]
-        mx, my, mz = xyz
-        return sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
-
     def __hydrophobic_interactions(self, other):
         """
         Detection of hydrophobic contacts.
+
+        Definition: All pairs of qualified carbon atoms within a distance of hydroph_dist_max
         """
         config = self._pharmacophore_config
         min_dist = config['min_dist']
         hydroph_dist_max = config['hydroph_dist_max']
 
         contacts = []
-        xyz = other._conformers[0]
+        s_xyz = self._conformers[0]
+        o_xyz = other._conformers[0]
         for n, m in product(self.hydrophobic_centers, other.hydrophobic_centers):
-            e = self.__distance(n, xyz[m])
-            if min_dist < e < hydroph_dist_max:
-                contacts.append(Contact(n, m, ContactType.hydrophobic))
+            d = distance(s_xyz[n], o_xyz[m])
+            if min_dist < d < hydroph_dist_max:
+                contacts.append(Hydrophobic(n, m, d))
+        return contacts
+
+    def __hydrogen_bond_interactions(self, other):
+        """
+        Detection of hydrogen bonds between sets of acceptors and donor pairs.
+
+        Definition: All pairs of hydrogen bond acceptor and donors with
+        donor hydrogens and acceptor showing a distance within hbond_dist_max
+        and donor angles above hbond_don_angle_min
+        """
+        config = self._pharmacophore_config
+        min_dist = config['min_dist']
+        hbond_dist_max = config['hbond_dist_max']
+        hbond_don_angle_min = config['hbond_don_angle_min']
+
+        seen = set()
+        contacts = []
+        s_xyz = self._conformers[0]
+        o_xyz = other._conformers[0]
+        for (n, h), m in product(self.hydrogen_donors, other.hydrogen_acceptors):
+            dist_nm = distance(s_xyz[n], o_xyz[m])
+            if min_dist < dist_nm < hbond_dist_max:
+                a = angle(s_xyz[h], s_xyz[n], o_xyz[m])
+                if a >= hbond_don_angle_min:
+                    seen.add((n, m))
+                    contacts.append(HydrogenDonor(n, m, dist_nm, distance(s_xyz[h], o_xyz[m]),
+                                                  distance(s_xyz[n], s_xyz[h]), a))
+
+        for n, (m, h) in product(self.hydrogen_acceptors, other.hydrogen_donors):
+            if (n, m) in seen:
+                continue
+            dist_nm = distance(s_xyz[n], o_xyz[m])
+            if min_dist < dist_nm < hbond_dist_max:
+                a = angle(o_xyz[h], o_xyz[m], s_xyz[n])
+                if a >= hbond_don_angle_min:
+                    contacts.append(HydrogenAcceptor(n, m, dist_nm, distance(o_xyz[h], s_xyz[n]),
+                                                     distance(o_xyz[m], o_xyz[h]), a))
         return contacts
 
     @cached_property
@@ -277,7 +343,8 @@ class Pharmacophore:
         """
         raise NotImplemented
 
-    _pharmacophore_config = {'min_dist': .5, 'hydroph_dist_max': 4.}
+    _pharmacophore_config = {'min_dist': .5, 'hydroph_dist_max': 4., 'hbond_dist_max': 4.1,
+                             'hbond_don_angle_min': 1.75}
 
 
 __all__ = ['Pharmacophore']
