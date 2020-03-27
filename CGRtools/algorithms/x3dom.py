@@ -16,7 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from math import acos, sqrt
+from math import acos, sqrt, hypot
+from .depict import rotate_vector
 
 
 class JupyterWidget:
@@ -107,23 +108,160 @@ class X3domMolecule(X3dom):
 
     def _render_3d_bonds(self, xyz):
         config = self._render_config
-        bonds = []
+
+        double_space = config['double_space']
+        triple_space = .07
+        dash1, dash2 = config['dashes']
+        bond_color = '#808080'
+        radius = .02
+        xml = []
         for n, m, bond in self.bonds():
+            order = bond.order
             nx, ny, nz = xyz[n]
             mx, my, mz = xyz[m]
-            _nx, _ny, _nz = 0, 0, 0
 
             nmx, nmy, nmz = mx - nx, my - ny, mz - nz
             # norm_x, norm_y, norm_z = 0, 1, 0
-            angle = acos(nmy / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
+            dev = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+            if dev < .001:
+                continue
 
-            bonds.append(f"    <transform translation='{nx + nmx / 2:.2f} {ny + nmy / 2:.2f} {nz + nmz / 2:.2f}' "
-                         f"rotation='{nmz:.2f} {0} {-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
-                         f"          <material diffusecolor='0 1 1'>\n"
-                         f'          </material>\n        </appearance>\n'
-                         f"        <cylinder radius='.04' height='{sqrt(nmx**2 + nmy**2 + nmz**2):.2f}'>\n"
-                         f'        </cylinder>\n      </shape>\n    </transform>\n')
-        return ''.join(bonds)
+            angle = acos(nmy / dev)
+            x, y, z = nx + nmx / 2, ny + nmy / 2, nz + nmz / 2
+            length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+
+            if order in (1, 4):
+                xml.append(f"    <transform translation='{x:.2f} {y:.2f} {z:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                           f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                           f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                           f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                           "        </cylinder>\n      </shape>\n    </transform>\n")
+            elif order == 2:
+                dx, dy = rotate_vector(0, double_space, nmx, nmy)
+                xml.append(
+                    f"    <transform translation='{x + dx:.2f} {y - dy:.2f} {z:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                    f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                    f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                    f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                    "        </cylinder>\n      </shape>\n    </transform>\n")
+                xml.append(
+                    f"    <transform translation='{x - dx:.2f} {y + dy:.2f} {z:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                    f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                    f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                    f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                    "        </cylinder>\n      </shape>\n    </transform>\n")
+            elif order == 3:
+                dx, dy = rotate_vector(0, triple_space, nmx, nmy)
+                dz = hypot(dx, dy)
+                xml.append(
+                    f"    <transform translation='{x + dx:.2f} {y - dy:.2f} {z + dz:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                    f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                    f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                    f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                    "        </cylinder>\n      </shape>\n    </transform>\n")
+                xml.append(
+                    f"    <transform translation='{x:.2f} {y:.2f} {z - dz:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                    f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                    f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                    f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                    "        </cylinder>\n      </shape>\n    </transform>\n")
+                xml.append(
+                    f"    <transform translation='{x - dx:.2f} {y + dy:.2f} {z + dz:.2f}' rotation='{nmz:.2f} {0} {-nmx:.2f} "
+                    f"{angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                    f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                    f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
+                    "        </cylinder>\n      </shape>\n    </transform>\n")
+            else:
+                for _ in range(1, 5):
+                    nx += nmx * .2
+                    ny += nmy * .2
+                    nz += nmz * .2
+                    xml.append(f"    <transform translation='{nx:.2f} {ny:.2f} {nz:.2f}' rotation='{nmz:.2f} {0} "
+                               f"{-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                               f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                               f"       </appearance>\n        <cylinder radius='{radius}' height='{dash1:.2f}'>\n"
+                               "        </cylinder>\n      </shape>\n    </transform>\n")
+
+        for ring in self.connected_rings:
+            cx = sum(xyz[n][0] for n in ring) / len(ring)
+            cy = sum(xyz[n][1] for n in ring) / len(ring)
+
+            for n, m in zip(ring, ring[1:]):
+                nx, ny, nz = xyz[n]
+                mx, my, mz = xyz[m]
+                nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+                dev = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+                if dev < .001:
+                    continue
+
+                angle = acos(nmy / dev)
+                aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy)
+                if aromatic:
+                    ax, ay, bx, by = aromatic
+                    abx, aby = bx - ax, by - ay
+                    for _ in range(1, 5):
+                        ax += abx * .2
+                        ay += aby * .2
+                        nz += nmz * .2
+                        xml.append(
+                            f"    <transform translation='{ax:.2f} {ay:.2f} {nz:.2f}' rotation='{nmz:.2f} {0} "
+                            f"{-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                            f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                            f"       </appearance>\n        <cylinder radius='{radius}' height='{dash2:.2f}'>\n"
+                            "        </cylinder>\n      </shape>\n    </transform>\n")
+
+            nx, ny, nz = xyz[ring[-1]]
+            mx, my, mz = xyz[ring[0]]
+            nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+            dev = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+            if dev < .001:
+                continue
+
+            angle = acos(nmy / dev)
+            aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy)
+            if aromatic:
+                ax, ay, bx, by = aromatic
+                abx, aby = bx - ax, by - ay
+                for _ in range(1, 5):
+                    ax += abx * .2
+                    ay += aby * .2
+                    nz += nmz * .2
+                    xml.append(f"    <transform translation='{ax:.2f} {ay:.2f} {nz:.2f}' rotation='{nmz:.2f} {0} "
+                               f"{-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                               f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                               f"       </appearance>\n        <cylinder radius='{radius}' height='{dash2:.2f}'>\n"
+                               "        </cylinder>\n      </shape>\n    </transform>\n")
+        return ''.join(xml)
+
+    def __render_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y):
+        config = self._render_config
+
+        aromatic_space = config['aromatic_space']
+        dash3, dash4 = config['aromatic_dashes']
+        # n aligned xy
+        mn_x, mn_y, mn_z, cn_x, cn_y = m_x - n_x, m_y - n_y, m_z - n_z, c_x - n_x, c_y - n_y
+
+        # nm reoriented xy
+        mr_x, mr_y = hypot(mn_x, mn_y), 0
+        cr_x, cr_y = rotate_vector(cn_x, cn_y, mn_x, -mn_y)
+
+        if cr_y and aromatic_space / cr_y < .65:
+            if cr_y > 0:
+                r_y = aromatic_space
+            else:
+                r_y = -aromatic_space
+                cr_y = -cr_y
+
+            ar_x = aromatic_space * cr_x / cr_y
+            br_x = mr_x - aromatic_space * (mr_x - cr_x) / cr_y
+
+            # backward reorienting
+            an_x, an_y = rotate_vector(ar_x, r_y, mn_x, mn_y)
+            bn_x, bn_y = rotate_vector(br_x, r_y, mn_x, mn_y)
+            a_x, a_y = n_x + an_x, n_y + an_y
+            b_x, b_y = n_x + bn_x, n_y + bn_y
+
+            return a_x, a_y, b_x, b_y
 
 
 class X3domCGR(X3dom):
