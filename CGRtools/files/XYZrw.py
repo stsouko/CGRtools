@@ -154,46 +154,49 @@ class XYZ:
         # try randomly set charges and radicals.
         # first pick required radical states.
         # second try to minimize charge delta.
-        need_radical = radical - sum(radicals.values())
-        for attempt in range(1, len(combo_ua) + 1):
-            shuffle(combo_ua)
-            rad = []
-            chg = []
-            for atom in combo_ua:
-                if len(rad) < need_radical:  # pick radicals
-                    r = next((x for x in atom if x[2]), None)
-                    if r:  # pick random radical states
-                        rad.append(r)
-                    else:  # not radical
-                        chg.append(atom)
-                else:  # pick not radical states
-                    c = [x for x in atom if not x[2]]
-                    if len(c) > 1:
-                        chg.append(c)
-                    elif c:
-                        n, c, r = c[0]
+        if combo_ua:
+            need_radical = radical - sum(radicals.values())
+            for attempt in range(1, len(combo_ua) + 1):
+                shuffle(combo_ua)
+                rad = []
+                chg = []
+                for atom in combo_ua:
+                    if len(rad) < need_radical:  # pick radicals
+                        r = next((x for x in atom if x[2]), None)
+                        if r:  # pick random radical states
+                            rad.append(r)
+                        else:  # not radical
+                            chg.append(atom)
+                    else:  # pick not radical states
+                        c = [x for x in atom if not x[2]]
+                        if len(c) > 1:
+                            chg.append(c)
+                        elif c:
+                            n, c, r = c[0]
+                            charges[n] = c
+                            radicals[n] = r
+                        elif attempt == len(combo_ua):  # all states has radical. balancing impossible
+                            chg.append(atom)  # fuck it horse. we in last attempt
+                            warning('Radical state not balanced.')
+                        else:  # do next attempt
+                            break
+                else:
+                    for n, c, r in rad:
                         charges[n] = c
                         radicals[n] = r
-                    elif attempt == len(combo_ua):  # all states has radical. balancing impossible
-                        chg.append(atom)  # fuck it horse. we in last attempt
-                        warning('Radical state not balanced.')
-                    else:  # do next attempt
+
+                    current_charge = sum(charges.values())
+                    for x in chg:
+                        n, c, r = min(x, key=lambda x: abs(current_charge + x[1]))
+                        charges[n] = c
+                        radicals[n] = r
+                        current_charge += c
+                    if sum(charges.values()) == charge:
                         break
             else:
-                for n, c, r in rad:
-                    charges[n] = c
-                    radicals[n] = r
-
-                current_charge = sum(charges.values())
-                for x in chg:
-                    n, c, r = min(x, key=lambda x: abs(current_charge + x[1]))
-                    charges[n] = c
-                    radicals[n] = r
-                    current_charge += c
-                if sum(charges.values()) == charge:
-                    break
-        else:
-            warning('Charge state not balanced.')
+                warning('Charge state not balanced.')
+        elif sum(radicals.values()) != radical or sum(charges.values()) != charge:
+            warning('Charge or radical state not balanced.')
 
         for n in unsaturated:
             mol._calc_implicit(n)
