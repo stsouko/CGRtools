@@ -135,43 +135,7 @@ class StructureComponents:
         """
         Alkenes, allenes and cumulenes atoms numbers
         """
-        atoms = self._atoms
-        bonds = self._bonds
-        adj = defaultdict(set)  # carbon double bonds adjacency matrix
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6:
-                adj_n = adj[n].add
-                b_sum = 0
-                a_sum = 0
-                for m, bond in bonds[n].items():
-                    order = bond.order
-                    if order == 4:  # count aromatic bonds
-                        a_sum += 1
-                    elif order != 8:  # ignore special bond
-                        b_sum += order
-                    if order == 2 and atoms[m].atomic_number == 6:
-                        adj_n(m)
-                if a_sum:
-                    b_sum += a_sum + 1
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-        if not adj:
-            return ()
-
-        terminals = [x for x, y in adj.items() if len(y) == 1]
-        cumulenes = []
-        while terminals:
-            m = terminals.pop(0)
-            path = [m]
-            while m not in terminals:
-                n, m = m, adj[m].pop()
-                adj[m].discard(n)
-                path.append(m)
-            terminals.remove(m)
-            if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
-                # check for carbon only double-bonded chains.
-                cumulenes.append(tuple(path))
-        return cumulenes
+        return self._cumulenes()
 
     @cached_property
     def tetrahedrons(self) -> Tuple[int, ...]:
@@ -190,6 +154,45 @@ class StructureComponents:
                         raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
                     tetra.append(n)
         return tetra
+
+    def _cumulenes(self, heteroatoms=False):
+        atoms = self._atoms
+        bonds = self._bonds
+
+        if heteroatoms:
+            atoms_numbers = {5, 6, 7, 15, 16, 33, 34, 52}
+        else:
+            atoms_numbers = {6}
+
+        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        for n, atom in atoms.items():
+            if atom.atomic_number in atoms_numbers:
+                adj_n = adj[n].add
+                for m, bond in bonds[n].items():
+                    order = bond.order
+                    if order == 2 and atoms[m].atomic_number in atoms_numbers:
+                        adj_n(m)
+        if not adj:
+            return ()
+
+        for n, ms in adj.items():
+            if len(ms) > 2:
+                raise ValenceError(f'atom: {n} has invalid valence')
+
+        terminals = [x for x, y in adj.items() if len(y) == 1]
+        cumulenes = []
+        while terminals:
+            m = terminals.pop(0)
+            path = [m]
+            while m not in terminals:
+                n, m = m, adj[m].pop()
+                adj[m].discard(n)
+                path.append(m)
+            terminals.remove(m)
+            if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
+                # check for carbon only double-bonded chains.
+                cumulenes.append(tuple(path))
+        return cumulenes
 
 
 __all__ = ['GraphComponents', 'StructureComponents']

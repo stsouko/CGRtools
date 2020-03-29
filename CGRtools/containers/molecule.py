@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -29,12 +29,13 @@ from ..algorithms.depict import DepictMolecule
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule):
+                        DepictMolecule, Calculate2DMolecule, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
     __class_cache__ = {}
 
@@ -47,6 +48,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
+        """
+        Add new atom.
+        """
         if not isinstance(atom, Element):
             if isinstance(atom, str):
                 atom = Element.from_symbol(atom)()
@@ -77,6 +81,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return _map
 
     def add_bond(self, n, m, bond: Union[Bond, int]):
+        """
+        Connect atoms with bonds.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         if not isinstance(bond, Bond):
             bond = Bond(bond)
 
@@ -96,6 +107,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_atom(self, n):
+        """
+        Remove atom.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         old_bonds = self._bonds[n]  # save bonds
         isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
@@ -117,6 +135,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_bond(self, n, m):
+        """
+        Disconnect atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
@@ -184,7 +209,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
                                                                                 'query.QueryContainer']:
         """
-        create substructure containing atoms from atoms list
+        Create substructure containing atoms from atoms list.
+
+        For Thiele forms of molecule In Molecule substructure causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
@@ -210,7 +239,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
-            sub._conformers = []
+            sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n].copy()
@@ -230,9 +259,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._fix_stereo()
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._conformers.clear()
 
             u._neighbors.update(other._neighbors)
@@ -257,13 +286,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 
     def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
-        compose 2 graphs to CGR
+        Compose 2 graphs to CGR.
         """
         sa = self._atoms
         sc = self._charges
@@ -398,7 +427,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def implicify_hydrogens(self) -> int:
         """
-        remove explicit hydrogen if possible
+        Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
         :return: number of removed hydrogens
         """
@@ -438,7 +467,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def explicify_hydrogens(self) -> int:
         """
-        add explicit hydrogens to atoms
+        Add explicit hydrogens to atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :return: number of added atoms
         """
@@ -454,9 +487,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def check_valence(self) -> List[int]:
         """
-        check valences of all atoms
+        Check valences of all atoms.
 
-        works only on molecules with aromatic rings in Kekule form
+        Works only on molecules with aromatic rings in Kekule form.
         :return: list of invalid atoms
         """
         atoms = self._atoms
@@ -491,13 +524,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_property
     def molecular_charge(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return sum(self._charges.values())
 
     def __int__(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return self.molecular_charge
 
@@ -511,9 +544,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
         """
-        number of explicit hydrogen atoms connected to atom.
+        Number of explicit hydrogen atoms connected to atom.
 
-        take into account any type of bonds with hydrogen atoms.
+        Take into account any type of bonds with hydrogen atoms.
         """
         atoms = self._atoms
         return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -27,7 +27,8 @@ class Aromatize:
 
     def thiele(self) -> bool:
         """
-        convert structure to aromatic form (Huckel rule ignored). return True if found any kekule ring.
+        Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
+        Also marks atoms as aromatic. For pyroles, furans, thiophene, phospholes bonds kepts in Kekule form.
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -82,10 +83,11 @@ class Aromatize:
 
     def kekule(self) -> bool:
         """
-        convert structure to kekule form. return True if found any aromatic ring.
+        Convert structure to kekule form. Return True if found any aromatic ring. Set implicit hydrogen count and
+        hybridization marks on atoms.
 
-        only one of possible double/single bonds positions will be set.
-        for enumerate bonds positions use `enumerate_kekule`
+        Only one of possible double/single bonds positions will be set.
+        For enumerate bonds positions use `enumerate_kekule`.
         """
         kekule = next(self.__kekule_full(), None)
         if kekule:
@@ -96,7 +98,7 @@ class Aromatize:
 
     def enumerate_kekule(self):
         """
-        enumerate all possible kekule forms of molecule
+        Enumerate all possible kekule forms of molecule.
         """
         for form in self.__kekule_full():
             copy = self.copy()
@@ -105,7 +107,7 @@ class Aromatize:
 
     def check_thiele(self, fast=True) -> bool:
         """
-        check basic aromaticity errors of molecule.
+        Check basic aromaticity errors of molecule.
 
         :param fast: don't try to solve kekule form
         """

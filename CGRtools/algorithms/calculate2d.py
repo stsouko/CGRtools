@@ -18,16 +18,34 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from importlib.util import find_spec
 from itertools import combinations
 from math import sqrt, pi, atan2, cos, sin
-from numba import njit, f8, u2
-from numpy import array, zeros, uint16, zeros_like, empty
 from random import uniform
+
+if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
+    from numpy import array, zeros, uint16, zeros_like, empty
+    from numba import njit, f8, u2
+else:
+    def njit(*args, **kwargs):
+        def wrapper(f):
+            return f
+        return wrapper
+
+    class NumbaType:
+        def __getitem__(self, item):
+            return self
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+    f8 = u2 = NumbaType()
 
 
 @njit(f8[:, :](f8[:, :], f8, f8, f8),
       {'n': u2, 'i': u2, 'j': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8, 'distance': f8})
+       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8, 'distance': f8},
+      cache=True)
 def repulsive_force(xyz, coef, cut, inf):
     forces = zeros_like(xyz)
     n = len(xyz)
@@ -64,7 +82,7 @@ def repulsive_force(xyz, coef, cut, inf):
 
 @njit(f8[:, :](f8[:, :], u2[:, :], f8, f8, f8),
       {'n': u2, 'i': u2, 'j': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8})
+       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8}, cache=True)
 def straight_repulsive(xyz, straights, coef, cut, inf):
     forces = zeros_like(xyz)
     inf **= 2
@@ -95,7 +113,7 @@ def straight_repulsive(xyz, straights, coef, cut, inf):
 @njit(f8[:, :](f8[:, :], u2[:, :], f8[:], f8),
       {'i': u2, 'n': u2, 'm': u2, 'r': f8, 'nx': f8, 'ny': f8, 'nz': f8, 'mx': f8, 'my': f8, 'mz': f8, 'dx': f8,
        'dy': f8, 'dz': f8, 'distance': f8, 'f': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fdx': f8, 'fdy': f8, 'fdz': f8,
-       'fxj': f8, 'fyj': f8, 'fzj': f8})
+       'fxj': f8, 'fyj': f8, 'fzj': f8}, cache=True)
 def spring_force(xyz, springs, springs_distances, coef):
     forces = zeros_like(xyz)
     for i in range(len(springs)):
@@ -123,7 +141,7 @@ def spring_force(xyz, springs, springs_distances, coef):
 
 
 @njit(f8[:, :](f8[:, :], f8[:, :], f8),
-      {'n': u2, 'ff': f8[:, :], 'i': u2, 'x': f8, 'y': f8, 'z': f8, 'fx': f8, 'fy': f8, 'fz': f8})
+      {'n': u2, 'ff': f8[:, :], 'i': u2, 'x': f8, 'y': f8, 'z': f8, 'fx': f8, 'fy': f8, 'fz': f8}, cache=True)
 def flattening(forces, xyz, fc):
     n = len(forces)
     ff = zeros_like(xyz)
@@ -141,7 +159,7 @@ def flattening(forces, xyz, fc):
     return ff
 
 
-@njit(f8[:, :](f8[:, :], f8), {'n': u2, 'dx': f8, 'dy': f8, 'dz': f8, 'distance': f8, 'f': f8})
+@njit(f8[:, :](f8[:, :], f8), {'n': u2, 'dx': f8, 'dy': f8, 'dz': f8, 'distance': f8, 'f': f8}, cache=True)
 def cutoff(forces, cut):
     for n in range(len(forces)):
         dx, dy, dz = forces[n]
@@ -152,7 +170,7 @@ def cutoff(forces, cut):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:]))
+@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:]), cache=True)
 def steps(xyz, springs, straights, springs_distances):
     # step 1
     for _ in range(1000):
@@ -184,7 +202,7 @@ def steps(xyz, springs, straights, springs_distances):
 
 
 @njit(f8[:](f8[:, :], u2[:, :], u2),
-      {'angles': f8[:], 'i': u2, 'n': u2, 'm': u2, 'nx': f8, 'ny': f8, 'mx': f8, 'my': f8, 'nm': f8})
+      {'angles': f8[:], 'i': u2, 'n': u2, 'm': u2, 'nx': f8, 'ny': f8, 'mx': f8, 'my': f8, 'nm': f8}, cache=True)
 def get_angles(xyz, springs, bonds_count):
     angles = zeros(bonds_count)
     for i in range(bonds_count):
@@ -199,7 +217,8 @@ def get_angles(xyz, springs, bonds_count):
 
 
 @njit(f8[:, :](f8[:, :], u2, f8, f8),
-      {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8})
+      {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8},
+      cache=True)
 def rotate(xyz, atoms_count, shift_x, angle):
     cos_rad = cos(angle)
     sin_rad = sin(angle)
@@ -399,6 +418,23 @@ class Calculate2DCGR(Calculate2D):
         order1 = self.__primary(bond1)
         order2 = self.__primary(bond2)
         return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
+
+
+if find_spec('numpy'):  # load numpy not yet loaded with numba
+    if not find_spec('numba'):
+        from numpy import array, zeros, uint16, zeros_like, empty
+else:  # disable clean2d support
+    class Calculate2DMolecule:
+        __slots__ = ()
+
+        def clean2d(self):
+            raise NotImplemented('numpy required for clean2d')
+
+    class Calculate2DCGR:
+        __slots__ = ()
+
+        def clean2d(self):
+            raise NotImplemented('numpy required for clean2d')
 
 
 __all__ = ['Calculate2DMolecule', 'Calculate2DCGR']

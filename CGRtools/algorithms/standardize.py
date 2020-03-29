@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import chain
+from ..exceptions import ValenceError
 
 
 class Standardize:
@@ -53,26 +53,37 @@ class Standardize:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
         """
+        atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
+        bonds = self._bonds
         entries, exits, rads, constrains = self.__entries()
         hs = set()
         while len(rads) > 1:
             n = rads.pop()
-            path = self.__find_delocalize_path(n, rads, constrains)
-            if path:
+            for path in self.__find_delocalize_path(n, rads, constrains):
+                l, m, b = path[-1]
+                if b == 1:  # required pi-bond
+                    continue
+                try:
+                    atoms[m].valence_rules(charges[m], False, sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
                 self.__patch_path(path)
-                m = path[-1][1]
                 radicals[n] = radicals[m] = False
                 rads.discard(m)
                 hs.add(n)
                 hs.update(x for _, x, _ in path)
         while entries and exits:
             n = entries.pop()
-            path = self.__find_delocalize_path(n, exits, constrains)
-            if path:
+            for path in self.__find_delocalize_path(n, exits, constrains):
+                l, m, b = path[-1]
+                try:
+                    atoms[m].valence_rules(charges[m] - 1, radicals[m],
+                                           sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
                 self.__patch_path(path)
-                m = path[-1][1]
                 charges[n] += 1
                 charges[m] -= 1
                 exits.discard(m)
@@ -106,7 +117,7 @@ class Standardize:
 
             if current in finish:
                 if depth:  # one bonded ignored. we search double bond transfer! A=A-A >> A-A=A.
-                    return path
+                    yield path
                 continue  # stop grow
 
             depth += 1
