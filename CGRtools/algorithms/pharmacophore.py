@@ -186,7 +186,7 @@ class Pharmacophore:
 
     def find_contacts(self, other: 'Pharmacophore') -> List[Union[Hydrophobic, Salts, HydrogenDonor, HydrogenAcceptor,
                                                                   PiStack, PiCation, CationPi, HalogenAcceptor,
-                                                                  HalogenDonor]]:
+                                                                  HalogenDonor, MetalComplex]]:
         """
         Find pharmocophore contacts in 3d. Required explicit hydrogens.
         """
