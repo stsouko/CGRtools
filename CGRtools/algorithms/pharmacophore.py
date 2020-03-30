@@ -17,11 +17,12 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from itertools import product
+from itertools import product, chain
 from math import sqrt, acos, pi
 from typing import Tuple, Optional, List, NamedTuple, Union
 
 pi2 = pi / 2
+non_metals = {1, 2, 5, 6, 7, 8, 9, 10, 14, 15, 16, 17, 18, 32, 33, 34, 35, 36, 51, 52, 53, 54, 83, 84, 85, 86}
 
 
 class Hydrophobic(NamedTuple):
@@ -91,6 +92,14 @@ class HalogenDonor(NamedTuple):
     distance: float
     acceptor_angle: float  # acceptor group to halogen atom angle
     donor_angle: float  # halogen donor group to halogen acceptor atom angle
+
+
+class MetalComplex(NamedTuple):
+    source: Tuple[int, ...]  # ligands
+    target: Tuple[int, ...]  # ligands
+    metal: int
+    distance_source: Tuple[float, ...]  # distance to metal
+    distance_target: Tuple[float, ...]
 
 
 def distance(n, m):
@@ -186,6 +195,7 @@ class Pharmacophore:
         contacts.extend(self.__hydrogen_bond_interactions(other))
         contacts.extend(self.__pi_interactions(other))
         contacts.extend(self.__halogen_bond_interactions(other))
+        contacts.extend(self.__metal_complex_interactions(other))
         return contacts
 
     def __electrostatic_interactions(self, other):
@@ -354,160 +364,37 @@ class Pharmacophore:
         return contacts
 
     def __metal_complex_interactions(self, other):
-        """Find all metal complexes between metals and appropriate groups in both protein and ligand, as well as water"""
-        data = namedtuple('metal_complex', 'metal metal_orig_idx metal_type target target_orig_idx target_type '
-                                           'coordination_num distance resnr restype '
-                                           'reschain  restype_l reschain_l resnr_l location rms, geometry num_partners complexnum')
-        pairings_dict = {}
-        pairings = []
-        # #@todo Refactor
-        metal_to_id = {}
-        metal_to_orig_atom = {}
-        for metal, target in itertools.product(metals, metal_binding_lig + metal_binding_bs):
-            distance = euclidean3d(metal.m.coords, target.atom.coords)
-            if not distance < config.METAL_DIST_MAX:
-                continue
-            if metal.m not in pairings_dict:
-                pairings_dict[metal.m] = [(target, distance), ]
-                metal_to_id[metal.m] = metal.m_orig_idx
-                metal_to_orig_atom[metal.m] = metal.orig_m
-            else:
-                pairings_dict[metal.m].append((target, distance))
-        for cnum, metal in enumerate(pairings_dict):
-            rms = 0.0
-            excluded = []
-            # cnum +1 being the complex number
-            contact_pairs = pairings_dict[metal]
-            num_targets = len(contact_pairs)
-            vectors_dict = defaultdict(list)
-            for contact_pair in contact_pairs:
-                target, distance = contact_pair
-                vectors_dict[target.atom.idx].append(vector(metal.coords, target.atom.coords))
+        """
+        Find self-metal-other bridges.
+        """
+        config = self._pharmacophore_config
+        min_dist = config['min_dist']
+        metal_dist_max = config['metal_dist_max']
 
-            # Listing of coordination numbers and their geometries
-            configs = {2: ['linear', ],
-                       3: ['trigonal.planar', 'trigonal.pyramidal'],
-                       4: ['tetrahedral', 'square.planar'],
-                       5: ['trigonal.bipyramidal', 'square.pyramidal'],
-                       6: ['octahedral', ]}
+        contacts = []
+        s_xyz = self._conformers[0]
+        o_xyz = other._conformers[0]
 
-            # Angle signatures for each geometry (as seen from each target atom)
-            ideal_angles = {'linear': [[180.0]] * 2,
-                            'trigonal.planar': [[120.0, 120.0]] * 3,
-                            'trigonal.pyramidal': [[109.5, 109.5]] * 3,
-                            'tetrahedral': [[109.5, 109.5, 109.5, 109.5]] * 4,
-                            'square.planar': [[90.0, 90.0, 90.0, 90.0]] * 4,
-                            'trigonal.bipyramidal': [[120.0, 120.0, 90.0, 90.0]] * 3 + [[90.0, 90.0, 90.0, 180.0]] * 2,
-                            'square.pyramidal': [[90.0, 90.0, 90.0, 180.0]] * 4 + [[90.0, 90.0, 90.0, 90.0]],
-                            'octahedral': [[90.0, 90.0, 90.0, 90.0, 180.0]] * 6}
-            angles_dict = {}
-
-            for target in vectors_dict:
-                cur_vector = vectors_dict[target]
-                other_vectors = []
-                for t in vectors_dict:
-                    if not t == target:
-                        [other_vectors.append(x) for x in vectors_dict[t]]
-                angles = [vecangle(pair[0], pair[1]) for pair in itertools.product(cur_vector, other_vectors)]
-                angles_dict[target] = angles
-
-            all_total = []  # Record fit information for each geometry tested
-            gdata = namedtuple('gdata', 'geometry rms coordination excluded diff_targets')  # Geometry Data
-            # Can't specify geometry with only one target
-            if num_targets == 1:
-                final_geom = 'NA'
-                final_coo = 1
-                excluded = []
-                rms = 0.0
-            else:
-                for coo in sorted(configs, reverse=True):  # Start with highest coordination number
-                    geometries = configs[coo]
-                    for geometry in geometries:
-                        signature = ideal_angles[geometry]  # Set of ideal angles for geometry, from each perspective
-                        geometry_total = 0
-                        geometry_scores = []  # All scores for one geometry (from all subsignatures)
-                        used_up_targets = []  # Use each target just once for a subsignature
-                        not_used = []
-                        coo_diff = num_targets - coo  # How many more observed targets are there?
-
-                        # Find best match for each subsignature
-                        for subsignature in signature:  # Ideal angles from one perspective
-                            best_target = None  # There's one best-matching target for each subsignature
-                            best_target_score = 999
-
-                            for k, target in enumerate(angles_dict):
-                                if target not in used_up_targets:
-                                    observed_angles = angles_dict[
-                                        target]  # Observed angles from perspective of one target
-                                    single_target_scores = []
-                                    used_up_observed_angles = []
-                                    for i, ideal_angle in enumerate(subsignature):
-                                        # For each angle in the signature, find the best-matching observed angle
-                                        best_match = None
-                                        best_match_diff = 999
-                                        for j, observed_angle in enumerate(observed_angles):
-                                            if j not in used_up_observed_angles:
-                                                diff = abs(ideal_angle - observed_angle)
-                                                if diff < best_match_diff:
-                                                    best_match_diff = diff
-                                                    best_match = j
-                                        if best_match is not None:
-                                            used_up_observed_angles.append(best_match)
-                                            single_target_scores.append(best_match_diff)
-                                    # Calculate RMS for target angles
-                                    target_total = sum(
-                                        [x ** 2 for x in single_target_scores]) ** 0.5  # Tot. score targ/sig
-                                    if target_total < best_target_score:
-                                        best_target_score = target_total
-                                        best_target = target
-
-                            used_up_targets.append(best_target)
-                            geometry_scores.append(best_target_score)
-                            # Total score is mean of RMS values
-                            geometry_total = np.mean(geometry_scores)
-                        # Record the targets not used for excluding them when deciding for a final geometry
-                        [not_used.append(target) for target in angles_dict if target not in used_up_targets]
-                        all_total.append(gdata(geometry=geometry, rms=geometry_total, coordination=coo,
-                                               excluded=not_used, diff_targets=coo_diff))
-
-            # Make a decision here. Starting with the geometry with lowest difference in ideal and observed partners ...
-            # Check if the difference between the RMS to the next best solution is not larger than 0.5
-            if not num_targets == 1:  # Can't decide for any geoemtry in that case
-                all_total = sorted(all_total, key=lambda x: abs(x.diff_targets))
-                for i, total in enumerate(all_total):
-                    next_total = all_total[i + 1]
-                    this_rms, next_rms = total.rms, next_total.rms
-                    diff_to_next = next_rms - this_rms
-                    if diff_to_next > 0.5:
-                        final_geom, final_coo, rms, excluded = total.geometry, total.coordination, total.rms, total.excluded
-                        break
-                    elif next_total.rms < 3.5:
-                        final_geom, final_coo, = next_total.geometry, next_total.coordination
-                        rms, excluded = next_total.rms, next_total.excluded
-                        break
-                    elif i == len(all_total) - 2:
-                        final_geom, final_coo, rms, excluded = "NA", "NA", float('nan'), []
-                        break
-
-            # Record all contact pairing, excluding those with targets superfluous for chosen geometry
-            only_water = set([x[0].location for x in contact_pairs]) == {'water'}
-            if not only_water:  # No complex if just with water as targets
-                write_message("Metal ion %s complexed with %s geometry (coo. number %r/ %i observed).\n"
-                              % (metal.type, final_geom, final_coo, num_targets), indent=True)
-                for contact_pair in contact_pairs:
-                    target, distance = contact_pair
-                    if target.atom.idx not in excluded:
-                        metal_orig_atom = metal_to_orig_atom[metal]
-                        restype_l, reschain_l, resnr_l = whichrestype(metal_orig_atom), whichchain(
-                            metal_orig_atom), whichresnumber(metal_orig_atom)
-                        contact = data(metal=metal, metal_orig_idx=metal_to_id[metal], metal_type=metal.type,
-                                       target=target, target_orig_idx=target.atom_orig_idx, target_type=target.type,
-                                       coordination_num=final_coo, distance=distance, resnr=target.resnr,
-                                       restype=target.restype, reschain=target.reschain, location=target.location,
-                                       rms=rms, geometry=final_geom, num_partners=num_targets, complexnum=cnum + 1,
-                                       resnr_l=resnr_l, restype_l=restype_l, reschain_l=reschain_l)
-                        pairings.append(contact)
-        return filter_contacts(pairings)
+        for n in chain(self.metal_centers, other.metal_centers):
+            np = s_xyz[n]
+            sd = []
+            sn = []
+            for m in self.metal_ligands_centers:
+                d = distance(np, s_xyz[m])
+                if min_dist < d < metal_dist_max:
+                    sd.append(d)
+                    sn.append(m)
+            if sn:
+                od = []
+                on = []
+                for m in other.metal_ligands_centers:
+                    d = distance(np, o_xyz[m])
+                    if min_dist < d < metal_dist_max:
+                        od.append(d)
+                        on.append(m)
+                if od:
+                    contacts.append(MetalComplex(tuple(sn), tuple(on), n, tuple(sd), tuple(od)))
+        return contacts
 
     @cached_property
     def hydrogen_acceptor_centers(self) -> Tuple[int, ...]:
@@ -709,32 +596,28 @@ class Pharmacophore:
         return aroma
 
     @cached_property
-    def metal_ligands_centers(self):
+    def metal_ligands_centers(self) -> Tuple[int, ...]:
         """
         Atoms that could possibly be involved in chelating a metal ion.
         O: R-OH, R-O-R, C(=O)-OH, C(=O)-O-R, R-C(=O)H, R-C(=O)-R C(=O)-NR2
         N: N(Ar, not pyrole), R-NR2
         S: R-SH, R-S-R
         """
-        self.hydrogen_acceptor_centers
-        raise NotImplemented
+        return tuple({*self.hydrogen_acceptor_centers, *(x for _, x in self.halogen_acceptor_centers)})
 
     @cached_property
-    def metal_centers(self):
-        METAL_IONS = ['Ca', 'Co', 'Mg', 'Mn', 'FE', 'CU', 'ZN', 'FE2', 'FE3', 'FE4', 'LI', 'NA', 'K', 'RB', 'SR', 'CS',
-                      'BA',
-                      'CR', 'NI', 'FE1', 'NI', 'RU', 'RU1', 'RH', 'RH1', 'PD', 'AG', 'CD', 'LA', 'W', 'W1', 'OS', 'IR',
-                      'PT',
-                      'PT1', 'AU', 'HG', 'CE', 'PR', 'SM', 'EU', 'GD', 'TB', 'YB', 'LU', 'AL', 'GA', 'IN', 'SB', 'TL',
-                      'PB']
-
-
+    def metal_centers(self) -> Tuple[int, ...]:
+        out = []
+        for n, a in self._atoms.items():
+            if a.atomic_number not in non_metals:
+                out.append(n)
+        return tuple(out)
 
     _pharmacophore_config = {'min_dist': .5, 'hydroph_dist_max': 4., 'hbond_dist_max': 4.1,
                              'hbond_don_angle_min': 1.75, 'pi_stack_dist_max': 5.5, 'pi_stack_ang_dev': 0.52,
                              'pi_stack_offset_max': 2.0, 'salt_bridge_dist_max': 5.5, 'halogen_dist_max': 4.0,
                              'halogen_angle_dev': 0.52, 'halogen_acc_angle': 2.1, 'halogen_don_angle': 2.88,
-                             'pi_cation_dist_max': 6.}
+                             'pi_cation_dist_max': 6., 'metal_dist_max': 3.}
 
 
 __all__ = ['Pharmacophore']
