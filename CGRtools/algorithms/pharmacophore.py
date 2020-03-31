@@ -375,8 +375,7 @@ class Pharmacophore:
         s_xyz = self._conformers[0]
         o_xyz = other._conformers[0]
 
-        for n in chain(self.metal_centers, other.metal_centers):
-            np = s_xyz[n]
+        for n, np in chain(((n, s_xyz[n]) for n in self.metal_centers), ((n, o_xyz[n]) for n in other.metal_centers)):
             sd = []
             sn = []
             for m in self.metal_ligands_centers:
