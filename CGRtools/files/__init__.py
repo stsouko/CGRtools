@@ -21,6 +21,7 @@ Available file parsers and writers
 """
 from .INCHIrw import *
 from .MRVrw import *
+from .PDBrw import *
 from .RDFrw import *
 from .SDFrw import *
 from .SMILESrw import *

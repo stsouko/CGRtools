@@ -16,6 +16,22 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from math import acos, sqrt
+
+
+class JupyterWidget:
+    def __init__(self, xml, width, height):
+        self.xml = xml
+        self.width = width
+        self.height = height
+
+    def _repr_html_(self):
+        return ("<script type='text/javascript' src='https://www.x3dom.org/download/x3dom.js'></script>"
+                "<link rel='stylesheet' type='text/css' href='https://www.x3dom.org/download/x3dom.css'>"
+                f'<div style="width: {self.width}; height: {self.height}">{self.xml}</div>')
+
+    def __html__(self):
+        return self._repr_html_()
 
 
 class X3dom:
@@ -23,12 +39,29 @@ class X3dom:
 
     def depict3d(self, index: int = 0) -> str:
         """Get X3DOM XML string.
+
         :param index: index of conformer
         """
-        return f'<x3d width=100% height=100%>\n  <scene>\n{self.__render_atoms(index)}{self._render_3d_bonds(index)}' \
-               '  </scene>\n</x3d>'
+        xyz = self._conformers[index]
+        mx = sum(x for x, _, _ in xyz.values()) / len(xyz)
+        my = sum(y for _, y, _ in xyz.values()) / len(xyz)
+        mz = sum(z for _, _, z in xyz.values()) / len(xyz)
+        xyz = {n: (x - mx, y - my, z - mz) for n, (x, y, z) in xyz.items()}
+        atoms = self.__render_atoms(xyz)
+        bonds = self._render_3d_bonds(xyz)
+        return f'<x3d width=100% height=100%>\n  <scene>\n{atoms}{bonds}  </scene>\n</x3d>'
 
-    def __render_atoms(self, index):
+    def view3d(self, index: int = 0, width='600px', height='400px'):
+        """
+        Jupyter widget for 3D visualization.
+
+        :param index: index of conformer
+        :param width: widget width
+        :param height: widget height
+        """
+        return JupyterWidget(self.depict3d(index), width, height)
+
+    def __render_atoms(self, xyz):
         config = self._render_config
         colors = config['atoms_colors']
         mapping_color = config['mapping_color']
@@ -41,7 +74,6 @@ class X3dom:
         elif not radius:
             multiplier = .2
 
-        xyz = self._conformers[index]
         atoms = []
         if carbon:
             for n, a in self._atoms.items():
@@ -73,18 +105,32 @@ class X3dom:
 class X3domMolecule(X3dom):
     __slots__ = ()
 
-    def _render_3d_bonds(self, index):
+    def _render_3d_bonds(self, xyz):
         config = self._render_config
-        xyz = self._conformers[index]
-        return ''
+        bonds = []
+        for n, m, bond in self.bonds():
+            nx, ny, nz = xyz[n]
+            mx, my, mz = xyz[m]
+            _nx, _ny, _nz = 0, 0, 0
+
+            nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+            # norm_x, norm_y, norm_z = 0, 1, 0
+            angle = acos(nmy / sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2))
+
+            bonds.append(f"    <transform translation='{nx + nmx / 2:.2f} {ny + nmy / 2:.2f} {nz + nmz / 2:.2f}' "
+                         f"rotation='{nmz:.2f} {0} {-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                         f"          <material diffusecolor='0 1 1'>\n"
+                         f'          </material>\n        </appearance>\n'
+                         f"        <cylinder radius='.04' height='{sqrt(nmx**2 + nmy**2 + nmz**2):.2f}'>\n"
+                         f'        </cylinder>\n      </shape>\n    </transform>\n')
+        return ''.join(bonds)
 
 
 class X3domCGR(X3dom):
     __slots__ = ()
 
-    def _render_3d_bonds(self, index):
+    def _render_3d_bonds(self, xyz):
         config = self._render_config
-        xyz = self._conformers[index]
         return ''
 
 

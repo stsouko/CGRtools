@@ -3,13 +3,16 @@ CGRTools
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
 Basic operations:
-   - Read /write /convert formats MDL .RDF and .SDF, SMILES, .MRV
-   - Standardize reactions and valid structures checker.
+   - Read/write/convert formats: MDL .RDF and .SDF, .MRV, SMILES, INCHI (Linux and Windows), .XYZ, .PDB
+   - Standardize molecules and reactions and valid structures checker.
    - Produce CGRs.
    - Perform subgraph search.
-   - Build /correct molecules and reactions.
-   - Produce template based reactions.
-    
+   - Build/edit molecules and reactions.
+   - Produce template based reactions and molecules.
+   - Atom-to-atom mapping checker and rule-based fixer.
+   - Perform MCS search.
+   - 2d depiction.
+
 INSTALL
 =======
 
@@ -89,6 +92,24 @@ General part
     pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
     ```
 
+* Install CGRtools with MRV files parsing support
+
+    ```
+    pip install CGRTools[mrv]
+    ```
+
+* Install CGRtools with structures `clean2d` support \[only DEV\] optimized version \[numba and numpy used\]
+
+    ```
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRTools[clean2djit]
+    ```
+
+* Install CGRtools with structures `clean2d` support \[only DEV\] slow version \[numpy used\]
+
+    ```
+    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools[clean2d]
+    ```
+
 * Jupyter integration:
 
     ```
@@ -120,7 +141,7 @@ COPYRIGHT
 =========
 
 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer  
-2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm and API discussion  
+2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> features and API discussion  
 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 
 CONTRIBUTORS

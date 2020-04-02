@@ -18,11 +18,28 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from importlib.util import find_spec
 from itertools import combinations
 from math import sqrt, pi, atan2, cos, sin
-from numba import njit, f8, u2
-from numpy import array, zeros, uint16, zeros_like, empty
 from random import uniform
+
+if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
+    from numpy import array, zeros, uint16, zeros_like, empty
+    from numba import njit, f8, u2
+else:
+    def njit(*args, **kwargs):
+        def wrapper(f):
+            return f
+        return wrapper
+
+    class NumbaType:
+        def __getitem__(self, item):
+            return self
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+    f8 = u2 = NumbaType()
 
 
 @njit(f8[:, :](f8[:, :], f8, f8, f8),
@@ -401,6 +418,23 @@ class Calculate2DCGR(Calculate2D):
         order1 = self.__primary(bond1)
         order2 = self.__primary(bond2)
         return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
+
+
+if find_spec('numpy'):  # load numpy not yet loaded with numba
+    if not find_spec('numba'):
+        from numpy import array, zeros, uint16, zeros_like, empty
+else:  # disable clean2d support
+    class Calculate2DMolecule:
+        __slots__ = ()
+
+        def clean2d(self):
+            raise NotImplemented('numpy required for clean2d')
+
+    class Calculate2DCGR:
+        __slots__ = ()
+
+        def clean2d(self):
+            raise NotImplemented('numpy required for clean2d')
 
 
 __all__ = ['Calculate2DMolecule', 'Calculate2DCGR']

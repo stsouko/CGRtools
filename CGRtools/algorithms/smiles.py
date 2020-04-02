@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, cached_property
+from CachedMethods import cached_method
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count, product
@@ -70,6 +70,8 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
+            if '!r' in format_spec:
+                kwargs['aromatic'] = False
             return ''.join(self._smiles(self.atoms_order.get, **kwargs))
         return str(self)
 
@@ -214,65 +216,43 @@ class Smiles:
 class MoleculeSmiles(Smiles):
     __slots__ = ()
 
-    @cached_property
-    def __aromatic_atoms(self):
-        aromatics = set()
-        for ring in self.aromatic_rings:
-            aromatics.update(ring)
-        return aromatics
-
     def _format_atom(self, n, adjacency=None, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
-        if atom.isotope:
-            smi = [str(atom.isotope), atom.atomic_symbol]
-        else:
-            smi = [atom.atomic_symbol]
 
-        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
-            # todo: extend to allenes
-            smi.append('@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@')
-            if ih:
-                smi.append('H')
-            smi.insert(0, '[')
-            smi.append(']')
+        smi = ['',  # [
+               str(atom.isotope) if atom.isotope else '',  # isotope
+               None,
+               '',  # stereo
+               '',  # hydrogen
+               '',  # charge
+               '']  # ]
+
+        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # neutral carbon only
+            smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
         elif charge:
+            smi[5] = charge_str[charge]
+
+        if any(smi) or atom.atomic_symbol not in organic_set or self._radicals[n]:
+            smi[0] = '['
+            smi[-1] = ']'
             if ih == 1:
-                smi.append('H')
+                smi[4] = 'H'
             elif ih:
-                smi.append(f'H{ih}')
-            smi.append(charge_str[charge])
-            smi.insert(0, '[')
-            smi.append(']')
-        elif self._radicals[n]:
-            if ih == 1:
-                smi.append('H')
-            elif ih:
-                smi.append(f'H{ih}')
-            smi.insert(0, '[')
-            smi.append(']')
-        elif n in self.__aromatic_atoms and atom.atomic_symbol in ('N', 'P'):  # heterocycles
-            if ih == 1:
-                smi.append('H]')
-                smi.insert(0, '[')
-            elif ih:
-                smi.append(f'H{ih}]')
-                smi.insert(0, '[')
-        elif atom.atomic_symbol not in organic_set:
-            if ih == 1:
-                smi.append('H')
-            elif ih:
-                smi.append(f'H{ih}')
-            smi.insert(0, '[')
-            smi.append(']')
-        elif len(smi) != 1:
-            smi.insert(0, '[')
-            smi.append(']')
+                smi[4] = f'H{ih}'
+
+        if kwargs.get('aromatic', True) and self._hybridizations[n] == 4:
+            smi[2] = atom.atomic_symbol.lower()
+        else:
+            smi[2] = atom.atomic_symbol
         return ''.join(smi)
 
     def _format_bond(self, n, m, **kwargs):
-        return order_str[self._bonds[n][m].order]
+        order = self._bonds[n][m].order
+        if kwargs.get('aromatic', True) and order == 4:
+            return ''
+        return order_str[order]
 
 
 class CGRSmiles(Smiles):
@@ -285,9 +265,13 @@ class CGRSmiles(Smiles):
         p_charge = self._p_charges[n]
         p_is_radical = self._p_radicals[n]
         if atom.isotope:
-            smi = [str(atom.isotope), atom.atomic_symbol]
+            smi = [str(atom.isotope)]
         else:
-            smi = [atom.atomic_symbol]
+            smi = []
+        if kwargs.get('aromatic', True) and (self._hybridizations[n] == 4 or self._p_hybridizations[n] == 4):
+            smi.append(atom.atomic_symbol.lower())
+        else:
+            smi.append(atom.atomic_symbol)
 
         if charge or p_charge:
             smi.append(dyn_charge_str[(charge, p_charge)])
@@ -301,7 +285,10 @@ class CGRSmiles(Smiles):
 
     def _format_bond(self, n, m, **kwargs):
         bond = self._bonds[n][m]
-        return dyn_order_str[(bond.order, bond.p_order)]
+        order, p_order = bond.order, bond.p_order
+        if kwargs.get('aromatic', True) and order == p_order == 4:
+            return ''
+        return dyn_order_str[(order, p_order)]
 
 
 class QuerySmiles(Smiles):

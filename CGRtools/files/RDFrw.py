@@ -38,7 +38,7 @@ class RDFRead(MDLRead):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, *args, indexable=False, **kwargs):
+    def __init__(self, file, indexable=False, **kwargs):
         """
         :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
             dealing with a real file (the path to the file is specified) because the external grep utility is used,
@@ -46,8 +46,10 @@ class RDFRead(MDLRead):
 
             if False: works like generator converting a record into ReactionContainer and returning each object in
             order, records with errors are skipped
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(file, **kwargs)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:

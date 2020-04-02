@@ -460,7 +460,7 @@ class MDLReadMeta(type):
 
 
 class MDLRead(CGRRead, metaclass=MDLReadMeta):
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
             self._is_buffer = False
@@ -472,7 +472,7 @@ class MDLRead(CGRRead, metaclass=MDLReadMeta):
             self._is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
     def close(self, force=False):
         """
