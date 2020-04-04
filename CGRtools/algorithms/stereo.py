@@ -488,7 +488,7 @@ class MoleculeStereo(Stereo):
                 if len(ax) > 1:
                     axises.append(ax)
             tmp = []
-            for ax in sorted(axises):
+            for ax in sorted(axises, reverse=True, key=len):
                 if all(x.isdisjoint(ax) for x in tmp):
                     tmp.append(ax)
             out.extend(tuple(x) for x in tmp)
