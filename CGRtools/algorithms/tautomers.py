@@ -17,7 +17,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import TYPE_CHECKING, Iterable, Tuple, Iterator
+from typing import TYPE_CHECKING, List, Tuple, Iterator
+from ..containers.bonds import Bond
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
@@ -35,74 +36,136 @@ class Tautomers:
 
     def enumerate_tautomers(self) -> Iterator['MoleculeContainer']:
         """
-        Enumerate all possible tautomeric forms of molecule. Supported hydrogen, charge and radicals migration through
-        delocalized chain.
+        Enumerate all possible tautomeric forms of molecule. Supported hydrogen migration through delocalized chain.
 
         O=C-C[H] <-> [H]O-C=C
         O=C-C=C-C[H] <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
-        [C-]-C=C <-> C=C-[C-], [C-]=C=C <-> C#C-[C-]
         """
-        # todo: implement
         yield self
 
-    def __entries(self) -> Iterable[Tuple[int, bool]]:
-        # possible: not radicals
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        plane = self._plane
+        bonds = self._bonds
+        neighbors = self._neighbors
+        hybridizations = self._hybridizations
+        hydrogens = self._hydrogens
+
+        for path in self.__enumerate_bonds():
+            mol = self.__class__()
+            m_atoms = mol._atoms
+            m_charges = mol._charges
+            m_radicals = mol._radicals
+            m_plane = mol._plane
+            m_bonds = mol._bonds
+            m_neighbors = mol._neighbors
+            m_hybridizations = mol._hybridizations
+            m_hydrogens = mol._hydrogens
+
+            adj = {}
+            for n, a in atoms.items():
+                a = a.copy()
+                m_atoms[n] = a
+                a._attach_to_graph(mol, n)
+                m_charges[n] = charges[n]
+                m_radicals[n] = radicals[n]
+                m_plane[n] = plane[n]
+                m_bonds[n] = {}
+                adj[n] = set()
+
+            seen = set()
+            for n, m, bond in path:
+                if bond is not None:
+                    m_bonds[n][m] = m_bonds[m][n] = Bond(bond)
+                adj[n].add(m)
+                adj[m].add(n)
+                seen.add(n)
+                seen.add(m)
+
+            for n, ms in bonds.items():
+                adjn = adj[n]
+                for m, bond in ms.items():
+                    if m not in adjn:
+                        m_bonds[n][m] = m_bonds[m][n] = bond.copy()
+
+            for n, h in hybridizations.items():
+                if n in seen:
+                    mol._calc_hybridization(n)
+                    mol._calc_implicit(n)
+                    m_neighbors[n] = sum(m_atoms[m].atomic_number != 1 for m in m_bonds[n])
+                else:
+                    m_hybridizations[n] = h
+                    m_hydrogens[n] = hydrogens[n]
+                    m_neighbors[n] = neighbors[n]
+            yield mol
+
+    def __enumerate_bonds(self):
+        bonds = self._bonds
+        for atom, atom_type in self.__entries():
+            path = [atom]
+            new_bonds = []
+            stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order < 3]
+
+            while stack:
+                current, bond, depth = stack.pop()
+
+                if len(path) > depth:
+                    path = path[:depth]
+                    new_bonds = new_bonds[:depth - 1]
+
+                if bond == 1:
+                    new_bonds.append((path[-1], current, 2))
+                else:
+                    new_bonds.append((path[-1], current, 1))
+                path.append(current)
+
+                depth += 1
+                nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
+                stack.extend(nbg)
+
+                if len(path) % 2:
+                    yield new_bonds
+
+    def __entries(self) -> List[Tuple[int, bool]]:
+        # possible: not radicals and not charged
         # O S Se -H[enol] (only 1 neighbor)
         # N -H[enol] (1 or 2 neighbor)
         # P -H[enol] (1 or 2 non-hydrogen bonds with order sum 1 or 2)
 
         # reverse (has double bonded neighbor):
-        # O (charge 0)
-        # S Se (only 1 neighbor and charge 0)
-        # N (charge -1 or 0)
-        # P (charge -1 OR charge 0 and neighbors 1 or 2)
+        # O S Se (only 1 neighbor)
+        # N P(1 or 2 neighbors)
+
         atoms = self._atoms
-        bonds = self._bonds
         charges = self._charges
         hydrogens = self._hydrogens
+        neighbors = self._neighbors
+        radicals = self._radicals
+        hybridizations = self._hybridizations
 
-        ent_atoms = []
-        for i, atom in atoms.items():
-            if bonds[i]:
-                if charges[i] < 0:         # [C, N, O, Si, P,  S,  As, Se, Te]
-                    if atom.atomic_number in {6, 7, 8, 14, 15, 16, 33, 34, 52}:
-                        ent_atoms.append((atom, i, 1))
-                elif hydrogens[i]:         # [N, O, Si, P,  S,  As, Se, Te]
-                    if atom.atomic_number in {7, 8, 14, 15, 16, 33, 34, 52}:
-                        ent_atoms.append((atom, i, 2))
-        return ent_atoms
+        _entries = []
 
-    def get_paths(self, ent_atoms):
-        bonds = self._bonds
-
-        for a in ent_atoms:
-            path = [a[1]]
-            stack = [(i, n.order, 1) for i, n in bonds[a[1]].items() if n.order < 3]
-
-            while stack:
-                cur, b, d = stack.pop()
-
-                if len(path) > d:
-                    path = path[:d]
-
-                if set(bonds[cur].keys()).difference(path):
-                    for x in bonds[cur].values():
-                        if (x.order < 3) and (x.order != b):
-                            path.append(cur)
-
-                            if len(path) % 2:
-                                yield path
-                            break
-
-                elif not len(path) % 2:
-                    path.append(cur)
-                    yield path
-
-                d += 1
-                nbg = [(x, y.order, d) for x, y in bonds[cur].items() if (y.order < 3) and (y.order != b)]
-                stack.extend(nbg)
+        for n, a in atoms.items():
+            if radicals[n] or charges[n]:
+                continue
+            if a.atomic_number in {8, 16, 34}:
+                if neighbors[n] == 1:
+                    _entries.append((n, bool(hydrogens[n])))
+            elif a.atomic_number in {7, 15}:
+                if 0 < neighbors[n] < 3:
+                    if hybridizations[n] == 1:  # amine
+                        if hydrogens[n]:
+                            _entries.append((n, True))
+                    elif hybridizations[n] == 2:  # imine
+                        _entries.append((n, False))
+                        if hydrogens[n]:
+                            _entries.append((n, True))
+                    elif hybridizations[n] == 3:  # nitrile
+                        _entries.append((n, False))
+        return _entries
 
 
 __all__ = ['Tautomers']
