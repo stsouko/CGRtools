@@ -354,11 +354,11 @@ class Pharmacophore:
                     if don_am < don_angle < don_ap:
                         contacts.append(HalogenAcceptor(a, h, d, acc_angle, don_angle))
         for (an, a), (hn, h) in product(other.halogen_acceptor_centers, self.halogen_donor_centers):
-            d = distance(s_xyz[a], o_xyz[h])
+            d = distance(o_xyz[a], s_xyz[h])
             if min_dist < d < halogen_dist_max:
-                acc_angle = points_angle(s_xyz[a], s_xyz[an], o_xyz[h])
+                acc_angle = points_angle(o_xyz[a], o_xyz[an], s_xyz[h])
                 if acc_am < acc_angle < acc_ap:
-                    don_angle = points_angle(o_xyz[h], s_xyz[a], o_xyz[hn])
+                    don_angle = points_angle(s_xyz[h], o_xyz[a], s_xyz[hn])
                     if don_am < don_angle < don_ap:
                         contacts.append(HalogenDonor(h, a, d, acc_angle, don_angle))
         return contacts
