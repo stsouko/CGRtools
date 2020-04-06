@@ -184,21 +184,21 @@ def projected_distance(normal, centroid, point):
 class Pharmacophore:
     __slots__ = ()
 
-    def find_contacts(self, other: 'Pharmacophore') -> List[Union[Hydrophobic, Salts, HydrogenDonor, HydrogenAcceptor,
-                                                                  PiStack, PiCation, CationPi, HalogenAcceptor,
-                                                                  HalogenDonor, MetalComplex]]:
+    def find_contacts(self, other: 'Pharmacophore', index: int = 0, other_index: int = 0) -> \
+            List[Union[Hydrophobic, Salts, HydrogenDonor, HydrogenAcceptor, PiStack, PiCation, CationPi,
+                       HalogenAcceptor, HalogenDonor, MetalComplex]]:
         """
-        Find pharmocophore contacts in 3d. Required explicit hydrogens.
+        Find pharmacophore contacts in 3d. Required explicit hydrogens.
         """
         contacts = []
-        contacts.extend(self.__electrostatic_interactions(other))
-        contacts.extend(self.__hydrogen_bond_interactions(other))
-        contacts.extend(self.__pi_interactions(other))
-        contacts.extend(self.__halogen_bond_interactions(other))
-        contacts.extend(self.__metal_complex_interactions(other))
+        contacts.extend(self.__electrostatic_interactions(other, index, other_index))
+        contacts.extend(self.__hydrogen_bond_interactions(other, index, other_index))
+        contacts.extend(self.__pi_interactions(other, index, other_index))
+        contacts.extend(self.__halogen_bond_interactions(other, index, other_index))
+        contacts.extend(self.__metal_complex_interactions(other, index, other_index))
         return contacts
 
-    def __electrostatic_interactions(self, other):
+    def __electrostatic_interactions(self, other, index, other_index):
         """
         Detection of electrostatic contacts.
         """
@@ -208,8 +208,8 @@ class Pharmacophore:
         salt_bridge_dist_max = config['salt_bridge_dist_max']
 
         contacts = []
-        s_xyz = self._conformers[0]
-        o_xyz = other._conformers[0]
+        s_xyz = self._conformers[index]
+        o_xyz = other._conformers[other_index]
         for n, m in product(self.hydrophobic_centers, other.hydrophobic_centers):
             d = distance(s_xyz[n], o_xyz[m])
             if min_dist < d < hydroph_dist_max:
@@ -224,7 +224,7 @@ class Pharmacophore:
                 contacts.append(Salts(n, m, d))
         return contacts
 
-    def __hydrogen_bond_interactions(self, other):
+    def __hydrogen_bond_interactions(self, other, index, other_index):
         """
         Detection of hydrogen bonds between sets of acceptors and donor pairs.
 
@@ -239,8 +239,8 @@ class Pharmacophore:
 
         seen = set()
         contacts = []
-        s_xyz = self._conformers[0]
-        o_xyz = other._conformers[0]
+        s_xyz = self._conformers[index]
+        o_xyz = other._conformers[other_index]
         for (n, h), m in product(self.hydrogen_donor_centers, other.hydrogen_acceptor_centers):
             dist_nm = distance(s_xyz[n], o_xyz[m])
             if min_dist < dist_nm < hbond_dist_max:
@@ -261,7 +261,7 @@ class Pharmacophore:
                                                      distance(o_xyz[m], o_xyz[h]), a))
         return contacts
 
-    def __pi_interactions(self, other):
+    def __pi_interactions(self, other, index, other_index):
         """
         Detection of pi-stackings between aromatic ring systems and pi-Cation interaction between aromatic rings and
         positively charged groups.
@@ -277,8 +277,8 @@ class Pharmacophore:
         pi_stack_ang_dev_perp = pi2 - pi_stack_ang_dev
 
         contacts = []
-        s_xyz = self._conformers[0]
-        o_xyz = other._conformers[0]
+        s_xyz = self._conformers[index]
+        o_xyz = other._conformers[other_index]
 
         s_centers = []
         s_normals = []
@@ -327,7 +327,7 @@ class Pharmacophore:
                     contacts.append(CationPi(n, mr, d, offset))
         return contacts
 
-    def __halogen_bond_interactions(self, other):
+    def __halogen_bond_interactions(self, other, index, other_index):
         """
         Detect all halogen bonds of the type Y-O...X-C
         """
@@ -343,8 +343,8 @@ class Pharmacophore:
         don_am = halogen_don_angle - halogen_angle_dev
 
         contacts = []
-        s_xyz = self._conformers[0]
-        o_xyz = other._conformers[0]
+        s_xyz = self._conformers[index]
+        o_xyz = other._conformers[other_index]
         for (an, a), (hn, h) in product(self.halogen_acceptor_centers, other.halogen_donor_centers):
             d = distance(s_xyz[a], o_xyz[h])
             if min_dist < d < halogen_dist_max:
@@ -363,7 +363,7 @@ class Pharmacophore:
                         contacts.append(HalogenDonor(h, a, d, acc_angle, don_angle))
         return contacts
 
-    def __metal_complex_interactions(self, other):
+    def __metal_complex_interactions(self, other, index, other_index):
         """
         Find self-metal-other bridges.
         """
@@ -372,8 +372,8 @@ class Pharmacophore:
         metal_dist_max = config['metal_dist_max']
 
         contacts = []
-        s_xyz = self._conformers[0]
-        o_xyz = other._conformers[0]
+        s_xyz = self._conformers[index]
+        o_xyz = other._conformers[other_index]
 
         for n, np in chain(((n, s_xyz[n]) for n in self.metal_centers), ((n, o_xyz[n]) for n in other.metal_centers)):
             sd = []
@@ -619,4 +619,5 @@ class Pharmacophore:
                              'pi_cation_dist_max': 6., 'metal_dist_max': 3.}
 
 
-__all__ = ['Pharmacophore']
+__all__ = ['Pharmacophore', 'Hydrophobic',  'Salts', 'HydrogenDonor', 'HydrogenAcceptor', 'HalogenDonor',
+           'HalogenAcceptor', 'PiStack', 'PiCation', 'CationPi', 'MetalComplex']
