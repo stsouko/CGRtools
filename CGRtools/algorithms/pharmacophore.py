@@ -43,7 +43,8 @@ class HydrogenDonor(NamedTuple):
     distance: float  # between atoms connected by hydrogen
     acceptor_distance: float  # acceptor-H bond length
     donor_distance: float  # donor-H bond length
-    angle: float
+    angle: float  # angle between donor-H-acceptor
+    lp_angle: float  # angle between LP-acceptor-H
 
 
 class HydrogenAcceptor(NamedTuple):
@@ -52,7 +53,8 @@ class HydrogenAcceptor(NamedTuple):
     distance: float  # between atoms connected by hydrogen
     acceptor_distance: float  # acceptor-H bond length
     donor_distance: float  # donor-H bond length
-    angle: float
+    angle: float  # angle between donor-H-acceptor
+    lp_angle: float  # angle between LP-acceptor-H
 
 
 class PiStack(NamedTuple):
@@ -106,6 +108,16 @@ def distance(n, m):
     nx, ny, nz = n
     mx, my, mz = m
     return sqrt((nx - mx) ** 2 + (ny - my) ** 2 + (nz - mz) ** 2)
+
+
+def normal_vector(n, m):
+    nx, ny, nz = n
+    mx, my, mz = m
+    nmx = mx - nx
+    nmy = my - ny
+    nmz = mz - nz
+    nmd = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+    return nmx / nmd, nmy / nmd, nmz / nmd
 
 
 def points_angle(n, m, k):
@@ -236,29 +248,61 @@ class Pharmacophore:
         min_dist = config['min_dist']
         hbond_dist_max = config['hbond_dist_max']
         hbond_don_angle_min = config['hbond_don_angle_min']
+        hbond_lp_angle_max = config['hbond_lp_angle_max']
 
         seen = set()
         contacts = []
         s_xyz = self._conformers[index]
         o_xyz = other._conformers[other_index]
-        for (n, h), m in product(self.hydrogen_donor_centers, other.hydrogen_acceptor_centers):
+        s_bonds = self._bonds
+        o_bonds = other._bonds
+
+        s_lp = []
+        for n in self.hydrogen_acceptor_centers:
+            nx, ny, nz = nc = s_xyz[n]
+            sx = sy = sz = 0.
+            for m in s_bonds[n]:
+                x, y, z = normal_vector(nc, s_xyz[m])
+                sx += x
+                sy += y
+                sz += z
+            lbn = len(s_bonds[n])
+            s_lp.append((nx - sx / lbn, ny - sy / lbn, nz - sz / lbn))
+
+        o_lp = []
+        for n in other.hydrogen_acceptor_centers:
+            nx, ny, nz = nc = o_xyz[n]
+            sx = sy = sz = 0.
+            for m in o_bonds[n]:
+                x, y, z = normal_vector(nc, o_xyz[m])
+                sx += x
+                sy += y
+                sz += z
+            lbn = len(o_bonds[n])
+            o_lp.append((nx - sx / lbn, ny - sy / lbn, nz - sz / lbn))
+
+        for (n, h), (m, l) in product(self.hydrogen_donor_centers, zip(other.hydrogen_acceptor_centers, o_lp)):
             dist_nm = distance(s_xyz[n], o_xyz[m])
             if min_dist < dist_nm < hbond_dist_max:
                 a = points_angle(s_xyz[h], s_xyz[n], o_xyz[m])
-                if a >= hbond_don_angle_min:
-                    seen.add((n, m))
-                    contacts.append(HydrogenDonor(n, m, dist_nm, distance(s_xyz[h], o_xyz[m]),
-                                                  distance(s_xyz[n], s_xyz[h]), a))
+                if a > hbond_don_angle_min:
+                    b = points_angle(o_xyz[m], l, s_xyz[h])
+                    if b < hbond_lp_angle_max:
+                        seen.add((n, m))
+                        contacts.append(HydrogenDonor(n, m, dist_nm, distance(s_xyz[h], o_xyz[m]),
+                                                      distance(s_xyz[n], s_xyz[h]), a, b))
 
-        for n, (m, h) in product(self.hydrogen_acceptor_centers, other.hydrogen_donor_centers):
+        for (n, l), (m, h) in product(zip(self.hydrogen_acceptor_centers, s_lp), other.hydrogen_donor_centers):
             if (n, m) in seen:
                 continue
             dist_nm = distance(s_xyz[n], o_xyz[m])
             if min_dist < dist_nm < hbond_dist_max:
                 a = points_angle(o_xyz[h], o_xyz[m], s_xyz[n])
                 if a > hbond_don_angle_min:
-                    contacts.append(HydrogenAcceptor(n, m, dist_nm, distance(o_xyz[h], s_xyz[n]),
-                                                     distance(o_xyz[m], o_xyz[h]), a))
+                    b = points_angle(s_xyz[n], l, o_xyz[h])
+                    if b < hbond_lp_angle_max:
+                        contacts.append(HydrogenAcceptor(n, m, dist_nm, distance(o_xyz[h], s_xyz[n]),
+                                                         distance(o_xyz[m], o_xyz[h]), a, b))
         return contacts
 
     def __pi_interactions(self, other, index, other_index):
@@ -402,6 +446,7 @@ class Pharmacophore:
 
         N: R-N(-[H,R,Ar])-[H,R], Ar:N:Ar, Ar-NH2, [R,H]-N=R
         O: R-O-[H,R,Ar], [R,Ar]-C(=O)-[H,R,Ar,OH,OR,NR2], R-C(=O)-[O-], Ar-[O-], Ar-OH
+        F: R-F
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -434,6 +479,8 @@ class Pharmacophore:
                     elif all(hybridizations[m] not in (2, 3) for m in bonds[n]):  # [R,Ar]-O-[H,R]
                         if sum(hybridizations[m] == 4 for m in bonds[n]) <= 1:  # only one Aryl neighbor
                             out.append(n)
+                elif a.atomic_number == 9:  # F
+                    out.append(n)
             elif charges[n] == -1:  # R-C(=O)-[O-] or Ar-[O-]
                 if a.atomic_number == 8 and not any(charges[m] > 0 for m in bonds[n]):
                     # exclude zwitterions: nitro etc
@@ -616,7 +663,7 @@ class Pharmacophore:
                              'hbond_don_angle_min': 1.75, 'pi_stack_dist_max': 5.5, 'pi_stack_ang_dev': 0.52,
                              'pi_stack_offset_max': 2.0, 'salt_bridge_dist_max': 5.5, 'halogen_dist_max': 4.0,
                              'halogen_angle_dev': 0.52, 'halogen_acc_angle': 2.1, 'halogen_don_angle': 2.88,
-                             'pi_cation_dist_max': 6., 'metal_dist_max': 3.}
+                             'pi_cation_dist_max': 6., 'metal_dist_max': 3., 'hbond_lp_angle_max': 0.52}
 
 
 __all__ = ['Pharmacophore', 'Hydrophobic',  'Salts', 'HydrogenDonor', 'HydrogenAcceptor', 'HalogenDonor',
