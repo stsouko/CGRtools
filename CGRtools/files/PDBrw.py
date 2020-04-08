@@ -46,8 +46,8 @@ class PDBRead(XYZ):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param element_name_priority: For ligands use element symbol column value and ignore atom name column.
-        :param parse_as_single: Usable if all models in file is same structure. 2d graph will be restored from first
-            model. Other models will be stored as conformers.
+        :param parse_as_single: Usable if all models in file is the same structure. 2d graph will be restored from first
+            model. Other models will be returned as conformers.
         """
         if isinstance(file, str):
             self.__file = open(file)
@@ -64,6 +64,7 @@ class PDBRead(XYZ):
         self.__ignore = ignore
         self.__element_name_priority = element_name_priority
         self.__parse_as_single = parse_as_single
+        self.__parsed_first = None
         self._data = self.__reader()
 
     def close(self, force=False):
@@ -175,7 +176,11 @@ class PDBRead(XYZ):
                 atoms.append((atom_name, charge, x, y, z, residue))
             elif line.startswith('END'):  # EOF or end of complex
                 if atoms:  # convert collected atoms
-                    yield self._convert_structure(atoms)
+                    try:
+                        yield self._convert_structure(atoms)
+                    except ValueError:
+                        warning(f'Structure consist errors:\n{format_exc()}')
+                        yield None
                     atoms = []
                 else:
                     warning(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
@@ -183,30 +188,23 @@ class PDBRead(XYZ):
         if atoms:  # ENDMDL or END not found
             warning('PDB not finished')
             yield None
-        elif self.__parse_as_single:
-            yield self.__parsed_mol
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float, str]]):
-        if self.__parse_as_single:
-            if self.__parsed_mol is None:
-                mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
-                mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}
-                self.__parsed_mol = mol
-            else:
-                if len(self.__parsed_mol) != len(matrix):
-                    raise ValueError('models not equal')
-                c = {}
-                for (n, a), (e, _, x, y, z, _) in zip(self.__parsed_mol.atoms(), matrix):
-                    if a.atomic_symbol != e:
-                        raise ValueError('models or atom order not equal')
-                    c[n] = (x, y, z)
-                self.__parsed_mol._conformers.append(c)
-        else:
+        if self.__parsed_first is None:
             mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
             mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}
+            if self.__parse_as_single:
+                self.__parsed_first = [(n, a.atomic_symbol) for n, a in mol.atoms()]
             return mol
-
-    __parsed_mol = None
+        else:
+            if len(self.__parsed_first) != len(matrix):
+                raise ValueError('models not equal')
+            c = {}
+            for (n, a), (e, _, x, y, z, _) in zip(self.__parsed_first, matrix):
+                if a != e:
+                    raise ValueError('models or atom order not equal')
+                c[n] = (x, y, z)
+            return c
 
 
 __all__ = ['PDBRead']
