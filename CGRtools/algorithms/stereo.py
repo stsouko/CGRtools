@@ -18,10 +18,9 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from itertools import combinations, product
 from logging import info
-from typing import Set, Tuple, Dict, Optional, Union
-from ..exceptions import AtomNotFound, NotChiral, IsChiral
+from typing import Dict, Optional, Set, Tuple, Union
+from ..exceptions import AtomNotFound, IsChiral, NotChiral
 
 
 def _pyramid_sign(n, u, v, w):
@@ -478,6 +477,7 @@ class MoleculeStereo(Stereo):
         bonds = self._bonds
 
         out = []
+        seen = set()
         for c in self.connected_rings_cumulenes:
             axises = []
             for m in self._get_automorphism_mapping({n: morgan[n] for n in c},
@@ -487,11 +487,11 @@ class MoleculeStereo(Stereo):
                 ax = {k for k in m.keys() - sym if not sym.isdisjoint(bonds[k])}
                 if len(ax) > 1:
                     axises.append(ax)
-            tmp = []
+            # get longest axises
             for ax in sorted(axises, reverse=True, key=len):
-                if all(x.isdisjoint(ax) for x in tmp):
-                    tmp.append(ax)
-            out.extend(tuple(x) for x in tmp)
+                if seen.isdisjoint(ax):
+                    out.append(tuple(ax))
+                    seen.update(ax)
         return out
 
     @cached_property
