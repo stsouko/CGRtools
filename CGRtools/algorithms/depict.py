@@ -266,6 +266,8 @@ class DepictMolecule(Depict):
         font5 = .5 * font
         font6 = .6 * font
         font8 = .8 * font
+        m_font3 = .3 * mapping_font
+        m_font5 = .5 * mapping_font
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
@@ -307,8 +309,8 @@ class DepictMolecule(Depict):
                             f'text-anchor="end">{n}</text>')
                 dx, dy = x - font5, y + font5
                 for _ in range(len(str(n))):
-                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{font3}" ry="{font5}" />')
-                    dx -= font5
+                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
+                    dx -= m_font5
 
         if mapping:
             svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{mapping_font:.2f}">')
@@ -781,7 +783,8 @@ class DepictQuery(Depict):
         font6 = .6 * font
         font7 = .7 * font
         font8 = .8 * font
-
+        m_font3 = .3 * mapping_font
+        m_font5 = .5 * mapping_font
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
@@ -813,8 +816,8 @@ class DepictQuery(Depict):
                             f'text-anchor="end">{n}</text>')
                 dx, dy = x - font5, y + font5
                 for _ in range(len(str(n))):
-                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{font3}" ry="{font5}" />')
-                    dx -= font5
+                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
+                    dx -= m_font5
 
             level = 1
             if atom.neighbors:
