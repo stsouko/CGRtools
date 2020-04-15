@@ -19,10 +19,10 @@
 from collections import defaultdict
 from itertools import count
 from logging import warning
-from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
+from ..containers import CGRContainer, MoleculeContainer, QueryContainer, ReactionContainer
 from ..containers.bonds import Bond, DynamicBond
-from ..exceptions import MappingError, AtomNotFound
-from ..periodictable import Element, DynamicElement, QueryElement
+from ..exceptions import AtomNotFound, MappingError
+from ..periodictable import DynamicElement, Element, QueryElement
 
 
 common_isotopes = {'H': 1, 'He': 4, 'Li': 7, 'Be': 9, 'B': 11, 'C': 12, 'N': 14, 'O': 16, 'F': 19, 'Ne': 20, 'Na': 23,
@@ -174,7 +174,7 @@ class CGRRead:
             conformers = []
         g.__setstate__({'atoms': atoms, 'bonds': bonds, 'meta': {}, 'plane': plane, 'parsed_mapping': pm,
                         'charges': charges, 'radicals': radicals, 'name': '', 'conformers': conformers,
-                        'atoms_stereo': {}})
+                        'atoms_stereo': {}, 'allenes_stereo': {}, 'cis_trans_stereo': {}})
         return g
 
     @staticmethod

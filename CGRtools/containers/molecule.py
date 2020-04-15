@@ -18,7 +18,7 @@
 #
 from CachedMethods import cached_args_method, cached_property, class_cached_property
 from collections import defaultdict
-from typing import List, Union, Tuple, Optional, Dict
+from typing import Dict, List, Optional, Tuple, Union
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
@@ -30,7 +30,7 @@ from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
 from ..algorithms.x3dom import X3domMolecule
-from ..exceptions import ValenceError, MappingError
+from ..exceptions import MappingError, ValenceError
 from ..periodictable import Element, QueryElement
 
 
@@ -49,6 +49,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._atoms_stereo: Dict[int, bool] = {}
         self._allenes_stereo: Dict[int, bool] = {}
         self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
+
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -621,7 +622,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return rules
 
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
+        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
+                'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
+                **super().__getstate__()}
 
     def __setstate__(self, state):
         if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
@@ -665,6 +668,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         super().__setstate__(state)
         self._conformers = state['conformers']
         self._atoms_stereo = state['atoms_stereo']
+        self._allenes_stereo = state['allenes_stereo']
+        self._cis_trans_stereo = state['cis_trans_stereo']
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}
