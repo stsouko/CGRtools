@@ -785,6 +785,7 @@ class DepictQuery(Depict):
         font8 = .8 * font
         m_font3 = .3 * mapping_font
         m_font5 = .5 * mapping_font
+
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
