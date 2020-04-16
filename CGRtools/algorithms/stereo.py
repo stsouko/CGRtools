@@ -471,10 +471,15 @@ class MoleculeStereo(Stereo):
     @cached_property
     def _axises_connected_rings_cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
         """
-        Get all axises in rings with attached cumulenes
+        Get all stereogenic axises in rings with attached cumulenes. Stereogenic axises has only stereogenic atoms.
         """
         morgan = self.atoms_order
         bonds = self._bonds
+        stereo_tetrahedrons = self._stereo_tetrahedrons
+        cumulenes_terminals = set()
+        for path in self._stereo_cumulenes:
+            cumulenes_terminals.add(path[0])
+            cumulenes_terminals.add(path[-1])
 
         out = []
         seen = set()
@@ -484,7 +489,8 @@ class MoleculeStereo(Stereo):
                                                     {n: {m: b for m, b in bonds[n].items() if m in c} for n in c}):
                 # get self-matched atoms connected with automorphic atoms
                 sym = {k for k, v in m.items() if k != v}
-                ax = {k for k in m.keys() - sym if not sym.isdisjoint(bonds[k])}
+                ax = {k for k in m.keys() - sym if not sym.isdisjoint(bonds[k]) and
+                      (k in stereo_tetrahedrons or k in cumulenes_terminals)}
                 if len(ax) > 1:
                     axises.append(ax)
             # get longest axises
@@ -503,22 +509,12 @@ class MoleculeStereo(Stereo):
         morgan = self.atoms_order
         tetrahedrons = self._stereo_tetrahedrons.copy()
         cumulenes = self._stereo_cumulenes.copy()
-
-        # stereogenic axises has only stereogenic atoms
-        cumulenes_terminals = set()
-        for path in cumulenes:
-            cumulenes_terminals.add(path[0])
-            cumulenes_terminals.add(path[-1])
-        axises = [n for axis in self._axises_connected_rings_cumulenes
-                  if all(n in tetrahedrons or n in cumulenes_terminals for n in axis)
-                  for n in axis]
+        axises = self._axises_connected_rings_cumulenes
 
         morgan_update = {}
         while True:
-            # get True-chiral centers
-            chiral_t = {n for n, env in tetrahedrons.items()
-                        if (ul := len(set(morgan[x] for x in env))) == (fl := len(env))
-                        or n in axises and ul == fl - 1}
+            # tetrahedron is chiral if all its neighbors are unique or this atom in symmetric ring.
+            chiral_t = {n for n, env in tetrahedrons.items() if len({morgan[x] for x in env}) == len(env)}
             chiral_c = set()
             chiral_a = set()
             for path, (n1, m1, n2, m2) in cumulenes.items():
