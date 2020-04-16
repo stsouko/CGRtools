@@ -17,9 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from collections import defaultdict
 from itertools import chain, combinations
-from typing import Set, Dict, Union, Any, Tuple
+from typing import Any, Dict, Set, Tuple, Union
 
 
 class SSSR:
@@ -34,17 +33,16 @@ class SSSR:
     @cached_property
     def sssr(self) -> Tuple[Tuple[int, ...], ...]:
         """
-        Smallest Set of Smallest Rings
+        Smallest Set of Smallest Rings.
 
         :return rings atoms numbers
         """
-        # ignore isolated atoms. optimization.
         return self._sssr(self._bonds)
 
     @classmethod
     def _sssr(cls, bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Tuple[Tuple[int, ...], ...]:
         """
-        Smallest Set of Smallest Rings of any adjacency matrix
+        Smallest Set of Smallest Rings of any adjacency matrix.
         """
         bonds = cls._skin_graph(bonds)
         if bonds:

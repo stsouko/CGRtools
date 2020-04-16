@@ -18,7 +18,7 @@
 #
 from collections import defaultdict
 from itertools import product
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 from ..exceptions import InvalidAromaticRing
 
 
@@ -91,7 +91,7 @@ class Aromatize:
         """
         kekule = next(self.__kekule_full(), None)
         if kekule:
-            self._kekule_patch(kekule)
+            self.__kekule_patch(kekule)
             self.flush_cache()
             return True
         return False
@@ -102,7 +102,7 @@ class Aromatize:
         """
         for form in self.__kekule_full():
             copy = self.copy()
-            copy._kekule_patch(form)
+            copy._Aromatize__kekule_patch(form)
             yield copy
 
     def check_thiele(self, fast=True) -> bool:
@@ -234,7 +234,7 @@ class Aromatize:
                 raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se, Te possible, not: {atoms[n].atomic_symbol}')
         return rings, pyroles, double_bonded
 
-    def _kekule_patch(self, patch):
+    def __kekule_patch(self, patch):
         bonds = self._bonds
         atoms = set()
         for n, m, b in patch:

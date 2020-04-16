@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_args_method, cached_property, class_cached_property
+from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
@@ -38,7 +38,6 @@ from ..periodictable import Element, QueryElement
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
                         DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
-    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -604,18 +603,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     hybridization = 2
         self._hybridizations[n] = hybridization
         return hybridization
-
-    @class_cached_property
-    def _standardize_compiled_rules(self):
-        rules = []
-        for atoms, bonds, atom_fix, bonds_fix in self._standardize_rules():
-            q = query.QueryContainer()
-            for a in atoms:
-                q.add_atom(**a)
-            for n, m, b in bonds:
-                q.add_bond(n, m, b)
-            rules.append((q, atom_fix, bonds_fix))
-        return rules
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}

@@ -17,11 +17,14 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import class_cached_property
+from ..containers import query  # cyclic imports resolve
 from ..exceptions import ValenceError
 
 
 class Standardize:
     __slots__ = ()
+    __class_cache__ = {}
 
     def standardize(self) -> bool:
         """
@@ -31,7 +34,7 @@ class Standardize:
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
-        for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
+        for pattern, atom_fix, bonds_fix in self.__standardize_compiled_rules:
             for mapping in pattern.get_mapping(self):
                 hs.update(mapping.values())
 
@@ -148,8 +151,20 @@ class Standardize:
                 rads.add(n)
         return entries, exits, rads, transfer
 
+    @class_cached_property
+    def __standardize_compiled_rules(self):
+        rules = []
+        for atoms, bonds, atom_fix, bonds_fix in self.__standardize_rules():
+            q = query.QueryContainer()
+            for a in atoms:
+                q.add_atom(**a)
+            for n, m, b in bonds:
+                q.add_bond(n, m, b)
+            rules.append((q, atom_fix, bonds_fix))
+        return rules
+
     @staticmethod
-    def _standardize_rules():
+    def __standardize_rules():
         rules = []
 
         # Nitrone
@@ -547,6 +562,7 @@ class Standardize:
 
 class StandardizeReaction:
     __slots__ = ()
+    __class_cache__ = {}
 
     def standardize(self, fix_mapping: bool = True) -> bool:
         """
@@ -570,10 +586,10 @@ class StandardizeReaction:
 
     def fix_mapping(self) -> bool:
         """
-        Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors
+        Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
-        for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
+        for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
             for m in self.reactants:
                 for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
@@ -603,8 +619,25 @@ class StandardizeReaction:
             return True
         return False
 
+    @class_cached_property
+    def __standardize_compiled_rules(self):
+        rules = []
+        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self.__standardize_rules():
+            r_q = query.QueryContainer()
+            p_q = query.QueryContainer()
+            for a in r_atoms:
+                r_q.add_atom(**a)
+            for n, m, b in r_bonds:
+                r_q.add_bond(n, m, b)
+            for a in p_atoms:
+                p_q.add_atom(**a)
+            for n, m, b in p_bonds:
+                p_q.add_bond(n, m, b)
+            rules.append((r_q, p_q, fix))
+        return rules
+
     @staticmethod
-    def _standardize_rules():
+    def __standardize_rules():
         rules = []
 
         # Nitro
