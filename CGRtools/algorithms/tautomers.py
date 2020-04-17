@@ -104,7 +104,9 @@ class Tautomers:
 
     def __enumerate_bonds(self):
         bonds = self._bonds
-        for atom, atom_type in self.__entries():
+        entries = self.__entries()
+        previous = 0
+        for atom, atom_type in entries:
             path = [atom]
             new_bonds = []
             stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order < 3]
@@ -116,9 +118,9 @@ class Tautomers:
                     path = path[:depth]
                     new_bonds = new_bonds[:depth - 1]
 
-                if bond == 1:
+                if bond == 1 and current != atom:
                     new_bonds.append((path[-1], current, 2))
-                else:
+                elif bond == 2 and current != atom:
                     new_bonds.append((path[-1], current, 1))
                 path.append(current)
 
@@ -126,8 +128,14 @@ class Tautomers:
                 nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
                 stack.extend(nbg)
 
-                if len(path) % 2:
+                if len(path) % 2 and current != previous:
                     yield new_bonds
+                else:
+                    continue
+
+                if not stack:
+                    entries.append((current, True))
+                    previous = atom
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
@@ -146,26 +154,26 @@ class Tautomers:
         radicals = self._radicals
         hybridizations = self._hybridizations
 
-        _entries = []
+        entries = []
 
         for n, a in atoms.items():
             if radicals[n] or charges[n]:
                 continue
             if a.atomic_number in {8, 16, 34}:
                 if neighbors[n] == 1:
-                    _entries.append((n, bool(hydrogens[n])))
+                    entries.append((n, bool(hydrogens[n])))
             elif a.atomic_number in {7, 15}:
                 if 0 < neighbors[n] < 3:
                     if hybridizations[n] == 1:  # amine
                         if hydrogens[n]:
-                            _entries.append((n, True))
-                    elif hybridizations[n] == 2:  # imine
-                        _entries.append((n, False))
+                            entries.append((n, True))
+                    elif hybridizations[n] == 2:  # imin
+                        entries.append((n, False))
                         if hydrogens[n]:
-                            _entries.append((n, True))
+                            entries.append((n, True))
                     elif hybridizations[n] == 3:  # nitrile
-                        _entries.append((n, False))
-        return _entries
+                        entries.append((n, False))
+        return entries
 
 
 __all__ = ['Tautomers']
