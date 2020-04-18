@@ -105,7 +105,6 @@ class Tautomers:
     def __enumerate_bonds(self):
         bonds = self._bonds
         entries = self.__entries()
-        previous = 0
         for atom, atom_type in entries:
             path = [atom]
             new_bonds = []
@@ -113,29 +112,36 @@ class Tautomers:
 
             while stack:
                 current, bond, depth = stack.pop()
+                # time to exit
+                if (current, atom_type) in entries:
+                    continue
 
+                # branch processing
                 if len(path) > depth:
                     path = path[:depth]
                     new_bonds = new_bonds[:depth - 1]
 
-                if bond == 1 and current != atom:
+                # adding new bonds
+                if bond == 1:
                     new_bonds.append((path[-1], current, 2))
-                elif bond == 2 and current != atom:
+                elif bond == 2:
                     new_bonds.append((path[-1], current, 1))
                 path.append(current)
 
+                # adding new neighbors
                 depth += 1
                 nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
                 stack.extend(nbg)
 
-                if len(path) % 2 and current != previous:
+                # time to yield new_bonds
+                if len(path) % 2:
                     yield new_bonds
+                    # time to go back
+                    if not nbg:
+                        entries.append((current, atom_type))
                 else:
-                    continue
-
-                if not stack:
-                    entries.append((current, True))
-                    previous = atom
+                    if not nbg and len(path) > 2:
+                        entries.append((path[-2], atom_type))
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
