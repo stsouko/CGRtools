@@ -133,13 +133,14 @@ class Tautomers:
                 nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
                 stack.extend(nbg)
 
-                # time to yield new_bonds
+                # time or not to yield new_bonds
                 if len(path) % 2:
                     yield new_bonds
                     # time to go back
                     if not nbg:
                         entries.append((current, atom_type))
                 else:
+                    # time to go back
                     if not nbg and len(path) > 2:
                         entries.append((path[-2], atom_type))
 
