@@ -22,7 +22,27 @@ from collections import defaultdict
 from functools import partial
 from math import atan2, sin, cos, hypot
 from uuid import uuid4
-from ..periodictable.cpk import cpk
+
+
+cpk = tuple('''
+ #909090                                                                                         #D9FFFF
+ #CC80FF #C2FF00                                         #FFB5B5 #101010 #3050F8 #FF0D0D #90E050 #B3E3F5
+ #AB5CF2 #8AFF00                                         #BFA6A6 #F0C8A0 #FF8000 #C6C600 #1FF01F #80D1E3
+ #8F40D4 #3DFF00 #E6E6E6 #BFC2C7 #A6A6AB #8A99C7 #9C7AC7 
+                 #E06633 #F090A0 #50D050 #C88033 #7D80B0 #C28F8F #668F8F #BD80E3 #FFA100 #A62929 #5CB8D1
+ #702EB0 #00FF00 #94FFFF #94E0E0 #73C2C9 #54B5B5 #3B9E9E 
+                 #248F8F #0A7D8C #006985 #C0C0C0 #FFD98F #A67573 #668080 #9E63B5 #D47A00 #940094 #429EB0
+ #57178F #00C900 #70D4FF 
+                 #FFFFC7 #D9FFC7 #C7FFC7 #A3FFC7 #8FFFC7 #61FFC7 #45FFC7
+                 #30FFC7 #1FFFC7 #00FF9C #00E675 #00D452 #00BF38 #00AB24 
+                         #4DC2FF #4DA6FF #2194D6 #267DAB
+                 #266696 #175487 #D0D0E0 #FFD123 #B8B8D0 #A6544D #575961 #9E4FB5 #AB5C00 #754F45 #428296
+ #420066 #007D00 #70ABFA
+                 #00BAFF #00A1FF #008FFF #0080FF #006BFF #545CF2 #785CE3
+                 #8A4FE3 #A136D4 #B31FD4 #B31FBA #B30DA6 #BD0D87 #C70066
+                         #CC0059 #D1004F #D90045 #E00038 
+                 #E6002E #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026
+'''.split())
 
 
 def rotate_vector(x1, y1, x2, y2):
@@ -92,7 +112,7 @@ class Depict:
     def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
                         bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
                         triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
-                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05), atom_radius=-.2):
+                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05), atom_radius=-.2, mapping_font=.22):
         """
         Settings for depict of chemical structures
 
@@ -101,6 +121,7 @@ class Depict:
         font: float: font size
         mapping: bool: if True depict mapping
         mapping_color: str: mapping color
+        mapping_font: float: mapping font size
         bond_width: float: bond width
         query_color: str: hybridization and neighbors color
         atoms_colors: dict: atom colors where key is atomic number - 1, value is atom color (str)
@@ -134,6 +155,7 @@ class Depict:
         config['cgr_aromatic_space'] = cgr_aromatic_space
         config['aromatic_dashes'] = aromatic_dashes
         config['atom_radius'] = atom_radius
+        config['mapping_font'] = mapping_font
 
     @cached_method
     def _repr_svg_(self):
@@ -141,9 +163,9 @@ class Depict:
 
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
                       'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
-                      'mapping_color': '#788CFF', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
+                      'mapping_color': '#0305A7', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
                       'formed_color': 'green', 'cgr_aromatic_space': .14, 'aromatic_dashes': (.05, .05),
-                      'atom_radius': -.2}
+                      'atom_radius': -.2, 'mapping_font': .22}
 
 
 class DepictMolecule(Depict):
@@ -238,11 +260,14 @@ class DepictMolecule(Depict):
         carbon = config['carbon']
         atoms_colors = config['atoms_colors']
         font = config['font']
+        mapping_font = config['mapping_font']
         font2 = .2 * font
         font3 = .3 * font
         font5 = .5 * font
         font6 = .6 * font
         font8 = .8 * font
+        m_font3 = .3 * mapping_font
+        m_font5 = .5 * mapping_font
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
@@ -263,9 +288,6 @@ class DepictMolecule(Depict):
                     h = f'H<tspan  dy="{font5:.2f}" font-size="{font8:.2f}">{h}</tspan>'
                 else:
                     h = ''
-                if mapping:
-                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font8:.2f}" '
-                                f'text-anchor="end">{n}</text>')
 
                 svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
                 svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font3:.2f}" '
@@ -282,10 +304,16 @@ class DepictMolecule(Depict):
                                f'font-size="{font6:.2f}" text-anchor="end">{atom.isotope}</text>')
                 svg.append('    </g>')
                 mask.append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
-            elif mapping:
-                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle">{n}</text>')
+            if mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font8:.2f}" '
+                            f'text-anchor="end">{n}</text>')
+                dx, dy = x - font5, y + font5
+                for _ in range(len(str(n))):
+                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
+                    dx -= m_font5
+
         if mapping:
-            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{font8:.2f}">')
+            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{mapping_font:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
         return svg, mask
@@ -747,12 +775,16 @@ class DepictQuery(Depict):
         carbon = config['carbon']
         atoms_colors = config['atoms_colors']
         font = config['font']
+        mapping_font = config['mapping_font']
         font2 = .2 * font
         font3 = .3 * font
         font4 = .4 * font
+        font5 = .5 * font
         font6 = .6 * font
         font7 = .7 * font
         font8 = .8 * font
+        m_font3 = .3 * mapping_font
+        m_font5 = .5 * mapping_font
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
@@ -771,10 +803,6 @@ class DepictQuery(Depict):
                 svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
                 svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
                            f'font-size="{font:.2f}">{symbol}</text>')
-                if mapping:
-                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
-                                f'text-anchor="end">{n}</text>')
-
                 if atom.charge:
                     svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
                                f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
@@ -784,20 +812,24 @@ class DepictQuery(Depict):
                                f'font-size="{font6:.2f}">↑</text>')
                 svg.append('    </g>')
                 mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
-            elif mapping:
+            if mapping:
                 maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
                             f'text-anchor="end">{n}</text>')
+                dx, dy = x - font5, y + font5
+                for _ in range(len(str(n))):
+                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
+                    dx -= m_font5
 
             level = 1
             if atom.neighbors:
                 level = 1.6
                 nn = [str(x) for x in atom.neighbors]
-                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
                               f'text-anchor="start">{"".join(nn)}</text>')
 
             if atom.hybridization:
                 hh = [_render_hybridization[x] for x in atom.hybridization]
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{level * font8:.2f}" '
                                 f'text-anchor="start">{"".join(hh)}</text>')
         if nghbrs:
             svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
@@ -812,7 +844,7 @@ class DepictQuery(Depict):
             svg.append('    </g>')
 
         if mapping:
-            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{mapping_font:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
 

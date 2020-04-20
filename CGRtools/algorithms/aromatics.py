@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 #
 from collections import defaultdict
 from itertools import product
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 from ..exceptions import InvalidAromaticRing
 
 
@@ -27,7 +27,8 @@ class Aromatize:
 
     def thiele(self) -> bool:
         """
-        convert structure to aromatic form (Huckel rule ignored). return True if found any kekule ring.
+        Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
+        Also marks atoms as aromatic. For pyroles, furans, thiophene, phospholes bonds kepts in Kekule form.
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -82,30 +83,31 @@ class Aromatize:
 
     def kekule(self) -> bool:
         """
-        convert structure to kekule form. return True if found any aromatic ring.
+        Convert structure to kekule form. Return True if found any aromatic ring. Set implicit hydrogen count and
+        hybridization marks on atoms.
 
-        only one of possible double/single bonds positions will be set.
-        for enumerate bonds positions use `enumerate_kekule`
+        Only one of possible double/single bonds positions will be set.
+        For enumerate bonds positions use `enumerate_kekule`.
         """
         kekule = next(self.__kekule_full(), None)
         if kekule:
-            self._kekule_patch(kekule)
+            self.__kekule_patch(kekule)
             self.flush_cache()
             return True
         return False
 
     def enumerate_kekule(self):
         """
-        enumerate all possible kekule forms of molecule
+        Enumerate all possible kekule forms of molecule.
         """
         for form in self.__kekule_full():
             copy = self.copy()
-            copy._kekule_patch(form)
+            copy._Aromatize__kekule_patch(form)
             yield copy
 
     def check_thiele(self, fast=True) -> bool:
         """
-        check basic aromaticity errors of molecule.
+        Check basic aromaticity errors of molecule.
 
         :param fast: don't try to solve kekule form
         """
@@ -232,7 +234,7 @@ class Aromatize:
                 raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se, Te possible, not: {atoms[n].atomic_symbol}')
         return rings, pyroles, double_bonded
 
-    def _kekule_patch(self, patch):
+    def __kekule_patch(self, patch):
         bonds = self._bonds
         atoms = set()
         for n, m, b in patch:

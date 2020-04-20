@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_args_method, cached_property, class_cached_property
+from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
@@ -26,19 +26,18 @@ from ..algorithms.aromatics import Aromatize
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
+from ..algorithms.pharmacophore import Pharmacophore
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
-from ..algorithms.tautomers import Tautomers
 from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, Tautomers, X3domMolecule):
+                        DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
     __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
-    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -49,6 +48,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
+        """
+        Add new atom.
+        """
         if not isinstance(atom, Element):
             if isinstance(atom, str):
                 atom = Element.from_symbol(atom)()
@@ -79,6 +81,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return _map
 
     def add_bond(self, n, m, bond: Union[Bond, int]):
+        """
+        Connect atoms with bonds.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         if not isinstance(bond, Bond):
             bond = Bond(bond)
 
@@ -98,6 +107,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_atom(self, n):
+        """
+        Remove atom.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         old_bonds = self._bonds[n]  # save bonds
         isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
@@ -119,6 +135,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_bond(self, n, m):
+        """
+        Disconnect atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
@@ -186,7 +209,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
                                                                                 'query.QueryContainer']:
         """
-        create substructure containing atoms from atoms list
+        Create substructure containing atoms from atoms list.
+
+        For Thiele forms of molecule In Molecule substructure causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
@@ -265,7 +292,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
-        compose 2 graphs to CGR
+        Compose 2 graphs to CGR.
         """
         sa = self._atoms
         sc = self._charges
@@ -400,7 +427,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def implicify_hydrogens(self) -> int:
         """
-        remove explicit hydrogen if possible
+        Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
         :return: number of removed hydrogens
         """
@@ -440,7 +467,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def explicify_hydrogens(self) -> int:
         """
-        add explicit hydrogens to atoms
+        Add explicit hydrogens to atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :return: number of added atoms
         """
@@ -456,9 +487,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def check_valence(self) -> List[int]:
         """
-        check valences of all atoms
+        Check valences of all atoms.
 
-        works only on molecules with aromatic rings in Kekule form
+        Works only on molecules with aromatic rings in Kekule form.
         :return: list of invalid atoms
         """
         atoms = self._atoms
@@ -493,13 +524,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_property
     def molecular_charge(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return sum(self._charges.values())
 
     def __int__(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return self.molecular_charge
 
@@ -513,9 +544,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
         """
-        number of explicit hydrogen atoms connected to atom.
+        Number of explicit hydrogen atoms connected to atom.
 
-        take into account any type of bonds with hydrogen atoms.
+        Take into account any type of bonds with hydrogen atoms.
         """
         atoms = self._atoms
         return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
@@ -572,18 +603,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     hybridization = 2
         self._hybridizations[n] = hybridization
         return hybridization
-
-    @class_cached_property
-    def _standardize_compiled_rules(self):
-        rules = []
-        for atoms, bonds, atom_fix, bonds_fix in self._standardize_rules():
-            q = query.QueryContainer()
-            for a in atoms:
-                q.add_atom(**a)
-            for n, m, b in bonds:
-                q.add_bond(n, m, b)
-            rules.append((q, atom_fix, bonds_fix))
-        return rules
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
