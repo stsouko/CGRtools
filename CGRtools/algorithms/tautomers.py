@@ -44,7 +44,16 @@ class Tautomers:
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
         yield self
+        seen = {self}
+        queue = [self]
+        while queue:
+            for mol in queue.pop(0)._enumerate_tautomers():
+                if mol not in seen:
+                    yield mol
+                    seen.add(mol)
+                    queue.append(mol)
 
+    def _enumerate_tautomers(self):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
@@ -104,45 +113,30 @@ class Tautomers:
 
     def __enumerate_bonds(self):
         bonds = self._bonds
-        entries = self.__entries()
-        for atom, atom_type in entries:
+        for atom, atom_type in self.__entries():
             path = [atom]
             new_bonds = []
             stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order < 3]
 
             while stack:
                 current, bond, depth = stack.pop()
-                # time to exit
-                if (current, atom_type) in entries:
-                    continue
 
-                # branch processing
                 if len(path) > depth:
                     path = path[:depth]
                     new_bonds = new_bonds[:depth - 1]
 
-                # adding new bonds
                 if bond == 1:
                     new_bonds.append((path[-1], current, 2))
-                elif bond == 2:
+                else:
                     new_bonds.append((path[-1], current, 1))
                 path.append(current)
 
-                # adding new neighbors
                 depth += 1
                 nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
                 stack.extend(nbg)
 
-                # time or not to yield new_bonds
                 if len(path) % 2:
                     yield new_bonds
-                    # time to go back
-                    if not nbg:
-                        entries.append((current, atom_type))
-                else:
-                    # time to go back
-                    if not nbg and len(path) > 2:
-                        entries.append((path[-2], atom_type))
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
