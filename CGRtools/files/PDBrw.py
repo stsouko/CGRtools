@@ -25,10 +25,13 @@ from .XYZrw import XYZ
 from ..containers import MoleculeContainer
 
 
-res_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG',
-             'SER', 'THR', 'VAL', 'TRP', 'TYR',  # Amino acids
-             'DA', 'DC', 'DG', 'DT', 'DI',  # Deoxyribonucleotides
-             'A', 'C', 'G', 'U', 'I'}  # Ribonucleotides
+one_symbol_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG',
+                    'SER', 'THR', 'VAL', 'TRP', 'TYR',  # Amino acids
+                    'ASH',  # H-asparagine
+                    'DA', 'DC', 'DG', 'DT', 'DI',  # Deoxyribonucleotides
+                    'A', 'C', 'G', 'U', 'I',  # Ribonucleotides
+                    'IOD', 'K'}  # Elements
+two_symbol_names = {'CL', 'BR', 'NA', 'CA', 'MG', 'CO', 'MN', 'FE', 'CU', 'ZN'}
 
 
 class PDBRead(XYZ):
@@ -39,9 +42,12 @@ class PDBRead(XYZ):
     Supported multiple structures in same file separated by ENDMDL. Supported only ATOM and HETATM parsing.
     END or ENDMDL required in the end.
     """
-    def __init__(self, file, ignore=False, **kwargs):
+    def __init__(self, file, ignore=False, element_name_priority=False, parse_as_single=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
+        :param element_name_priority: For ligands use element symbol column value and ignore atom name column.
+        :param parse_as_single: Usable if all models in file is the same structure. 2d graph will be restored from first
+            model. Other models will be returned as conformers.
         """
         if isinstance(file, str):
             self.__file = open(file)
@@ -56,6 +62,9 @@ class PDBRead(XYZ):
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
         self.__ignore = ignore
+        self.__element_name_priority = element_name_priority
+        self.__parse_as_single = parse_as_single
+        self.__parsed_first = None
         self._data = self.__reader()
 
     def close(self, force=False):
@@ -88,6 +97,8 @@ class PDBRead(XYZ):
         return next(iter(self))
 
     def __reader(self):
+        element_name_priority = self.__element_name_priority
+        ignore = self.__ignore
         failkey = False
         atoms = []
         for n, line in enumerate(self.__file):
@@ -135,8 +146,10 @@ class PDBRead(XYZ):
                 element = line[76:78].strip()
                 residue = line[17:20].strip()
                 atom_name = line[12:16].strip(' 0123456789')
-                if residue in res_names:  # bio-polymers
+                if residue in one_symbol_names:  # bio-polymers and I
                     atom_name = atom_name[0]
+                elif residue in two_symbol_names:
+                    atom_name = atom_name[:2].capitalize()
                 elif residue == 'MSE':
                     if atom_name.startswith('SE'):
                         atom_name = 'Se'
@@ -147,12 +160,15 @@ class PDBRead(XYZ):
                         atom_name = 'Br'
                     else:
                         atom_name = atom_name[0]
-                else:  # ligands
+                # ligands    
+                elif element_name_priority:
+                    atom_name = element
+                else:
                     atom_name = atom_name.capitalize()
 
                 if atom_name != element:
-                    warning('Atom name and Element symbol not equal')
-                    if not self.__ignore:
+                    warning(f'Atom name and Element symbol not equal: {line[:-1]}')
+                    if not ignore:
                         failkey = True
                         atoms = []
                         yield None
@@ -160,7 +176,11 @@ class PDBRead(XYZ):
                 atoms.append((atom_name, charge, x, y, z, residue))
             elif line.startswith('END'):  # EOF or end of complex
                 if atoms:  # convert collected atoms
-                    yield self._convert_structure(atoms)
+                    try:
+                        yield self._convert_structure(atoms)
+                    except ValueError:
+                        warning(f'Structure consist errors:\n{format_exc()}')
+                        yield None
                     atoms = []
                 else:
                     warning(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
@@ -170,9 +190,21 @@ class PDBRead(XYZ):
             yield None
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float, str]]):
-        mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
-        mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}
-        return mol
+        if self.__parsed_first is None:
+            mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
+            mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}
+            if self.__parse_as_single:
+                self.__parsed_first = [(n, a.atomic_symbol) for n, a in mol.atoms()]
+            return mol
+        else:
+            if len(self.__parsed_first) != len(matrix):
+                raise ValueError('models not equal')
+            c = {}
+            for (n, a), (e, _, x, y, z, _) in zip(self.__parsed_first, matrix):
+                if a != e:
+                    raise ValueError('models or atom order not equal')
+                c[n] = (x, y, z)
+            return c
 
 
 __all__ = ['PDBRead']

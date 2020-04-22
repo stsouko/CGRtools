@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,13 +16,13 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, class_cached_property
+from CachedMethods import cached_method
 from collections.abc import Iterable
-from itertools import chain
 from functools import reduce
 from hashlib import sha512
+from itertools import chain
 from operator import or_
-from typing import Tuple, Dict, Iterable as TIterable, Optional, Iterator
+from typing import Dict, Iterable as TIterable, Iterator, Optional, Tuple
 from .cgr import CGRContainer
 from .common import Graph
 from .molecule import MoleculeContainer
@@ -40,7 +40,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     query containers itself not support hashing and comparison.
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
-    __class_cache__ = {}
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
                  reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
@@ -391,9 +390,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     @cached_method
     def __str__(self):
-        """
-        SMIRKS of reaction. query and CGR containers in reaction {surrounded by curly braces}
-        """
         sig = []
         for ml in (self.__reactants, self.__reagents, self.__products):
             sig.append(self.__get_smiles(ml) if ml else '')
@@ -430,23 +426,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         self.__dict__.clear()
         for m in self.molecules():
             m.flush_cache()
-
-    @class_cached_property
-    def _standardize_compiled_rules(self):
-        rules = []
-        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self._standardize_rules():
-            r_q = QueryContainer()
-            p_q = QueryContainer()
-            for a in r_atoms:
-                r_q.add_atom(**a)
-            for n, m, b in r_bonds:
-                r_q.add_bond(n, m, b)
-            for a in p_atoms:
-                p_q.add_atom(**a)
-            for n, m, b in p_bonds:
-                p_q.add_bond(n, m, b)
-            rules.append((r_q, p_q, fix))
-        return rules
 
 
 __all__ = ['ReactionContainer']

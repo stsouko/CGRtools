@@ -50,15 +50,16 @@ class Smiles:
 
     def __format__(self, format_spec):
         """
-        signature generation options
+        Signature generation options.
 
-        :param format_spec: string with keys:
-            a - generate asymmetric closures
-            !s - disable stereo marks
-            !h - disable hybridization marks in queries
-            !n - disable neighbors marks in queries
+        :param format_spec: String with keys:
+            a - Generate asymmetric closures.
+            !s - Disable stereo marks.
+            !h - Disable hybridization marks in queries. Returns non-unique signature.
+            !n - Disable neighbors marks in queries. Returns non-unique signature.
+            !r - Use aromatic bonds instead aromatic atoms.
 
-            combining possible. order independent. another key ignored
+            Combining possible. Order independent. Another keys ignored.
         """
         if format_spec:
             kwargs = {}
