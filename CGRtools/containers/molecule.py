@@ -631,6 +631,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
             state['meta'] = state['_BaseContainer__meta']
             state['parsed_mapping'] = {}
         elif 'node' in state:  # 3.1 compatibility.
@@ -651,6 +653,12 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
+        elif 'allenes_stereo' not in state:  # <4.0.19
+            state['atoms_stereo'] = {}  # flush existing stereo if exists.
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
 
         super().__setstate__(state)
         self._conformers = state['conformers']
