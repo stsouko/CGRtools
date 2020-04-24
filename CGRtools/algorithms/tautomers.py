@@ -113,30 +113,45 @@ class Tautomers:
 
     def __enumerate_bonds(self):
         bonds = self._bonds
+        hydrogens = self._hydrogens
+
+        # for each atom in entries
         for atom, atom_type in self.__entries():
             path = [atom]
             new_bonds = []
+
+            # stack is neighbors
             stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order < 3]
 
             while stack:
                 current, bond, depth = stack.pop()
 
+                # branch processing
                 if len(path) > depth:
                     path = path[:depth]
                     new_bonds = new_bonds[:depth - 1]
 
+                # adding new bonds
                 if bond == 1:
                     new_bonds.append((path[-1], current, 2))
                 else:
                     new_bonds.append((path[-1], current, 1))
                 path.append(current)
 
+                # adding neighbors
                 depth += 1
                 nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
                 stack.extend(nbg)
 
+                # time to yield
                 if len(path) % 2:
-                    yield new_bonds
+                    if atom_type:  # enol
+                        yield new_bonds
+                    else:  # ketone
+                        if hydrogens[current]:
+                            yield new_bonds
+
+
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
