@@ -17,7 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from collections import defaultdict
+from collections import defaultdict, deque
+from itertools import chain
 from logging import info
 from typing import Dict, Optional, Set, Tuple, Union
 from ..exceptions import AtomNotFound, IsChiral, NotChiral
@@ -469,7 +470,7 @@ class MoleculeStereo(Stereo):
         return self.__chiral_centers[2]
 
     @cached_property
-    def _chiral_axises(self) -> Tuple[Tuple[int, ...], ...]:
+    def _stereo_axises(self) -> Tuple[Tuple[int, ...], ...]:
         """
         Get all stereogenic axises in rings with attached cumulenes. Stereogenic axises has only stereogenic atoms.
         """
@@ -477,30 +478,91 @@ class MoleculeStereo(Stereo):
         bonds = self._bonds
         stereo_tetrahedrons = self._stereo_tetrahedrons
         cumulenes_terminals = {}
-        for path in self._stereo_cumulenes:
-            cumulenes_terminals[path[0]] = cumulenes_terminals[path[-1]] = path
+        for n, *_, m in self._stereo_cumulenes:
+            cumulenes_terminals[n] = m
+            cumulenes_terminals[m] = n
 
         out = []
-        seen = set()
+        axises = set()
         for c in self.connected_rings_cumulenes:
-            axises = []
-            for m in self._get_automorphism_mapping({n: morgan[n] for n in c},
-                                                    {n: {m: b for m, b in bonds[n].items() if m in c} for n in c}):
+            adj = {n: {m: b.order for m, b in bonds[n].items() if m in c} for n in c}
+            for mapping in self._get_automorphism_mapping({n: morgan[n] for n in c}, adj):
+                sym = {k for k, v in mapping.items() if k != v}
+                if not sym:
+                    continue
                 # get self-matched atoms connected with automorphic atoms
-                sym = {k for k, v in m.items() if k != v}
-                ax = {k for k in m.keys() - sym if not sym.isdisjoint(bonds[k]) and
-                      (k in stereo_tetrahedrons or k in cumulenes_terminals)}
+                ax = {k for k in mapping.keys() - sym if not sym.isdisjoint(bonds[k])}
                 # add terminal stereogenic cumulenes
-                for k in list(ax):
-                    if k in cumulenes_terminals:
-                        ax.update(cumulenes_terminals[k])
-                if len(ax) > 1:
-                    axises.append(ax)
-            # get longest axises
-            for ax in sorted(axises, reverse=True, key=len):
-                if seen.isdisjoint(ax):
-                    out.append(tuple(ax))
-                    seen.update(ax)
+                c = 0
+                tmp = set()
+                for n in ax:
+                    if n in stereo_tetrahedrons:
+                        c += 1
+                        tmp.add(n)
+                    elif n in cumulenes_terminals:
+                        tmp.add(n)
+                        m = cumulenes_terminals[n]
+                        if m not in ax:
+                            tmp.add(m)
+                            c += 1
+                if c < 2:
+                    continue
+                tmp = frozenset(tmp)
+                if tmp in axises:
+                    continue
+                axises.add(tmp)
+                if len(tmp) > 2:  # get order of atoms
+                    start = next(iter(tmp))
+                    # prepare distances
+                    dist = {start: 0}
+                    queue = deque([(start, 1)])
+                    while queue:
+                        n, d = queue.popleft()
+                        d1 = d + 1
+                        for m in adj[n].keys() - dist.keys():
+                            queue.append((m, d1))
+                            dist[m] = d
+                    # get paths
+                    seen = {start}
+                    path = None
+                    cut = {start}
+                    stack = deque()
+                    for n in adj[start]:
+                        if mapping[n] not in cut:
+                            stack.append((n, 0))
+                            cut.add(n)
+                    full_path = None
+                    while stack:
+                        n, d = stack.pop()
+                        if not d:  # lets start
+                            if path:
+                                full_path = path[::-1]
+                            path = [start]
+                            d = 1
+                        elif dist[n] != d:
+                            continue
+                        elif len(path) > d:
+                            path = path[:d]
+                        path.append(n)
+                        if n in tmp:
+                            seen.add(n)
+                            if seen == tmp:
+                                break
+                        d += 1
+                        for m in adj[n]:
+                            if m in cut:
+                                if m not in path:
+                                    stack.append((m, d))
+                            elif mapping[m] not in cut:
+                                cut.add(m)
+                                if m not in path:
+                                    stack.append((m, d))
+
+                    if full_path:
+                        path = full_path + path[1:]
+                    out.append(tuple(n for n in path if n in tmp))
+                else:
+                    out.append(tuple(tmp))
         return tuple(out)
 
     @cached_property
