@@ -470,7 +470,7 @@ class MoleculeStereo(Stereo):
         return self.__chiral_centers[2]
 
     @cached_property
-    def _stereo_axises(self) -> Tuple[Tuple[int, ...], ...]:
+    def _stereo_axises(self) -> Tuple[Tuple[Tuple[int, ...], ...], Tuple[Tuple[int, ...], ...]]:
         """
         Get all stereogenic axises in rings with attached cumulenes. Stereogenic axises has only stereogenic atoms.
         """
@@ -483,8 +483,11 @@ class MoleculeStereo(Stereo):
             cumulenes_terminals[m] = n
 
         out = []
+        env = []
         axises = set()
         for c in self.connected_rings_cumulenes:
+            out_c = []
+            env_c = []
             adj = {n: {m: b.order for m, b in bonds[n].items() if m in c} for n in c}
             for mapping in self._get_automorphism_mapping({n: morgan[n] for n in c}, adj):
                 sym = {k for k, v in mapping.items() if k != v}
@@ -507,12 +510,12 @@ class MoleculeStereo(Stereo):
                             c += 1
                 if c < 2:
                     continue
-                tmp = frozenset(tmp)
-                if tmp in axises:
+                ax = frozenset(tmp)
+                if ax in axises:
                     continue
-                axises.add(tmp)
-                if len(tmp) > 2:  # get order of atoms
-                    start = next(iter(tmp))
+                axises.add(ax)
+                if len(ax) > 2:  # get order of atoms
+                    start = next(iter(ax))
                     # prepare distances
                     dist = {start: 0}
                     queue = deque([(start, 1)])
@@ -544,9 +547,9 @@ class MoleculeStereo(Stereo):
                         elif len(path) > d:
                             path = path[:d]
                         path.append(n)
-                        if n in tmp:
+                        if n in ax:
                             seen.add(n)
-                            if seen == tmp:
+                            if seen == ax:
                                 break
                         d += 1
                         for m in adj[n]:
@@ -560,10 +563,48 @@ class MoleculeStereo(Stereo):
 
                     if full_path:
                         path = full_path + path[1:]
-                    out.append(tuple(n for n in path if n in tmp))
+                    ax = tuple(n for n in path if n in ax)
                 else:
-                    out.append(tuple(tmp))
-        return tuple(out)
+                    ax = tuple(ax)
+                out_c.append(ax)
+                env_c.append(tuple(n for n in sym if n in bonds[ax[0]] or n in bonds[ax[-1]]))
+            for ax, e in sorted(zip(out_c, env_c), key=lambda x: len(x[0]), reverse=True):
+                out.append(ax)
+                env.append(e)
+        return tuple(out), tuple(env)
+
+    @cached_property
+    def __stereo_axises(self):
+        bonds = self._bonds
+        tetrahedrons = self._stereo_tetrahedrons
+        cumulenes = self._stereo_cumulenes
+
+        cumulenes_terminals = {}
+        for path in cumulenes:
+            cumulenes_terminals[path[0]] = cumulenes_terminals[path[-1]] = path
+        axises = []
+        for ax, env in zip(*self._stereo_axises):
+            ax_t, ax_a, ax_c = set(), set(), set()
+            checks = {}
+            axises.append((ax_t, ax_a, ax_c, checks))
+            for n in ax:
+                if n in tetrahedrons:
+                    ax_t.add(n)
+                else:
+                    path = cumulenes_terminals[n]
+                    if len(path) % 2:
+                        ax_a.add(path)
+                    else:
+                        ax_c.add(path)
+            for n in (ax[0], ax[-1]):
+                if n in tetrahedrons:
+                    ngb = tuple(m for m in tetrahedrons[n] if m not in env)
+                else:
+                    path = cumulenes_terminals[n]
+                    ngb = tuple(m for m in bonds[n] if m not in path)
+                if len(ngb) == 2:  # only this atoms should be checked
+                    checks[n] = ngb
+        return axises
 
     @cached_property
     def __chiral_centers(self):
@@ -574,12 +615,13 @@ class MoleculeStereo(Stereo):
         morgan = self.atoms_order
         tetrahedrons = self._stereo_tetrahedrons.copy()
         cumulenes = self._stereo_cumulenes.copy()
-        axises = self._chiral_axises
+        axises = self.__stereo_axises
 
         morgan_update = {}
         while True:
-            # tetrahedron is chiral if all its neighbors are unique or this atom in symmetric ring.
+            # tetrahedron is chiral if all its neighbors are unique.
             chiral_t = {n for n, env in tetrahedrons.items() if len({morgan[x] for x in env}) == len(env)}
+            # double bond is chiral if neighbors of each terminal atom is unique.
             chiral_c = set()
             chiral_a = set()
             for path, (n1, m1, n2, m2) in cumulenes.items():
@@ -588,6 +630,16 @@ class MoleculeStereo(Stereo):
                         chiral_a.add(path)
                     else:
                         chiral_c.add(path)
+            # axis with 2 terminal chiral atoms is chiral
+            for ax in axises:
+                ax_t, ax_a, ax_c, check = ax
+                if not chiral_t.isdisjoint(ax_t) or not ax_a.isdisjoint(chiral_a) or not ax_c.isdisjoint(chiral_c):
+                    continue  # self chiral centers can't be in axises
+                elif check and any(morgan[n] == morgan[m] for n, m in check.values()):  # need additional check
+                    continue  # not chiral
+                chiral_t.update(ax_t)
+                chiral_a.update(ax_a)
+                chiral_c.update(ax_c)
 
             # separate equal constitutionally but unique by stereo type chiral centers
             # need for searching depended chiral centers
@@ -602,7 +654,7 @@ class MoleculeStereo(Stereo):
                              if self._translate_tetrahedron_sign(n, sorted(tetrahedrons[n], key=morgan.get))]
                         if 0 < len(s) < len(group):  # RS pair required
                             for n in s:
-                                morgan_update[n] = hash((1, morgan[n]))
+                                morgan_update[n] = -morgan[n]
                     for n in group:  # remove seen stereo atoms
                         del tetrahedrons[n]
                         chiral_t.discard(n)
@@ -633,7 +685,7 @@ class MoleculeStereo(Stereo):
                                 s.append(n)
                         if 0 < len(s) < len(group):  # RS pair required
                             for n in s:
-                                morgan_update[n] = hash((1, morgan[n]))
+                                morgan_update[n] = -morgan[n]
                     for *_, path in group:  # remove seen stereo atoms
                         del cumulenes[path]
                         chiral_c.discard(path)
@@ -663,6 +715,15 @@ class MoleculeStereo(Stereo):
                     for *_, path in group:  # remove seen stereo atoms
                         del cumulenes[path]
                         chiral_a.discard(path)
+
+            tmp = []
+            for ax in axises:
+                ax_t, ax_a, ax_c, check = ax
+                # remove fully labeled axises
+                if not ax_t.isdisjoint(tetrahedrons) or ax_a and not ax_a.isdisjoint(cumulenes) or \
+                        ax_c and not ax_c.isdisjoint(cumulenes):
+                    tmp.append(ax)
+            axises = tmp
 
             if morgan_update:
                 morgan = self._morgan({**morgan, **morgan_update})
