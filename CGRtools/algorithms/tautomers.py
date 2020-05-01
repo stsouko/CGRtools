@@ -116,12 +116,15 @@ class Tautomers:
         hydrogens = self._hydrogens
 
         # for each atom in entries
-        for atom, atom_type in self.__entries():
+        for atom, hydrogen in self.__entries():
             path = [atom]
             new_bonds = []
 
             # stack is neighbors
-            stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order < 3]
+            if hydrogen:  # enol
+                stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 1]
+            elif not hydrogen:  # ketone
+                stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 2]
 
             while stack:
                 current, bond, depth = stack.pop()
@@ -145,11 +148,10 @@ class Tautomers:
 
                 # time to yield
                 if len(path) % 2:
-                    if atom_type:  # enol
+                    if hydrogen:  # enol
                         yield new_bonds
-                    else:  # ketone
-                        if hydrogens[current]:
-                            yield new_bonds
+                    elif hydrogens[current]:  # ketone
+                        yield new_bonds
 
 
 
