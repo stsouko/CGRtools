@@ -71,10 +71,10 @@ class Depict:
         if embedding:
             return atoms, bonds, masks, min_x, min_y, max_x, max_y
 
-        font = config['font']
-        font125 = 1.25 * font
-        width = max_x - min_x + 3.0 * font
-        height = max_y - min_y + 2.5 * font
+        font_size = config['font_size']
+        font125 = 1.25 * font_size
+        width = max_x - min_x + 3.0 * font_size
+        height = max_y - min_y + 2.5 * font_size
         viewbox_x = min_x - font125
         viewbox_y = -max_y - font125
 
@@ -87,9 +87,10 @@ class Depict:
                 uid = str(uuid4())
                 svg.append(f'  <defs>\n    <mask id="mask-{uid}">\n'
                            f'      <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
-                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
-                svg.extend(masks)
-                svg.append(f'      </g>\n    </mask>\n  </defs>\n  <g fill="none" stroke="{config["bond_color"]}" '
+                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
+                svg.extend(self._masks_svg(masks))
+                svg.append('    </mask>\n  </defs>\n'
+                           f'  <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
                 if len(bonds) == 1:  # SVG BUG adhoc
                     svg.append(f'    <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
@@ -109,42 +110,107 @@ class Depict:
         return '\n'.join(svg)
 
     @classmethod
-    def depict_settings(cls, *, carbon=False, bond_color='black', font=.25, mapping=True, mapping_color='#788CFF',
-                        bond_width=.03, query_color='#5D8AA8', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.08,
-                        triple_space=.07, double_space=.04, broken_color='red', formed_color='green',
-                        cgr_aromatic_space=.14, aromatic_dashes=(.05, .05), atom_radius=-.2, mapping_font=.22):
+    def _masks_svg(cls, masks):
+        config = cls._render_config
+
+        font_size = config['font_size']
+        other_size = config['other_size']
+        mapping_size = config['mapping_size']
+        other_font_style = config['other_font_style']
+        symbols_font_style = config['symbols_font_style']
+
+        svg = []
+        stroke_width_s = font_size * .1
+        stroke_width_o = other_size * .1
+        stroke_width_m = mapping_size * .1
+
+        if 'center' in masks:
+            svg.append('      <g fill="black">')
+            svg.extend(masks['center'])
+            svg.append('      </g>')
+
+        svg.append(f'      <g font-family="monospace" stroke="black">')
+        if 'symbols' in masks:
+            svg.append(f'        <g font-family="{symbols_font_style}" font-size="{font_size:.2f}" '
+                       f'stroke-width="{stroke_width_s:.2f}">')
+            svg.extend(masks['symbols'])
+            svg.append('        </g>')
+        if 'aam' in masks:
+            svg.append(f'        <g font-size="{mapping_size:.2f}" stroke-width="{stroke_width_m:.2f}">')
+            svg.extend(masks['aam'])
+            svg.append('        </g>')
+        if 'other' in masks:
+            svg.append(f'        <g font-family="{other_font_style}" font-size="{other_size}" '
+                       f'stroke-width="{stroke_width_o:.2f}">')
+            svg.extend(masks['other'])
+            svg.append('        </g>')
+        if 'span' in masks:
+            svg.append(f'        <g font-family="{symbols_font_style}" font-size="{font_size:.2f}" '
+                       f'stroke-width="{stroke_width_o:.2f}">')
+            svg.extend(masks['span'])
+            svg.append('        </g>')
+        svg.append('      </g>')
+
+        return svg
+
+    @classmethod
+    def depict_settings(cls, *, carbon=False, bond_color='black', font_size=.5, mapping=True, mapping_color='#788CFF',
+                        bond_width=.04, query_color='black', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.14,
+                        triple_space=.13, double_space=.06, broken_color='red', formed_color='green', monochrome=False,
+                        aromatic_dashes=(.15, .05), atom_radius=.2, mapping_size=.22, symbols_font_style='sans-serif',
+                        other_size=.6 * .5, dx_m=.1 * .5, dy_m=.4 * .5, span_dy=.3 * .5, span_size=.7 * .5,
+                        dx_ci=.1 * .5, dy_ci=.4 * .5, cgr_aromatic_space=.18, other_font_style='monospace',
+                        other_color='black', dx_nh=.15 * .5, dy_nh=.4 * .5):
         """
         Settings for depict of chemical structures
 
-        carbon: bool: if True depict atom C
-        bond_color: str: color of bonds
-        font: float: font size
-        mapping: bool: if True depict mapping
-        mapping_color: str: mapping color
-        mapping_font: float: mapping font size
+        carbon: bool: if True, depict atom C
+        font_size: float: font size
+        mapping_size: float: mapping font size
+        other_size: float: isotope, radical, charges, neighbors and hybridization symbols size
         bond_width: float: bond width
+        bond_color: str: color of bonds
+        mapping_color: str: mapping color
         query_color: str: hybridization and neighbors color
         atoms_colors: dict: atom colors where key is atomic number - 1, value is atom color (str)
+        broken_color: str: only CGRContainer: color of broken bond
+        formed_color: str: only CGRContainer: color of formed bond
+        symbols_font_style: str : font style for atom symbols
+        other_font_style: str: font style for mapping, charges, radicals, isotopes, hybridization and neighbors
+        mapping: bool: if True, depict mapping
+        monochrome: bool: if True, colors of items in molecule not used
         dashes: tuple: two values: one is long of visible line, other is long of invisible line
         aromatic_space: float: space between simple and aromatic bonds
         triple_space: float: space between simple and triple bonds
         double_space: float: space between simple and double bonds
-        broken_color: str: only CGRContainer: color of broken bond
-        formed_color: str: only CGRContainer: color of formed bond
         cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
         aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is
                                                                long of invisible line
         atom_radius: float: radius of atoms spheres in depict3d. if negative is multiplier to covalent radii
+        dx_m, dx_nh, dx_ci, dy_ci, dy_m, dy_nh, span_dy: float: offset relative to the center of the atom symbol
+            dx_ci: x-axis: for radical, charges, isotope
+            dy_ci: y-axis: for radical, charges, isotope
+            dx_m: x-axis: for mapping
+            dy_m: y-axis: for mapping
+            dx_nh: x-axis: for neighbors and hybridization
+            dy_nh: y-axis: for neighbors and hybridization
         """
 
         config = cls._render_config
-        config['font'] = font
         config['carbon'] = carbon
         config['dashes'] = dashes
+        config['span_dy'] = span_dy
         config['mapping'] = mapping
+        config['font_size'] = font_size
+        config['span_size'] = span_size
+        config['other_size'] = other_size
+        config['monochrome'] = monochrome
         config['bond_color'] = bond_color
         config['bond_width'] = bond_width
         config['query_color'] = query_color
+        config['other_color'] = other_color
+        config['atom_radius'] = -atom_radius
+        config['mapping_size'] = mapping_size
         config['atoms_colors'] = atoms_colors
         config['triple_space'] = triple_space
         config['double_space'] = double_space
@@ -152,20 +218,26 @@ class Depict:
         config['formed_color'] = formed_color
         config['mapping_color'] = mapping_color
         config['aromatic_space'] = aromatic_space
-        config['cgr_aromatic_space'] = cgr_aromatic_space
         config['aromatic_dashes'] = aromatic_dashes
-        config['atom_radius'] = atom_radius
-        config['mapping_font'] = mapping_font
+        config['dx_m'], config['dy_m'] = dx_m, dy_m
+        config['other_font_style'] = other_font_style
+        config['dx_ci'], config['dy_ci'] = dx_ci, dy_ci
+        config['dx_nh'], config['dy_nh'] = dx_nh, dy_nh
+        config['cgr_aromatic_space'] = cgr_aromatic_space
+        config['symbols_font_style'] = symbols_font_style
 
     @cached_method
     def _repr_svg_(self):
         return self.depict()
 
-    _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font': .25, 'dashes': (.2, .1),
-                      'aromatic_space': .08, 'triple_space': .07, 'double_space': .04, 'mapping': True,
-                      'mapping_color': '#0305A7', 'bond_width': .03, 'query_color': '#5D8AA8', 'broken_color': 'red',
-                      'formed_color': 'green', 'cgr_aromatic_space': .14, 'aromatic_dashes': (.05, .05),
-                      'atom_radius': -.2, 'mapping_font': .22}
+    _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font_size': .5, 'dashes': (.2, .1),
+                      'aromatic_space': .14, 'triple_space': .13, 'double_space': .06, 'mapping': True, 'dx_m': .1 * .5,
+                      'mapping_color': '#0305A7', 'bond_width': .04, 'query_color': '#5D8AA8', 'broken_color': 'red',
+                      'formed_color': 'green', 'aromatic_dashes': (.15, .05), 'atom_radius': -.2, 'monochrome': False,
+                      'mapping_size': .5 * .5, 'symbols_font_style': 'sans-serif', 'other_size': .6 * .5,
+                      'dy_m': .4 * .5, 'span_dy': .3 * .5, 'span_size': .7 * .5, 'dx_ci': .1 * .5, 'dy_ci': .4 * .5,
+                      'cgr_aromatic_space': .18, 'dx_nh': .15 * .5, 'dy_nh': .3 * .5, 'other_font_style': 'monospace',
+                      'other_color': 'black'}
 
 
 class DepictMolecule(Depict):
@@ -251,30 +323,41 @@ class DepictMolecule(Depict):
     def _render_atoms(self):
         bonds = self._bonds
         plane = self._plane
-        hydrogens = self._hydrogens
         charges = self._charges
         radicals = self._radicals
+        hydrogens = self._hydrogens
         config = self._render_config
 
-        mapping = config['mapping']
         carbon = config['carbon']
+        mapping = config['mapping']
+        span_size = config['span_size']
+        font_size = config['font_size']
+        other_size = config['other_size']
         atoms_colors = config['atoms_colors']
-        font = config['font']
-        mapping_font = config['mapping_font']
-        font2 = .2 * font
-        font3 = .3 * font
-        font5 = .5 * font
-        font6 = .6 * font
-        font8 = .8 * font
-        m_font3 = .3 * mapping_font
-        m_font5 = .5 * mapping_font
+        mapping_font = config['mapping_size']
+        dx_m, dy_m = config['dx_m'], config['dy_m']
+        dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
+        symbols_font_style = config['symbols_font_style']
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
+        if config['monochrome']:
+            map_fill = other_fill = symbol_fill = 'black'
+        else:
+            symbol_fill = None
+            map_fill = config['mapping_color']
+            other_fill = config['other_color']
+
         svg = []
         maps = []
-        mask = []
+        others = []
+        font2 = .2 * font_size
+        font3 = .3 * font_size
+        font4 = .4 * font_size
+        font5 = .5 * font_size
+        font7 = .7 * font_size
+        mask = defaultdict(list)
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
@@ -284,36 +367,68 @@ class DepictMolecule(Depict):
                 h = hydrogens[n]
                 if h == 1:
                     h = 'H'
+                    span = ''
                 elif h:
-                    h = f'H<tspan  dy="{font5:.2f}" font-size="{font8:.2f}">{h}</tspan>'
+                    span = f'<tspan  dy="{config["span_dy"]:.2f}" font-size="{span_size:.2f}">{h}</tspan>'
+                    h = 'H'
                 else:
                     h = ''
+                    span = ''
 
-                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
-                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font3:.2f}" '
-                           f'font-size="{font:.2f}">{symbol}{h}</text>')
                 if charges[n]:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{"↑" if radicals[n] else ""}'
-                               f'</text>')
+                    t = f'{_render_charge[charges[n]]}{"↑" if radicals[n] else ""}'
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">{t}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}</text>')
                 elif radicals[n]:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">↑</text>')
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">↑</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'↑</text>')
                 if atom.isotope:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="-{font2:.2f}" '
-                               f'font-size="{font6:.2f}" text-anchor="end">{atom.isotope}</text>')
-                svg.append('    </g>')
-                mask.append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
-            if mapping:
-                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font8:.2f}" '
-                            f'text-anchor="end">{n}</text>')
-                dx, dy = x - font5, y + font5
-                for _ in range(len(str(n))):
-                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
-                    dx -= m_font5
+                    t = atom.isotope
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'text-anchor="end">{t}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                         f'text-anchor="end">{t}</text>')
 
+                if symbol_fill != 'black':
+                    symbol_fill = atoms_colors[atom.atomic_number - 1]
+                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style }">')
+                if len(symbol) > 1:
+                    dx = font7
+                    dx_mm = dx_m + font5
+                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                else:
+                    dx = font4
+                    dx_mm = dx_m + font2
+                    mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
+                           f'font-size="{font_size:.2f}">{symbol}{h}{span}</text>')
+                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                                       f'dy="{font4:.2f}">{symbol}{h}</text>')
+                if span:
+                    mask['span'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
+                                        f'{symbol}{h}{span}</text>')
+                svg.append('    </g>')
+
+                if mapping:
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" dy="{dy_m + font3:.2f}" '
+                                f'text-anchor="end">{n}</text>')
+                    mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
+                                       f'dy="{dy_m + font3:.2f}" text-anchor="end">{n}</text>')
+
+            elif mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
+                            f'text-anchor="end">{n}</text>')
+                mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
+                                   f'text-anchor="end">{n}</text>')
+        if others:
+            svg.append(f'    <g font-family="{config["other_font_style"]}" fill="{other_fill}" '
+                       f'font-size="{other_size:.2f}">')
+            svg.extend(others)
+            svg.append('    </g>')
         if mapping:
-            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{mapping_font:.2f}">')
+            svg.append(f'    <g fill="{map_fill}" font-size="{mapping_font:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
         return svg, mask
@@ -328,14 +443,16 @@ class DepictReaction:
 
         r_atoms = []
         r_bonds = []
-        r_masks = []
+        r_masks = defaultdict(list)
 
         r_max_x = r_max_y = r_min_y = 0
         for m in self.molecules():
+            print(type(m))
             atoms, bonds, masks, min_x, min_y, max_x, max_y = m.depict(embedding=True)
             r_atoms.extend(atoms)
             r_bonds.extend(bonds)
-            r_masks.extend(masks)
+            for k, v in masks.items():
+                r_masks[k].extend(v)
             if max_x > r_max_x:
                 r_max_x = max_x
             if max_y > r_max_y:
@@ -344,10 +461,10 @@ class DepictReaction:
                 r_min_y = min_y
 
         config = Depict._render_config
-        font = config['font']
-        font125 = 1.25 * font
-        width = r_max_x + 3.0 * font
-        height = r_max_y - r_min_y + 2.5 * font
+        font_size = config['font_size']
+        font125 = 1.25 * font_size
+        width = r_max_x + 3.0 * font_size
+        height = r_max_y - r_min_y + 2.5 * font_size
         viewbox_x = -font125
         viewbox_y = -r_max_y - font125
 
@@ -362,9 +479,9 @@ class DepictReaction:
                 uid = str(uuid4())
                 svg.append(f'    <mask id="mask-{uid}">\n'
                            f'      <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
-                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>\n      <g fill="black">')
-                svg.extend(r_masks)
-                svg.append('      </g>\n    </mask>\n  </defs>\n'
+                           f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
+                svg.extend(Depict._masks_svg(r_masks))
+                svg.append('    </mask>\n  </defs>\n'
                            f'  <line x1="{self._arrow[0]:.2f}" y1="0" x2="{self._arrow[1]:.2f}" y2="0" '
                            f'fill="none" stroke="black" stroke-width=".04" marker-end="url(#arrow)"/>\n'
                            f'  <g fill="none" stroke="{config["bond_color"]}" '
@@ -403,16 +520,16 @@ class DepictReaction:
 
 class DepictCGR(Depict):
     def _render_bonds(self):
-        svg = []
         plane = self._plane
         config = self._render_config
 
-        double_space = config['double_space']
-        triple_space = config['triple_space']
-        dash1, dash2 = config['dashes']
         broken = config['broken_color']
         formed = config['formed_color']
+        dash1, dash2 = config['dashes']
+        double_space = config['double_space']
+        triple_space = config['triple_space']
 
+        svg = []
         ar_bond_colors = defaultdict(dict)
         for n, m, bond in self.bonds():
             order, p_order = bond.order, bond.p_order
@@ -645,9 +762,9 @@ class DepictCGR(Depict):
     def __render_aromatic_bond(self, n_x, n_y, m_x, m_y, c_x, c_y, color):
         config = self._render_config
 
-        aromatic_space = config['cgr_aromatic_space']
         dash1, dash2 = config['dashes']
         dash3, dash4 = config['aromatic_dashes']
+        aromatic_space = config['cgr_aromatic_space']
         # n aligned xy
         mn_x, mn_y, cn_x, cn_y = m_x - n_x, m_y - n_y, c_x - n_x, c_y - n_y
 
@@ -680,29 +797,37 @@ class DepictCGR(Depict):
         bonds = self._bonds
         plane = self._plane
         charges = self._charges
-        p_charges = self._p_charges
         radicals = self._radicals
-        p_radicals = self._p_radicals
+        p_charges = self._p_charges
         config = self._render_config
+        p_radicals = self._p_radicals
 
         carbon = config['carbon']
+        font_size = config['font_size']
+        other_size = config['other_size']
         atoms_colors = config['atoms_colors']
-        font = config['font']
-        font2 = .2 * font
-        font3 = .3 * font
-        font5 = .5 * font
-        font6 = .6 * font
+        dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
+        symbols_font_style = config['symbols_font_style']
+        font4 = .4 * font_size
+        font7 = .7 * font_size
+        din_charges = {m[0]: m[1] != n[1] for m, n in zip(charges.items(), p_charges.items())}
+        din_radicals = {m[0]: m[1] != n[1] for m, n in zip(radicals.items(), p_radicals.items())}
+
+        if config['monochrome']:
+            other_fill = symbol_fill = 'black'
+        else:
+            symbol_fill = None
+            other_fill = config['other_color']
 
         svg = []
-        mask = []
+        others = []
+        mask = defaultdict(list)
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
             symbol = atom.atomic_symbol
-            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope:
-                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
-                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="{font3:.2f}" '
-                           f'font-size="{font:.2f}">{symbol}</text>')
+            if not bonds[n] or symbol != 'C' or carbon or atom.charge or atom.is_radical or atom.isotope \
+                    or din_charges[n] or din_radicals[n]:
 
                 if radicals[n]:
                     r = '↑' if p_radicals[n] else '↑↓'
@@ -712,20 +837,50 @@ class DepictCGR(Depict):
                     r = ''
 
                 if charges[n] != p_charges[n]:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{_render_p_charge[charges[n]][p_charges[n]]}{r}</text>')
+                    t = _render_p_charge[charges[n]][p_charges[n]]
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">{t}{r}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}{r}</text>')
                 if charges[n]:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{_render_charge[charges[n]]}{r}</text>')
+                    t = _render_charge[charges[n]]
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">{t}{r}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}{r}</text>')
                 elif r:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font5:.2f}" '
-                               f'font-size="{font6:.2f}">{r}</text>')
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">{r}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{r}</text>')
 
                 if atom.isotope:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{font3:.2f}" dy="-{font2:.2f}" '
-                               f'font-size="{font6:.2f}" text-anchor="end">{atom.isotope}</text>')
+                    t = atom.isotope
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}" text-anchor="end">{t}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}</text>')
+
+                if symbol_fill != 'black':
+                    symbol_fill = atoms_colors[atom.atomic_number - 1]
+                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                if len(symbol) > 1:
+                    dx = font7
+                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                else:
+                    dx = font4
+                    mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
+                           f'font-size="{font_size:.2f}">{symbol}</text>')
+                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                                       f'dy="{font4:.2f}">{symbol}</text>')
                 svg.append('    </g>')
-                mask.append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font5:.2f}"/>')
+
+        if others:
+            svg.append(f'    <g font-family="{config["other_font_style"]}" fill="{other_fill}" '
+                       f'font-size="{other_size:.2f}">')
+            svg.extend(others)
+            svg.append('    </g>')
         return svg, mask
 
 
@@ -737,9 +892,9 @@ class DepictQuery(Depict):
         plane = self._plane
         config = self._render_config
 
+        dash1, dash2 = config['dashes']
         double_space = config['double_space']
         triple_space = config['triple_space']
-        dash1, dash2 = config['dashes']
         dash3, dash4 = config['aromatic_dashes']
         for n, m, bond in self.bonds():
             order = bond.order
@@ -771,80 +926,130 @@ class DepictQuery(Depict):
         plane = self._plane
         config = self._render_config
 
-        mapping = config['mapping']
         carbon = config['carbon']
+        mapping = config['mapping']
+        font_size = config['font_size']
+        other_size = config['other_size']
         atoms_colors = config['atoms_colors']
-        font = config['font']
-        mapping_font = config['mapping_font']
-        font2 = .2 * font
-        font3 = .3 * font
-        font4 = .4 * font
-        font5 = .5 * font
-        font6 = .6 * font
-        font7 = .7 * font
-        font8 = .8 * font
-        m_font3 = .3 * mapping_font
-        m_font5 = .5 * mapping_font
+        mapping_size = config['mapping_size']
+        dx_m, dy_m = config['dx_m'], config['dy_m']
+        other_font_style = config['other_font_style']
+        dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
+        dx_nh, dy_nh = config['dx_nh'], config['dy_nh']
+        symbols_font_style = config['symbols_font_style']
+
+        font2 = .2 * font_size
+        font3 = .3 * font_size
+        font4 = .4 * font_size
+        font5 = .5 * font_size
+        font7 = .7 * font_size
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
+        if config['monochrome']:
+            map_fill = query_fill = other_fill = symbol_fill = 'black'
+        else:
+            symbol_fill = None
+            other_fill = config['other_color']
+            map_fill = config['mapping_color']
+            query_fill = config['query_color']
+
         svg = []
-        mask = []
         maps = []
+        others = []
         nghbrs = []
         hbrdztns = []
+        mask = defaultdict(list)
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
+            smbl = False
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
             if single or symbol != 'C' or carbon or atom.charge or atom.is_radical or n in cumulenes:
-                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
-                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
-                           f'font-size="{font:.2f}">{symbol}</text>')
+                smbl = True
                 if atom.charge:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
-                               f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
-                               f'{"↑" if atom.is_radical else ""}</text>')
+                    t = _render_charge[atom.charge]
+                    tt = "↑" if atom.is_radical else ""
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">{t}{tt}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}{tt}</text>')
                 elif atom.is_radical:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
-                               f'font-size="{font6:.2f}">↑</text>')
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">↑</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'↑</text>')
+
+                if symbol_fill != 'black':
+                    symbol_fill = atoms_colors[atom.atomic_number - 1]
+                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                if len(symbol) > 1:
+                    dx = font7
+                    dx_mm = dx_m + font5
+                    dx_nhh = dx_nh + font5
+                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                else:
+                    dx = font4
+                    dx_mm = dx_m + font2
+                    dx_nhh = dx_nh + font2
+                    mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
+                           f'font-size="{font_size:.2f}">{symbol}</text>')
+                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                                       f'dy="{font4:.2f}">{symbol}</text>')
                 svg.append('    </g>')
-                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
-            if mapping:
-                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
+
+                if mapping:
+                    maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" dy="{dy_m + font3:.2f}" '
+                                f'text-anchor="end">{n}</text>')
+                    mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
+                                       f'dy="{dy_m + font3:.2f}" text-anchor="end">{n}</text>')
+            elif mapping:
+                maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m}" dy="{dy_m:.2f}" '
                             f'text-anchor="end">{n}</text>')
-                dx, dy = x - font5, y + font5
-                for _ in range(len(str(n))):
-                    mask.append(f'        <ellipse cx="{dx:.2f}" cy="{dy:.2f}" rx="{m_font3}" ry="{m_font5}" />')
-                    dx -= m_font5
+                mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m}" dy="{dy_m:.2f}" '
+                                   f'text-anchor="end">{n}</text>')
+            if smbl:
+                dx_nnh = dx_nhh
+            else:
+                dx_nnh = dx_nh
 
             level = 1
             if atom.neighbors:
-                level = 1.6
-                nn = [str(x) for x in atom.neighbors]
-                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{font8:.2f}" '
-                              f'text-anchor="start">{"".join(nn)}</text>')
+                level = 15 * dy_nh
+                nn = "".join(str(x) for x in atom.neighbors)
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{dy_nh:.2f}" '
+                              f'text-anchor="start">{nn}</text>')
+                mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
+                                     f'{nn}</text>')
 
             if atom.hybridization:
-                hh = [_render_hybridization[x] for x in atom.hybridization]
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="0" dy="{level * font8:.2f}" '
-                                f'text-anchor="start">{"".join(hh)}</text>')
+                hh = "".join(_render_hybridization[x] for x in atom.hybridization)
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{level * dy_nh:.2f}" '
+                                f'text-anchor="start">{hh}</text>')
+                mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
+                                     f'dy="{level * dy_nh:.2f}">{hh}</text>')
+
         if nghbrs:
-            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
             svg.extend(nghbrs)
             if hbrdztns:
                 svg.extend(hbrdztns)
             svg.append('    </g>')
-
         elif hbrdztns:
-            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
             svg.extend(hbrdztns)
             svg.append('    </g>')
 
+        if others:
+            svg.append(f'    <g fill="{other_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
+            svg.extend(others)
+            svg.append('    </g>')
+
         if mapping:
-            svg.append(f'    <g fill="{config["mapping_color"]}" font-size="{mapping_font:.2f}">')
+            svg.append(f'    <g fill="{map_fill}" font-size="{mapping_size:.2f}">')
             svg.extend(maps)
             svg.append('    </g>')
 
@@ -857,12 +1062,12 @@ class DepictQueryCGR(Depict):
         plane = self._plane
         config = self._render_config
 
-        double_space = config['double_space']
-        triple_space = config['triple_space']
         dash1, dash2 = config['dashes']
-        dash3, dash4 = config['aromatic_dashes']
         broken = config['broken_color']
         formed = config['formed_color']
+        double_space = config['double_space']
+        triple_space = config['triple_space']
+        dash3, dash4 = config['aromatic_dashes']
 
         for n, m, bond in self.bonds():
             order, p_order = bond.order, bond.p_order
@@ -1112,69 +1317,119 @@ class DepictQueryCGR(Depict):
         config = self._render_config
 
         carbon = config['carbon']
+        font_size = config['font_size']
+        other_size = config['other_size']
         atoms_colors = config['atoms_colors']
-        font = config['font']
-        font2 = .2 * font
-        font3 = .3 * font
-        font4 = .4 * font
-        font6 = .6 * font
-        font7 = .7 * font
-        font8 = .8 * font
+        other_font_style = config['other_font_style']
+        dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
+        dx_nh, dy_nh = config['dx_nh'], config['dy_nh']
+        symbols_font_style = config['symbols_font_style']
+
+        font2 = .2 * font_size
+        font4 = .4 * font_size
+        font5 = .5 * font_size
+        font7 = .7 * font_size
+
+        if config['monochrome']:
+            query_fill = other_fill = symbol_fill = 'black'
+        else:
+            symbol_fill = None
+            other_fill = config['other_color']
+            query_fill = config['query_color']
 
         svg = []
-        mask = []
+        others = []
         nghbrs = []
         hbrdztns = []
+        mask = defaultdict(list)
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
+            smbl = False
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
             if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
-                svg.append(f'    <g fill="{atoms_colors[atom.atomic_number - 1]}">')
-                svg.append(f'      <text x="{x - font4:.2f}" y="{font3 + y:.2f}" '
-                           f'font-size="{font:.2f}">{symbol}</text>')
-
+                smbl = True
                 if atom.charge:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
-                               f'font-size="{font6:.2f}">{_render_charge[atom.charge]}'
-                               f'{"↑" if atom.is_radical else ""}</text>')
+                    t = _render_charge[atom.charge]
+                    tt = "↑" if atom.is_radical else ""
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">{t}{tt}</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'{t}{tt}</text>')
                 elif atom.is_radical:
-                    svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{font2:.2f}" dy="-{font4:.2f}" '
-                               f'font-size="{font6:.2f}">↑</text>')
+                    others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'font-size="{other_size:.2f}">↑</text>')
+                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                         f'↑</text>')
+
+                if symbol_fill != 'black':
+                    symbol_fill = atoms_colors[atom.atomic_number - 1]
+                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                if len(symbol) > 1:
+                    dx = font7
+                    dx_nhh = dx_nh + font5
+                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                else:
+                    dx = font4
+                    dx_nhh = dx_nh + font2
+                    mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
+                svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
+                           f'font-size="{font_size:.2f}">{symbol}</text>')
+                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                                       f'dy="{font4:.2f}">{symbol}</text>')
                 svg.append('    </g>')
-                mask.append(f'      <circle cx="{x:.2f}" cy="{y:.2f}" r="{font7:.2f}"/>')
+
+            if smbl:
+                dx_nnh = dx_nhh
+            else:
+                dx_nnh = dx_nh
 
             level = 1
             if atom.neighbors:
-                level = 1.6
-                nn = [str(x) for x in atom.neighbors]
-                pn = [str(x) for x in atom.p_neighbors] if atom.p_neighbors else None
-                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{font8:.2f}" '
-                              f'text-anchor="start">{"".join(nn)}»{"".join(pn) if pn else 0}</text>')
+                level = 15 * dy_nh
+                nn = ''.join(str(x) for x in atom.neighbors)
+                if atom.p_neighbors:
+                    pn = ''.join(str(x) for x in atom.p_neighbors)
+                else:
+                    pn = '0'
+                nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}" '
+                              f'text-anchor="start">{nn}»{pn}</text>')
+                mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
+                                     f'{nn}»{pn}</text>')
 
             if atom.hybridization:
-                hh = [_render_hybridization[x] for x in atom.hybridization]
-                ph = [_render_hybridization[x] for x in atom.p_hybridization] if atom.p_hybridization else None
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{0:.2f}" dy="{level * font8:.2f}" '
-                                f'text-anchor="start">{"".join(hh)}»{"".join(ph) if ph else 0}</text>')
+                hh = ''.join(_render_hybridization[x] for x in atom.hybridization)
+                if atom.p_hybridization:
+                    ph = ''.join(_render_hybridization[x] for x in atom.p_hybridization)
+                else:
+                    ph = '0'
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level * dy_nh:.2f}" '
+                                f'text-anchor="start">{hh}»{ph}</text>')
+                mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
+                                     f'dy="{level * dy_nh:.2f}">{hh}»{ph}</text>')
+
         if nghbrs:
-            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
             svg.extend(nghbrs)
             if hbrdztns:
                 svg.extend(hbrdztns)
             svg.append('    </g>')
-
         elif hbrdztns:
-            svg.append(f'    <g fill="{config["query_color"]}" font-size="{font7:.2f}">')
+            svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
             svg.extend(hbrdztns)
+            svg.append('    </g>')
+
+        if others:
+            svg.append(f'    <g fill="{other_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
+            svg.extend(others)
             svg.append('    </g>')
 
         return svg, mask
 
 
 _render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
-_render_charge = {-3: '3⁃', -2: '2⁃', -1: '⁃', 1: '+', 2: '2+', 3: '3+'}
+_render_charge = {-3: '3-', -2: '2-', -1: '-', 1: '+', 2: '2+', 3: '3+'}
 _render_p_charge = {-3: {-2: '-3»-2', -1: '-3»-', 0: '-3»0', 1: '-3»+', 2: '-3»2', 3: '-3»3'},
                     -2: {-3: '-2»-3', -1: '-2»-', 0: '-2»0', 1: '-2»+', 2: '-2»2', 3: '-2»3'},
                     -1: {-3: '-»-3', -2: '-»-2', 0: '-»0', 1: '-»+', 2: '-»2', 3: '-»3'},
