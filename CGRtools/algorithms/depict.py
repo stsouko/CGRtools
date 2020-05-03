@@ -1019,7 +1019,6 @@ class DepictQuery(Depict):
             else:
                 dx_nnh = dx_nh
 
-            level = 0
             if atom.neighbors:
                 level = .6 * other_size
                 nn = "".join(str(x) for x in atom.neighbors)
@@ -1027,6 +1026,8 @@ class DepictQuery(Depict):
                               f'text-anchor="start">{nn}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
                                      f'{nn}</text>')
+            else:
+                level = 0
 
             if atom.hybridization:
                 hh = "".join(_render_hybridization[x] for x in atom.hybridization)
@@ -1385,7 +1386,6 @@ class DepictQueryCGR(Depict):
             else:
                 dx_nnh = dx_nh
 
-            level = 0
             if atom.neighbors:
                 level = .6 * other_size
                 nn = ''.join(str(x) for x in atom.neighbors)
@@ -1397,6 +1397,8 @@ class DepictQueryCGR(Depict):
                               f'text-anchor="start">{nn}»{pn}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
                                      f'{nn}»{pn}</text>')
+            else:
+                level = 0
 
             if atom.hybridization:
                 hh = ''.join(_render_hybridization[x] for x in atom.hybridization)
