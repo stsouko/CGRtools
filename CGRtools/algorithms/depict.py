@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
+#  Copyright 2019-2020 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -339,6 +339,7 @@ class DepictMolecule(Depict):
         mapping = config['mapping']
         span_size = config['span_size']
         font_size = config['font_size']
+        monochrome = config['monochrome']
         other_size = config['other_size']
         atoms_colors = config['atoms_colors']
         mapping_font = config['mapping_size']
@@ -349,10 +350,9 @@ class DepictMolecule(Depict):
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
-        if config['monochrome']:
-            map_fill = other_fill = symbol_fill = 'black'
+        if monochrome:
+            map_fill = other_fill = 'black'
         else:
-            symbol_fill = None
             map_fill = config['mapping_color']
             other_fill = config['other_color']
 
@@ -398,9 +398,8 @@ class DepictMolecule(Depict):
                     mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
                                          f'text-anchor="end">{t}</text>')
 
-                if symbol_fill != 'black':
-                    symbol_fill = atoms_colors[atom.atomic_number - 1]
-                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style }">')
+                svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
+                           f'font-family="{symbols_font_style }">')
                 if len(symbol) > 1:
                     dx = font7
                     dx_mm = dx_m + font5
@@ -813,6 +812,7 @@ class DepictCGR(Depict):
         carbon = config['carbon']
         font_size = config['font_size']
         other_size = config['other_size']
+        monochrome = config['monochrome']
         atoms_colors = config['atoms_colors']
         dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
         symbols_font_style = config['symbols_font_style']
@@ -821,10 +821,9 @@ class DepictCGR(Depict):
         din_charges = {m[0]: m[1] != n[1] for m, n in zip(charges.items(), p_charges.items())}
         din_radicals = {m[0]: m[1] != n[1] for m, n in zip(radicals.items(), p_radicals.items())}
 
-        if config['monochrome']:
-            other_fill = symbol_fill = 'black'
+        if monochrome:
+            other_fill = 'black'
         else:
-            symbol_fill = None
             other_fill = config['other_color']
 
         svg = []
@@ -869,9 +868,8 @@ class DepictCGR(Depict):
                     mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
                                          f'{t}</text>')
 
-                if symbol_fill != 'black':
-                    symbol_fill = atoms_colors[atom.atomic_number - 1]
-                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
+                           f'font-family="{symbols_font_style}">')
                 if len(symbol) > 1:
                     dx = font7
                     mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
@@ -938,6 +936,7 @@ class DepictQuery(Depict):
         mapping = config['mapping']
         font_size = config['font_size']
         other_size = config['other_size']
+        monochrome = config['monochrome']
         atoms_colors = config['atoms_colors']
         mapping_size = config['mapping_size']
         dx_m, dy_m = config['dx_m'], config['dy_m']
@@ -955,10 +954,9 @@ class DepictQuery(Depict):
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
 
-        if config['monochrome']:
-            map_fill = query_fill = other_fill = symbol_fill = 'black'
+        if monochrome:
+            map_fill = query_fill = other_fill = 'black'
         else:
-            symbol_fill = None
             other_fill = config['other_color']
             map_fill = config['mapping_color']
             query_fill = config['query_color']
@@ -972,11 +970,9 @@ class DepictQuery(Depict):
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
-            smbl = False
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
             if single or symbol != 'C' or carbon or atom.charge or atom.is_radical or n in cumulenes:
-                smbl = True
                 if atom.charge:
                     t = _render_charge[atom.charge]
                     tt = "↑" if atom.is_radical else ""
@@ -990,9 +986,8 @@ class DepictQuery(Depict):
                     mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
                                          f'↑</text>')
 
-                if symbol_fill != 'black':
-                    symbol_fill = atoms_colors[atom.atomic_number - 1]
-                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
+                           f'font-family="{symbols_font_style}">')
                 if len(symbol) > 1:
                     dx = font7
                     dx_mm = dx_m + font5
@@ -1008,6 +1003,7 @@ class DepictQuery(Depict):
                 mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
                                        f'dy="{font4:.2f}">{symbol}</text>')
                 svg.append('    </g>')
+                dx_nnh = dx_nhh
 
                 if mapping:
                     maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" dy="{dy_m + font3:.2f}" '
@@ -1015,30 +1011,30 @@ class DepictQuery(Depict):
                     mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
                                        f'dy="{dy_m + font3:.2f}" text-anchor="end">{n}</text>')
             elif mapping:
+                dx_nnh = dx_nh
                 maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m}" dy="{dy_m:.2f}" '
                             f'text-anchor="end">{n}</text>')
                 mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m}" dy="{dy_m:.2f}" '
                                    f'text-anchor="end">{n}</text>')
-            if smbl:
-                dx_nnh = dx_nhh
             else:
                 dx_nnh = dx_nh
 
-            level = 1
             if atom.neighbors:
-                level = 15 * dy_nh
+                level = .6 * other_size
                 nn = "".join(str(x) for x in atom.neighbors)
                 nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{dy_nh:.2f}" '
                               f'text-anchor="start">{nn}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
                                      f'{nn}</text>')
+            else:
+                level = 0
 
             if atom.hybridization:
                 hh = "".join(_render_hybridization[x] for x in atom.hybridization)
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{level * dy_nh:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{level + dy_nh:.2f}" '
                                 f'text-anchor="start">{hh}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
-                                     f'dy="{level * dy_nh:.2f}">{hh}</text>')
+                                     f'dy="{level + dy_nh:.2f}">{hh}</text>')
 
         if nghbrs:
             svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
@@ -1329,6 +1325,7 @@ class DepictQueryCGR(Depict):
         carbon = config['carbon']
         font_size = config['font_size']
         other_size = config['other_size']
+        monochrome = config['monochrome']
         atoms_colors = config['atoms_colors']
         other_font_style = config['other_font_style']
         dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
@@ -1340,10 +1337,9 @@ class DepictQueryCGR(Depict):
         font5 = .5 * font_size
         font7 = .7 * font_size
 
-        if config['monochrome']:
-            query_fill = other_fill = symbol_fill = 'black'
+        if monochrome:
+            query_fill = other_fill = 'black'
         else:
-            symbol_fill = None
             other_fill = config['other_color']
             query_fill = config['query_color']
 
@@ -1355,11 +1351,9 @@ class DepictQueryCGR(Depict):
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
-            smbl = False
             single = not self._bonds[n]
             symbol = atom.atomic_symbol
             if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
-                smbl = True
                 if atom.charge:
                     t = _render_charge[atom.charge]
                     tt = "↑" if atom.is_radical else ""
@@ -1373,9 +1367,8 @@ class DepictQueryCGR(Depict):
                     mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
                                          f'↑</text>')
 
-                if symbol_fill != 'black':
-                    symbol_fill = atoms_colors[atom.atomic_number - 1]
-                svg.append(f'    <g fill="{symbol_fill}" font-family="{symbols_font_style}">')
+                svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
+                           f'font-family="{symbols_font_style}">')
                 if len(symbol) > 1:
                     dx = font7
                     dx_nhh = dx_nh + font5
@@ -1389,15 +1382,12 @@ class DepictQueryCGR(Depict):
                 mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
                                        f'dy="{font4:.2f}">{symbol}</text>')
                 svg.append('    </g>')
-
-            if smbl:
                 dx_nnh = dx_nhh
             else:
                 dx_nnh = dx_nh
 
-            level = 1
             if atom.neighbors:
-                level = 15 * dy_nh
+                level = .6 * other_size
                 nn = ''.join(str(x) for x in atom.neighbors)
                 if atom.p_neighbors:
                     pn = ''.join(str(x) for x in atom.p_neighbors)
@@ -1407,6 +1397,8 @@ class DepictQueryCGR(Depict):
                               f'text-anchor="start">{nn}»{pn}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
                                      f'{nn}»{pn}</text>')
+            else:
+                level = 0
 
             if atom.hybridization:
                 hh = ''.join(_render_hybridization[x] for x in atom.hybridization)
@@ -1414,10 +1406,10 @@ class DepictQueryCGR(Depict):
                     ph = ''.join(_render_hybridization[x] for x in atom.p_hybridization)
                 else:
                     ph = '0'
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level * dy_nh:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level + dy_nh:.2f}" '
                                 f'text-anchor="start">{hh}»{ph}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
-                                     f'dy="{level * dy_nh:.2f}">{hh}»{ph}</text>')
+                                     f'dy="{level + dy_nh:.2f}">{hh}»{ph}</text>')
 
         if nghbrs:
             svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
