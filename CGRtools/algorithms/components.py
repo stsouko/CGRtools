@@ -160,7 +160,7 @@ class StructureComponents:
         bonds = self._bonds
 
         if heteroatoms:
-            atoms_numbers = {5, 6, 7, 15, 16, 33, 34, 52}
+            atoms_numbers = {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}
         else:
             atoms_numbers = {6}
 
