@@ -22,6 +22,7 @@ from collections import defaultdict
 from functools import partial
 from math import atan2, sin, cos, hypot
 from uuid import uuid4
+from typing import Tuple
 
 
 cpk = tuple('''
@@ -43,6 +44,9 @@ cpk = tuple('''
                          #CC0059 #D1004F #D90045 #E00038 
                  #E6002E #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026 #EB0026
 '''.split())
+_font1 = .1 * .5
+_font3 = .3 * .5
+_font4 = .4 * .5
 
 
 def rotate_vector(x1, y1, x2, y2):
@@ -154,53 +158,56 @@ class Depict:
         return svg
 
     @classmethod
-    def depict_settings(cls, *, carbon=False, bond_color='black', font_size=.5, mapping=True, mapping_color='#788CFF',
-                        bond_width=.04, query_color='black', atoms_colors=cpk, dashes=(.2, .1), aromatic_space=.14,
-                        triple_space=.13, double_space=.06, broken_color='red', formed_color='green', monochrome=False,
-                        aromatic_dashes=(.15, .05), atom_radius=.2, mapping_size=.22, symbols_font_style='sans-serif',
-                        other_size=.6 * .5, dx_m=.1 * .5, dy_m=.4 * .5, span_dy=.3 * .5, span_size=.7 * .5,
-                        dx_ci=.1 * .5, dy_ci=.4 * .5, cgr_aromatic_space=.18, other_font_style='monospace',
-                        other_color='black', dx_nh=.15 * .5, dy_nh=.4 * .5):
+    def settings(cls, *, carbon: bool = False, bond_color: str = 'black', font_size: float = .5, aam: bool = True,
+                 aam_color: str = '#0305A7', bond_width: float = .04, dashes: Tuple[float, float] = (.2, .1),
+                 query_color: str = '#5D8AA8', atoms_colors: tuple = cpk, dx_ci: float = _font1, dy_ci: float = _font4,
+                 triple_space: float = .13, aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
+                 formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2, dy_m: float = _font4,
+                 symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5, double_space: float = .06,
+                 dx_m: float = _font1, span_dy: float = _font3, span_size: float = .7 * .5, dx_nh: float = .15 * .5,
+                 other_font_style: str = 'monospace', cgr_aromatic_space: float = .18, aam_size: float = .5 * .5,
+                 other_color: str = 'black',  broken_color: str = 'red', aromatic_space: float = .14):
         """
         Settings for depict of chemical structures
 
-        carbon: bool: if True, depict atom C
-        font_size: float: font size
-        mapping_size: float: mapping font size
-        other_size: float: isotope, radical, charges, neighbors and hybridization symbols size
-        bond_width: float: bond width
-        bond_color: str: color of bonds
-        mapping_color: str: mapping color
-        query_color: str: hybridization and neighbors color
-        atoms_colors: dict: atom colors where key is atomic number - 1, value is atom color (str)
-        broken_color: str: only CGRContainer: color of broken bond
-        formed_color: str: only CGRContainer: color of formed bond
-        symbols_font_style: str : font style for atom symbols
-        other_font_style: str: font style for mapping, charges, radicals, isotopes, hybridization and neighbors
-        mapping: bool: if True, depict mapping
-        monochrome: bool: if True, colors of items in molecule not used
-        dashes: tuple: two values: one is long of visible line, other is long of invisible line
-        aromatic_space: float: space between simple and aromatic bonds
-        triple_space: float: space between simple and triple bonds
-        double_space: float: space between simple and double bonds
-        cgr_aromatic_space: float: only CGRContainer: space between simple and aromatic bonds
-        aromatic_dashes: tuple: for aromatic bonds two values: one is long of visible line, other is
-                                                               long of invisible line
-        atom_radius: float: radius of atoms spheres in depict3d. if negative is multiplier to covalent radii
-        dx_m, dx_nh, dx_ci, dy_ci, dy_m, dy_nh, span_dy: float: offset relative to the center of the atom symbol
-            dx_ci: x-axis: for radical, charges, isotope
-            dy_ci: y-axis: for radical, charges, isotope
-            dx_m: x-axis: for mapping
-            dy_m: y-axis: for mapping
-            dx_nh: x-axis: for neighbors and hybridization
-            dy_nh: y-axis: for neighbors and hybridization
+        :param carbon: if True, depict atom C
+        :param font_size: font size
+        :param aam_size: atom-to-atom mapping font size
+        :param span_size: font size for hydrogen count
+        :param other_size: isotope, radical, charges, neighbors and hybridization symbols size
+        :param bond_width: bond width
+        :param bond_color: color of bonds
+        :param aam_color: atom-to-atom mapping color
+        :param query_color: hybridization and neighbors color
+        :param atoms_colors: atom colors where key is atomic number - 1, value is atom color (str)
+        :param broken_color: only CGRContainer: color of broken bond
+        :param formed_color: only CGRContainer: color of formed bond
+        :param other_color: color for charges, radicals, isotopes
+        :param symbols_font_style: font style for atom symbols
+        :param other_font_style: font style for mapping, charges, radicals, isotopes, hybridization and neighbors
+        :param aam: if True, depict mapping
+        :param monochrome: if True, colors of items in molecule not used
+        :param dashes: first value is long of visible line, second is long of invisible line
+        :param aromatic_space: space between simple and aromatic bonds
+        :param triple_space: space between simple and triple bonds
+        :param double_space: space between simple and double bonds
+        :param cgr_aromatic_space: only CGRContainer: space between simple and aromatic bonds
+        :param aromatic_dashes: first value is long of visible line, second is long of invisible line
+        :param atom_radius: radius of atoms spheres in depict3d. if negative is multiplier to covalent radii
+        :param dx_ci: x-axis offset relative to the center of the atom symbol for radical, charges, isotope
+        :param dy_ci: y-axis offset relative to the center of the atom symbol for radical, charges, isotope
+        :param dx_m: x-axis offset relative to the center of the atom symbol for atom-to-atom mapping
+        :param dy_m: y-axis offset relative to the center of the atom symbol for atom-to-atom mapping
+        :param dx_nh: x-axis offset relative to the center of the atom symbol for neighbors and hybridization
+        :param dy_nh: y-axis offset relative to the center of the atom symbol for neighbors and hybridization
+        :param span_dy: y-axis offset relative to the center of the atom symbol for hydrogen count
         """
 
         config = cls._render_config
         config['carbon'] = carbon
         config['dashes'] = dashes
         config['span_dy'] = span_dy
-        config['mapping'] = mapping
+        config['mapping'] = aam
         config['font_size'] = font_size
         config['span_size'] = span_size
         config['other_size'] = other_size
@@ -210,13 +217,13 @@ class Depict:
         config['query_color'] = query_color
         config['other_color'] = other_color
         config['atom_radius'] = -atom_radius
-        config['mapping_size'] = mapping_size
+        config['mapping_size'] = aam_size
         config['atoms_colors'] = atoms_colors
         config['triple_space'] = triple_space
         config['double_space'] = double_space
         config['broken_color'] = broken_color
         config['formed_color'] = formed_color
-        config['mapping_color'] = mapping_color
+        config['mapping_color'] = aam_color
         config['aromatic_space'] = aromatic_space
         config['aromatic_dashes'] = aromatic_dashes
         config['dx_m'], config['dy_m'] = dx_m, dy_m
@@ -231,12 +238,12 @@ class Depict:
         return self.depict()
 
     _render_config = {'carbon': False, 'atoms_colors': cpk, 'bond_color': 'black', 'font_size': .5, 'dashes': (.2, .1),
-                      'aromatic_space': .14, 'triple_space': .13, 'double_space': .06, 'mapping': True, 'dx_m': .1 * .5,
+                      'aromatic_space': .14, 'triple_space': .13, 'double_space': .06, 'mapping': True, 'dx_m': _font1,
                       'mapping_color': '#0305A7', 'bond_width': .04, 'query_color': '#5D8AA8', 'broken_color': 'red',
                       'formed_color': 'green', 'aromatic_dashes': (.15, .05), 'atom_radius': -.2, 'monochrome': False,
                       'mapping_size': .5 * .5, 'symbols_font_style': 'sans-serif', 'other_size': .6 * .5,
-                      'dy_m': .4 * .5, 'span_dy': .3 * .5, 'span_size': .7 * .5, 'dx_ci': .1 * .5, 'dy_ci': .4 * .5,
-                      'cgr_aromatic_space': .18, 'dx_nh': .15 * .5, 'dy_nh': .3 * .5, 'other_font_style': 'monospace',
+                      'dy_m': _font4, 'span_dy': _font3, 'span_size': .7 * .5, 'dx_ci': _font1, 'dy_ci': _font4,
+                      'cgr_aromatic_space': .18, 'dx_nh': .15 * .5, 'dy_nh': _font3, 'other_font_style': 'monospace',
                       'other_color': 'black'}
 
 
@@ -447,7 +454,6 @@ class DepictReaction:
 
         r_max_x = r_max_y = r_min_y = 0
         for m in self.molecules():
-            print(type(m))
             atoms, bonds, masks, min_x, min_y, max_x, max_y = m.depict(embedding=True)
             r_atoms.extend(atoms)
             r_bonds.extend(bonds)
@@ -519,6 +525,8 @@ class DepictReaction:
 
 
 class DepictCGR(Depict):
+    __slots__ = ()
+
     def _render_bonds(self):
         plane = self._plane
         config = self._render_config
@@ -1057,6 +1065,8 @@ class DepictQuery(Depict):
 
 
 class DepictQueryCGR(Depict):
+    __slots__ = ()
+
     def _render_bonds(self):
         svg = []
         plane = self._plane
