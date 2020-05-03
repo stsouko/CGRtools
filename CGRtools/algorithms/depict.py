@@ -1024,9 +1024,9 @@ class DepictQuery(Depict):
             else:
                 dx_nnh = dx_nh
 
-            level = 1
+            level = 0
             if atom.neighbors:
-                level = 15 * dy_nh
+                level = .6 * other_size
                 nn = "".join(str(x) for x in atom.neighbors)
                 nghbrs.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{dy_nh:.2f}" '
                               f'text-anchor="start">{nn}</text>')
@@ -1035,10 +1035,10 @@ class DepictQuery(Depict):
 
             if atom.hybridization:
                 hh = "".join(_render_hybridization[x] for x in atom.hybridization)
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{level * dy_nh:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh}" dy="{level + dy_nh:.2f}" '
                                 f'text-anchor="start">{hh}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
-                                     f'dy="{level * dy_nh:.2f}">{hh}</text>')
+                                     f'dy="{level + dy_nh:.2f}">{hh}</text>')
 
         if nghbrs:
             svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
@@ -1395,9 +1395,9 @@ class DepictQueryCGR(Depict):
             else:
                 dx_nnh = dx_nh
 
-            level = 1
+            level = 0
             if atom.neighbors:
-                level = 15 * dy_nh
+                level = .6 * other_size
                 nn = ''.join(str(x) for x in atom.neighbors)
                 if atom.p_neighbors:
                     pn = ''.join(str(x) for x in atom.p_neighbors)
@@ -1414,10 +1414,10 @@ class DepictQueryCGR(Depict):
                     ph = ''.join(_render_hybridization[x] for x in atom.p_hybridization)
                 else:
                     ph = '0'
-                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level * dy_nh:.2f}" '
+                hbrdztns.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level + dy_nh:.2f}" '
                                 f'text-anchor="start">{hh}»{ph}</text>')
                 mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
-                                     f'dy="{level * dy_nh:.2f}">{hh}»{ph}</text>')
+                                     f'dy="{level + dy_nh:.2f}">{hh}»{ph}</text>')
 
         if nghbrs:
             svg.append(f'    <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
