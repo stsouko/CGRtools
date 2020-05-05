@@ -21,11 +21,12 @@ from . import cgr, molecule, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.calculate2d import Calculate2DCGR
+from ..algorithms.depict import DepictQueryCGR
 from ..algorithms.smiles import QueryCGRSmiles
 from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement
 
 
-class QueryCGRContainer(Graph, QueryCGRSmiles, Calculate2DCGR):
+class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
     __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
 
     def __init__(self):
@@ -177,9 +178,9 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, Calculate2DCGR):
             atom._attach_to_graph(sub, n)
         return sub
 
-    def union(self, other) -> 'QueryCGRContainer':
+    def union(self, other, **kwargs) -> 'QueryCGRContainer':
         if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
 
@@ -225,7 +226,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, Calculate2DCGR):
                         ub[n][m] = ub[m][n] = bond.copy()
             return u
         elif isinstance(other, (query.QueryContainer, molecule.MoleculeContainer)):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
 
