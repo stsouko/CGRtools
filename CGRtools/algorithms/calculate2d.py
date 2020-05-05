@@ -252,8 +252,16 @@ class Calculate2D:
         springs_distances = []
         dd = defaultdict(dict)
 
-        # for cycles of 4 atoms
-        ac = set(a for c in self.sssr if len(c) == 4 for a in c)
+        # for cycles of 4 and 6 atoms
+        ac6 = []
+        ac4 = set()
+        for c in self.sssr:
+            k = len(c)
+            if k == 4:
+                for a in c:
+                    ac4.add(a)
+            elif k == 6:
+                ac6.append(c)
 
         # create matrix of coordinates
         cube = len(component)
@@ -306,6 +314,12 @@ class Calculate2D:
                         springs_distances.append(.825)
                         end += 1
 
+        # add springs for cycles of six atoms
+        for cycle in ac6:
+            for i, j in zip(cycle[:3], cycle[3:]):
+                springs.append((mapping[i], mapping[j]))
+                springs_distances.append(1.65)
+
         # add virtual bonds and complement matrices of bonds and coordinates
         for n, m_bond in dd.items():
             if len(m_bond) == 3:
@@ -315,7 +329,7 @@ class Calculate2D:
                         if (j, i) not in springs or (i, j) not in springs:
                             springs.append((i, j))
                             long1, long2 = m_bond[m1], m_bond[m2]
-                            if m1 in ac and m2 in ac:
+                            if m1 in ac4 and m2 in ac4:
                                 springs_distances.append(1.17)
                             elif not long1 and not long2:
                                 springs_distances.append(1.43)
