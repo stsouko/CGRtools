@@ -106,10 +106,10 @@ class Standardize:
         Return True if any isotope found.
         """
         atoms = self._atoms
-        isotopes = [k for k, v in atoms.items() if v.isotope]
+        isotopes = [x for x in atoms.values() if x.isotope]
         if isotopes:
             for i in isotopes:
-                atoms[i].isotope = None
+                i._Core__isotope = None
             self.flush_cache()
             return True
         return False
