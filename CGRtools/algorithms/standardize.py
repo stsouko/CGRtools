@@ -641,7 +641,7 @@ class StandardizeReaction:
         flag = False
         for m in self.molecules():
             if hasattr(m, 'clean_isotopes'):
-                if m.slean_isotopes() and not flag:
+                if m.clean_isotopes() and not flag:
                     flag = True
 
         if flag:
