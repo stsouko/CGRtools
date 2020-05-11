@@ -195,7 +195,7 @@ class SSSR:
                         continue
                     break
                 else:
-                    # update condensed rings
+                    # update condensed rings. need for cuban and fullerene like structures.
                     tmp = set()
                     ckc = ck
                     for r in condensed_rings:
@@ -205,26 +205,24 @@ class SSSR:
                             ckc |= r
                         elif lc == len(ckc):
                             unique = r - ckc
-                            common = {n for n in common if not unique.isdisjoint(bonds[n])}
-                            keep = set()
-                            for n in common:
-                                if not all(len(unique.intersection(bonds[x])) > 1
-                                           for x in unique.intersection(bonds[n])):
-                                    keep.add(n)
-                                elif not all(len(common.intersection(bonds[x])) > 1 or
-                                             len(unique.intersection(bonds[x])) > 1
-                                             for x in common.intersection(bonds[n])):
-                                    keep.add(n)
-                            ckc = unique | keep
-                        elif lc == len(r):  # impossible?
-                            print('SHEE', r)
-                            ckc -= r
+                            ckc = unique | {n for n in common if not unique.isdisjoint(bonds[n])}
+                        # elif lc == len(r):  # impossible?
+                        #     ckc -= r
                         elif lc > 2:
                             ckc = r ^ ckc | {n for n in common if len(common.intersection(bonds[n])) == 1}
+                            while True:
+                                term = {n for n in ckc if len(ckc.intersection(bonds[n])) == 1}
+                                if not term:
+                                    break
+                                ckc -= term
                         else:
                             tmp.add(r)
+
                     tmp.add(ckc)
                     condensed_rings = tmp
+                    if ckc in seen_rings:  # reduced to existing ring. finis reached?
+                        condensed_rings.add(ck)  # add ring to condensed. required for for combined rings detection.
+                        continue
                     seen_rings.add(ckc)
                     sssr[ck] = c
                     if len(sssr) == n_sssr:
