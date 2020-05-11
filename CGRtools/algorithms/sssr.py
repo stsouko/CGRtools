@@ -18,7 +18,7 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from itertools import combinations, product
+from itertools import chain, combinations, product
 from operator import itemgetter
 from typing import Any, Dict, Set, Tuple, Union
 
@@ -146,17 +146,18 @@ class SSSR:
         ck = frozenset(c)
         seen_rings = {ck}
         sssr = {ck: c}
+        condensed_rings = {ck}  # collection of contours of condensed rings
         for c in rings:
             ck = frozenset(c)
             if len(ck) != len(c) or ck in seen_rings:
                 continue
+            seen_rings.add(ck)
 
             # create graph of connected neighbour rings
-            neighbors = {x: set() for x in sssr if len(x.intersection(ck)) > 1}
-            seen_rings.add(ck)
+            neighbors = {x: set() for x in chain(sssr, condensed_rings) if len(x & ck) > 1}
             if neighbors:
                 for i, j in combinations(neighbors, 2):
-                    if len(i.intersection(j)) > 1:
+                    if len(i & j) > 1:
                         neighbors[i].add(j)
                         neighbors[j].add(i)
                 # check if hold rings is combination of existing. (123654) is combo of (1254) and (2365)
@@ -181,30 +182,55 @@ class SSSR:
                             stack.pop()
                         else:
                             if child not in seen:
-                                unique = parent ^ child
                                 common = parent & child
-                                up = parent - common
-                                uc = child - common
-
-                                border = set()
-                                for n in common:
-                                    ms = bonds[n]
-                                    if not up.isdisjoint(ms) and not uc.isdisjoint(ms):
-                                        border.add(n)
-                                if len(border) == 2:
-                                    unique |= border
-                                    if ck == unique:  # macrocycle found
-                                        break
-                                    if depth_now and len(unique) < len(c):
-                                        stack.append((unique, depth_now - 1, iter(neighbors[child]), {child} | seen))
+                                if len(common) > 2:  # only terminal common atoms required
+                                    mc = parent ^ child | {n for n in common if len(common.intersection(bonds[n])) == 1}
+                                else:  # neighbors at least have 2 common atoms
+                                    mc = parent | child
+                                if ck == mc:  # macrocycle found
+                                    break
+                                elif depth_now and 2 < len(mc) <= len(c):
+                                    stack.append((mc, depth_now - 1, iter(neighbors[child]), {child} | seen))
                     else:
                         continue
                     break
                 else:
+                    # update condensed rings
+                    tmp = set()
+                    ckc = ck
+                    for r in condensed_rings:
+                        common = r & ckc
+                        lc = len(common)
+                        if lc == 2:
+                            ckc |= r
+                        elif lc == len(ckc):
+                            unique = r - ckc
+                            common = {n for n in common if not unique.isdisjoint(bonds[n])}
+                            keep = set()
+                            for n in common:
+                                if not all(len(unique.intersection(bonds[x])) > 1
+                                           for x in unique.intersection(bonds[n])):
+                                    keep.add(n)
+                                elif not all(len(common.intersection(bonds[x])) > 1 or
+                                             len(unique.intersection(bonds[x])) > 1
+                                             for x in common.intersection(bonds[n])):
+                                    keep.add(n)
+                            ckc = unique | keep
+                        elif lc == len(r):  # impossible?
+                            print('SHEE', r)
+                            ckc -= r
+                        elif lc > 2:
+                            ckc = r ^ ckc | {n for n in common if len(common.intersection(bonds[n])) == 1}
+                        else:
+                            tmp.add(r)
+                    tmp.add(ckc)
+                    condensed_rings = tmp
+                    seen_rings.add(ckc)
                     sssr[ck] = c
                     if len(sssr) == n_sssr:
                         return tuple(sssr.values())
             else:
+                condensed_rings.add(ck)
                 sssr[ck] = c
                 if len(sssr) == n_sssr:
                     return tuple(sssr.values())
