@@ -105,8 +105,7 @@ class Standardize:
         Clean isotope marks from molecule.
         Return True if any isotope found.
         """
-        atoms = self._atoms
-        isotopes = [x for x in atoms if x._Core__isotope]
+        isotopes = [x for x in self._atoms if x.isotope]
         if isotopes:
             for i in isotopes:
                 i._Core__isotope = None
@@ -640,8 +639,9 @@ class StandardizeReaction:
         """
         flag = False
         for m in self.molecules():
-            if m.slean_isotopes() and not flag:
-                flag = True
+            if hasattr(m, 'clean_isotopes'):
+                if m.slean_isotopes() and not flag:
+                    flag = True
 
         if flag:
             self.flush_cache()
