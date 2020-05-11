@@ -105,10 +105,11 @@ class Standardize:
         Clean isotope marks from molecule.
         Return True if any isotope found.
         """
-        isotopes = [x for x in self._atoms if x.isotope]
+        atoms = self._atoms
+        isotopes = [k for k, v in atoms.items() if v.isotope]
         if isotopes:
             for i in isotopes:
-                i._Core__isotope = None
+                atoms[i].isotope = None
             self.flush_cache()
             return True
         return False
