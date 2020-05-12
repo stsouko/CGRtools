@@ -158,15 +158,17 @@ class Depict:
         return svg
 
     @classmethod
-    def settings(cls, *, carbon: bool = False, bond_color: str = 'black', font_size: float = .5, aam: bool = True,
-                 aam_color: str = '#0305A7', bond_width: float = .04, dashes: Tuple[float, float] = (.2, .1),
-                 query_color: str = '#5D8AA8', atoms_colors: tuple = cpk, dx_ci: float = _font1, dy_ci: float = _font4,
-                 triple_space: float = .13, aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
-                 formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2, dy_m: float = _font4,
-                 symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5, double_space: float = .06,
-                 dx_m: float = _font1, span_dy: float = _font3, span_size: float = .7 * .5, dx_nh: float = .15 * .5,
-                 other_font_style: str = 'monospace', cgr_aromatic_space: float = .18, aam_size: float = .5 * .5,
-                 other_color: str = 'black',  broken_color: str = 'red', aromatic_space: float = .14):
+    def depict_settings(cls, *, carbon: bool = False, bond_color: str = 'black', font_size: float = .5,
+                        aam: bool = True, aam_color: str = '#0305A7', bond_width: float = .04,
+                        dashes: Tuple[float, float] = (.2, .1), query_color: str = '#5D8AA8', atoms_colors: tuple = cpk,
+                        dx_ci: float = _font1, dy_ci: float = _font4, triple_space: float = .13,
+                        aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
+                        formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2,
+                        dy_m: float = _font4, symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5,
+                        double_space: float = .06, dx_m: float = _font1, span_dy: float = _font3,
+                        span_size: float = .7 * .5, dx_nh: float = .15 * .5, other_font_style: str = 'monospace',
+                        cgr_aromatic_space: float = .18, aam_size: float = .5 * .5, other_color: str = 'black',
+                        broken_color: str = 'red', aromatic_space: float = .14):
         """
         Settings for depict of chemical structures
 
@@ -517,6 +519,11 @@ class DepictReaction:
 
         svg.append('</svg>')
         return '\n'.join(svg)
+
+    @staticmethod
+    def depict_settings(**kwargs):
+        """Settings for depict of chemical structures"""
+        Depict.depict_settings(**kwargs)
 
     @cached_method
     def _repr_svg_(self):
