@@ -158,15 +158,17 @@ class Depict:
         return svg
 
     @classmethod
-    def settings(cls, *, carbon: bool = False, bond_color: str = 'black', font_size: float = .5, aam: bool = True,
-                 aam_color: str = '#0305A7', bond_width: float = .04, dashes: Tuple[float, float] = (.2, .1),
-                 query_color: str = '#5D8AA8', atoms_colors: tuple = cpk, dx_ci: float = _font1, dy_ci: float = _font4,
-                 triple_space: float = .13, aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
-                 formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2, dy_m: float = _font4,
-                 symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5, double_space: float = .06,
-                 dx_m: float = _font1, span_dy: float = _font3, span_size: float = .7 * .5, dx_nh: float = .15 * .5,
-                 other_font_style: str = 'monospace', cgr_aromatic_space: float = .18, aam_size: float = .5 * .5,
-                 other_color: str = 'black',  broken_color: str = 'red', aromatic_space: float = .14):
+    def depict_settings(cls, *, carbon: bool = False, bond_color: str = 'black', font_size: float = .5,
+                        aam: bool = True, aam_color: str = '#0305A7', bond_width: float = .04,
+                        dashes: Tuple[float, float] = (.2, .1), query_color: str = '#5D8AA8', atoms_colors: tuple = cpk,
+                        dx_ci: float = _font1, dy_ci: float = _font4, triple_space: float = .13,
+                        aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
+                        formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2,
+                        dy_m: float = _font4, symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5,
+                        double_space: float = .06, dx_m: float = _font1, span_dy: float = _font3,
+                        span_size: float = .7 * .5, dx_nh: float = .15 * .5, other_font_style: str = 'monospace',
+                        cgr_aromatic_space: float = .18, aam_size: float = .5 * .5, other_color: str = 'black',
+                        broken_color: str = 'red', aromatic_space: float = .14):
         """
         Settings for depict of chemical structures
 
@@ -519,24 +521,27 @@ class DepictReaction:
         return '\n'.join(svg)
 
     @staticmethod
-    def settings(*, carbon: bool = False, bond_color: str = 'black', font_size: float = .5, aam: bool = True,
-                 aam_color: str = '#0305A7', bond_width: float = .04, dashes: Tuple[float, float] = (.2, .1),
-                 query_color: str = '#5D8AA8', atoms_colors: tuple = cpk, dx_ci: float = _font1, dy_ci: float = _font4,
-                 triple_space: float = .13, aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
-                 formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2, dy_m: float = _font4,
-                 symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5, double_space: float = .06,
-                 dx_m: float = _font1, span_dy: float = _font3, span_size: float = .7 * .5, dx_nh: float = .15 * .5,
-                 other_font_style: str = 'monospace', cgr_aromatic_space: float = .18, aam_size: float = .5 * .5,
-                 other_color: str = 'black',  broken_color: str = 'red', aromatic_space: float = .14):
+    def depict_settings(*, carbon: bool = False, bond_color: str = 'black', font_size: float = .5, aam: bool = True,
+                        aam_color: str = '#0305A7', bond_width: float = .04, dashes: Tuple[float, float] = (.2, .1),
+                        query_color: str = '#5D8AA8', atoms_colors: tuple = cpk, dx_ci: float = _font1,
+                        dy_ci: float = _font4, triple_space: float = .13,
+                        aromatic_dashes: Tuple[float, float] = (.15, .05), dy_nh: float = _font3,
+                        formed_color: str = 'green', monochrome: bool = False,  atom_radius: float = .2,
+                        dy_m: float = _font4, symbols_font_style: str = 'sans-serif', other_size: float = .6 * .5,
+                        double_space: float = .06, dx_m: float = _font1, span_dy: float = _font3,
+                        span_size: float = .7 * .5, dx_nh: float = .15 * .5, other_font_style: str = 'monospace',
+                        cgr_aromatic_space: float = .18, aam_size: float = .5 * .5, other_color: str = 'black',
+                        broken_color: str = 'red', aromatic_space: float = .14):
 
-        Depict.settings(carbon=carbon, bond_color=bond_color, font_size=font_size, aam=aam, aam_color=aam_color,
-                        bond_width=bond_width, dashes=dashes, query_color=query_color, atoms_colors=atoms_colors,
-                        dx_ci=dx_ci, dy_ci=dy_ci, triple_space=triple_space, aromatic_dashes=aromatic_dashes,
-                        dy_nh=dy_nh, formed_color=formed_color, monochrome=monochrome, atom_radius=atom_radius,
-                        dy_m=dy_m, symbols_font_style=symbols_font_style, other_size=other_size,
-                        double_space=double_space, dx_m=dx_m, span_dy=span_dy, span_size=span_size, dx_nh=dx_nh,
-                        other_font_style=other_font_style, cgr_aromatic_space=cgr_aromatic_space, aam_size=aam_size,
-                        other_color=other_color, broken_color=broken_color, aromatic_space=aromatic_space)
+        Depict.depict_settings(carbon=carbon, bond_color=bond_color, font_size=font_size, aam=aam, aam_color=aam_color,
+                               bond_width=bond_width, dashes=dashes, query_color=query_color, atoms_colors=atoms_colors,
+                               dx_ci=dx_ci, dy_ci=dy_ci, triple_space=triple_space, aromatic_dashes=aromatic_dashes,
+                               dy_nh=dy_nh, formed_color=formed_color, monochrome=monochrome, atom_radius=atom_radius,
+                               dy_m=dy_m, symbols_font_style=symbols_font_style, other_size=other_size,
+                               double_space=double_space, dx_m=dx_m, span_dy=span_dy, span_size=span_size, dx_nh=dx_nh,
+                               other_font_style=other_font_style, cgr_aromatic_space=cgr_aromatic_space,
+                               aam_size=aam_size, other_color=other_color, broken_color=broken_color,
+                               aromatic_space=aromatic_space)
 
     @cached_method
     def _repr_svg_(self):
