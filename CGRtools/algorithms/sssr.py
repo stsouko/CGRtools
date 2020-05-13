@@ -39,7 +39,9 @@ class SSSR:
 
         :return rings atoms numbers
         """
-        return self._sssr(self._bonds, self.rings_count)
+        if self.rings_count:
+            return self._sssr(self._bonds, self.rings_count)
+        return ()
 
     @classmethod
     def _sssr(cls, bonds: Dict[int, Union[Set[int], Dict[int, Any]]], n_sssr: int) -> Tuple[Tuple[int, ...], ...]:
