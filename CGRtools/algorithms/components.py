@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property, FrozenDict
-from collections import defaultdict
+from collections import defaultdict, deque
 from itertools import chain
 from typing import Tuple, Dict, Set, Any, Union
 from ..exceptions import ValenceError
@@ -33,13 +33,24 @@ class GraphComponents:
         """
         if not self._atoms:
             return ()
-        atoms = set(self._atoms)
+        return self._connected_components(self._bonds)
+
+    @staticmethod
+    def _connected_components(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Tuple[Tuple[int, ...], ...]:
+        atoms = set(bonds)
         components = []
         while atoms:
             start = atoms.pop()
-            component = tuple(self.__component(start))
-            components.append(component)
-            atoms.difference_update(component)
+            seen = {start}
+            queue = deque([start])
+            while queue:
+                current = queue.popleft()
+                for i in bonds[current]:
+                    if i not in seen:
+                        queue.append(i)
+                        seen.add(i)
+            components.append(tuple(seen))
+            atoms.difference_update(seen)
         return tuple(components)
 
     @property
@@ -48,17 +59,6 @@ class GraphComponents:
         Number of components in graph
         """
         return len(self.connected_components)
-
-    def __component(self, start):
-        bonds = self._bonds
-        seen = {start}
-        queue = [start]
-        while queue:
-            start = queue.pop(0)
-            yield start
-            for i in bonds[start].keys() - seen:
-                queue.append(i)
-                seen.add(i)
 
     @cached_property
     def skin_atoms(self) -> Tuple[int, ...]:
@@ -116,6 +116,14 @@ class GraphComponents:
         Atoms in rings
         """
         return tuple({x for x in self.sssr for x in x})
+
+    @cached_property
+    def rings_count(self):
+        """
+        SSSR rings count.
+        """
+        bonds = self._bonds
+        return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
 
 
 class StructureComponents:
@@ -183,7 +191,7 @@ class StructureComponents:
         bonds = self._bonds
 
         if heteroatoms:
-            atoms_numbers = {5, 6, 7, 15, 16, 33, 34, 52}
+            atoms_numbers = {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}
         else:
             atoms_numbers = {6}
 

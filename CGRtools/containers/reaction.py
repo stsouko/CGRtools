@@ -310,6 +310,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         for m in reactants:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
+                max_x += .2
                 signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
@@ -330,6 +331,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         for m in products:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
+                max_x += .2
                 signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
