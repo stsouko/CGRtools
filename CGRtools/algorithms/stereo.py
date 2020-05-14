@@ -147,9 +147,9 @@ class Stereo:
     @cached_property
     def _wedge_map(self):
         plane = self._plane
-        morgan = self.atoms_order
         atoms_stereo = self._atoms_stereo
         allenes_centers = self._stereo_allenes_centers
+        atoms = self._atoms
         used = set()
         wedge = []
         for n, s in self._allenes_stereo.items():
@@ -163,7 +163,7 @@ class Stereo:
                 order.append((env[3], env[0], *term[::-1]))
                 order.append((env[0], env[3], *term))
             order = sorted(order, key=lambda x: (x[0] in atoms_stereo, x[0] in allenes_centers,
-                                                 morgan[x[0]], morgan[x[1]]))
+                                                 -atoms[x[0]].atomic_number))
             while (order[0][0], order[0][2]) in used:
                 order.append(order.pop(0))
             order = order[0]
@@ -179,7 +179,7 @@ class Stereo:
 
         for n, s in atoms_stereo.items():
             order = sorted(self._stereo_tetrahedrons[n], key=lambda x: (x in atoms_stereo, x in allenes_centers,
-                                                                        morgan[x]))
+                                                                        -atoms[x].atomic_number, atoms[x].in_ring))
             while (order[0], n) in used:
                 order.append(order.pop(0))
             used.add((n, order[0]))
@@ -545,7 +545,7 @@ class MoleculeStereo(Stereo):
         for c in self.connected_rings_cumulenes:
             out_c = []
             env_c = []
-            adj = {n: {m: b.order for m, b in bonds[n].items() if m in c} for n in c}
+            adj = {n: {m: 1 for m, b in bonds[n].items() if m in c} for n in c}
             for mapping in self._get_automorphism_mapping({n: morgan[n] for n in c}, adj):
                 sym = {k for k, v in mapping.items() if k != v}
                 if not sym:
