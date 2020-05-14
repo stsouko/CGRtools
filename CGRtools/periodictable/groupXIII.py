@@ -45,8 +45,7 @@ class B(Element, PeriodII, GroupXIII):
 
     @property
     def _valences_exceptions(self):
-        return ((-1, False, 4, ()),
-                (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
+        return (-1, False, 4, ()),
 
     @property
     def atomic_radius(self):

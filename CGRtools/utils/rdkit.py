@@ -95,13 +95,13 @@ def to_rdkit_molecule(data):
     for n, a in data.atoms():
         conf.SetAtomPosition(mapping[n], (a.x, a.y, 0))
     conf.Set3D(False)
-    mol.AddConformer(conf)
+    mol.AddConformer(conf, assignId=True)
 
     for c in data._conformers:
         conf = Conformer()
         for n, xyz in c.items():
             conf.SetAtomPosition(mapping[n], xyz)
-        mol.AddConformer(conf)
+        mol.AddConformer(conf, assignId=True)
 
     SanitizeMol(mol)
     return mol

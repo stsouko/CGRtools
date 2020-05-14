@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,8 +20,8 @@ from collections import defaultdict
 from itertools import count
 from logging import warning
 from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
-from ..containers.cgr import DynamicBond
-from ..exceptions import MappingError
+from ..containers.bonds import Bond, DynamicBond
+from ..exceptions import MappingError, AtomNotFound
 from ..periodictable import Element, DynamicElement, QueryElement
 
 
@@ -143,16 +143,38 @@ class CGRRead:
 
     @staticmethod
     def __convert_molecule(molecule, mapping):
-        g = MoleculeContainer()
-        pm = g._parsed_mapping
+        g = object.__new__(MoleculeContainer)
+        pm = {}
+        atoms = {}
+        plane = {}
+        charges = {}
+        radicals = {}
+        bonds = {}
         for n, atom in enumerate(molecule['atoms']):
-            n = g.add_atom(Element.from_symbol(atom['element'])(atom['isotope']), mapping[n],
-                           charge=atom['charge'], is_radical=atom['is_radical'], xy=(atom['x'], atom['y']))
+            n = mapping[n]
+            atoms[n] = Element.from_symbol(atom['element'])(atom['isotope'])
+            bonds[n] = {}
+
+            charges[n] = g._validate_charge(atom['charge'])
+            radicals[n] = atom['is_radical']
+            plane[n] = (atom['x'], atom['y'])
             pm[n] = atom['mapping']
         for n, m, b in molecule['bonds']:
-            g.add_bond(mapping[n], mapping[m], b)
+            n, m = mapping[n], mapping[m]
+            if n == m:
+                raise ValueError('atom loops impossible')
+            if n not in bonds or m not in bonds:
+                raise AtomNotFound('atoms not found')
+            if n in bonds[m]:
+                raise ValueError('atoms already bonded')
+            bonds[n][m] = bonds[m][n] = Bond(b)
         if any(a['z'] for a in molecule['atoms']):
-            g._conformers.append({mapping[n]: (a['x'], a['y'], a['z']) for n, a in enumerate(molecule['atoms'])})
+            conformers = [{mapping[n]: (a['x'], a['y'], a['z']) for n, a in enumerate(molecule['atoms'])}]
+        else:
+            conformers = []
+        g.__setstate__({'atoms': atoms, 'bonds': bonds, 'meta': {}, 'plane': plane, 'parsed_mapping': pm,
+                        'charges': charges, 'radicals': radicals, 'name': '', 'conformers': conformers,
+                        'atoms_stereo': {}})
         return g
 
     @staticmethod
@@ -169,19 +191,43 @@ class CGRRead:
                 n, m = nm
                 bonds[n][m] = bonds[m][n] = DynamicBond(*value)
 
-        g = CGRContainer()
-        pm = g._parsed_mapping
-        for n, atom in enumerate(molecule['atoms']):
-            n = g.add_atom(DynamicElement.from_symbol(atom['element'])(atom['isotope']), mapping[n],
-                           charge=atom['charge'], is_radical=atom['is_radical'],
-                           p_charge=atom.get('p_charge', atom['charge']),
-                           p_is_radical=atom.get('p_is_radical', atom['is_radical']),
-                           xy=(atom['x'], atom['y']))
+        g = object.__new__(CGRContainer)
+        pm = {}
+        g_atoms = {}
+        plane = {}
+        charges = {}
+        radicals = {}
+        p_charges = {}
+        p_radicals = {}
+        g_bonds = {}
+        for n, atom in enumerate(atoms):
+            n = mapping[n]
+            g_atoms[n] = DynamicElement.from_symbol(atom['element'])(atom['isotope'])
+            g_bonds[n] = {}
+            charges[n] = g._validate_charge(atom['charge'])
+            radicals[n] = atom['is_radical']
+            p_charges[n] = g._validate_charge(atom.get('p_charge', atom['charge']))
+            p_radicals[n] = atom.get('p_is_radical', atom['is_radical'])
+            plane[n] = (atom['x'], atom['y'])
             pm[n] = atom['mapping']
         for n, m, b in molecule['bonds']:
-            if m in bonds[n] and b != 8:
-                raise ValueError('CGR spec invalid')
-            g.add_bond(mapping[n], mapping[m], bonds[n].get(m, b))
+            if m in bonds[n]:
+                if b != 8:
+                    raise ValueError('CGR spec invalid')
+                b = bonds[n][m]
+            else:
+                b = DynamicBond(b, b)
+            n, m = mapping[n], mapping[m]
+            if n == m:
+                raise ValueError('atom loops impossible')
+            if n not in g_bonds or m not in g_bonds:
+                raise AtomNotFound('atoms not found')
+            if n in g_bonds[m]:
+                raise ValueError('atoms already bonded')
+            g_bonds[n][m] = g_bonds[m][n] = b
+        g.__setstate__({'atoms': g_atoms, 'bonds': g_bonds, 'meta': {}, 'plane': plane, 'parsed_mapping': pm,
+                        'charges': charges, 'radicals': radicals, 'name': '', 'p_charges': p_charges,
+                        'p_radicals': p_radicals})
         return g
 
     @staticmethod

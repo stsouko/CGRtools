@@ -40,7 +40,7 @@ class _bdist_wheel(bdist_wheel):
 
 setup(
     name='CGRtools',
-    version='4.0.17',
+    version='4.0.20',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',
@@ -49,8 +49,9 @@ setup(
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.1',
     cmdclass={'bdist_wheel': _bdist_wheel},
-    install_requires=['CachedMethods>=0.1.4,<0.2', 'numpy>=1.18', 'numba>=0.46'],
-    extras_require={'mrv': ['lxml>=4.1,<4.5']},
+    install_requires=['CachedMethods>=0.1.4,<0.2'],
+    extras_require={'mrv': ['lxml>=4.1,<4.5'], 'clean2d': ['numpy>=1.18'],
+                    'clean2djit': ['numpy>=1.18', 'numba>=0.46']},
     data_files=[('lib', libinchi)],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').read_text(),
