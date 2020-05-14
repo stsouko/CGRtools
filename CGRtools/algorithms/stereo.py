@@ -18,7 +18,6 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict, deque
-from itertools import chain
 from logging import info
 from typing import Dict, Optional, Set, Tuple, Union
 from ..exceptions import AtomNotFound, IsChiral, NotChiral
@@ -148,10 +147,43 @@ class Stereo:
     @cached_property
     def _wedge_map(self):
         plane = self._plane
+        morgan = self.atoms_order
+        atoms_stereo = self._atoms_stereo
+        allenes_centers = self._stereo_allenes_centers
+        used = set()
         wedge = []
-        for n, s in self._atoms_stereo.items():
-            order = sorted(self._stereo_tetrahedrons[n], key=self.atoms_order.get)
-            # todo: find not used wedge
+        for n, s in self._allenes_stereo.items():
+            env = self._stereo_allenes[n]
+            term = self._stereo_allenes_terminals[n]
+            order = [(*env[:2], *term), (*env[1::-1], *term[::-1])]
+            if env[2]:
+                order.append((env[2], env[1], *term))
+                order.append((env[1], env[2], *term[::-1]))
+            if env[3]:
+                order.append((env[3], env[0], *term[::-1]))
+                order.append((env[0], env[3], *term))
+            order = sorted(order, key=lambda x: (x[0] in atoms_stereo, x[0] in allenes_centers,
+                                                 morgan[x[0]], morgan[x[1]]))
+            while (order[0][0], order[0][2]) in used:
+                order.append(order.pop(0))
+            order = order[0]
+            used.add((order[2], order[0]))
+            s = self._translate_allene_sign(n, *order[:2])
+            v = _allene_sign((*plane[order[0]], 1), plane[order[2]], plane[order[3]], (*plane[order[1]], 0))
+            if not v:
+                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
+            if s:
+                wedge.append((order[2], order[0], v))
+            else:
+                wedge.append((order[2], order[0], -v))
+
+        for n, s in atoms_stereo.items():
+            order = sorted(self._stereo_tetrahedrons[n], key=lambda x: (x in atoms_stereo, x in allenes_centers,
+                                                                        morgan[x]))
+            while (order[0], n) in used:
+                order.append(order.pop(0))
+            used.add((n, order[0]))
+
             s = self._translate_tetrahedron_sign(n, order)
             # need recalculation if XY changed
             if len(order) == 3:
@@ -162,11 +194,10 @@ class Stereo:
                                   (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
             if not v:
                 info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
-            v = v > 0
             if s:
-                wedge.append((n, order[0], 1 if v else -1))
+                wedge.append((n, order[0], v))
             else:
-                wedge.append((n, order[0], -1 if v else 1))
+                wedge.append((n, order[0], -v))
         return tuple(wedge)
 
     def _translate_tetrahedron_sign(self, n, env):
@@ -244,16 +275,38 @@ class Stereo:
         s = self._allenes_stereo[c]
 
         n0, n1, n2, n3 = self._stereo_allenes[c]
-        if nn == n0:
+        if nn == n0:  # same start
             t0 = 0
+            if nm == n1:
+                t1 = 1
+            elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+                t1 = 3
+            else:
+                raise KeyError
+        elif nn == n1:
+            t0 = 1
+            if nm == n0:
+                t1 = 0
+            elif nm == n2 or n2 is None and atoms[nm].atomic_number == 1:
+                t1 = 2
+            else:
+                raise KeyError
         elif nn == n2 or n2 is None and atoms[nn].atomic_number == 1:
             t0 = 2
-        else:
-            raise KeyError
-        if nm == n1:
-            t1 = 1
-        elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
-            t1 = 3
+            if nm == n1:
+                t1 = 1
+            elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+                t1 = 3
+            else:
+                raise KeyError
+        elif nn == n3 or n3 is None and atoms[nn].atomic_number == 1:
+            t0 = 3
+            if nm == n0:
+                t1 = 0
+            elif nm == n2 or n2 is None and atoms[nm].atomic_number == 1:
+                t1 = 2
+            else:
+                raise KeyError
         else:
             raise KeyError
 
@@ -345,7 +398,7 @@ class Stereo:
 class MoleculeStereo(Stereo):
     __slots__ = ()
 
-    def add_wedge(self, n: int, m: int, mark: bool):
+    def add_wedge(self, n: int, m: int, mark: bool, *, clean_cache=True):
         if n not in self._atoms:
             raise AtomNotFound
         if n in self._atoms_stereo:
@@ -366,32 +419,36 @@ class MoleculeStereo(Stereo):
                     s = _pyramid_sign(order[-1], *order[:3])
             if s:
                 self._atoms_stereo[n] = s > 0
-                del self.__dict__['_MoleculeStereo__chiral_centers']
+                if clean_cache:
+                    del self.__dict__['_MoleculeStereo__chiral_centers']
         else:
-            c = self._allenes_centers.get(n)
+            c = self._stereo_allenes_centers.get(n)
             if c:
                 if c in self._allenes_stereo:
                     raise IsChiral
 
-                order = self._allenes[c]
-                t1, t2 = self._allenes_terminals[c]
+                order = self._stereo_allenes[c]
+                t1, t2 = self._stereo_allenes_terminals[c]
                 w = order.index(m)
                 if w == 0:
                     m1 = order[1]
                     r = False
                 elif w == 1:
                     m1 = order[0]
+                    t1, t2 = t2, t1
                     r = False
                 elif w == 2:
                     m1 = order[1]
                     r = True
                 else:
                     m1 = order[0]
+                    t1, t2 = t2, t1
                     r = True
-                s = _dihedral_sign((*plane[m], mark), (*plane[t1], 0), (*plane[t2], 0), (*plane[m1], 0))
+                s = _allene_sign((*plane[m], mark), plane[t1], plane[t2], (*plane[m1], 0))
                 if s:
                     self._allenes_stereo[c] = s < 0 if r else s > 0
-                    del self.__dict__['_MoleculeStereo__chiral_centers']
+                    if clean_cache:
+                        del self.__dict__['_MoleculeStereo__chiral_centers']
             else:
                 # only tetrahedrons and allenes supported
                 raise NotChiral

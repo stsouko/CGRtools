@@ -450,6 +450,36 @@ class ERXNRead:
     __in_mol = 0
 
 
+class MDLStereo(CGRRead):
+    @classmethod
+    def _convert_molecule(cls, molecule, mapping):
+        mol = super()._convert_molecule(molecule, mapping)
+        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
+
+        while stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for n, m, s in stereo:
+                try:
+                    mol.add_wedge(n, m, s, clean_cache=False)
+                except NotChiral:
+                    fail_stereo.append((n, m, s))
+                except IsChiral:
+                    info(f'wedge {{{n}, {m}}} on already chiral atom')
+                except ValenceError:
+                    warning('structure has errors, stereo data skipped')
+                    mol.flush_cache()
+                    break
+            else:
+                stereo = fail_stereo
+                if len(stereo) == old_stereo:
+                    break
+                mol.flush_cache()
+                continue
+            break
+        return mol
+
+
 class MDLReadMeta(type):
     def __call__(cls, *args, **kwargs):
         if kwargs.get('indexable'):
@@ -459,7 +489,7 @@ class MDLReadMeta(type):
         return obj
 
 
-class MDLRead(CGRRead, metaclass=MDLReadMeta):
+class MDLRead(MDLStereo, metaclass=MDLReadMeta):
     def __init__(self, file, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
@@ -813,27 +843,3 @@ class MDLWrite:
         return out
 
     __charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}
-
-
-class MOLStereo:
-    @staticmethod
-    def update_stereo(g, mapping, stereo):
-        stereo = [(mapping[n], mapping[m], s) for n, m, s in stereo]
-        old_stereo = 0
-        while len(stereo) != old_stereo:
-            fail_stereo = []
-            old_stereo = len(stereo)
-            for n, m, s in stereo:
-                try:
-                    g.add_wedge(n, m, s)
-                except NotChiral:
-                    fail_stereo.append((n, m, s))
-                except IsChiral:
-                    info(f'wedge {{{n}, {m}}} on already chiral atom')
-                except ValenceError:
-                    info('structure has errors, stereo data skipped')
-                    break
-            else:
-                stereo = fail_stereo
-                continue
-            break

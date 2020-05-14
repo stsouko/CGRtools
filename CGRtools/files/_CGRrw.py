@@ -106,7 +106,6 @@ class CGRRead:
                         maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
 
         rc = {'reactants': [], 'products': [], 'reagents': []}
-        rm = {'reactants': [], 'products': [], 'reagents': []}
         for i, tmp in maps.items():
             shift = 0
             for j in reaction[i]:
@@ -115,8 +114,7 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-                rm[i].append(remapped)
-        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc), rm
+        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -139,10 +137,10 @@ class CGRRead:
 
         g = self.__prepare_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
-        return g, remapped
+        return g
 
     @staticmethod
-    def __convert_molecule(molecule, mapping):
+    def _convert_molecule(molecule, mapping):
         g = object.__new__(MoleculeContainer)
         pm = {}
         atoms = {}
@@ -178,7 +176,7 @@ class CGRRead:
         return g
 
     @staticmethod
-    def __convert_cgr(molecule, mapping):
+    def _convert_cgr(molecule, mapping):
         atoms = molecule['atoms']
         bonds = defaultdict(dict)
 
@@ -231,7 +229,7 @@ class CGRRead:
         return g
 
     @staticmethod
-    def __convert_query(molecule, mapping):
+    def _convert_query(molecule, mapping):
         atoms = molecule['atoms']
         for n, _type, value in molecule['query']:
             atoms[n][_type] = value
@@ -252,11 +250,11 @@ class CGRRead:
         if 'query' in molecule:
             if 'cgr' in molecule:
                 raise ValueError('QueryCGR parsing not supported')
-            g = self.__convert_query(molecule, mapping)
+            g = self._convert_query(molecule, mapping)
         elif 'cgr' in molecule:
-            g = self.__convert_cgr(molecule, mapping)
+            g = self._convert_cgr(molecule, mapping)
         else:
-            g = self.__convert_molecule(molecule, mapping)
+            g = self._convert_molecule(molecule, mapping)
 
         if 'title' in molecule:
             g.name = molecule['title']

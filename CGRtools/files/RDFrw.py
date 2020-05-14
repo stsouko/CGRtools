@@ -145,9 +145,9 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
+                            container = self._convert_structure(record)
                         seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
@@ -171,9 +171,9 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
+                            container = self._convert_structure(record)
                         seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
@@ -226,9 +226,9 @@ class RDFRead(MDLRead):
                 record['title'] = title
             try:
                 if is_reaction:
-                    container, mapping = self._convert_reaction(record)
+                    container = self._convert_reaction(record)
                 else:
-                    container, mapping = self._convert_structure(record)
+                    container = self._convert_structure(record)
                 yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
