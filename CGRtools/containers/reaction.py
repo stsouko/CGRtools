@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, class_cached_property
+from CachedMethods import cached_method
 from collections.abc import Iterable
 from functools import reduce
 from hashlib import sha512
@@ -40,7 +40,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     query containers itself not support hashing and comparison.
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
-    __class_cache__ = {}
 
     def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
                  reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
@@ -429,39 +428,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         self.__dict__.clear()
         for m in self.molecules():
             m.flush_cache()
-
-    @classmethod
-    def load_remapping_rules(cls, reactions: TIterable[Tuple['ReactionContainer', 'ReactionContainer']]):
-        """
-        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
-        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
-        Products should be equal but with different atom numbers.
-        """
-        rules = []
-        for bad, good in reactions:
-            if bad != good:
-                raise ValueError('bad and good reaction should be equal')
-
-            bc = ~bad
-            gc = ~good
-            atoms = set(bc.center_atoms + gc.center_atoms)
-
-            bad_query = bc.substructure(atoms.intersection(bc), as_query=True)
-            good_query = gc.substructure(atoms.intersection(gc), as_query=True)
-
-            fix = {}
-            for mb, mg in zip(bad.products, good.products):  # get fix map
-                fx = min((m for m in
-                         ({k: v for k, v in m.items() if k != v} for m in mb.get_mapping(mg, automorphism_filter=False))
-                         if atoms.issuperset(m)), key=len)
-                fix.update(fx)
-            rules.append((bad_query, good_query, fix))
-
-        cls.__class_cache__[cls] = {'_remapping_compiled_rules': tuple(rules)}
-
-    @class_cached_property
-    def _remapping_compiled_rules(self):
-        return ()
 
 
 __all__ = ['ReactionContainer']

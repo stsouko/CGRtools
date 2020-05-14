@@ -18,9 +18,12 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import class_cached_property
-from itertools import chain, permutations, product
+from typing import Iterable, Tuple, TYPE_CHECKING
 from ..containers import query  # cyclic imports resolve
 from ..exceptions import ValenceError
+
+if TYPE_CHECKING:
+    from CGRtools import ReactionContainer
 
 
 class Standardize:
@@ -601,7 +604,7 @@ class StandardizeReaction:
 
     def fix_mapping(self) -> bool:
         """
-        Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
+        Fix atom-to-atom mapping of some functional groups or reaction centers. Return True if found AAM errors.
         """
         seen = set()
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
@@ -628,11 +631,40 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+        if seen:
+            self.flush_cache()
+            flag = True
+            seen = set()
+        else:
+            flag = False
+
+        for bad_query, good_query, fix in self.__remapping_compiled_rules:
+            cgr = ~self
+            del self.__dict__['__cached_method_compose']
+
+            set_fix = set(fix)
+            for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
+                if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
+                    continue
+                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
+                reverse = {m: n for n, m in mapping.items()}
+                for m in self.products:
+                    m.remap(mapping)
+
+                check = ~self
+                if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
+                    seen.update(mapping)
+                    continue
+
+                # restore old mapping
+                for m in self.products:
+                    m.remap(reverse)
+                del self.__dict__['__cached_method_compose']
 
         if seen:
             self.flush_cache()
             return True
-        return False
+        return flag
 
     def clean_isotopes(self) -> bool:
         """
@@ -649,28 +681,38 @@ class StandardizeReaction:
             self.flush_cache()
         return flag
 
-    def __mapping_fixing(self):
-        cgr = ~self
-        del self.__dict__['__cached_method_compose']
+    @classmethod
+    def load_remapping_rules(cls, reactions: Iterable[Tuple['ReactionContainer', 'ReactionContainer']]):
+        """
+        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
+        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Products should be equal but with different atom numbers.
+        """
+        rules = []
+        for bad, good in reactions:
+            if bad != good:
+                raise ValueError('bad and good reaction should be equal')
 
-        for bad_query, good_query, fix in self._remapping_compiled_rules:
-            set_fix = set(fix)
-            for mapping in bad_query.get_mapping(cgr):
-                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
-                reverse = {m: n for n, m in mapping.items()}
-                for m in self.products:
-                    m.remap(mapping)
+            bc = ~bad
+            gc = ~good
+            atoms = set(bc.center_atoms + gc.center_atoms)
 
-                check = ~self
-                if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
-                    return True
+            bad_query = bc.substructure(atoms.intersection(bc), as_query=True)
+            good_query = gc.substructure(atoms.intersection(gc), as_query=True)
 
-                # restore old mapping
-                for m in self.products:
-                    m.remap(reverse)
-                del self.__dict__['__cached_method_compose']
+            fix = {}
+            for mb, mg in zip(bad.products, good.products):  # get fix map
+                fx = min((m for m in
+                         ({k: v for k, v in m.items() if k != v} for m in mb.get_mapping(mg, automorphism_filter=False))
+                         if atoms.issuperset(m)), key=len)
+                fix.update(fx)
+            rules.append((bad_query, good_query, fix))
 
-        return False
+        cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
+
+    @class_cached_property
+    def __remapping_compiled_rules(self):
+        return ()
 
     @class_cached_property
     def __standardize_compiled_rules(self):
