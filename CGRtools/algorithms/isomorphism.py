@@ -23,6 +23,22 @@ from itertools import permutations, product
 from typing import Dict, Iterator, Any
 
 
+frequency = {1: 10,  # H
+             6: 9,  # C
+             8: 8,  # O
+             7: 7,  # N
+             15: 6, 16: 6,  # P, S
+             9: 5,  # F
+             17: 4, 35: 4,  # Cl, Br
+             53: 3,  # I
+             5: 2, 14: 2,  # B, Si
+             11: 1, 12: 1, 19: 1, 20: 1}  # Na, Mag,  K, Ca
+
+
+def atom_frequency(x):
+    return frequency.get(x.atomic_number, 0)
+
+
 class Isomorphism:
     __slots__ = ()
 
@@ -74,67 +90,87 @@ class Isomorphism:
         o_atoms = other._atoms
         o_bonds = other._bonds
 
-        for candidates in permutations(other.connected_components, len(components)):
-            for match in product(*(self.__get_mapping(order, closures, o_atoms, o_bonds, component)
-                                   for order, component in zip(components, candidates))):
-                mapping = match[0]
-                for m in match[1:]:
-                    mapping.update(m)
-                if automorphism_filter:
-                    atoms = frozenset(mapping.values())
-                    if atoms in seen:
-                        continue
-                    seen.add(atoms)
-                yield mapping
+        for candidates in permutations((set(x) for x in other.connected_components), len(components)):
+            mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component)
+                       for order, component in zip(components, candidates)]
+            if len(mappers) == 1:
+                for mapping in mappers[0]:
+                    if automorphism_filter:
+                        atoms = frozenset(mapping.values())
+                        if atoms in seen:
+                            continue
+                        seen.add(atoms)
+                    yield mapping
+            else:
+                for match in product(*mappers):
+                    mapping = match[0]
+                    for m in match[1:]:
+                        mapping.update(m)
+                    if automorphism_filter:
+                        atoms = frozenset(mapping.values())
+                        if atoms in seen:
+                            continue
+                        seen.add(atoms)
+                    yield mapping
 
     @staticmethod
     def __get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope):
         size = len(linear_query) - 1
         order_depth = {v[0]: k for k, v in enumerate(linear_query)}
+        equal_cache = defaultdict(dict)
 
         stack = []
         path = []
         mapping = {}
         reversed_mapping = {}
 
-        s_atom = linear_query[0][1]
+        s_n, s_atom = linear_query[0]
+        eqs = equal_cache[s_n]
         for n, o_atom in o_atoms.items():
-            if n in scope and s_atom == o_atom:
-                stack.append((n, 0))
+            if n in scope:
+                if s_atom == o_atom:
+                    eqs[n] = True
+                    stack.append((n, 0))
+                else:
+                    eqs[n] = False
 
         while stack:
-            o_atom, depth = stack.pop()
-            s_atom = linear_query[depth][0]
+            n, depth = stack.pop()
+            current = linear_query[depth][0]
             if depth == size:
-                yield {s_atom: o_atom, **mapping}
+                yield {current: n, **mapping}
             else:
                 if len(path) != depth:
                     for x in path[depth:]:
-                        del mapping[reversed_mapping[x]]
+                        del mapping[reversed_mapping.pop(x)]
                     path = path[:depth]
 
-                back = linear_query[depth + 1][1]
-                if back != s_atom:
-                    fork = path[order_depth[back]]
-                else:
-                    fork = o_atom
+                path.append(n)
+                mapping[current] = n
+                reversed_mapping[n] = current
 
-                path.append(o_atom)
-                mapping[s_atom] = o_atom
-                reversed_mapping[o_atom] = s_atom
+                depth += 1
+                s_n, back, s_atom, s_bond = linear_query[depth]
+                if back != current:
+                    n = path[order_depth[back]]
 
-                lp = len(path)
-                for o_n, o_bond in o_bonds[fork].items():
-                    if o_n not in scope:
-                        continue
-                    s_n, _, s_atom, s_bond = linear_query[lp]
-                    if o_n not in path and s_bond == o_bond and s_atom == o_atoms[o_n] \
-                            and all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
-                        stack.append((o_n, lp))
+                eqs = equal_cache[s_n]
+                for o_n, o_bond in o_bonds[n].items():
+                    if o_n in scope and o_n not in reversed_mapping and s_bond == o_bond:
+                        if o_n in eqs:
+                            if eqs[o_n]:
+                                if all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
+                                    stack.append((o_n, depth))
+                        elif s_atom == o_atoms[o_n]:
+                            eqs[o_n] = True
+                            if all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
+                                stack.append((o_n, depth))
+                        else:
+                            eqs[o_n] = False
 
     @cached_property
     def __compiled_query(self):
-        return self.__compile_query(self._atoms, self._bonds, self.atoms_order)
+        return self.__compile_query(self._atoms, self._bonds, {n: atom_frequency(a) for n, a in self._atoms.items()})
 
     @staticmethod
     def __compile_query(atoms, bonds, atoms_order):
@@ -142,9 +178,9 @@ class Isomorphism:
         components = []
         seen = set()
         while len(seen) < len(atoms):
-            start = max(atoms.keys() - seen, key=lambda x: atoms_order[x])
+            start = min(atoms.keys() - seen, key=lambda x: atoms_order[x])
             seen.add(start)
-            stack = [(n, start, atoms[n], bond) for n, bond in sorted(bonds[start].items(),
+            stack = [(n, start, atoms[n], bond) for n, bond in sorted(bonds[start].items(), reverse=True,
                                                                       key=lambda x: atoms_order[x[0]])]
             order = [(start, atoms[start])]
             components.append(order)
@@ -153,7 +189,7 @@ class Isomorphism:
                 front, back, *_ = atom = stack.pop()
                 if front not in seen:
                     order.append(atom)
-                    for n, bond in sorted(bonds[front].items(), key=lambda x: atoms_order[x[0]]):
+                    for n, bond in sorted(bonds[front].items(), reverse=True, key=lambda x: atoms_order[x[0]]):
                         if n != back:
                             if n not in seen:
                                 stack.append((n, front, atoms[n], bond))
@@ -176,18 +212,23 @@ class Isomorphism:
         """
         Iterator of all possible automorphism mappings.
         """
-        return self._get_automorphism_mapping(self.atoms_order, self._bonds)
+        return self._get_automorphism_mapping(self.atoms_order, self._bonds,
+                                              {n: atom_frequency(a) for n, a in self._atoms.items()})
 
     @classmethod
-    def _get_automorphism_mapping(cls, atoms: Dict[int, int], bonds: Dict[int, Dict[int, Any]]) -> \
-            Iterator[Dict[int, int]]:
+    def _get_automorphism_mapping(cls, atoms: Dict[int, int], bonds: Dict[int, Dict[int, Any]],
+                                  atoms_order: Dict[int, int]) -> Iterator[Dict[int, int]]:
 
         if len(atoms) == len(set(atoms.values())):
             return  # all atoms unique
 
-        components, closures = cls.__compile_query(atoms, bonds, atoms)
-        for match in product(*(cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order})
-                               for order in components)):
+        components, closures = cls.__compile_query(atoms, bonds, atoms_order)
+        mappers = [cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}) for order in components]
+        if len(mappers) == 1:
+            for mapping in mappers[0]:
+                if any(k != v for k, v in mapping.items()):
+                    yield mapping
+        for match in product(*mappers):
             mapping = match[0]
             for m in match[1:]:
                 mapping.update(m)
