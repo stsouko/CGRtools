@@ -546,7 +546,8 @@ class MoleculeStereo(Stereo):
             out_c = []
             env_c = []
             adj = {n: {m: 1 for m, b in bonds[n].items() if m in c} for n in c}
-            for mapping in self._get_automorphism_mapping({n: morgan[n] for n in c}, adj):
+            w_atoms = {n: morgan[n] for n in c}
+            for mapping in self._get_automorphism_mapping(w_atoms, adj, w_atoms):
                 sym = {k for k, v in mapping.items() if k != v}
                 if not sym:
                     continue

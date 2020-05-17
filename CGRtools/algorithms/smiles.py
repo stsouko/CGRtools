@@ -217,7 +217,7 @@ class Smiles:
 class MoleculeSmiles(Smiles):
     __slots__ = ()
 
-    def _format_atom(self, n, adjacency=None, **kwargs):
+    def _format_atom(self, n, adjacency, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
@@ -230,8 +230,14 @@ class MoleculeSmiles(Smiles):
                '',  # charge
                '']  # ]
 
-        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # neutral carbon only
-            smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
+        if kwargs.get('stereo', True):
+            if n in self._atoms_stereo:
+                smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
+            elif n in self._allenes_stereo:
+                ts = self._stereo_allenes_terminals[n]
+                env = self._stereo_allenes[n]
+                n1, n2 = (next(x for x in ngb if x in env) for x, ngb in adjacency.items() if x in ts)
+                smi[3] = '@' if self._translate_allene_sign(n, n1, n2) else '@@'
         elif charge:
             smi[5] = charge_str[charge]
 
