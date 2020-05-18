@@ -216,17 +216,16 @@ class Isomorphism:
         Iterator of all possible automorphism mappings.
         """
         return self._get_automorphism_mapping(self.atoms_order, self._bonds,
-                                              {n: atom_frequency(a) for n, a in self._atoms.items()},
-                                              self.atoms_order)
+                                              {n: atom_frequency(a) for n, a in self._atoms.items()})
 
     @classmethod
     def _get_automorphism_mapping(cls, atoms: Dict[int, int], bonds: Dict[int, Dict[int, Any]],
-                                  atoms_frequencies: Dict[int, int],
-                                  groups: Dict[int, int]) -> Iterator[Dict[int, int]]:
+                                  atoms_frequencies: Dict[int, int]) -> Iterator[Dict[int, int]]:
         if len(atoms) == len(set(atoms.values())):
             return  # all atoms unique
 
         components, closures = cls.__compile_query(atoms, bonds, atoms_frequencies)
+        groups = {x: n for n, x in enumerate(atoms)}
         mappers = [cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}, groups)
                    for order in components]
         if len(mappers) == 1:
