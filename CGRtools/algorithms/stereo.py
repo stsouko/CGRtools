@@ -394,6 +394,22 @@ class Stereo:
                 terminals[c] = (path[0], path[-1])
         return terminals
 
+    @cached_property
+    def _stereo_allenes_paths(self) -> Dict[int, Tuple[int, ...]]:
+        paths = {}
+        for path, env in self._stereo_cumulenes.items():
+            if len(path) % 2:
+                paths[path[len(path) // 2]] = path
+        return paths
+
+    @cached_property
+    def _stereo_cis_trans_paths(self) -> Dict[Tuple[int, int], Tuple[int, ...]]:
+        paths = {}
+        for path, env in self._stereo_cumulenes.items():
+            if not len(path) % 2:
+                paths[(path[0], path[-1])] = path
+        return paths
+
 
 class MoleculeStereo(Stereo):
     __slots__ = ()
