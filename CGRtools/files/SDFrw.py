@@ -43,6 +43,7 @@ class SDFRead(MDLRead):
             order, records with errors are skipped
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
         """
         super().__init__(file, **kwargs)
         self._data = self.__reader()

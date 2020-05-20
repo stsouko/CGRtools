@@ -79,6 +79,7 @@ class MRVRead(MDLStereo):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
         """
         if isinstance(file, str):
             self.__file = open(file, 'rb')

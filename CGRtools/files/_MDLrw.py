@@ -451,12 +451,17 @@ class ERXNRead:
 
 
 class MDLStereo(CGRRead):
-    @classmethod
-    def _convert_molecule(cls, molecule, mapping):
+    def __init__(self, calc_cis_trans=False, **kwargs):
+        super().__init__(**kwargs)
+        self.__calc_cis_trans = calc_cis_trans
+
+    def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
         stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
 
         while stereo:
+            if self.__calc_cis_trans:
+                mol.calculate_cis_trans_from_2d(clean_cache=False)
             fail_stereo = []
             old_stereo = len(stereo)
             for n, m, s in stereo:
@@ -474,7 +479,7 @@ class MDLStereo(CGRRead):
                 stereo = fail_stereo
                 if len(stereo) == old_stereo:
                     break
-                mol.flush_cache()
+                del mol.__dict__['_MoleculeStereo__chiral_centers']
                 continue
             break
         return mol

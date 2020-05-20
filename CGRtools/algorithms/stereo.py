@@ -436,7 +436,7 @@ class MoleculeStereo(Stereo):
             if s:
                 self._atoms_stereo[n] = s > 0
                 if clean_cache:
-                    del self.__dict__['_MoleculeStereo__chiral_centers']
+                    self.flush_cache()
         else:
             c = self._stereo_allenes_centers.get(n)
             if c:
@@ -464,50 +464,48 @@ class MoleculeStereo(Stereo):
                 if s:
                     self._allenes_stereo[c] = s < 0 if r else s > 0
                     if clean_cache:
-                        del self.__dict__['_MoleculeStereo__chiral_centers']
+                        self.flush_cache()
             else:
                 # only tetrahedrons and allenes supported
                 raise NotChiral
 
-    def calculate_cis_trans_from_2d(self):
+    def calculate_cis_trans_from_2d(self, *, clean_cache=True):
         cis_trans_stereo = self._cis_trans_stereo
         plane = self._plane
-        while True:
-            if not self._chiral_cis_trans:
-                break
+        flag = False
+        while self._chiral_cis_trans:
             stereo = {}
             for nm in self._chiral_cis_trans:
                 n, m = nm
-                n1, m1 = self._cis_trans[nm][:2]
+                n1, m1, *_ = self._stereo_cis_trans[nm]
                 s = _cis_trans_sign(plane[n1], plane[n], plane[m], plane[m1])
                 if s:
                     stereo[nm] = s > 0
             if stereo:
                 cis_trans_stereo.update(stereo)
+                flag = True
                 del self.__dict__['_MoleculeStereo__chiral_centers']
             else:
                 break
+        if flag and clean_cache:
+            self.flush_cache()
 
-    def add_atom_stereo(self, n, env, mark: bool):
+    def add_atom_stereo(self, n, mark: bool, *, clean_cache=True):
         if n not in self._atoms:
             raise AtomNotFound
-        if n in self._atoms_stereo:
+        if n in self._atoms_stereo or n in self._allenes_stereo:
             raise IsChiral
-        if len(env) != len(set(env)):
-            raise ValueError('invalid environment')
         if not isinstance(mark, bool):
             raise TypeError('stereo mark should be bool')
 
         if n in self._chiral_tetrahedrons:
-            if set(env) != set(self._bonds[n]):
-                raise AtomNotFound
-
-            translate = tuple(env.index(x) for x in self._stereo_tetrahedrons[n][:3])
-            if _tetrahedron_translate[translate]:
-                mark = not mark
-
             self._atoms_stereo[n] = mark
-            del self.__dict__['_MoleculeStereo__chiral_centers']
+            if clean_cache:
+                self.flush_cache()
+        elif n in self._chiral_allenes:
+            self._allenes_stereo[n] = mark
+            if clean_cache:
+                self.flush_cache()
         else:  # only tetrahedrons supported
             raise NotChiral
 
