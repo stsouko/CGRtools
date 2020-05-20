@@ -81,15 +81,22 @@ class Isomorphism:
         return True
 
     @abstractmethod
-    def get_mapping(self, other, *, automorphism_filter: bool = True) -> Iterator[Dict[int, int]]:
+    def get_mapping(self, other, *,
+                    automorphism_filter: bool = True, optimize: bool = True) -> Iterator[Dict[int, int]]:
         """
-        Get self to other substructure mapping generator
+        Get self to other substructure mapping generator.
+
+        :param automorphism_filter: skip matches to same atoms.
+        :param optimize: morgan weights based automorphism preventing.
         """
         seen = set()
         components, closures = self.__compiled_query
         o_atoms = other._atoms
         o_bonds = other._bonds
-        o_order = other.atoms_order
+        if optimize:
+            o_order = other.atoms_order
+        else:
+            o_order = {n: i for i, n in enumerate(o_atoms)}
 
         for candidates in permutations((set(x) for x in other.connected_components), len(components)):
             mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
