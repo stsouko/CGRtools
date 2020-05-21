@@ -222,9 +222,13 @@ class SSSR:
 
                     tmp.add(ckc)
                     condensed_rings = tmp
-                    if ckc != ck and ckc in seen_rings:  # reduced to existing ring. finis reached?
-                        condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
-                        continue
+
+                    if ckc != ck:  # I dunno why this need. but need!
+                        # check ring for full surrounding by other rings
+                        if ck.issubset(n for n in neighbors for n in n) and ckc in seen_rings:
+                            # reduced to existing ring. finis reached?
+                            condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
+                            continue
                     seen_rings.add(ckc)
                     sssr[ck] = c
                     if len(sssr) == n_sssr:
