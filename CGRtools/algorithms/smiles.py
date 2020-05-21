@@ -270,12 +270,10 @@ class MoleculeSmiles(Smiles):
                         return '/'
                     else:
                         return '\\' if self._cis_trans_stereo[ts] else '/'
-                else:
-                    return ''
-            elif m in ctt and ctt[m] in self._cis_trans_stereo:  # R-C=C case
+
+            elif m in ctt and ctt[m] in self._cis_trans_stereo:  # Rn-Cm(X)=C case
                 return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
-            else:
-                return ''
+            return ''
         return order_str[order]
 
 
