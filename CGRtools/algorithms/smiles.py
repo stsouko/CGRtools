@@ -264,10 +264,12 @@ class MoleculeSmiles(Smiles):
             if n in ctt:
                 ts = ctt[n]
                 if ts in self._cis_trans_stereo:
-                    if n == next(x for x in adjacency if x in ts):  # first bond UP
+                    env = self._stereo_cis_trans[ts]
+
+                    if n == next(x for x in adjacency if x in ts):  # C(/R)=C case
                         return '/'
                     else:
-                        return '/' if self._cis_trans_stereo[ts] else '\\'
+                        return '\\' if self._cis_trans_stereo[ts] else '/'
                 else:
                     return ''
             elif m in ctt and ctt[m] in self._cis_trans_stereo:  # R-C=C case
