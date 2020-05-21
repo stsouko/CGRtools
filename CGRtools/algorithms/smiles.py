@@ -259,8 +259,15 @@ class MoleculeSmiles(Smiles):
         order = self._bonds[n][m].order
         if kwargs.get('aromatic', True) and order == 4:
             return ''
-        elif kwargs.get('stereo', True):
-            ...
+        elif kwargs.get('stereo', True) and order == 1:  # cis-trans /\
+            ctt = self._stereo_cis_trans_terminals
+            if n in ctt:
+                ...
+            elif m in ctt:
+                k = ctt[m]
+
+            else:
+                return ''
         return order_str[order]
 
 
