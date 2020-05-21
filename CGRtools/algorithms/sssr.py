@@ -222,8 +222,8 @@ class SSSR:
 
                     tmp.add(ckc)
                     condensed_rings = tmp
-                    if ckc in seen_rings:  # reduced to existing ring. finis reached?
-                        condensed_rings.add(ck)  # add ring to condensed. required for for combined rings detection.
+                    if ckc != ck and ckc in seen_rings:  # reduced to existing ring. finis reached?
+                        condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
                         continue
                     seen_rings.add(ckc)
                     sssr[ck] = c
