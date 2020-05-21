@@ -457,11 +457,11 @@ class MDLStereo(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
-        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
+        if self.__calc_cis_trans:
+            mol.calculate_cis_trans_from_2d()
 
+        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
         while stereo:
-            if self.__calc_cis_trans:
-                mol.calculate_cis_trans_from_2d(clean_cache=False)
             fail_stereo = []
             old_stereo = len(stereo)
             for n, m, s in stereo:
@@ -480,6 +480,8 @@ class MDLStereo(CGRRead):
                 if len(stereo) == old_stereo:
                     break
                 del mol.__dict__['_MoleculeStereo__chiral_centers']
+                if self.__calc_cis_trans:
+                    mol.calculate_cis_trans_from_2d(clean_cache=False)
                 continue
             break
         return mol

@@ -262,10 +262,16 @@ class MoleculeSmiles(Smiles):
         elif kwargs.get('stereo', True) and order == 1:  # cis-trans /\
             ctt = self._stereo_cis_trans_terminals
             if n in ctt:
-                ...
-            elif m in ctt:
-                k = ctt[m]
-
+                ts = ctt[n]
+                if ts in self._cis_trans_stereo:
+                    if n == next(x for x in adjacency if x in ts):  # first bond UP
+                        return '/'
+                    else:
+                        return '/' if self._cis_trans_stereo[ts] else '\\'
+                else:
+                    return ''
+            elif m in ctt and ctt[m] in self._cis_trans_stereo:  # R-C=C case
+                return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
             else:
                 return ''
         return order_str[order]
