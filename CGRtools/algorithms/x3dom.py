@@ -31,6 +31,11 @@ def normal_vector(nm, no):
     return nmy * noz - noy * nmz, nmx * noz - nox * nmz, nmx * noy - nox * nmy
 
 
+def unit_vector(nmx, nmy, nmz):
+    nmd = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+    return nmx / nmd, nmy / nmd, nmz / nmd
+
+
 class JupyterWidget:
     def __init__(self, xml, width, height):
         self.xml = xml
@@ -79,7 +84,7 @@ class X3dom:
         mapping_color = config['mapping_color']
         carbon = config['carbon']
         font = config['font_size']
-        radius = config['atom_radius']
+        radius = config['atom_radius'] = -.1
         if radius < 0:
             multiplier = -radius
             radius = 0
@@ -150,6 +155,7 @@ class X3domMolecule(X3dom):
                 order = 2
             else:
                 order = 1
+            order = 2
             nx, ny, nz = xyz[n]
             mx, my, mz = xyz[m]
 
@@ -163,8 +169,8 @@ class X3domMolecule(X3dom):
             x, y, z = nx + nmx / 2, ny + nmy / 2, nz + nmz / 2
             length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
             if order == 1:
-                xml.append(f"    <transform translation='{x:.2f} {y:.2f} {z:.2f}' rotation='{nmz:.2f} "
-                           f"{0} {-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                xml.append(f"    <transform translation='{x:.2f} {y:.2f} {z:.2f}' rotation='{nmz:.2f} 0 "
+                           f"{-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
                            f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
                            f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
                            "        </cylinder>\n      </shape>\n    </transform>\n")
