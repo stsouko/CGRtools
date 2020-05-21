@@ -36,18 +36,6 @@ def unit_vector(nmx, nmy, nmz):
     return nmx / nmd, nmy / nmd, nmz / nmd
 
 
-def center_atom(n, xyz):
-    new_xyz = {}
-    nx, ny, nz = xyz[n]
-    for k, v in xyz.items():
-        if k == n:
-            new_xyz[k] = (0, 0, 0)
-        else:
-            vx, vy, vz = v
-            new_xyz[k] = vx - nx, vy - ny, vz - nz
-    return new_xyz
-
-
 class JupyterWidget:
     def __init__(self, xml, width, height):
         self.xml = xml
@@ -96,7 +84,7 @@ class X3dom:
         mapping_color = config['mapping_color']
         carbon = config['carbon']
         font = config['font_size']
-        radius = config['atom_radius'] = -.1
+        radius = config['atom_radius']
         if radius < 0:
             multiplier = -radius
             radius = 0
@@ -163,12 +151,10 @@ class X3domMolecule(X3dom):
         xml = []
         for n, m, bond in self.bonds():
 
-            # if n == 2 and m == 3:
-            #     order = 2
-            # else:
-            #     order = 1
-            # order = bond.order
-            order = 2
+            if n == 2 and m == 3:
+                order = 2
+            else:
+                order = 1
             nx, ny, nz = xyz[n]
             mx, my, mz = xyz[m]
 
@@ -190,48 +176,35 @@ class X3domMolecule(X3dom):
                            f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
                            "        </cylinder>\n      </shape>\n    </transform>\n")
             elif order == 2:
-                o = sorted([x for x in bonds[n] if x != m], key=lambda a: len(bonds[a]))
-                if not o:
+                neighbor = sorted([x for x in bonds[n] if x != m], key=lambda a: len(bonds[a]))
+                if not neighbor:
                     pass
                 else:
-                    o = o[0]
-                print('third', o)
-                # center atom n (0, 0, 0)
-                _xyz = center_atom(n, xyz)
+                    neighbor = neighbor[0]
+                ox, oy, oz = xyz[neighbor]
+                nox, noy, noz = ox - nx, oy - ny, oz - nz
 
-                # atom m (x, 0, 0)
-                mx, my, mz = _xyz[m]
-                _mx, _my, _mz = sqrt(mx ** 2 + my ** 2 + mz ** 2), 0, 0
+                # normal for plane n m o
+                normx, normy, normz = normal_vector((nmx, nmy, nmz), (nox, noy, noz))
 
-                # atom o (x, y, 0)
-                ox, oy, oz = _xyz[o]
-                _ox = (mx * ox + my * oy + mz * oz) / _mx
-                _oy, _oz = sqrt(ox ** 2 + oy ** 2 + oz ** 2 - _ox ** 2), 0
+                # normal for plane n m normal
+                norm_x, norm_y, norm_z = normal_vector((nmx, nmy, nmz), (normx, normy, normz))
+                norm_dist = sqrt(norm_x ** 2 + norm_y ** 2 + norm_z ** 2)
 
-                # normal for plane mno
-                A1, B1, C1 = plane_normal((_mx, _my, _mz), (_ox, _oy, _oz))
+                if norm_dist < .0001:
+                    coef = 1
+                else:
+                    coef = double_space / norm_dist
 
-                mox, moy, moz = _ox - _mx, _oy - _my, _oz - _mz
-                for atom, d3 in _xyz.items():
-                    if atom not in (n, m, o):
-                        ax, ay, az = d3
-                        sc = (ax * _mx + ay * _my + az * _mz)
-                        _ax = sc / _mx
-                        _ay = (sc - _ax * _ox) / _oy
-                        _az = sqrt(ax ** 2 + ay ** 2 + az ** 2 - _ax ** 2 - _ay ** 2)
-                        A2, B2, C2 = plane_normal((mox, moy, moz), (_ax - _mx, _ay - _my, _az - _mz))
-                        if (B1 * C2 - C1 * B2) * mox + (C1 * A2 - A1 * C2) * moy + (A1 * B2 - B1 * A2) * moz < .0001:
-                            _az = -_az
-
-
+                dx, dy, dz = norm_x * coef, norm_y * coef, norm_z * coef
                 xml.append(
-                    f"    <transform translation='{x + dx:.2f} {y - dy:.2f} {z + dz:.2f}' rotation='{nmz:.2f} "
+                    f"    <transform translation='{x + dx:.2f} {y + dy:.2f} {z + dz:.2f}' rotation='{nmz:.2f} "
                     f"{0} {-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
                     f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
                     f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
                     "        </cylinder>\n      </shape>\n    </transform>\n")
                 xml.append(
-                    f"    <transform translation='{x - dx:.2f} {y + dy:.2f} {z - dz:.2f}' rotation='{nmz:.2f} "
+                    f"    <transform translation='{x - dx:.2f} {y - dy:.2f} {z - dz:.2f}' rotation='{nmz:.2f} "
                     f"{0} {-nmx:.2f} {angle:.2f}'>\n      <shape>\n        <appearance>\n"
                     f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
                     f"       </appearance>\n        <cylinder radius='{radius}' height='{length:.2f}'>\n"
