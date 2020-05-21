@@ -219,11 +219,9 @@ class SSSR:
                                 ckc -= term
                         else:
                             tmp.add(r)
-
-                    tmp.add(ckc)
                     condensed_rings = tmp
 
-                    if ckc != ck and ckc in seen_rings:  # I dunno why this need. but need!
+                    if ckc != ck and ckc in seen_rings:
                         # check ring for full surrounding by other rings
                         # reduced to existing ring. finis reached?
                         neighbors = set()  # bonds of neighbors
@@ -236,6 +234,8 @@ class SSSR:
                         if (c[0], c[-1]) in neighbors and all(x in neighbors for x in zip(c, c[1:])):
                             condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
                             continue
+
+                    condensed_rings.add(ckc)
                     seen_rings.add(ckc)
                     sssr[ck] = c
                     if len(sssr) == n_sssr:
