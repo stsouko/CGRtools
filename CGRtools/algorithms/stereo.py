@@ -364,6 +364,21 @@ class Stereo:
         return {(n, m): env for (n, *mid, m), env in self._stereo_cumulenes.items() if not len(mid) % 2}
 
     @cached_property
+    def _stereo_cis_trans_paths(self) -> Dict[Tuple[int, int], Tuple[int, ...]]:
+        return {(path[0], path[-1]): path for path in self._stereo_cumulenes if not len(path) % 2}
+
+    @cached_property
+    def _stereo_cis_trans_terminals(self) -> Dict[int, Tuple[int, int]]:
+        """
+        Cis-Trans terminal atoms to cis-trans key mapping
+        """
+        terminals = {}
+        for nm in self._stereo_cis_trans_paths:
+            n, m = nm
+            terminals[n] = terminals[m] = nm
+        return terminals
+
+    @cached_property
     def _stereo_allenes(self) -> Dict[int, Tuple[int, int, Optional[int], Optional[int]]]:
         """
         Allenes which contains at least one non-hydrogen neighbor on both ends
@@ -376,10 +391,8 @@ class Stereo:
         Allene terminal atom to center mapping
         """
         terminals = {}
-        for path, env in self._stereo_cumulenes.items():
-            if len(path) % 2:
-                c = path[len(path) // 2]
-                terminals[path[0]] = terminals[path[-1]] = c
+        for c, (n, m) in self._stereo_allenes_terminals.items():
+            terminals[n] = terminals[m] = c
         return terminals
 
     @cached_property
@@ -387,28 +400,11 @@ class Stereo:
         """
         Allene center atom to terminals mapping
         """
-        terminals = {}
-        for path, env in self._stereo_cumulenes.items():
-            if len(path) % 2:
-                c = path[len(path) // 2]
-                terminals[c] = (path[0], path[-1])
-        return terminals
+        return {c: (path[0], path[-1]) for c, path in self._stereo_allenes_paths.items()}
 
     @cached_property
     def _stereo_allenes_paths(self) -> Dict[int, Tuple[int, ...]]:
-        paths = {}
-        for path, env in self._stereo_cumulenes.items():
-            if len(path) % 2:
-                paths[path[len(path) // 2]] = path
-        return paths
-
-    @cached_property
-    def _stereo_cis_trans_paths(self) -> Dict[Tuple[int, int], Tuple[int, ...]]:
-        paths = {}
-        for path, env in self._stereo_cumulenes.items():
-            if not len(path) % 2:
-                paths[(path[0], path[-1])] = path
-        return paths
+        return {path[len(path) // 2]: path for path in self._stereo_cumulenes if len(path) % 2}
 
 
 class MoleculeStereo(Stereo):
@@ -498,6 +494,7 @@ class MoleculeStereo(Stereo):
         if not isinstance(mark, bool):
             raise TypeError('stereo mark should be bool')
 
+        # [C@]1(Br)(Cl)CCCC(F)C1 need reversed mark if ring-broken
         if n in self._chiral_tetrahedrons:
             self._atoms_stereo[n] = mark
             if clean_cache:

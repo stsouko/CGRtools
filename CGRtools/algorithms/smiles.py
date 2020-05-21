@@ -255,10 +255,12 @@ class MoleculeSmiles(Smiles):
             smi[2] = atom.atomic_symbol
         return ''.join(smi)
 
-    def _format_bond(self, n, m, **kwargs):
+    def _format_bond(self, n, m, adjacency, **kwargs):
         order = self._bonds[n][m].order
         if kwargs.get('aromatic', True) and order == 4:
             return ''
+        elif kwargs.get('stereo', True):
+            ...
         return order_str[order]
 
 
