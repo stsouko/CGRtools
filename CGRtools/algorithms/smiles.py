@@ -265,12 +265,13 @@ class MoleculeSmiles(Smiles):
                 ts = ctt[n]
                 if ts in self._cis_trans_stereo:
                     env = self._stereo_cis_trans[ts]
-
-                    if n == next(x for x in adjacency if x in ts):  # C(/R)=C case
-                        return '/'
-                    else:
-                        return '\\' if self._cis_trans_stereo[ts] else '/'
-
+                    if m == next(x for x in adjacency[n] if x in env):  # only first neighbor of double bonded atom
+                        if n == next(x for x in adjacency if x in ts):  # Cn(\Rm)(X)=C, Cn(=C)(\Rm)X, C(=C=Cn(\Rm)X)=C
+                            return '\\'
+                        else:  # C=Cn(Rm)(X) cases
+                            n2 = ts[1] if ts[0] == n else ts[0]
+                            m2 = next(x for x in adjacency[n2] if x in env)
+                            return '\\' if self._translate_cis_trans_sign(n2, n, m2, m) else '/'
             elif m in ctt and ctt[m] in self._cis_trans_stereo:  # Rn-Cm(X)=C case
                 return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
             return ''
