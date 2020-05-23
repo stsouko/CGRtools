@@ -678,7 +678,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             state['atoms_stereo'] = {}
             state['allenes_stereo'] = {}
             state['cis_trans_stereo'] = {}
-        elif 'allenes_stereo' not in state:  # <4.0.19
+        elif 'allenes_stereo' not in state:  # <4.0.22
             state['atoms_stereo'] = {}  # flush existing stereo if exists.
             state['allenes_stereo'] = {}
             state['cis_trans_stereo'] = {}

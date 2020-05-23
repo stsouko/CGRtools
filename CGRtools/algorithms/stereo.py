@@ -246,16 +246,38 @@ class Stereo:
             nn, nm = nm, nn
 
         n0, n1, n2, n3 = self._stereo_cis_trans[(n, m)]
-        if nn == n0:
+        if nn == n0:  # same start
             t0 = 0
+            if nm == n1:
+                t1 = 1
+            elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+                t1 = 3
+            else:
+                raise KeyError
+        elif nn == n1:
+            t0 = 1
+            if nm == n0:
+                t1 = 0
+            elif nm == n2 or n2 is None and atoms[nm].atomic_number == 1:
+                t1 = 2
+            else:
+                raise KeyError
         elif nn == n2 or n2 is None and atoms[nn].atomic_number == 1:
             t0 = 2
-        else:
-            raise KeyError
-        if nm == n1:
-            t1 = 1
-        elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
-            t1 = 3
+            if nm == n1:
+                t1 = 1
+            elif nm == n3 or n3 is None and atoms[nm].atomic_number == 1:
+                t1 = 3
+            else:
+                raise KeyError
+        elif nn == n3 or n3 is None and atoms[nn].atomic_number == 1:
+            t0 = 3
+            if nm == n0:
+                t1 = 0
+            elif nm == n2 or n2 is None and atoms[nm].atomic_number == 1:
+                t1 = 2
+            else:
+                raise KeyError
         else:
             raise KeyError
 
@@ -438,6 +460,8 @@ class MoleculeStereo(Stereo):
             if c:
                 if c in self._allenes_stereo:
                     raise IsChiral
+                elif c not in self._chiral_allenes:
+                    raise NotChiral
 
                 order = self._stereo_allenes[c]
                 t1, t2 = self._stereo_allenes_terminals[c]
@@ -801,8 +825,11 @@ class MoleculeStereo(Stereo):
                 return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}
 
 
-class QueryStereo(Stereo):  # todo: implement add_wedge, calculate_cis_trans_from_2d
+class QueryStereo(Stereo):  # todo: implement add_wedge
     __slots__ = ()
+
+    def add_wedge(self, n: int, m: int, mark: bool, *, clean_cache=True):
+        raise NotImplementedError
 
 
 # 1  2
