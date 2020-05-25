@@ -533,6 +533,7 @@ class MoleculeStereo(Stereo):
             raise NotChiral
 
     def _fix_stereo(self):
+        # todo: fix
         if self._atoms_stereo:
             atoms = self._atoms
             stereo = {k: v for k, v in self._atoms_stereo.items() if k in atoms}
@@ -815,8 +816,7 @@ class MoleculeStereo(Stereo):
             for ax in axises:
                 ax_t, ax_a, ax_c, check = ax
                 # remove fully labeled axises
-                if not ax_t.isdisjoint(tetrahedrons) or ax_a and not ax_a.isdisjoint(cumulenes) or \
-                        ax_c and not ax_c.isdisjoint(cumulenes):
+                if ax_t.issubset(tetrahedrons) and ax_a.issubset(cumulenes) and ax_c.issubset(cumulenes):
                     tmp.append(ax)
             axises = tmp
 
