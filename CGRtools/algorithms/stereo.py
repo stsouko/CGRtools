@@ -127,7 +127,9 @@ class Stereo:
     __slots__ = ()
 
     def get_mapping(self, other, **kwargs):
-        # todo: refactor
+        return super().get_mapping(other, **kwargs)
+        # todo: reimplement
+
         stereo = self._atoms_stereo
         if stereo:
             tetrahedrons = self._stereo_tetrahedrons
