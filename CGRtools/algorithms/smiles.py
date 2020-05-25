@@ -232,7 +232,10 @@ class MoleculeSmiles(Smiles):
 
         if kwargs.get('stereo', True):
             if n in self._atoms_stereo:
-                smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
+                if ih and next(x for x in adjacency) == n:
+                    smi[3] = '@@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@'
+                else:
+                    smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
             elif n in self._allenes_stereo:
                 ts = self._stereo_allenes_terminals[n]
                 env = self._stereo_allenes[n]
