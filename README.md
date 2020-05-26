@@ -152,3 +152,10 @@ CONTRIBUTORS
 * Adelia Fatykhova <adelik21979@gmail.com>
 * Tagir Akhmetshin <tagirshin@gmail.com>
 * Ravil Mukhametgaleev <sonic-mc@mail.ru>
+
+CITE THIS
+=========
+
+CGRtools: Python Library for Molecule, Reaction, and Condensed Graph of Reaction Processing.
+Journal of Chemical Information and Modeling 2019 59 (6), 2516-2521.
+DOI: 10.1021/acs.jcim.9b00102 
