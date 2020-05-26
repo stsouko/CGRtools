@@ -217,7 +217,7 @@ class Smiles:
 class MoleculeSmiles(Smiles):
     __slots__ = ()
 
-    def _format_atom(self, n, adjacency=None, **kwargs):
+    def _format_atom(self, n, adjacency, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
@@ -230,8 +230,17 @@ class MoleculeSmiles(Smiles):
                '',  # charge
                '']  # ]
 
-        if kwargs.get('stereo', True) and n in self._atoms_stereo:  # neutral carbon only
-            smi[3] = '@' if self._translate_tetrahedron_stereo(n, adjacency[n]) else '@@'
+        if kwargs.get('stereo', True):
+            if n in self._atoms_stereo:
+                if ih and next(x for x in adjacency) == n:
+                    smi[3] = '@@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@'
+                else:
+                    smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
+            elif n in self._allenes_stereo:
+                ts = self._stereo_allenes_terminals[n]
+                env = self._stereo_allenes[n]
+                n1, n2 = (next(x for x in ngb if x in env) for x, ngb in adjacency.items() if x in ts)
+                smi[3] = '@' if self._translate_allene_sign(n, n1, n2) else '@@'
         elif charge:
             smi[5] = charge_str[charge]
 
@@ -249,9 +258,25 @@ class MoleculeSmiles(Smiles):
             smi[2] = atom.atomic_symbol
         return ''.join(smi)
 
-    def _format_bond(self, n, m, **kwargs):
+    def _format_bond(self, n, m, adjacency, **kwargs):
         order = self._bonds[n][m].order
         if kwargs.get('aromatic', True) and order == 4:
+            return ''
+        elif kwargs.get('stereo', True) and order == 1:  # cis-trans /\
+            ctt = self._stereo_cis_trans_terminals
+            if n in ctt:
+                ts = ctt[n]
+                if ts in self._cis_trans_stereo:
+                    env = self._stereo_cis_trans[ts]
+                    if m == next(x for x in adjacency[n] if x in env):  # only first neighbor of double bonded atom
+                        if n == next(x for x in adjacency if x in ts):  # Cn(\Rm)(X)=C, Cn(=C)(\Rm)X, C(=C=Cn(\Rm)X)=C
+                            return '\\'
+                        else:  # C=Cn(Rm)(X) cases
+                            n2 = ts[1] if ts[0] == n else ts[0]
+                            m2 = next(x for x in adjacency[n2] if x in env)
+                            return '\\' if self._translate_cis_trans_sign(n2, n, m2, m) else '/'
+            elif m in ctt and ctt[m] in self._cis_trans_stereo:  # Rn-Cm(X)=C case
+                return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
             return ''
         return order_str[order]
 
@@ -307,7 +332,7 @@ class QuerySmiles(Smiles):
             smi = ['[', atom.atomic_symbol]
 
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
-            smi.append('@' if self._translate_tetrahedron_stereo(n, kwargs['adjacency'][n]) else '@@')
+            smi.append('@' if self._translate_tetrahedron_sign(n, kwargs['adjacency'][n]) else '@@')
 
         if kwargs.get('hybridization', True) and hybridization:
             smi.append(';')

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  Copyright 2019 Tansu Nasyrova <tansu.nasyrova@gmail.com>
 #  This file is part of CGRtools.
@@ -33,11 +33,11 @@ class C(Element, PeriodII, GroupXIV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({12: 0.9893, 13: 0.0107})
+        return FrozenDict({12: 0.9893, 13: 0.0107, 14: 0.0})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({12: 12.0, 13: 13.003355})
+        return FrozenDict({12: 12.0, 13: 13.003355, 14: 14.003242})
 
     @property
     def _common_valences(self):
