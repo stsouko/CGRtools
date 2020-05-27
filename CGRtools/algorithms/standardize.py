@@ -614,7 +614,6 @@ class StandardizeReaction:
                     if mapping[1] not in seen:
                         found.append(({fix.get(k, k): v for k, v in mapping.items()},
                                       {mapping[k]: mapping[v] for k, v in fix.items()}))
-
             if not found:
                 continue
             for m in self.products:
@@ -703,7 +702,8 @@ class StandardizeReaction:
             fix = {}
             for mb, mg in zip(bad.products, good.products):  # get fix map
                 fx = min((m for m in
-                         ({k: v for k, v in m.items() if k != v} for m in mb.get_mapping(mg, automorphism_filter=False))
+                         ({k: v for k, v in m.items() if k != v}
+                          for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
                          if atoms.issuperset(m)), key=len)
                 fix.update(fx)
             rules.append((bad_query, good_query, fix))
