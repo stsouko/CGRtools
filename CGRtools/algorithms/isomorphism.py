@@ -81,13 +81,14 @@ class Isomorphism:
         return True
 
     @abstractmethod
-    def get_mapping(self, other, *,
-                    automorphism_filter: bool = True, optimize: bool = True) -> Iterator[Dict[int, int]]:
+    def get_mapping(self, other, *, automorphism_filter: bool = True,
+                    optimize: bool = True, fallback: bool = False) -> Iterator[Dict[int, int]]:
         """
         Get self to other substructure mapping generator.
 
         :param automorphism_filter: Skip matches to same atoms.
         :param optimize: Morgan weights based automorphism preventing.
+        :param fallback: Try without optimization then nothing matched.
         """
         if optimize:
             g = self.__components_mapping(other, other.atoms_order, automorphism_filter)
@@ -95,6 +96,8 @@ class Isomorphism:
             if m is not None:
                 yield m
                 yield from g
+                return
+            elif not fallback:
                 return
         yield from self.__components_mapping(other, {n: i for i, n in enumerate(other)}, automorphism_filter)
 
