@@ -81,17 +81,25 @@ class Isomorphism:
         return True
 
     @abstractmethod
-    def get_mapping(self, other, *, automorphism_filter: bool = True) -> Iterator[Dict[int, int]]:
+    def get_mapping(self, other, *,
+                    automorphism_filter: bool = True, optimize: bool = True) -> Iterator[Dict[int, int]]:
         """
-        Get self to other substructure mapping generator
+        Get self to other substructure mapping generator.
+
+        :param automorphism_filter: skip matches to same atoms.
+        :param optimize: morgan weights based automorphism preventing.
         """
         seen = set()
         components, closures = self.__compiled_query
         o_atoms = other._atoms
         o_bonds = other._bonds
+        if optimize:
+            o_order = other.atoms_order
+        else:
+            o_order = {n: i for i, n in enumerate(o_atoms)}
 
         for candidates in permutations((set(x) for x in other.connected_components), len(components)):
-            mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component)
+            mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
                        for order, component in zip(components, candidates)]
             if len(mappers) == 1:
                 for mapping in mappers[0]:
@@ -114,7 +122,7 @@ class Isomorphism:
                     yield mapping
 
     @staticmethod
-    def __get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope):
+    def __get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope, groups):
         size = len(linear_query) - 1
         order_depth = {v[0]: k for k, v in enumerate(linear_query)}
         equal_cache = defaultdict(dict)
@@ -155,8 +163,10 @@ class Isomorphism:
                     n = path[order_depth[back]]
 
                 eqs = equal_cache[s_n]
+                uniq = set()
                 for o_n, o_bond in o_bonds[n].items():
-                    if o_n in scope and o_n not in reversed_mapping and s_bond == o_bond:
+                    if o_n in scope and o_n not in reversed_mapping and s_bond == o_bond and groups[o_n] not in uniq:
+                        uniq.add(groups[o_n])
                         if o_n in eqs:
                             if eqs[o_n]:
                                 if all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
@@ -173,15 +183,15 @@ class Isomorphism:
         return self.__compile_query(self._atoms, self._bonds, {n: atom_frequency(a) for n, a in self._atoms.items()})
 
     @staticmethod
-    def __compile_query(atoms, bonds, atoms_order):
+    def __compile_query(atoms, bonds, atoms_frequencies):
         closures = defaultdict(list)
         components = []
         seen = set()
         while len(seen) < len(atoms):
-            start = min(atoms.keys() - seen, key=lambda x: atoms_order[x])
+            start = min(atoms.keys() - seen, key=lambda x: atoms_frequencies[x])
             seen.add(start)
             stack = [(n, start, atoms[n], bond) for n, bond in sorted(bonds[start].items(), reverse=True,
-                                                                      key=lambda x: atoms_order[x[0]])]
+                                                                      key=lambda x: atoms_frequencies[x[0]])]
             order = [(start, atoms[start])]
             components.append(order)
 
@@ -189,7 +199,7 @@ class Isomorphism:
                 front, back, *_ = atom = stack.pop()
                 if front not in seen:
                     order.append(atom)
-                    for n, bond in sorted(bonds[front].items(), reverse=True, key=lambda x: atoms_order[x[0]]):
+                    for n, bond in sorted(bonds[front].items(), reverse=True, key=lambda x: atoms_frequencies[x[0]]):
                         if n != back:
                             if n not in seen:
                                 stack.append((n, front, atoms[n], bond))
@@ -217,13 +227,14 @@ class Isomorphism:
 
     @classmethod
     def _get_automorphism_mapping(cls, atoms: Dict[int, int], bonds: Dict[int, Dict[int, Any]],
-                                  atoms_order: Dict[int, int]) -> Iterator[Dict[int, int]]:
-
+                                  atoms_frequencies: Dict[int, int]) -> Iterator[Dict[int, int]]:
         if len(atoms) == len(set(atoms.values())):
             return  # all atoms unique
 
-        components, closures = cls.__compile_query(atoms, bonds, atoms_order)
-        mappers = [cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}) for order in components]
+        components, closures = cls.__compile_query(atoms, bonds, atoms_frequencies)
+        groups = {x: n for n, x in enumerate(atoms)}
+        mappers = [cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}, groups)
+                   for order in components]
         if len(mappers) == 1:
             for mapping in mappers[0]:
                 if any(k != v for k, v in mapping.items()):

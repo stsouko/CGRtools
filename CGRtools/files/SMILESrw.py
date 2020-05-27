@@ -201,7 +201,7 @@ class SMILESRead(CGRRead):
                 return
 
             try:
-                container, mapping = self._convert_reaction(record)
+                container = self._convert_reaction(record)
                 return container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
@@ -215,7 +215,7 @@ class SMILESRead(CGRRead):
 
             record['meta'] = meta
             try:
-                container, mapping = self._convert_structure(record)
+                container = self._convert_structure(record)
                 return container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')

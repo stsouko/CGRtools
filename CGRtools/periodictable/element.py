@@ -37,7 +37,7 @@ class Core(ABC):
         """
         if isinstance(isotope, int):
             if isotope not in self.isotopes_distribution:
-                raise ValueError('isotope number impossible or not stable')
+                raise ValueError(f'isotope number {isotope} impossible or not stable for {self.__class__.__name__}')
         elif isotope is not None:
             raise TypeError('integer isotope number required')
         self.__isotope = isotope

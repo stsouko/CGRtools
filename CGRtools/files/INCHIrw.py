@@ -140,7 +140,7 @@ class INCHIRead(CGRRead):
 
         record['meta'] = meta
         try:
-            container, mapping = self._convert_structure(record)
+            container = self._convert_structure(record)
             return container
         except ValueError:
             warning(f'record consist errors:\n{format_exc()}')
