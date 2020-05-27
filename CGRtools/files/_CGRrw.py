@@ -19,10 +19,10 @@
 from collections import defaultdict
 from itertools import count
 from logging import warning
-from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
+from ..containers import CGRContainer, MoleculeContainer, QueryContainer, ReactionContainer
 from ..containers.bonds import Bond, DynamicBond
-from ..exceptions import MappingError, AtomNotFound
-from ..periodictable import Element, DynamicElement, QueryElement
+from ..exceptions import AtomNotFound, MappingError
+from ..periodictable import DynamicElement, Element, QueryElement
 
 
 common_isotopes = {'H': 1, 'He': 4, 'Li': 7, 'Be': 9, 'B': 11, 'C': 12, 'N': 14, 'O': 16, 'F': 19, 'Ne': 20, 'Na': 23,
@@ -106,7 +106,6 @@ class CGRRead:
                         maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
 
         rc = {'reactants': [], 'products': [], 'reagents': []}
-        rm = {'reactants': [], 'products': [], 'reagents': []}
         for i, tmp in maps.items():
             shift = 0
             for j in reaction[i]:
@@ -115,8 +114,7 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-                rm[i].append(remapped)
-        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc), rm
+        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -139,10 +137,10 @@ class CGRRead:
 
         g = self.__prepare_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
-        return g, remapped
+        return g
 
     @staticmethod
-    def __convert_molecule(molecule, mapping):
+    def _convert_molecule(molecule, mapping):
         g = object.__new__(MoleculeContainer)
         pm = {}
         atoms = {}
@@ -174,11 +172,11 @@ class CGRRead:
             conformers = []
         g.__setstate__({'atoms': atoms, 'bonds': bonds, 'meta': {}, 'plane': plane, 'parsed_mapping': pm,
                         'charges': charges, 'radicals': radicals, 'name': '', 'conformers': conformers,
-                        'atoms_stereo': {}})
+                        'atoms_stereo': {}, 'allenes_stereo': {}, 'cis_trans_stereo': {}})
         return g
 
     @staticmethod
-    def __convert_cgr(molecule, mapping):
+    def _convert_cgr(molecule, mapping):
         atoms = molecule['atoms']
         bonds = defaultdict(dict)
 
@@ -231,7 +229,7 @@ class CGRRead:
         return g
 
     @staticmethod
-    def __convert_query(molecule, mapping):
+    def _convert_query(molecule, mapping):
         atoms = molecule['atoms']
         for n, _type, value in molecule['query']:
             atoms[n][_type] = value
@@ -252,11 +250,11 @@ class CGRRead:
         if 'query' in molecule:
             if 'cgr' in molecule:
                 raise ValueError('QueryCGR parsing not supported')
-            g = self.__convert_query(molecule, mapping)
+            g = self._convert_query(molecule, mapping)
         elif 'cgr' in molecule:
-            g = self.__convert_cgr(molecule, mapping)
+            g = self._convert_cgr(molecule, mapping)
         else:
-            g = self.__convert_molecule(molecule, mapping)
+            g = self._convert_molecule(molecule, mapping)
 
         if 'title' in molecule:
             g.name = molecule['title']

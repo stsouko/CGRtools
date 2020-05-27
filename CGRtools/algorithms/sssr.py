@@ -19,8 +19,10 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import chain, combinations, product
+from logging import warning
 from operator import itemgetter
 from typing import Any, Dict, Set, Tuple, Union
+from ..exceptions import ImplementationError
 
 
 class SSSR:
@@ -149,6 +151,7 @@ class SSSR:
         seen_rings = {ck}
         sssr = {ck: c}
         condensed_rings = {ck}  # collection of contours of condensed rings
+        hold = []
         for c in rings:
             ck = frozenset(c)
             if len(ck) != len(c) or ck in seen_rings:
@@ -219,13 +222,11 @@ class SSSR:
                                 ckc -= term
                         else:
                             tmp.add(r)
-
-                    tmp.add(ckc)
                     condensed_rings = tmp
 
-                    if ckc != ck and ckc in seen_rings:  # I dunno why this need. but need!
+                    if ckc != ck and ckc in seen_rings:
                         # check ring for full surrounding by other rings
-                        # reduced to existing ring. finis reached?
+                        # reduced to existing ring. finish reached?
                         neighbors = set()  # bonds of neighbors
                         for r in sssr:
                             if len(r & ck) > 1:
@@ -235,7 +236,10 @@ class SSSR:
                                             neighbors.add((n, m))
                         if (c[0], c[-1]) in neighbors and all(x in neighbors for x in zip(c, c[1:])):
                             condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
+                            hold.append(c)
                             continue
+
+                    condensed_rings.add(ckc)
                     seen_rings.add(ckc)
                     sssr[ck] = c
                     if len(sssr) == n_sssr:
@@ -245,6 +249,12 @@ class SSSR:
                 sssr[ck] = c
                 if len(sssr) == n_sssr:
                     return tuple(sssr.values())
+
+        if len(hold) < n_sssr - len(sssr):
+            raise ImplementationError
+        elif len(hold) > n_sssr - len(sssr):
+            warning('Number of closing rings more than SSSR count. Possible errors.')
+        return (*sssr.values(), *hold[:n_sssr - len(sssr)])
 
 
 __all__ = ['SSSR']

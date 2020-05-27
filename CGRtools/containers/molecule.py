@@ -37,7 +37,8 @@ from ..periodictable import Element, QueryElement
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
                         DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
+                 '_allenes_stereo')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -45,6 +46,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, bool] = {}
+        self._allenes_stereo: Dict[int, bool] = {}
+        self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
+
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
@@ -169,12 +173,16 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             hhg = h._hydrogens
             hc = h._conformers
             has = h._atoms_stereo
+            hal = h._allenes_stereo
+            hcs = h._cis_trans_stereo
         else:
             hn = {}
             hh = {}
             hhg = {}
             hc = []
             has = {}
+            hal = {}
+            hcs = {}
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
@@ -186,6 +194,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
         for n, stereo in self._atoms_stereo.items():
             has[mg(n, n)] = stereo
+        for n, stereo in self._allenes_stereo.items():
+            hal[mg(n, n)] = stereo
+        for (n, m), stereo in self._cis_trans_stereo.items():
+            hcs[(mg(n, n), mg(m, m))] = stereo
 
         if copy:
             return h
@@ -195,6 +207,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hydrogens = hhg
         self._conformers = hc
         self._atoms_stereo = has
+        self._allenes_stereo = hal
+        self._cis_trans_stereo = hcs
         return self
 
     def copy(self, **kwargs) -> 'MoleculeContainer':
@@ -204,6 +218,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
         copy._atoms_stereo = self._atoms_stereo.copy()
+        copy._allenes_stereo = self._allenes_stereo.copy()
+        copy._cis_trans_stereo = self._cis_trans_stereo.copy()
         return copy
 
     def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
@@ -227,6 +243,12 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
             not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
             sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
+            sub._allenes_stereo = {n: s for n, s in self._allenes_stereo.items()
+                                   if not_skin.issuperset(self._stereo_allenes_paths[n]) and
+                                      not_skin.issuperset(x for x in self._stereo_allenes[n] if x)}
+            sub._cis_trans_stereo = {nm: s for nm, s in self._cis_trans_stereo.items()
+                                     if not_skin.issuperset(self._stereo_cis_trans_paths[nm]) and
+                                        not_skin.issuperset(x for x in self._stereo_cis_trans[nm] if x)}
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n]
@@ -255,7 +277,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
                 sub._calc_hybridization(n)
                 sub._calc_implicit(n)
+            # fix_stereo will repair data
             sub._atoms_stereo = self._atoms_stereo
+            sub._allenes_stereo = self._allenes_stereo
+            sub._cis_trans_stereo = self._cis_trans_stereo
             sub._fix_stereo()
         return sub
 
@@ -268,6 +293,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
+            u._allenes_stereo.update(other._allenes_stereo)
+            u._cis_trans_stereo.update(other._cis_trans_stereo)
 
             ub = u._bonds
             for n in other._bonds:
@@ -605,7 +632,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return hybridization
 
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
+        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
+                'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
+                **super().__getstate__()}
 
     def __setstate__(self, state):
         if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
@@ -625,6 +654,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
             state['meta'] = state['_BaseContainer__meta']
             state['parsed_mapping'] = {}
         elif 'node' in state:  # 3.1 compatibility.
@@ -645,10 +676,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
+        elif 'allenes_stereo' not in state:  # <4.0.22
+            state['atoms_stereo'] = {}  # flush existing stereo if exists.
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
 
         super().__setstate__(state)
         self._conformers = state['conformers']
         self._atoms_stereo = state['atoms_stereo']
+        self._allenes_stereo = state['allenes_stereo']
+        self._cis_trans_stereo = state['cis_trans_stereo']
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}

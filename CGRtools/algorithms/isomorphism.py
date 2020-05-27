@@ -86,18 +86,24 @@ class Isomorphism:
         """
         Get self to other substructure mapping generator.
 
-        :param automorphism_filter: skip matches to same atoms.
-        :param optimize: morgan weights based automorphism preventing.
+        :param automorphism_filter: Skip matches to same atoms.
+        :param optimize: Morgan weights based automorphism preventing.
         """
-        seen = set()
+        if optimize:
+            g = self.__components_mapping(other, other.atoms_order, automorphism_filter)
+            m = next(g, None)
+            if m is not None:
+                yield m
+                yield from g
+                return
+        yield from self.__components_mapping(other, {n: i for i, n in enumerate(other)}, automorphism_filter)
+
+    def __components_mapping(self, other, o_order, automorphism_filter):
         components, closures = self.__compiled_query
         o_atoms = other._atoms
         o_bonds = other._bonds
-        if optimize:
-            o_order = other.atoms_order
-        else:
-            o_order = {n: i for i, n in enumerate(o_atoms)}
 
+        seen = set()
         for candidates in permutations((set(x) for x in other.connected_components), len(components)):
             mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
                        for order, component in zip(components, candidates)]

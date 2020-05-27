@@ -35,14 +35,11 @@ class Morgan:
         :return: dict of atom-order pairs
         """
         atoms = self._atoms
-        bonds = self._bonds
         if not atoms:  # for empty containers
             return {}
         elif len(atoms) == 1:  # optimize single atom containers
             return dict.fromkeys(atoms, 1)
-
-        params = {n: hash((a, *sorted(int(b) for b in bonds[n].values()))) for n, a in atoms.items()}
-        return self._morgan(params)
+        return self._morgan({n: hash(a) for n, a in atoms.items()})
 
     def _morgan(self, weights: Dict[int, int]) -> Dict[int, int]:
         atoms = self._atoms
@@ -53,7 +50,8 @@ class Morgan:
         stab = old_numb = 0
 
         for _ in range(tries):
-            weights = {n: hash((weights[n], *sorted(weights[m] for m in ms))) for n, ms in bonds.items()}
+            weights = {n: hash((weights[n], *sorted((weights[m], int(b)) for m, b in ms.items())))
+                       for n, ms in bonds.items()}
             old_numb, numb = numb, len(set(weights.values()))
             if numb == len(atoms):  # each atom now unique
                 break

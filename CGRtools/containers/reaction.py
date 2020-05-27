@@ -405,13 +405,13 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     def __str__(self):
         sig = []
         for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append(''.join(sorted(str(x) for x in ml)))
+            sig.append('.'.join(sorted(str(x) for x in ml)))
         return '>'.join(sig)
 
     def __format__(self, format_spec):
         sig = []
         for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append(''.join(sorted(format(x, format_spec) for x in ml)))
+            sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
         return '>'.join(sig)
 
     def flush_cache(self):
