@@ -254,7 +254,7 @@ class X3domMolecule(X3dom):
             else:
                 xml.extend(self.__render_dashes(nx, ny, nz, nmx, nmy, nmz, length, rotation_angle))
 
-        for ring in self.connected_rings:
+        for ring in self.aromatic_rings:
             cx = sum(xyz[n][0] for n in ring) / len(ring)
             cy = sum(xyz[n][1] for n in ring) / len(ring)
             cz = sum(xyz[n][2] for n in ring) / len(ring)
