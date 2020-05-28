@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,7 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from math import acos, sqrt, cos, sin, ceil
+from math import acos, sqrt
 
 
 def plane_normal(nmx, nmy, nmz, nox, noy, noz):
@@ -34,13 +35,15 @@ def unit_vector(nmx, nmy, nmz):
 
 
 def get_angle(nx, ny, nz, mx, my, mz):
-    ch = nx * mx + ny * my + nz * mz
-    zn = (nx ** 2 + ny ** 2 + nz ** 2) ** .5 * (mx ** 2 + my ** 2 + mz ** 2) ** .5
-    if zn < .0001:
-        angle = .0
+    ch = (nx * mx + ny * my + nz * mz) ** 2
+    zn = (nx ** 2 + ny ** 2 + nz ** 2) * (mx ** 2 + my ** 2 + mz ** 2)
+    if ch < .0001:
+        return 1.
     else:
-        angle = acos(ch/zn)
-    return angle
+        if zn < .0001:
+            return .0
+        else:
+            return sqrt(1 - ch / zn)
 
 
 def vector_normal(nmx, nmy, nmz):
@@ -145,7 +148,6 @@ class X3domMolecule(X3dom):
         bonds = self._bonds
         config = self._render_config
 
-        dash1, dash2 = config['dashes']
         bond_color = config['bond_color']
         bond_radius = config['bond_radius']
         double_space = config['double_space']
@@ -252,7 +254,7 @@ class X3domMolecule(X3dom):
                            f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                            f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
             else:
-                xml.extend(self.__render_dashes(nx, ny, nz, nmx, nmy, nmz, length, rotation_angle))
+                xml.extend(self.__render_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle))
 
         for ring in self.aromatic_rings:
             cx = sum(xyz[n][0] for n in ring) / len(ring)
@@ -262,70 +264,50 @@ class X3domMolecule(X3dom):
             for n, m in zip(ring, ring[1:]):
                 nx, ny, nz = xyz[n]
                 mx, my, mz = xyz[m]
-                nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-                if (n, m) in lengths:
-                    length, rotation_angle = lengths[(n, m)]
-                else:
-                    length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
-                    rotation_angle = acos(nmy / length)
-                if length < .001:
-                    continue
 
                 aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
                 if aromatic:
                     veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                     ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
-                    bx, by, bz = mx + vecb_x, my + vecb_y, mz + vecb_z
-                    xx, yy, zz = (ax + bx) / 2, (ay + by) / 2, (az + bz) / 2
-                    abx, aby, abz = bx - ax, by - ay, bz - az
-                    ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
-                    xml.append(f"    <transform translation='{xx:.2f} {yy:.2f} {zz:.2f}' rotation='{nmz:.2f} 0 "
-                               f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
-                               f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-                               f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{ln:.2f}'>\n"
-                               "        </cylinder>\n      </shape>\n    </transform>\n")
-                    # xml.extend(self.__render_dashes(ax, ay, az, abx, aby, abz, sqrt(abx ** 2 + aby ** 2 + abz ** 2),
-                    #                                 rotation_angle, aromatic=True))
+                    abx, aby, abz = mx + vecb_x - ax, my + vecb_y - ay, mz + vecb_z - az
+                    ab_ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
+                    if ab_ln < .0001:
+                        continue
+                    else:
+                        xml.extend(self.__render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
 
             i, j = ring[-1], ring[0]
             nx, ny, nz = xyz[i]
             mx, my, mz = xyz[j]
-            nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-            if (i, j) in lengths:
-                length, rotation_angle = lengths[(i, j)]
-            else:
-                length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
-                rotation_angle = acos(nmy / length)
-            if length < .001:
-                continue
-
             aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
             if aromatic:
                 veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                 ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
-                bx, by, bz = mx + vecb_x, my + vecb_y, mz + vecb_z
-                xx, yy, zz = (ax + bx) / 2, (ay + by) / 2, (az + bz) / 2
-                abx, aby, abz = bx - ax, by - ay, bz - az
-                ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
-                xml.append(f"    <transform translation='{xx:.2f} {yy:.2f} {zz:.2f}' rotation='{nmz:.2f} 0 "
-                           f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
-                           f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-                           f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{ln:.2f}'>\n"
-                           "        </cylinder>\n      </shape>\n    </transform>\n")
+                abx, aby, abz = mx + vecb_x - ax, my + vecb_y - ay, mz + vecb_z - az
+                ab_ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
+                if ab_ln < .0001:
+                    continue
+                else:
+                    xml.extend(self.__render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
+
         return ''.join(xml)
 
-    def __render_dashes(self, nx, ny, nz, nmx, nmy, nmz, nm_ln, r_angle, aromatic=False):
+    def __render_dashes(self, nx, ny, nz, nmx, nmy, nmz, nm_ln, r_angle=.0):
         config = self._render_config
 
         bond_color = config['bond_color']
         bond_radius = config['bond_radius']
-        if aromatic:
-            dash1, dash2 = config['aromatic_dashes']
-        else:
+        if r_angle:
             dash1, dash2 = config['dashes']
+        else:
+            dash1, dash2 = config['aromatic_dashes']
+            r_angle = acos(nmy / nm_ln)
 
         xml = []
         dashes_sum = dash1 + dash2
+        if dashes_sum < .0001:
+            raise ValueError('Dashes should be nonzero')
+
         d = dashes_sum / nm_ln
         dx, dy, dz = nmx * d, nmy * d, nmz * d
         b = int((nm_ln - dash1) // dashes_sum)
@@ -348,39 +330,23 @@ class X3domMolecule(X3dom):
         return xml
 
     def __render_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y, c_z):
-        config = self._render_config
+        aromatic_space = self._render_config['aromatic_space']
 
-        aromatic_space = config['aromatic_space'] = .1
         # n aligned xyz
-        nm_x, nm_y, nm_z = m_x - n_x, m_y - n_y, m_z - n_z
-        mn_x, mn_y, mn_z = n_x - m_x, n_y - m_y, n_z - m_z
         nc_x, nc_y, nc_z = c_x - n_x, c_y - n_y, c_z - n_z
         mc_x, mc_y, mc_z = c_x - m_x, c_y - m_y, c_z - m_z
 
         nc_ln = sqrt(nc_x ** 2 + nc_y ** 2 + nc_z ** 2)
         mc_ln = sqrt(mc_x ** 2 + mc_y ** 2 + mc_z ** 2)
-        angle1 = get_angle(nm_x, nm_y, nm_z, nc_x, nc_y, nc_z)
-        angle2 = get_angle(mn_x, mn_y, mn_z, mc_x, mc_y, mc_z)
+        sin1 = get_angle(m_x - n_x, m_y - n_y, m_z - n_z, nc_x, nc_y, nc_z)
+        sin2 = get_angle(n_x - m_x, n_y - m_y, n_z - m_z, mc_x, mc_y, mc_z)
 
-        # nm reoriented xy
-        small_nc = aromatic_space / sin(angle1)
-        small_mc = aromatic_space / sin(angle2)
-        coef1 = small_nc / nc_ln
-        coef2 = small_mc / mc_ln
-
-        # if -.0001 < cnr_y < .0001:
-        #     if cnr_y > 0:
-        #         coef = aromatic_space * 10000
-        #     else:
-        #         coef = - aromatic_space * 10000
-        # else:
-        #     coef = aromatic_space / cnr_y
-
-        a_x, a_y, a_z = nc_x * coef1, nc_y * coef1, nc_z * coef1
-        b_x, b_y, b_z = mc_x * coef2, mc_y * coef2, mc_z * coef2
-        # b_x, b_y, b_z = n_x - m_x + (c_x - m_x) * coef, n_y - m_y + (c_y - m_y) * coef, n_z - m_z + (c_z - m_z) * coef
-
-        return a_x, a_y, a_z, b_x, b_y, b_z
+        if sin1 < .0001 or sin2 < .0001 or nc_ln < .0001 or mc_ln < .0001:
+            return
+        else:
+            coef1 = aromatic_space / (nc_ln * sin1)
+            coef2 = aromatic_space / (mc_ln * sin2)
+            return nc_x * coef1, nc_y * coef1, nc_z * coef1, mc_x * coef2, mc_y * coef2, mc_z * coef2
 
 
 class X3domCGR(X3dom):
