@@ -98,8 +98,8 @@ class X3dom:
     def __render_atoms(self, xyz):
         config = self._render_config
 
-        carbon = config['carbon']
         font = config['font_size']
+        carbon = config['carbon']
         radius = config['atom_radius']
         colors = config['atoms_colors']
         mapping_color = config['mapping_color']
@@ -155,7 +155,6 @@ class X3domMolecule(X3dom):
         lengths = {}
         doubles = {}
         half_triple = triple_space / 2
-        dashes_sum = dash1 + dash2
         for n, m, bond in self.bonds():
             order = bond.order
             nx, ny, nz = xyz[n]
@@ -205,7 +204,7 @@ class X3domMolecule(X3dom):
                 norm_dist = sqrt(norm_x ** 2 + norm_y ** 2 + norm_z ** 2)
 
                 if norm_dist < .0001:
-                    coef = 1
+                    coef = double_space * 10000
                 else:
                     coef = double_space / norm_dist
 
@@ -253,123 +252,133 @@ class X3domMolecule(X3dom):
                            f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                            f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
             else:
-                d = dashes_sum / length
-                dx, dy, dz = nmx * d, nmy * d, nmz * d
+                xml.extend(self.__render_dashes(nx, ny, nz, nmx, nmy, nmz, length, rotation_angle))
 
-                b = int((length - dash1) // dashes_sum)
-                t = (length - (b * dashes_sum)) / length
-                nx, ny, nz = nx + nmx * t / 2, ny + nmy * t / 2, nz + nmz * t / 2
-                for _ in range(b):
-                    xml.append(f"    <transform translation='{nx:.2f} {ny:.2f} {nz:.2f}' rotation='{nmz:.2f} 0 "
+        for ring in self.connected_rings:
+            cx = sum(xyz[n][0] for n in ring) / len(ring)
+            cy = sum(xyz[n][1] for n in ring) / len(ring)
+            cz = sum(xyz[n][2] for n in ring) / len(ring)
+
+            for n, m in zip(ring, ring[1:]):
+                nx, ny, nz = xyz[n]
+                mx, my, mz = xyz[m]
+                nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+                if (n, m) in lengths:
+                    length, rotation_angle = lengths[(n, m)]
+                else:
+                    length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+                    rotation_angle = acos(nmy / length)
+                if length < .001:
+                    continue
+
+                aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+                if aromatic:
+                    veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
+                    ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
+                    bx, by, bz = mx + vecb_x, my + vecb_y, mz + vecb_z
+                    xx, yy, zz = (ax + bx) / 2, (ay + by) / 2, (az + bz) / 2
+                    abx, aby, abz = bx - ax, by - ay, bz - az
+                    ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
+                    xml.append(f"    <transform translation='{xx:.2f} {yy:.2f} {zz:.2f}' rotation='{nmz:.2f} 0 "
                                f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
                                f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-                               f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{dash1:.2f}'>\n"
+                               f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{ln:.2f}'>\n"
                                "        </cylinder>\n      </shape>\n    </transform>\n")
-                    nx += dx
-                    ny += dy
-                    nz += dz
-                xml.append(f"    <transform translation='{nx:.2f} {ny:.2f} {nz:.2f}' rotation='{nmz:.2f} 0 "
+                    # xml.extend(self.__render_dashes(ax, ay, az, abx, aby, abz, sqrt(abx ** 2 + aby ** 2 + abz ** 2),
+                    #                                 rotation_angle, aromatic=True))
+
+            i, j = ring[-1], ring[0]
+            nx, ny, nz = xyz[i]
+            mx, my, mz = xyz[j]
+            nmx, nmy, nmz = mx - nx, my - ny, mz - nz
+            if (i, j) in lengths:
+                length, rotation_angle = lengths[(i, j)]
+            else:
+                length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
+                rotation_angle = acos(nmy / length)
+            if length < .001:
+                continue
+
+            aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+            if aromatic:
+                veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
+                ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
+                bx, by, bz = mx + vecb_x, my + vecb_y, mz + vecb_z
+                xx, yy, zz = (ax + bx) / 2, (ay + by) / 2, (az + bz) / 2
+                abx, aby, abz = bx - ax, by - ay, bz - az
+                ln = sqrt(abx ** 2 + aby ** 2 + abz ** 2)
+                xml.append(f"    <transform translation='{xx:.2f} {yy:.2f} {zz:.2f}' rotation='{nmz:.2f} 0 "
                            f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
                            f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-                           f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{dash1:.2f}'>\n"
+                           f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{ln:.2f}'>\n"
                            "        </cylinder>\n      </shape>\n    </transform>\n")
-
-        # for ring in self.connected_rings:
-        #     cx = sum(xyz[n][0] for n in ring) / len(ring)
-        #     cy = sum(xyz[n][1] for n in ring) / len(ring)
-        #     cz = sum(xyz[n][2] for n in ring) / len(ring)
-        #
-        #     for n, m in zip(ring, ring[1:]):
-        #         nx, ny, nz = xyz[n]
-        #         mx, my, mz = xyz[m]
-        #         nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-        #         if (n, m) in lengths:
-        #             length, rotation_angle = lengths[(n, m)]
-        #         else:
-        #             length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
-        #             rotation_angle = acos(nmy / length)
-        #         if length < .001:
-        #             continue
-        #
-        #         aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz, length)
-        #         if aromatic:
-        #             ax, ay, az, bx, by, bz = aromatic
-        #             abx, aby, abz = bx - ax, by - ay, bz - az
-        #             for _ in range(1, 5):
-        #                 ax += abx * .15
-        #                 ay += aby * .15
-        #                 nz += nmz * .15
-        #                 xml.append(
-        #                     f"    <transform translation='{ax:.2f} {ay:.2f} {nz:.2f}' rotation='{nmz:.2f} 0 "
-        #                     f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
-        #                     f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-        #                     f"       </appearance>\n        <cylinder radius='{radius}' height='{dash2:.2f}'>\n"
-        #                     "        </cylinder>\n      </shape>\n    </transform>\n")
-        #
-        #     i, j = ring[-1], ring[0]
-        #     nx, ny, nz = xyz[i]
-        #     mx, my, mz = xyz[j]
-        #     nmx, nmy, nmz = mx - nx, my - ny, mz - nz
-        #     if (i, j) in lengths:
-        #         length, rotation_angle = lengths[(i, j)]
-        #     else:
-        #         length = sqrt(nmx ** 2 + nmy ** 2 + nmz ** 2)
-        #         rotation_angle = acos(nmy / length)
-        #     if length < .001:
-        #         continue
-        #
-        #     aromatic = self.__render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz, length)
-        #     if aromatic:
-        #         ax, ay, az, bx, by, bz = aromatic
-        #         abx, aby, abz = bx - ax, by - ay, bz - az
-        #         for _ in range(1, 5):
-        #             ax += abx * .15
-        #             ay += aby * .15
-        #             nz += nmz * .15
-        #             xml.append(f"    <transform translation='{ax:.2f} {ay:.2f} {nz:.2f}' rotation='{nmz:.2f} {0} "
-        #                        f"{-nmx:.2f} {rotation_angle:.2f}'>\n      <shape>\n        <appearance>\n"
-        #                        f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
-        #                        f"       </appearance>\n        <cylinder radius='{radius}' height='{dash2:.2f}'>\n"
-        #                        "        </cylinder>\n      </shape>\n    </transform>\n")
         return ''.join(xml)
 
-    def __render_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y, c_z, nm_ln):
+    def __render_dashes(self, nx, ny, nz, nmx, nmy, nmz, nm_ln, r_angle, aromatic=False):
         config = self._render_config
 
-        aromatic_space = config['aromatic_space'] = 2
-        dash3, dash4 = config['aromatic_dashes']
+        bond_color = config['bond_color']
+        bond_radius = config['bond_radius']
+        if aromatic:
+            dash1, dash2 = config['aromatic_dashes']
+        else:
+            dash1, dash2 = config['dashes']
+
+        xml = []
+        dashes_sum = dash1 + dash2
+        d = dashes_sum / nm_ln
+        dx, dy, dz = nmx * d, nmy * d, nmz * d
+        b = int((nm_ln - dash1) // dashes_sum)
+        t = (nm_ln - (b * dashes_sum)) / nm_ln
+        nx, ny, nz = nx + nmx * t / 2, ny + nmy * t / 2, nz + nmz * t / 2
+        for _ in range(b):
+            xml.append(f"    <transform translation='{nx:.2f} {ny:.2f} {nz:.2f}' rotation='{nmz:.2f} 0 "
+                       f"{-nmx:.2f} {r_angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                       f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                       f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{dash1:.2f}'>\n"
+                       "        </cylinder>\n      </shape>\n    </transform>\n")
+            nx += dx
+            ny += dy
+            nz += dz
+        xml.append(f"    <transform translation='{nx:.2f} {ny:.2f} {nz:.2f}' rotation='{nmz:.2f} 0 "
+                   f"{-nmx:.2f} {r_angle:.2f}'>\n      <shape>\n        <appearance>\n"
+                   f"          <material diffusecolor='{bond_color}'>\n          </material>\n"
+                   f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{dash1:.2f}'>\n"
+                   "        </cylinder>\n      </shape>\n    </transform>\n")
+        return xml
+
+    def __render_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y, c_z):
+        config = self._render_config
+
+        aromatic_space = config['aromatic_space'] = .1
         # n aligned xyz
-        nm_x, nm_y, nm_z, nc_x, nc_y, nc_z = m_x - n_x, m_y - n_y, m_z - n_z, c_x - n_x, c_y - n_y, c_z - n_y
+        nm_x, nm_y, nm_z = m_x - n_x, m_y - n_y, m_z - n_z
+        mn_x, mn_y, mn_z = n_x - m_x, n_y - m_y, n_z - m_z
+        nc_x, nc_y, nc_z = c_x - n_x, c_y - n_y, c_z - n_z
+        mc_x, mc_y, mc_z = c_x - m_x, c_y - m_y, c_z - m_z
+
         nc_ln = sqrt(nc_x ** 2 + nc_y ** 2 + nc_z ** 2)
-        angle = get_angle(nm_x, nm_y, nm_z, nc_x, nc_y, nc_z)
+        mc_ln = sqrt(mc_x ** 2 + mc_y ** 2 + mc_z ** 2)
+        angle1 = get_angle(nm_x, nm_y, nm_z, nc_x, nc_y, nc_z)
+        angle2 = get_angle(mn_x, mn_y, mn_z, mc_x, mc_y, mc_z)
 
         # nm reoriented xy
-        nmr_x, nmr_y = nm_ln, 0
-        cnr_x, cnr_y = cos(angle) * nc_ln, sin(angle) * nc_ln
+        small_nc = aromatic_space / sin(angle1)
+        small_mc = aromatic_space / sin(angle2)
+        coef1 = small_nc / nc_ln
+        coef2 = small_mc / mc_ln
 
-        if -.0001 < cnr_y < .0001:
-            coef = 1
-        else:
-            coef = aromatic_space / cnr_y
-
-        a_x, a_y, a_z = nm_x * coef, nm_y * coef, nm_z * coef
-        b_x, b_y, b_z = (c_x - m_x + nm_ln) * coef, (c_y - m_y) * coef, (c_z - m_z) * coef
-
-        # if cnr_y and aromatic_space / cnr_y < .65:
+        # if -.0001 < cnr_y < .0001:
         #     if cnr_y > 0:
-        #         r_y = aromatic_space
+        #         coef = aromatic_space * 10000
         #     else:
-        #         r_y = -aromatic_space
-        #         cr_y = -cnr_y
-        #
-        #     ar_x = aromatic_space * cr_x / cr_y
-        #     br_x = mr_x - aromatic_space * (mr_x - cr_x) / cr_y
-        #
-        #     # backward reorienting
-        #     an_x, an_y = rotate_vector(ar_x, r_y, mn_x, mn_y)
-        #     bn_x, bn_y = rotate_vector(br_x, r_y, mn_x, mn_y)
-        #     a_x, a_y = n_x + an_x, n_y + an_y
-        #     b_x, b_y = n_x + bn_x, n_y + bn_y
+        #         coef = - aromatic_space * 10000
+        # else:
+        #     coef = aromatic_space / cnr_y
+
+        a_x, a_y, a_z = nc_x * coef1, nc_y * coef1, nc_z * coef1
+        b_x, b_y, b_z = mc_x * coef2, mc_y * coef2, mc_z * coef2
+        # b_x, b_y, b_z = n_x - m_x + (c_x - m_x) * coef, n_y - m_y + (c_y - m_y) * coef, n_z - m_z + (c_z - m_z) * coef
 
         return a_x, a_y, a_z, b_x, b_y, b_z
 

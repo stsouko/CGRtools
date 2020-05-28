@@ -217,7 +217,6 @@ class Depict:
         config['monochrome'] = monochrome
         config['bond_color'] = bond_color
         config['bond_width'] = bond_width
-        config['dashes_sum'] = sum(dashes)
         config['query_color'] = query_color
         config['other_color'] = other_color
         config['bond_radius'] = bond_radius
@@ -249,7 +248,7 @@ class Depict:
                       'mapping_size': .5 * .5, 'symbols_font_style': 'sans-serif', 'other_size': .6 * .5,
                       'dy_m': _font4, 'span_dy': _font3, 'span_size': .7 * .5, 'dx_ci': _font1, 'dy_ci': _font4,
                       'cgr_aromatic_space': .18, 'dx_nh': .15 * .5, 'dy_nh': _font3, 'other_font_style': 'monospace',
-                      'other_color': 'black', 'bond_radius': .02, 'dashes_sum': .2 + .1}
+                      'other_color': 'black', 'bond_radius': .02}
 
 
 class DepictMolecule(Depict):
