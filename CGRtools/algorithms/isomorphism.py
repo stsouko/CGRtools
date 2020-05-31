@@ -23,6 +23,47 @@ from itertools import permutations, product
 from typing import Dict, Iterator, Any
 
 
+# lazy itertools.product with diagonal first
+def lazy_product(*args):
+    gens = [iter(x) for x in args]
+    empty = [False] * len(args)
+    pools = [[] for _ in range(len(args))]
+    indices = set()
+
+    reached = 0
+    while True:
+        out = []
+        ind = []
+        for n, (p, g, e) in enumerate(zip(pools, gens, empty)):
+            if e:
+                out.append(p[-1])
+            else:
+                try:
+                    x = next(g)
+                except StopIteration:
+                    if not p:  # one of gens empty
+                        return
+                    reached += 1
+                    if reached == len(args):
+                        break
+                    out.append(p[-1])
+                    empty[n] = True
+                else:
+                    p.append(x)
+                    out.append(x)
+            ind.append(len(p) - 1)
+        else:
+            yield tuple(out)
+            indices.add(tuple(ind))
+            continue
+        break
+
+    for ind in product(*(range(len(p)) for p in pools)):
+        if ind in indices:
+            continue
+        yield tuple(p[x] for x, p in zip(ind, pools))
+
+
 frequency = {1: 10,  # H
              6: 9,  # C
              8: 8,  # O
@@ -81,36 +122,46 @@ class Isomorphism:
         return True
 
     @abstractmethod
-    def get_mapping(self, other, *,
-                    automorphism_filter: bool = True, optimize: bool = True) -> Iterator[Dict[int, int]]:
+    def get_mapping(self, other, *, automorphism_filter: bool = True,
+                    optimize: bool = True, fallback: bool = False) -> Iterator[Dict[int, int]]:
         """
         Get self to other substructure mapping generator.
 
-        :param automorphism_filter: skip matches to same atoms.
-        :param optimize: morgan weights based automorphism preventing.
+        :param automorphism_filter: Skip matches to same atoms.
+        :param optimize: Morgan weights based automorphism preventing.
+        :param fallback: Try without optimization then nothing matched.
         """
-        seen = set()
+        if optimize:
+            g = self.__components_mapping(other, other.atoms_order, automorphism_filter)
+            m = next(g, None)
+            if m is not None:
+                yield m
+                yield from g
+                return
+            elif not fallback:
+                return
+        yield from self.__components_mapping(other, {n: i for i, n in enumerate(other)}, automorphism_filter)
+
+    def __components_mapping(self, other, o_order, automorphism_filter):
         components, closures = self.__compiled_query
         o_atoms = other._atoms
         o_bonds = other._bonds
-        if optimize:
-            o_order = other.atoms_order
-        else:
-            o_order = {n: i for i, n in enumerate(o_atoms)}
 
-        for candidates in permutations((set(x) for x in other.connected_components), len(components)):
-            mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
-                       for order, component in zip(components, candidates)]
-            if len(mappers) == 1:
-                for mapping in mappers[0]:
+        seen = set()
+        if len(components) == 1:
+            for candidate in other.connected_components:
+                for mapping in self.__get_mapping(components[0], closures, o_atoms, o_bonds, set(candidate), o_order):
                     if automorphism_filter:
                         atoms = frozenset(mapping.values())
                         if atoms in seen:
                             continue
                         seen.add(atoms)
                     yield mapping
-            else:
-                for match in product(*mappers):
+        else:
+            for candidates in permutations((set(x) for x in other.connected_components), len(components)):
+                mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
+                           for order, component in zip(components, candidates)]
+                for match in lazy_product(*mappers):
                     mapping = match[0]
                     for m in match[1:]:
                         mapping.update(m)
@@ -239,7 +290,7 @@ class Isomorphism:
             for mapping in mappers[0]:
                 if any(k != v for k, v in mapping.items()):
                     yield mapping
-        for match in product(*mappers):
+        for match in lazy_product(*mappers):
             mapping = match[0]
             for m in match[1:]:
                 mapping.update(m)
