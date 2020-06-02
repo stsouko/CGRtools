@@ -241,6 +241,8 @@ class MoleculeSmiles(Smiles):
                 env = self._stereo_allenes[n]
                 n1, n2 = (next(x for x in ngb if x in env) for x, ngb in adjacency.items() if x in ts)
                 smi[3] = '@' if self._translate_allene_sign(n, n1, n2) else '@@'
+            elif charge:
+                smi[5] = charge_str[charge]
         elif charge:
             smi[5] = charge_str[charge]
 
