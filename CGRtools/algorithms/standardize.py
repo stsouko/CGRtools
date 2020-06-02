@@ -587,9 +587,10 @@ class StandardizeReaction:
         """
         total = False
         for m in self.molecules():
-            if hasattr(m, 'standardize'):
-                if m.standardize() and not total:
-                    total = True
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.standardize() and not total:
+                total = True
 
         if fix_mapping and self.fix_mapping():
             return True
