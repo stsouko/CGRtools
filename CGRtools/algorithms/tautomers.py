@@ -44,8 +44,14 @@ class Tautomers:
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
         yield self
-        seen = {self}
-        queue = [self]
+
+        # making aromatic molecule
+        mol = self.copy()
+        mol.thiele()
+
+        # generation of all tautomers
+        seen = {self, mol}
+        queue = [mol]
         while queue:
             for mol in queue.pop(0)._enumerate_tautomers():
                 if mol not in seen:
@@ -109,14 +115,16 @@ class Tautomers:
                     m_hybridizations[n] = h
                     m_hydrogens[n] = hydrogens[n]
                     m_neighbors[n] = neighbors[n]
+            mol.thiele()
             yield mol
 
     def __enumerate_bonds(self):
         bonds = self._bonds
         hydrogens = self._hydrogens
+        hybridizations = self._hybridizations
 
         # for each atom in entries
-        for atom, hydrogen in self.__entries():
+        for atom, has_hydrogen in self.__entries():
             path = [atom]
             new_bonds = []
 
@@ -145,7 +153,7 @@ class Tautomers:
 
                 # time to yield
                 if len(path) % 2:
-                    if hydrogen:  # enol
+                    if has_hydrogen:  # enol
                         yield new_bonds
                     elif hydrogens[current]:  # ketone
                         yield new_bonds
