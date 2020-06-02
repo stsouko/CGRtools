@@ -100,6 +100,20 @@ class Standardize:
             return True
         return False
 
+    def clean_isotopes(self) -> bool:
+        """
+        Clean isotope marks from molecule.
+        Return True if any isotope found.
+        """
+        atoms = self._atoms
+        isotopes = [x for x in atoms.values() if x.isotope]
+        if isotopes:
+            for i in isotopes:
+                i._Core__isotope = None
+            self.flush_cache()
+            return True
+        return False
+
     def __patch_path(self, path):
         bonds = self._bonds
         for n, m, b in path:
@@ -573,9 +587,10 @@ class StandardizeReaction:
         """
         total = False
         for m in self.molecules():
-            if hasattr(m, 'standardize'):
-                if m.standardize() and not total:
-                    total = True
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.standardize() and not total:
+                total = True
 
         if fix_mapping and self.fix_mapping():
             return True
@@ -618,6 +633,21 @@ class StandardizeReaction:
             self.flush_cache()
             return True
         return False
+
+    def clean_isotopes(self) -> bool:
+        """
+        Clean isotope marks for all molecules in reaction.
+        Returns True if in any molecule found isotope.
+        """
+        flag = False
+        for m in self.molecules():
+            if hasattr(m, 'clean_isotopes'):
+                if m.clean_isotopes() and not flag:
+                    flag = True
+
+        if flag:
+            self.flush_cache()
+        return flag
 
     @class_cached_property
     def __standardize_compiled_rules(self):

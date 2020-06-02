@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
+from collections import defaultdict, deque
 from itertools import product
 from typing import List, Optional, Tuple
 from ..exceptions import InvalidAromaticRing
@@ -64,9 +64,10 @@ class Aromatize:
         if not rings:
             return False
 
-        rings = self._sssr(rings)  # search rings again
-        if not rings:
+        n_sssr = sum(len(x) for x in rings.values()) // 2 - len(rings) + len(self._connected_components(rings))
+        if not n_sssr:
             return False
+        rings = self._sssr(rings, n_sssr)  # search rings again
 
         seen = set()
         for ring in rings:
@@ -251,7 +252,15 @@ class Aromatize:
         components = []
         while atoms:
             start = atoms.pop()
-            component = {n: rings[n] for n in self.__component(rings, start)}
+            component = {start: rings[start]}
+            queue = deque([start])
+            while queue:
+                current = queue.popleft()
+                for n in rings[current]:
+                    if n not in component:
+                        queue.append(n)
+                        component[n] = rings[n]
+
             components.append(component)
             atoms.difference_update(component)
 
@@ -386,17 +395,6 @@ class Aromatize:
 
         if nether_yielded:
             raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
-
-    @staticmethod
-    def __component(bonds, start):
-        seen = {start}
-        queue = [start]
-        while queue:
-            start = queue.pop(0)
-            yield start
-            for i in bonds[start] - seen:
-                queue.append(i)
-                seen.add(i)
 
 
 __all__ = ['Aromatize']

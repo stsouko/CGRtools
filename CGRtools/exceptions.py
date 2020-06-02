@@ -76,3 +76,9 @@ class IncorrectSmiles(ValueError):
     """
     SMILES string invalid
     """
+
+
+class ImplementationError(Exception):
+    """
+    Algorithm has errors. Please send example of structure to author for analyze.
+    """
