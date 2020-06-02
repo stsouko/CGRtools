@@ -92,7 +92,7 @@ class Tautomers:
                 adj[n] = set()
 
             seen = set()
-            for n, m, bond in path:
+            for n, m, bond, depth in path:
                 if bond is not None:
                     m_bonds[n][m] = m_bonds[m][n] = Bond(bond)
                 adj[n].add(m)
@@ -124,15 +124,20 @@ class Tautomers:
         hybridizations = self._hybridizations
 
         # for each atom in entries
-        for atom, has_hydrogen in self.__entries():
-            path = [atom]
+        for enter, has_hydrogen in self.__entries():
+            path = [enter]
             new_bonds = []
 
             # stack is neighbors
-            stack = [(n, b.order, 1) for n, b in bonds[atom].items() if b.order < 3]
+            stack = []
+            for nbg, bond in bonds[enter].items():
+                if bond.order == 1:
+                    stack.append((enter, nbg, bond.order + 1, 1))
+                elif bond.order == 2:
+                    stack.append((enter, nbg, bond.order - 1, 1))
 
             while stack:
-                current, bond, depth = stack.pop()
+                previous, current, bond, depth = step = stack.pop()
 
                 # branch processing
                 if len(path) > depth:
@@ -140,16 +145,17 @@ class Tautomers:
                     new_bonds = new_bonds[:depth - 1]
 
                 # adding new bonds
-                if bond == 1:
-                    new_bonds.append((path[-1], current, 2))
-                else:
-                    new_bonds.append((path[-1], current, 1))
+                new_bonds.append(step)
                 path.append(current)
 
                 # adding neighbors
                 depth += 1
-                nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond) and (x not in path)]
-                stack.extend(nbg)
+                for n, b in bonds[current].items():
+                    if (hybridizations[n] != 4) and (n not in path):
+                        if b.order == bond == 1:
+                            stack.append((path[-1], n, b.order + 1, depth))
+                        elif b.order == bond == 2:
+                            stack.append((path[-1], n, b.order - 1, depth))
 
                 # time to yield
                 if len(path) % 2:
