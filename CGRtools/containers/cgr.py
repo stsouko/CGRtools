@@ -747,7 +747,10 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
         self._p_charges = state['p_charges']
         self._p_radicals = state['p_radicals']
         super().__setstate__(state)
-        self._conformers = state['conformers']
+        if 'conformers' in state:
+            self._conformers = state['conformers']
+        else:
+            self._conformers = []
 
         # restore query marks
         self._neighbors = sn = {}
