@@ -148,13 +148,15 @@ class Standardize:
         charges = self._charges
         radicals = self._radicals
         atoms = self._atoms
+        hybs = self._hybridizations
 
         transfer = set()
         entries = set()
         exits = set()
         rads = set()
         for n, a in atoms.items():
-            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}:  # filter non-organic set and halogens
+            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52} or hybs[n] == 4:
+                # filter non-organic set, halogens and aromatics
                 continue
             transfer.add(n)
             if charges[n] == -1:
@@ -587,9 +589,10 @@ class StandardizeReaction:
         """
         total = False
         for m in self.molecules():
-            if hasattr(m, 'standardize'):
-                if m.standardize() and not total:
-                    total = True
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.standardize() and not total:
+                total = True
 
         if fix_mapping and self.fix_mapping():
             return True
