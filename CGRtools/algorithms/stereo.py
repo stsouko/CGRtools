@@ -209,6 +209,9 @@ class Stereo:
         :param env: neighbors order
         """
         s = self._atoms_stereo[n]
+        return self._translate_tetrahedron_sign_reversed(n , env, s)
+
+    def _translate_tetrahedron_sign_reversed(self, n, env, s):
         order = self._stereo_tetrahedrons[n]
         if len(order) == 3:
             if len(env) == 4:  # hydrogen atom passed to env
@@ -294,8 +297,11 @@ class Stereo:
         :param nn: neighbor of first double bonded atom
         :param nm: neighbor of last double bonded atom
         """
-        atoms = self._atoms
         s = self._allenes_stereo[c]
+        return self._translate_allene_sign_reversed(c, nn, nm, s)
+
+    def _translate_allene_sign_reversed(self, c, nn, nm, s):
+        atoms = self._atoms
 
         n0, n1, n2, n3 = self._stereo_allenes[c]
         if nn == n0:  # same start
@@ -511,7 +517,7 @@ class MoleculeStereo(Stereo):
         if flag and clean_cache:
             self.flush_cache()
 
-    def add_atom_stereo(self, n, mark: bool, *, clean_cache=True):
+    def add_atom_stereo(self, n, env, mark: bool, *, clean_cache=True):
         if n not in self._atoms:
             raise AtomNotFound
         if n in self._atoms_stereo or n in self._allenes_stereo:
@@ -519,13 +525,12 @@ class MoleculeStereo(Stereo):
         if not isinstance(mark, bool):
             raise TypeError('stereo mark should be bool')
 
-        # [C@]1(Br)(Cl)CCCC(F)C1 need reversed mark if ring-broken
         if n in self._chiral_tetrahedrons:
-            self._atoms_stereo[n] = mark
+            self._atoms_stereo[n] = self._translate_tetrahedron_sign_reversed(n, env, mark)
             if clean_cache:
                 self.flush_cache()
         elif n in self._chiral_allenes:
-            self._allenes_stereo[n] = mark
+            self._allenes_stereo[n] = self._translate_allene_sign_reversed(n, *env, mark)
             if clean_cache:
                 self.flush_cache()
         else:  # only tetrahedrons supported

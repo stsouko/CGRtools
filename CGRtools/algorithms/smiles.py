@@ -237,9 +237,10 @@ class MoleculeSmiles(Smiles):
                 else:
                     smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
             elif n in self._allenes_stereo:
-                ts = self._stereo_allenes_terminals[n]
+                t1, t2 = self._stereo_allenes_terminals[n]
                 env = self._stereo_allenes[n]
-                n1, n2 = (next(x for x in ngb if x in env) for x, ngb in adjacency.items() if x in ts)
+                n1 = next(x for x in adjacency[t1] if x in env)
+                n2 = next(x for x in adjacency[t2] if x in env)
                 smi[3] = '@' if self._translate_allene_sign(n, n1, n2) else '@@'
         elif charge:
             smi[5] = charge_str[charge]

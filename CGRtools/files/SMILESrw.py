@@ -235,6 +235,52 @@ class SMILESRead(CGRRead):
             except ValueError:
                 info(f'record consist errors:\n{format_exc()}')
 
+    def _convert_molecule(self, molecule, mapping):
+        mol = super()._convert_molecule(molecule, mapping)
+        ctt = mol._stereo_cis_trans_terminals
+        st = mol._stereo_tetrahedrons
+        sa = mol._stereo_allenes
+        sat = mol._stereo_allenes_terminals
+
+        order = {mapping[n]: [mapping[m] for m in ms] for n, ms in molecule['order'].items()}
+
+        stereo = []
+        for n, s in molecule['stereo_atoms'].items():
+            n = mapping[n]
+            if n in st:
+                stereo.append((n, order[n], s))
+            elif n in sa:
+                t1, t2 = sat[n]
+                env = sa[n]
+                n1 = next(x for x in order[t1] if x in env)
+                n2 = next(x for x in order[t2] if x in env)
+                stereo.append((n, (n1, n2), s))
+
+        #molecule['stereo_bonds']
+
+        while stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for n, env, s in stereo:
+                try:
+                    mol.add_atom_stereo(n, env, s, clean_cache=False)
+                except NotChiral:
+                    fail_stereo.append((n, env, s))
+                except IsChiral:
+                    info(f'atom {n} already chiral')
+                except ValenceError:
+                    info('structure has errors, stereo data skipped')
+                    mol.flush_cache()
+                    break
+            else:
+                stereo = fail_stereo
+                if len(stereo) == old_stereo:
+                    break
+                del mol.__dict__['_MoleculeStereo__chiral_centers']
+                continue
+            break
+        return mol
+
     @staticmethod
     def _raw_tokenize(smiles):
         token_type = token = None
@@ -357,7 +403,7 @@ class SMILESRead(CGRRead):
         for token_type, token in tokens:
             if token_type in (0, 8):  # simple atom
                 out.append((token_type, {'element': token, 'charge': 0, 'isotope': None, 'is_radical': False,
-                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': 0, 'stereo': 0}))
+                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': 0, 'stereo': None}))
             elif token_type == 5:
                 if '>' in token:  # dynamic bond or atom
                     if len(token) == 3:  # bond only possible
@@ -478,7 +524,7 @@ class SMILESRead(CGRRead):
         cycles = {}
         used_cycles = set()
         cgr = []
-        stereo_bonds = []
+        stereo_bonds = defaultdict(dict)
         stereo_atoms = {}
         hydrogens = {}
         previous = None
@@ -522,7 +568,7 @@ class SMILESRead(CGRRead):
                         if not previous:
                             bt, b = ob
                             if bt == 9:  # closure open is \/ bonded
-                                stereo_bonds.append((a, last_num, b))
+                                stereo_bonds[a][last_num] = b
                                 bt = b = 1
                             elif strong_cycle:
                                 raise IncorrectSmiles('not equal cycle bonds')
@@ -531,21 +577,21 @@ class SMILESRead(CGRRead):
                             obt, ob = ob
                             if bt == 9:  # \/ bonds can be unequal
                                 if obt == 9:
-                                    stereo_bonds.append((a, last_num, ob))
+                                    stereo_bonds[a][last_num] = ob
                                 elif ob != 1:
                                     raise IncorrectSmiles('not equal cycle bonds')
-                                stereo_bonds.append((last_num, a, b))
+                                stereo_bonds[last_num][a] = b
                                 bt = b = 1
                             elif obt == 9:
                                 if b != 1:
                                     raise IncorrectSmiles('not equal cycle bonds')
-                                stereo_bonds.append((a, last_num, ob))
+                                stereo_bonds[a][last_num] = ob
                             elif b != ob:
                                 raise IncorrectSmiles('not equal cycle bonds')
                     elif previous:
                         bt, b = previous
                         if bt == 9:  # stereo \/
-                            stereo_bonds.append((last_num, a, b))
+                            stereo_bonds[last_num][a] = b
                             bt = b = 1
                         elif strong_cycle:
                             raise IncorrectSmiles('not equal cycle bonds')
@@ -574,7 +620,8 @@ class SMILESRead(CGRRead):
                         bonds.append((atom_num, last_num, b))
                     elif bt == 9:
                         bonds.append((atom_num, last_num, 1))
-                        stereo_bonds.append((last_num, atom_num, b))
+                        stereo_bonds[last_num][atom_num] = b
+                        stereo_bonds[atom_num][last_num] = not b
                     else:  # bt == 10
                         bonds.append((atom_num, last_num, 8))
                         cgr.append(((atom_num, last_num), 'bond', b))
@@ -585,7 +632,7 @@ class SMILESRead(CGRRead):
                     cgr.extend((atom_num, *x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
-                    if stereo:
+                    if stereo is not None:
                         stereo_atoms[atom_num] = stereo
                     hydrogen = token.pop('hydrogen')
                     if hydrogen:
@@ -604,6 +651,8 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('cycle is not finished')
         elif previous:
             raise IncorrectSmiles('bond on the end')
+
+        stereo_bonds = {n: ms for n, ms in stereo_bonds.items() if len(ms) == 1 or len(ms) == set(ms.values())}
         mol = {'atoms': atoms, 'bonds': bonds, 'order': order,
                'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
         if cgr or any(x == 11 for x in atoms_types):
