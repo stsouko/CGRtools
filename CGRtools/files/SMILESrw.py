@@ -237,10 +237,11 @@ class SMILESRead(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
-        ctt = mol._stereo_cis_trans_terminals
+
         st = mol._stereo_tetrahedrons
         sa = mol._stereo_allenes
         sat = mol._stereo_allenes_terminals
+        ctt = mol._stereo_cis_trans_terminals
 
         order = {mapping[n]: [mapping[m] for m in ms] for n, ms in molecule['order'].items()}
 
@@ -248,26 +249,37 @@ class SMILESRead(CGRRead):
         for n, s in molecule['stereo_atoms'].items():
             n = mapping[n]
             if n in st:
-                stereo.append((n, order[n], s))
+                stereo.append((mol.add_atom_stereo, n, order[n], s))
             elif n in sa:
                 t1, t2 = sat[n]
                 env = sa[n]
                 n1 = next(x for x in order[t1] if x in env)
                 n2 = next(x for x in order[t2] if x in env)
-                stereo.append((n, (n1, n2), s))
+                stereo.append((mol.add_atom_stereo, n, (n1, n2), s))
 
-        #molecule['stereo_bonds']
+        stereo_bonds = {mapping[n]: {mapping[m]: s for m, s in ms.items()}
+                        for n, ms in molecule['stereo_bonds'].items()}
+        seen = set()
+        for n, ns in stereo_bonds.items():
+            if n in seen:
+                continue
+            if n in ctt:
+                nm = ctt[n]
+                m = nm[1] if nm[0] == n else nm[0]
+                if m in stereo_bonds:
+                    seen.add(m)
+                    n2, s2 = stereo_bonds[m].popitem()
+                    n1, s1 = ns.popitem()
+                    stereo.append((mol.add_cis_trans_stereo, n, m, n1, n2, s1 == s2))
 
         while stereo:
             fail_stereo = []
             old_stereo = len(stereo)
-            for n, env, s in stereo:
+            for f, *args in stereo:
                 try:
-                    mol.add_atom_stereo(n, env, s, clean_cache=False)
+                    f(*args, clean_cache=False)
                 except NotChiral:
-                    fail_stereo.append((n, env, s))
-                except IsChiral:
-                    info(f'atom {n} already chiral')
+                    fail_stereo.append((f, *args))
                 except ValenceError:
                     info('structure has errors, stereo data skipped')
                     mol.flush_cache()

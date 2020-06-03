@@ -240,15 +240,16 @@ class Stereo:
         :param nn: neighbor of first atom
         :param nm: neighbor of last atom
         """
-        atoms = self._atoms
-        cis_trans_stereo = self._cis_trans_stereo
         try:
-            s = cis_trans_stereo[(n, m)]
+            s = self._cis_trans_stereo[(n, m)]
         except KeyError:
-            s = cis_trans_stereo[(m, n)]
+            s = self._cis_trans_stereo[(m, n)]
             n, m = m, n  # in alkenes sign not order depended
             nn, nm = nm, nn
+        return self._translate_cis_trans_sign_reversed(n, m, nn, nm, s)
 
+    def _translate_cis_trans_sign_reversed(self, n, m, nn, nm, s):
+        atoms = self._atoms
         n0, n1, n2, n3 = self._stereo_cis_trans[(n, m)]
         if nn == n0:  # same start
             t0 = 0
@@ -440,6 +441,13 @@ class MoleculeStereo(Stereo):
     __slots__ = ()
 
     def add_wedge(self, n: int, m: int, mark: bool, *, clean_cache=True):
+        """
+        Add stereo data by wedge notation of bonds. Use it for tetrahedrons of allenes.
+
+        :param n: number of atom from which wedge bond started
+        :param m: number of atom to which wedge bond coming
+        :param mark: up bond is True, down is False
+        """
         if n not in self._atoms:
             raise AtomNotFound
         if n in self._atoms_stereo:
@@ -497,6 +505,9 @@ class MoleculeStereo(Stereo):
                 raise NotChiral
 
     def calculate_cis_trans_from_2d(self, *, clean_cache=True):
+        """
+        Calculate cis-trans stereo bonds from given 2d coordinates. Unusable for SMILES and INCHI.
+        """
         cis_trans_stereo = self._cis_trans_stereo
         plane = self._plane
         flag = False
@@ -517,7 +528,16 @@ class MoleculeStereo(Stereo):
         if flag and clean_cache:
             self.flush_cache()
 
-    def add_atom_stereo(self, n, env, mark: bool, *, clean_cache=True):
+    def add_atom_stereo(self, n: int, env: Tuple[int, ...], mark: bool, *, clean_cache=True):
+        """
+        Add stereo data for specified neighbors bypass. Use it for tetrahedrons of allenes.
+
+        :param n: number of tetrahedron atom or central atom of allene.
+        :param env: numbers of atoms with specified bypass
+        :param mark: clockwise or anti bypass.
+
+        See <https://www.daylight.com/dayhtml/doc/theory/theory.smiles.html> and <http://opensmiles.org/opensmiles.html>
+        """
         if n not in self._atoms:
             raise AtomNotFound
         if n in self._atoms_stereo or n in self._allenes_stereo:
@@ -534,6 +554,43 @@ class MoleculeStereo(Stereo):
             if clean_cache:
                 self.flush_cache()
         else:  # only tetrahedrons supported
+            raise NotChiral
+
+    def add_cis_trans_stereo(self, n: int, m: int, n1: int, n2: int, mark: bool, *, clean_cache=True):
+        """
+        Add stereo data to cis-trans double bonds (not allenes).
+
+        ```
+        n1      n2
+         \\    /
+           n==m
+        ```
+
+        :param n: number of starting atom of double bonds chain (alkenes of cumulenes)
+        :param m: number of ending atom of double bonds chain (alkenes of cumulenes)
+        :param n1: number of neighboring atom of starting atom
+        :param n2: number of neighboring atom of ending atom
+        :param mark: cis or trans
+
+        See <https://www.daylight.com/dayhtml/doc/theory/theory.smiles.html> and <http://opensmiles.org/opensmiles.html
+        """
+        atoms = self._atoms
+        if n not in atoms or m not in atoms or n1 not in atoms or n2 not in atoms:
+            raise AtomNotFound
+        if not isinstance(mark, bool):
+            raise TypeError('stereo mark should be bool')
+        if (n, m) in self._cis_trans_stereo or (m, n) in self._cis_trans_stereo:
+            raise IsChiral
+
+        if (n, m) in self._chiral_cis_trans:
+            self._cis_trans_stereo[(n, m)] = self._translate_cis_trans_sign_reversed(n, m, n1, n2, mark)
+            if clean_cache:
+                self.flush_cache()
+        elif (m, n) in self._chiral_cis_trans:
+            self._cis_trans_stereo[(m, n)] = self._translate_cis_trans_sign_reversed(m, n, n2, n1, mark)
+            if clean_cache:
+                self.flush_cache()
+        else:
             raise NotChiral
 
     def _fix_stereo(self):
