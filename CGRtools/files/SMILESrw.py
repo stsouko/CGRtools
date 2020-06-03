@@ -280,6 +280,8 @@ class SMILESRead(CGRRead):
                     f(*args, clean_cache=False)
                 except NotChiral:
                     fail_stereo.append((f, *args))
+                except IsChiral:
+                    pass
                 except ValenceError:
                     info('structure has errors, stereo data skipped')
                     mol.flush_cache()

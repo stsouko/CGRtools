@@ -280,11 +280,14 @@ class MoleculeSmiles(Smiles):
                             return '\\' if self._translate_cis_trans_sign(n2, n, m2, m) else '/'
             elif m in ctt:
                 ts = ctt[m]
-                if ts in self._cis_trans_stereo:  # Rn-Cm(X)=C or RnCm=1X case
-                    if m == next(x for x in adjacency if x in ts):
+                if ts in self._cis_trans_stereo:
+                    if m == next(x for x in adjacency if x in ts):  # Rn-Cm(X)=C case
                         return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
-                    else:  # second RnCm=1X case
-                        ...
+                    else:  # second RnCm=1X or R1...=C1(X) case
+                        env = self._stereo_cis_trans[ts]
+                        n2 = ts[1] if ts[0] == m else ts[0]
+                        m2 = next(x for x in adjacency[n2] if x in env)
+                        return '/' if self._translate_cis_trans_sign(n2, m, m2, n) else '\\'
             return ''
         return order_str[order]
 
