@@ -89,6 +89,11 @@ class Core(ABC):
         """
 
     @property
+    @abstractmethod
+    def atomic_radius(self) -> float:
+        ...
+
+    @property
     def charge(self) -> int:
         try:
             return self._graph()._charges[self._map]
@@ -745,6 +750,10 @@ class AnyElement(Query):  # except Hydrogen!
     def isotopes_masses(self) -> Dict[int, float]:
         return {}
 
+    @property
+    def atomic_radius(self):
+        return 0.5
+
     def __eq__(self, other):
         """
         compare attached to molecules elements and query elements
@@ -799,6 +808,10 @@ class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
     @property
     def isotopes_masses(self) -> Dict[int, float]:
         return {}
+
+    @property
+    def atomic_radius(self):
+        return 0.5
 
     def __eq__(self, other):
         if isinstance(other, DynamicElement):
