@@ -237,10 +237,13 @@ class MoleculeSmiles(Smiles):
                 else:
                     smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
             elif n in self._allenes_stereo:
-                ts = self._stereo_allenes_terminals[n]
+                t1, t2 = self._stereo_allenes_terminals[n]
                 env = self._stereo_allenes[n]
-                n1, n2 = (next(x for x in ngb if x in env) for x, ngb in adjacency.items() if x in ts)
+                n1 = next(x for x in adjacency[t1] if x in env)
+                n2 = next(x for x in adjacency[t2] if x in env)
                 smi[3] = '@' if self._translate_allene_sign(n, n1, n2) else '@@'
+            elif charge:
+                smi[5] = charge_str[charge]
         elif charge:
             smi[5] = charge_str[charge]
 
@@ -275,8 +278,16 @@ class MoleculeSmiles(Smiles):
                             n2 = ts[1] if ts[0] == n else ts[0]
                             m2 = next(x for x in adjacency[n2] if x in env)
                             return '\\' if self._translate_cis_trans_sign(n2, n, m2, m) else '/'
-            elif m in ctt and ctt[m] in self._cis_trans_stereo:  # Rn-Cm(X)=C case
-                return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
+            elif m in ctt:
+                ts = ctt[m]
+                if ts in self._cis_trans_stereo:
+                    if m == next(x for x in adjacency if x in ts):  # Rn-Cm(X)=C case
+                        return '/'  # always start with UP R/C=C-X. RUSSIANS POSITIVE!
+                    else:  # second RnCm=1X or R1...=C1(X) case
+                        env = self._stereo_cis_trans[ts]
+                        n2 = ts[1] if ts[0] == m else ts[0]
+                        m2 = next(x for x in adjacency[n2] if x in env)
+                        return '/' if self._translate_cis_trans_sign(n2, m, m2, n) else '\\'
             return ''
         return order_str[order]
 

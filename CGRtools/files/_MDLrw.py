@@ -470,7 +470,7 @@ class MDLStereo(CGRRead):
                 except NotChiral:
                     fail_stereo.append((n, m, s))
                 except IsChiral:
-                    info(f'wedge {{{n}, {m}}} on already chiral atom')
+                    pass
                 except ValenceError:
                     warning('structure has errors, stereo data skipped')
                     mol.flush_cache()
