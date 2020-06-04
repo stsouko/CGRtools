@@ -100,7 +100,14 @@ class Smiles:
             visited_bond = set()
 
         while True:
-            start = min(atoms_set, key=weights)
+            groups = defaultdict(int)
+            for n in atoms_set:
+                groups[weights(n)] += 1
+            start = min(atoms_set,  # precedence of:
+                        key=lambda x: (groups[weights(x)],  # rare groups
+                                       -len(bonds[x]),  # more neighbors
+                                       len(bonds[x]) / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                                       weights(x)))  # smallest weight
 
             seen = {start: 0}
             queue = [(start, 1)]
