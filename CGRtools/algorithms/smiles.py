@@ -126,7 +126,12 @@ class Smiles:
                     seen[m] = d
 
             def mod_weights(x):
-                return weights(x), seen[x]
+                lb = len(bonds[x])
+                return (groups[weights(x)],  # rare groups
+                        -lb,  # more neighbors
+                        lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                        weights(x),  # smallest weight
+                        seen[x])  # BFS nearest to starting
 
             # modified NX dfs with cycle detection
             stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=mod_weights)))]
