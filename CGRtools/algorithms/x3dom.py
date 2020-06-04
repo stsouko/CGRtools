@@ -140,7 +140,7 @@ class X3dom:
                              "      </shape>\n    </transform>\n")
         return ''.join(atoms)
 
-    def _render_dashes(self, nx, ny, nz, nmx, nmy, nmz, nm_ln, r_angle=None, cgr_color=''):
+    def _render_3d_dashes(self, nx, ny, nz, nmx, nmy, nmz, nm_ln, r_angle=None, cgr_color=''):
         config = self._render_config
 
         bond_radius = config['bond_radius']
@@ -181,7 +181,7 @@ class X3dom:
                    "        </cylinder>\n      </shape>\n    </transform>\n")
         return xml
 
-    def _render_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y, c_z):
+    def _render_3d_aromatic_bond(self, n_x, n_y, n_z, m_x, m_y, m_z, c_x, c_y, c_z):
         aromatic_space = self._render_config['aromatic_space']
 
         # n aligned xyz
@@ -314,7 +314,7 @@ class X3domMolecule(X3dom):
                            f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                            f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
             else:
-                xml.extend(self._render_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle))
+                xml.extend(self._render_3d_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle))
 
         for ring in self.aromatic_rings:
             cx = sum(xyz[n][0] for n in ring) / len(ring)
@@ -325,7 +325,7 @@ class X3domMolecule(X3dom):
                 nx, ny, nz = xyz[n]
                 mx, my, mz = xyz[m]
 
-                aromatic = self._render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+                aromatic = self._render_3d_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
                 if aromatic:
                     veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                     ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
@@ -334,12 +334,12 @@ class X3domMolecule(X3dom):
                     if ab_ln < .0001:
                         continue
                     else:
-                        xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
+                        xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln))
 
             i, j = ring[-1], ring[0]
             nx, ny, nz = xyz[i]
             mx, my, mz = xyz[j]
-            aromatic = self._render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+            aromatic = self._render_3d_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
             if aromatic:
                 veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                 ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
@@ -348,7 +348,7 @@ class X3domMolecule(X3dom):
                 if ab_ln < .0001:
                     continue
                 else:
-                    xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
+                    xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln))
 
         return ''.join(xml)
 
@@ -448,8 +448,8 @@ class X3domCGR(X3dom):
                         f"          <material diffusecolor='{broken}'>\n          </material>\n"
                         f"       </appearance>\n        <cylinder radius='{bond_radius}' height='{length:.2f}'>\n"
                         "        </cylinder>\n      </shape>\n    </transform>\n")
-                    xml.extend(self._render_dashes(nx + dx, ny + dy, nz + dz, nmx, nmy, nmz, length,
-                                                   r_angle=rotation_angle, cgr_color='formed_color'))
+                    xml.extend(self._render_3d_dashes(nx + dx, ny + dy, nz + dz, nmx, nmy, nmz, length,
+                                                      r_angle=rotation_angle, cgr_color='formed_color'))
             elif order == 4:
                 if p_order == 4:
                     xml.append(f"    <transform translation='{x:.2f} {y:.2f} {z:.2f}' rotation='{nmz:.2f} 0 "
@@ -603,8 +603,8 @@ class X3domCGR(X3dom):
                                f"        <appearance>\n          <material diffusecolor='{broken}'>\n"
                                f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                                f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
-                    xml.extend(self._render_dashes(nx + vx, ny + vy, nz + vz, nmx, nmy, nmz, length,
-                                                   r_angle=rotation_angle, cgr_color='formed_color'))
+                    xml.extend(self._render_3d_dashes(nx + vx, ny + vy, nz + vz, nmx, nmy, nmz, length,
+                                                      r_angle=rotation_angle, cgr_color='formed_color'))
             elif order == 3:
                 if p_order == 3:
                     vx, vy, vz, x1, y1, z1, x2, y2, z2 = self.__triples(x, y, z, nmx, nmy, nmz,
@@ -734,8 +734,8 @@ class X3domCGR(X3dom):
                                f"        <appearance>\n          <material diffusecolor='{broken}'>\n"
                                f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                                f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
-                    xml.extend(self._render_dashes(nx + dx2, ny + dy2, nz + dz2, nmx, nmy, nmz, length,
-                                                   r_angle=rotation_angle, cgr_color='formed_color'))
+                    xml.extend(self._render_3d_dashes(nx + dx2, ny + dy2, nz + dz2, nmx, nmy, nmz, length,
+                                                      r_angle=rotation_angle, cgr_color='formed_color'))
             elif order is None:
                 if p_order == 1:
                     xml.append(f"    <transform translation='{x:.2f} {y:.2f} {z:.2f}' rotation='{nmz:.2f} 0 "
@@ -783,14 +783,14 @@ class X3domCGR(X3dom):
                                f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                                f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
                 else:
-                    xml.extend(self._render_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle,
-                                                   cgr_color='formed_color'))
+                    xml.extend(self._render_3d_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle,
+                                                      cgr_color='formed_color'))
             else:
                 if p_order == 8:
-                    xml.extend(self._render_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle))
+                    xml.extend(self._render_3d_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle))
                 elif p_order == 1:
                     dx, dy, dz, doubles = self.__doubles(n, m, nmx, nmy, nmz, xyz, doubles, bonds, double_space)
-                    xml.extend(self._render_dashes(nx + dx, ny + dy, nz + dz, nmx, nmy, nmz, length,
+                    xml.extend(self._render_3d_dashes(nx + dx, ny + dy, nz + dz, nmx, nmy, nmz, length,
                                                    r_angle=rotation_angle, cgr_color='broken_color'))
                     xml.append(
                         f"    <transform translation='{x - dx:.2f} {y - dy:.2f} {z - dz:.2f}' rotation='{nmz:.2f} 0 "
@@ -818,8 +818,8 @@ class X3domCGR(X3dom):
                                f"        <appearance>\n          <material diffusecolor='{formed}'>\n"
                                f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                                f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
-                    xml.extend(self._render_dashes(nx + vx, ny + vy, nz + vz, nmx, nmy, nmz, length,
-                                                   r_angle=rotation_angle, cgr_color='broken_color'))
+                    xml.extend(self._render_3d_dashes(nx + vx, ny + vy, nz + vz, nmx, nmy, nmz, length,
+                                                      r_angle=rotation_angle, cgr_color='broken_color'))
                 elif p_order == 3:
                     third = next((x for x in bonds[n] if x != m), None)
                     if third:
@@ -857,11 +857,11 @@ class X3domCGR(X3dom):
                                f"        <appearance>\n          <material diffusecolor='{formed}'>\n"
                                f"          </material>\n       </appearance>\n        <cylinder radius='{bond_radius}'"
                                f" height='{length:.2f}'>\n        </cylinder>\n      </shape>\n    </transform>\n")
-                    xml.extend(self._render_dashes(nx + dx2, ny + dy2, nz + dz2, nmx, nmy, nmz, length,
-                                                   r_angle=rotation_angle, cgr_color='broken_color'))
+                    xml.extend(self._render_3d_dashes(nx + dx2, ny + dy2, nz + dz2, nmx, nmy, nmz, length,
+                                                      r_angle=rotation_angle, cgr_color='broken_color'))
                 else:
-                    xml.extend(self._render_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle,
-                                                   cgr_color='broken_color'))
+                    xml.extend(self._render_3d_dashes(nx, ny, nz, nmx, nmy, nmz, length, r_angle=rotation_angle,
+                                                      cgr_color='broken_color'))
 
         for ring in self.aromatic_rings:
             cx = sum(xyz[n][0] for n in ring) / len(ring)
@@ -874,7 +874,7 @@ class X3domCGR(X3dom):
 
                 color = ar_bond_colors[n].get(m)
 
-                aromatic = self._render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+                aromatic = self._render_3d_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
                 if aromatic:
                     veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                     ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
@@ -883,18 +883,18 @@ class X3domCGR(X3dom):
                     if ab_ln < .0001:
                         continue
                     elif color:
-                        xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln, cgr_color=color))
+                        xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln, cgr_color=color))
                     elif color is None:
-                        xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln, r_angle=acos(aby / ab_ln)))
+                        xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln, r_angle=acos(aby / ab_ln)))
                     else:
-                        xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
+                        xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln))
 
             i, j = ring[-1], ring[0]
             nx, ny, nz = xyz[i]
             mx, my, mz = xyz[j]
 
             color = ar_bond_colors[i].get(j)
-            aromatic = self._render_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
+            aromatic = self._render_3d_aromatic_bond(nx, ny, nz, mx, my, mz, cx, cy, cz)
             if aromatic:
                 veca_x, veca_y, veca_z, vecb_x, vecb_y, vecb_z = aromatic
                 ax, ay, az = nx + veca_x, ny + veca_y, nz + veca_z
@@ -903,11 +903,11 @@ class X3domCGR(X3dom):
                 if ab_ln < .0001:
                     continue
                 elif color:
-                    xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln, cgr_color=color))
+                    xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln, cgr_color=color))
                 elif color is None:
-                    xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln, r_angle=acos(aby / ab_ln)))
+                    xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln, r_angle=acos(aby / ab_ln)))
                 else:
-                    xml.extend(self._render_dashes(ax, ay, az, abx, aby, abz, ab_ln))
+                    xml.extend(self._render_3d_dashes(ax, ay, az, abx, aby, abz, ab_ln))
         return ''.join(xml)
 
     @staticmethod
