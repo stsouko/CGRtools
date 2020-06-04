@@ -103,11 +103,19 @@ class Smiles:
             groups = defaultdict(int)
             for n in atoms_set:
                 groups[weights(n)] += 1
-            start = min(atoms_set,  # precedence of:
-                        key=lambda x: (groups[weights(x)],  # rare groups
-                                       -len(bonds[x]),  # more neighbors
-                                       len(bonds[x]) / len({weights(x) for x in bonds[x]}),  # more unique neighbors
-                                       weights(x)))  # smallest weight
+
+            def mod_weights(x):
+                # precedence of:
+                lb = len(bonds[x])
+                if lb:
+                    return (groups[weights(x)],  # rare groups
+                            -lb,  # more neighbors
+                            lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                            weights(x))  # smallest weight
+                else:
+                    return groups[weights(x)], weights(x)  # rare groups > smallest weight
+
+            start = min(atoms_set, key=mod_weights)
 
             seen = {start: 0}
             queue = [(start, 1)]
