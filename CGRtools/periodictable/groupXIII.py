@@ -45,8 +45,11 @@ class B(Element, PeriodII, GroupXIII):
 
     @property
     def _valences_exceptions(self):
-        return ((-1, False, 4, ()),
-                (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
+        return (-1, False, 4, ()),
+
+    @property
+    def atomic_radius(self):
+        return .87
 
 
 class Al(Element, PeriodIII, GroupXIII):
@@ -75,6 +78,10 @@ class Al(Element, PeriodIII, GroupXIII):
                 (-1, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))),
                 (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
                 (-3, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
+
+    @property
+    def atomic_radius(self):
+        return 1.18
 
 
 class Ga(Element, PeriodIV, GroupXIII):
@@ -106,6 +113,10 @@ class Ga(Element, PeriodIV, GroupXIII):
                 (-1, False, 0, ((1, 'Br'), (1, 'Br'), (1, 'Br'), (1, 'Br'))),
                 (-1, False, 0, ((1, 'I'), (1, 'I'), (1, 'I'), (1, 'I'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.36
+
 
 class In(Element, PeriodV, GroupXIII):
     __slots__ = ()
@@ -131,6 +142,10 @@ class In(Element, PeriodV, GroupXIII):
         return ((3, False, 0, ()),
                 (0, False, 0, ((1, 'Cl'),)), (0, False, 0, ((1, 'Br'),)), (0, False, 0, ((1, 'I'),)),
                 (0, False, 0, ((1, 'O'),)))
+
+    @property
+    def atomic_radius(self):
+        return 1.56
 
 
 class Tl(Element, PeriodVI, GroupXIII):
@@ -158,6 +173,10 @@ class Tl(Element, PeriodVI, GroupXIII):
                 (-3, False, 0, ((1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'), (1, 'Cl'))),
                 (1, False, 0, ((1, 'C'), (1, 'C'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.56
+
 
 class Nh(Element, PeriodVII, GroupXIII):
     __slots__ = ()
@@ -181,6 +200,10 @@ class Nh(Element, PeriodVII, GroupXIII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return 1.56  # unknown, taken radius of previous element in group
 
 
 __all__ = ['B', 'Al', 'Ga', 'In', 'Tl', 'Nh']

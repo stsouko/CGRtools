@@ -23,16 +23,20 @@ from typing import List, Union, Tuple, Dict, Optional
 from . import cgr_query as query, molecule  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
+from ..algorithms.calculate2d import Calculate2DCGR
 from ..algorithms.depict import DepictCGR
 from ..algorithms.smiles import CGRSmiles
+from ..algorithms.x3dom import X3domCGR
 from ..exceptions import MappingError
 from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
 
-class CGRContainer(Graph, CGRSmiles, DepictCGR):
-    __slots__ = ('_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors', '_p_hybridizations')
+class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
+    __slots__ = ('_conformers', '_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors',
+                 '_p_hybridizations')
 
     def __init__(self):
+        self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
         self._p_charges: Dict[int, int] = {}
         self._p_radicals: Dict[int, bool] = {}
         self._neighbors: Dict[int, int] = {}
@@ -63,6 +67,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._hybridizations[_map] = 1
         self._p_neighbors[_map] = 0
         self._p_hybridizations[_map] = 1
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
         return _map
 
     def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
@@ -78,6 +83,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             bond = DynamicBond(order, order)
 
         super().add_bond(n, m, bond)
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         sh = self._hybridizations
         sph = self._p_hybridizations
@@ -156,6 +162,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         del sh[n]
         del spn[n]
         del sph[n]
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         if isnt_hydrogen:  # neighbors query marks fix. ignore removed hydrogen
             for m, old_bond in old_bonds.items():
@@ -200,6 +207,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
     def delete_bond(self, n, m):
         old_bond = self._bonds[n][m]  # save bond
         super().delete_bond(n, m)
+        self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         atoms = self._atoms
         sh = self._hybridizations
@@ -299,6 +307,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             hpr = h._p_radicals
             hn = h._neighbors
             hh = h._hybridizations
+            hc = h._conformers
             hpn = h._p_neighbors
             hph = h._p_hybridizations
         else:
@@ -306,6 +315,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             hpr = {}
             hn = {}
             hh = {}
+            hc = []
             hpn = {}
             hph = {}
 
@@ -318,6 +328,8 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             hh[m] = sh[n]
             hph[m] = sph[n]
 
+        hc.extend({mg(n, n): x for n, x in c.items()} for c in self._conformers)
+
         if copy:
             return h
 
@@ -325,6 +337,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         self._p_radicals = hpr
         self._neighbors = hn
         self._hybridizations = hh
+        self._conformers = hc
         self._p_neighbors = hpn
         self._p_hybridizations = hph
         return self
@@ -333,6 +346,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         copy = super().copy(**kwargs)
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
+        copy._conformers = [c.copy() for c in self._conformers]
         copy._p_neighbors = self._p_neighbors.copy()
         copy._p_hybridizations = self._p_hybridizations.copy()
         copy._p_radicals = self._p_radicals.copy()
@@ -373,6 +387,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
             sub._p_neighbors = {n: (spn[n],) for n in atoms}
             sub._p_hybridizations = {n: (sph[n],) for n in atoms}
         else:
+            sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n].copy()
@@ -425,9 +440,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 sph[n] = p_hybridization
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, CGRContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
+            u._conformers.clear()
+
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
             u._neighbors.update(other._neighbors)
@@ -452,7 +469,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, molecule.MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
             u._neighbors.update(other._neighbors)
@@ -471,7 +488,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):  # Query or CGRQuery
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 
@@ -723,12 +740,17 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR):
         return self.decompose()
 
     def __getstate__(self):
-        return {'p_charges': self._p_charges, 'p_radicals': self._p_radicals, **super().__getstate__()}
+        return {'conformers': self._conformers, 'p_charges': self._p_charges, 'p_radicals': self._p_radicals,
+                **super().__getstate__()}
 
     def __setstate__(self, state):
         self._p_charges = state['p_charges']
         self._p_radicals = state['p_radicals']
         super().__setstate__(state)
+        if 'conformers' in state:
+            self._conformers = state['conformers']
+        else:
+            self._conformers = []
 
         # restore query marks
         self._neighbors = sn = {}

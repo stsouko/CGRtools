@@ -46,6 +46,10 @@ class Fe(Element, PeriodIV, GroupVIII):
     def _valences_exceptions(self):
         return (2, False, 0, ()), (3, False, 0, ()),
 
+    @property
+    def atomic_radius(self):
+        return 1.56
+
 
 class Ru(Element, PeriodV, GroupVIII):
     __slots__ = ()
@@ -70,6 +74,10 @@ class Ru(Element, PeriodV, GroupVIII):
     @property
     def _valences_exceptions(self):
         return (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'), (2, 'O'))),  # RuO4
+
+    @property
+    def atomic_radius(self):
+        return 1.78
 
 
 class Os(Element, PeriodVI, GroupVIII):
@@ -99,6 +107,10 @@ class Os(Element, PeriodVI, GroupVIII):
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))))
 
+    @property
+    def atomic_radius(self):
+        return 1.85
+
 
 class Hs(Element, PeriodVII, GroupVIII):
     __slots__ = ()
@@ -122,6 +134,10 @@ class Hs(Element, PeriodVII, GroupVIII):
     @property
     def _valences_exceptions(self):
         return ()
+
+    @property
+    def atomic_radius(self):
+        return 1.85  # unknown, taken radius of previous element in group
 
 
 __all__ = ['Fe', 'Ru', 'Os', 'Hs']

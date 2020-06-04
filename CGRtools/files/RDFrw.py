@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -38,7 +38,7 @@ class RDFRead(MDLRead):
     on initialization accept opened in text mode file, string path to file,
     pathlib.Path object or another buffered reader object
     """
-    def __init__(self, *args, indexable=False, **kwargs):
+    def __init__(self, file, indexable=False, **kwargs):
         """
         :param indexable: if True: supported methods seek, tell, object size and subscription, it only works when
             dealing with a real file (the path to the file is specified) because the external grep utility is used,
@@ -46,8 +46,11 @@ class RDFRead(MDLRead):
 
             if False: works like generator converting a record into ReactionContainer and returning each object in
             order, records with errors are skipped
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(file, **kwargs)
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
@@ -143,9 +146,9 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
+                            container = self._convert_structure(record)
                         seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
@@ -169,9 +172,9 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
+                            container = self._convert_structure(record)
                         seek = yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
@@ -224,9 +227,9 @@ class RDFRead(MDLRead):
                 record['title'] = title
             try:
                 if is_reaction:
-                    container, mapping = self._convert_reaction(record)
+                    container = self._convert_reaction(record)
                 else:
-                    container, mapping = self._convert_structure(record)
+                    container = self._convert_structure(record)
                 yield container
             except ValueError:
                 warning(f'record consist errors:\n{format_exc()}')
@@ -241,6 +244,12 @@ class RDFWrite(MDLWrite):
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
+    def __init__(self, file, *, write3d: bool = False):
+        """
+        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
+        """
+        super().__init__(file, write3d=int(write3d))
+
     def write(self, data):
         """
         write single molecule or reaction into file

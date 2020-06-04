@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,15 +16,14 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method, class_cached_property
+from CachedMethods import cached_method
 from collections.abc import Iterable
-from itertools import chain
 from functools import reduce
 from hashlib import sha512
+from itertools import chain
 from operator import or_
-from typing import Tuple, Dict, Iterable as TIterable, Optional, Iterator
+from typing import Dict, Iterable as TIterable, Iterator, Optional, Tuple, Union
 from .cgr import CGRContainer
-from .common import Graph
 from .molecule import MoleculeContainer
 from .query import QueryContainer
 from ..algorithms.depict import DepictReaction
@@ -33,19 +32,18 @@ from ..algorithms.standardize import StandardizeReaction
 
 class ReactionContainer(StandardizeReaction, DepictReaction):
     """
-    reaction storage. contains reactants, products and reagents lists.
+    Reaction storage. Contains reactants, products and reagents lists.
 
-    reaction storages hashable and comparable. based on reaction unique signature (SMIRKS).
-    for reactions with query containers hash and comparison may give errors due to non-uniqueness.
-    query containers itself not support hashing and comparison.
+    Reaction storage hashable and comparable. based on reaction unique signature (SMIRKS).
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
-    __class_cache__ = {}
 
-    def __init__(self, reactants: TIterable[Graph] = (), products: TIterable[Graph] = (),
-                 reagents: TIterable[Graph] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
+    def __init__(self, reactants: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
+                 products: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
+                 reagents: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
+                 meta: Optional[Dict] = None, name: Optional[str] = None):
         """
-        new empty or filled reaction object creation
+        New reaction object creation
 
         :param reactants: list of MoleculeContainers [or other Structure Containers] in left side of reaction
         :param products: right side of reaction. see reactants
@@ -56,12 +54,19 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         if not isinstance(reactants, Iterable) or isinstance(reactants, (str, bytes)) or \
                 not isinstance(products, Iterable) or isinstance(products, (str, bytes)) or \
                 not isinstance(reagents, Iterable) or isinstance(reagents, (str, bytes)):
-            raise TypeError('iterator of molecules or CGRs or queries expected')
+            raise TypeError('Iterator of molecules or CGRs or queries expected')
         reactants = tuple(reactants)
         products = tuple(products)
         reagents = tuple(reagents)
-        if any(not isinstance(x, Graph) for x in chain(reactants, products, reagents)):
-            raise TypeError('molecule or CGR or query expected')
+        try:
+            base_type = next(chain(reactants, products, reagents)).__class__
+        except StopIteration:
+            raise ValueError('At least one graph object required')
+        if not any(issubclass(base_type, x) for x in (MoleculeContainer, QueryContainer, CGRContainer)):
+            raise TypeError('MoleculeContainer or QueryContainer or CGRContainer expected')
+        elif not all(isinstance(x, base_type) for x in chain(reactants, products, reagents)):
+            raise TypeError(f'{base_type.__name__} expected for all graphs')
+
         self.__reactants = reactants
         self.__products = products
         self.__reagents = reagents
@@ -79,7 +84,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @classmethod
     def from_cgr(cls, cgr: CGRContainer) -> 'ReactionContainer':
         """
-        decompose CGR into reaction
+        Decompose CGR into reaction
         """
         if not isinstance(cgr, CGRContainer):
             raise TypeError('CGR expected')
@@ -123,37 +128,37 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         self._signs = None
 
     @property
-    def reactants(self) -> Tuple[Graph, ...]:
-        """reactants list. see products"""
+    def reactants(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
         return self.__reactants
 
     @property
-    def reagents(self) -> Tuple[Graph, ...]:
-        """reagents list. see products"""
+    def reagents(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
         return self.__reagents
 
     @property
-    def products(self) -> Tuple[Graph, ...]:
-        """list of CGRs or/and Molecules in products side"""
+    def products(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
         return self.__products
 
-    def molecules(self) -> Iterator[Graph]:
+    def molecules(self) -> Iterator[Union[MoleculeContainer, QueryContainer, CGRContainer]]:
         """
-        :return: iterator of all reaction molecules
+        Iterator of all reaction molecules
         """
         return chain(self.__reactants, self.__reagents, self.__products)
 
     @property
     def meta(self) -> Dict:
-        """dictionary of metadata. like DTYPE-DATUM in RDF"""
+        """
+        Dictionary of metadata.
+        Like DTYPE-DATUM in RDF
+        """
         return self.__meta
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.__name
 
     @name.setter
-    def name(self, name):
+    def name(self, name: str):
         if not isinstance(name, str):
             raise TypeError('name should be string up to 80 symbols')
         if len(name) > 80:
@@ -162,9 +167,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     def copy(self) -> 'ReactionContainer':
         """
-        get copy of object
-
-        :return: ReactionContainer
+        Get copy of object
         """
         copy = object.__new__(self.__class__)
         copy._ReactionContainer__reactants = tuple(x.copy() for x in self.__reactants)
@@ -179,10 +182,13 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @property
     def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
         """
-        union reaction centers by leaving or substitute group
-
-        :return: list of reaction centers
+        Union reaction centers by leaving or substitute group
         """
+        if not self.__reactants or self.__products:
+            return ()  # no rc
+        elif not isinstance(self.__reactants[0], MoleculeContainer):
+            raise TypeError('Only Molecules supported')
+
         reactants = reduce(or_, self.__reactants)
         products = reduce(or_, self.__products)
         cgr = reactants ^ products
@@ -207,56 +213,60 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     def implicify_hydrogens(self) -> int:
         """
-        remove explicit hydrogens if possible
+        Remove explicit hydrogens if possible
 
         :return: number of removed hydrogens
         """
         total = 0
         for m in self.molecules():
-            if isinstance(m, MoleculeContainer):
-                total += m.implicify_hydrogens()
+            if not isinstance(m, MoleculeContainer):
+                raise TypeError('Only Molecules supported')
+            total += m.implicify_hydrogens()
         if total:
             self.flush_cache()
         return total
 
     def explicify_hydrogens(self) -> int:
         """
-        add explicit hydrogens to atoms
+        Add explicit hydrogens to atoms
 
         :return: number of added atoms
         """
         total = 0
         for m in self.molecules():
-            if isinstance(m, MoleculeContainer):
-                total += m.explicify_hydrogens()
+            if not isinstance(m, MoleculeContainer):
+                raise TypeError('Only Molecules supported')
+            total += m.explicify_hydrogens()
         if total:
             self.flush_cache()
         return total
 
     def thiele(self) -> bool:
         """
-        convert structures to aromatic form. works only for Molecules.
-        return True if in any molecule found kekule ring
+        Convert structures to aromatic form. Works only for Molecules.
+        Return True if in any molecule found kekule ring
         """
         total = False
         for m in self.molecules():
-            if isinstance(m, MoleculeContainer):
-                if m.thiele() and not total:
-                    total = True
+            if not isinstance(m, MoleculeContainer):
+                raise TypeError('Only Molecules supported')
+            if m.thiele() and not total:
+                total = True
         if total:
             self.flush_cache()
         return total
 
     def kekule(self) -> bool:
         """
-        convert structures to kekule form. works only for Molecules.
-        return True if in any molecule found aromatic ring
+        Convert structures to kekule form. Works only for Molecules.
+        Return True if in any molecule found aromatic ring
         """
         total = False
         for m in self.molecules():
-            if isinstance(m, MoleculeContainer):
-                if m.kekule() and not total:
-                    total = True
+            if not isinstance(m, MoleculeContainer):
+                raise TypeError('Only Molecules supported')
+            if m.kekule() and not total:
+                total = True
         if total:
             self.flush_cache()
         return total
@@ -264,20 +274,20 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @cached_method
     def compose(self) -> CGRContainer:
         """
-        get CGR of reaction
+        Get CGR of reaction
 
-        reagents will be presented as unchanged molecules
+        Reagents will be presented as unchanged molecules
         :return: CGRContainer
         """
         rr = self.__reagents + self.__reactants
         if rr:
-            if not all(isinstance(x, (MoleculeContainer, CGRContainer)) for x in rr):
+            if not isinstance(rr[0], (MoleculeContainer, CGRContainer)):
                 raise TypeError('Queries not composable')
             r = reduce(or_, rr)
         else:
             r = MoleculeContainer()
         if self.__products:
-            if not all(isinstance(x, (MoleculeContainer, CGRContainer)) for x in self.__products):
+            if not isinstance(self.__products[0], (MoleculeContainer, CGRContainer)):
                 raise TypeError('Queries not composable')
             p = reduce(or_, self.__products)
         else:
@@ -288,21 +298,21 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     def __invert__(self):
         """
-        get CGR of reaction
+        Get CGR of reaction
         """
         return self.compose()
 
-    def calculate2d(self):
+    def clean2d(self):
         """
-        recalculate 2d coordinates
+        Recalculate 2d coordinates
         """
         for m in self.molecules():
-            m.calculate2d()
+            m.clean2d()
         self.fix_positions()
 
     def fix_positions(self):
         """
-        fix coordinates of molecules in reaction
+        Fix coordinates of molecules in reaction
         """
         shift_x = 0
         reactants = self.__reactants
@@ -311,6 +321,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         for m in reactants:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
+                max_x += .2
                 signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
@@ -331,6 +342,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         for m in products:
             max_x = self.__fix_positions(m, shift_x)
             if amount:
+                max_x += .2
                 signs.append(max_x)
                 amount -= 1
             shift_x = max_x + 1
@@ -391,62 +403,21 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
 
     @cached_method
     def __str__(self):
-        """
-        SMIRKS of reaction. query and CGR containers in reaction {surrounded by curly braces}
-        """
         sig = []
         for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append(self.__get_smiles(ml) if ml else '')
+            sig.append('.'.join(sorted(str(x) for x in ml)))
         return '>'.join(sig)
 
-    @staticmethod
-    def __get_smiles(molecules):
-        mc = []
-        cc = []
-        qc = []
-        qcc = []
-        smiles = []
-        for m in molecules:
-            if isinstance(m, MoleculeContainer):
-                mc.append(m)
-            elif isinstance(m, CGRContainer):
-                cc.append(m)
-            elif isinstance(m, QueryContainer):
-                qc.append(m)
-            else:
-                qcc.append(m)
-
-        if mc:
-            smiles.append(str(reduce(or_, mc)))
-        if cc:
-            smiles.append(str(reduce(or_, cc)))
-        if qc:
-            smiles.append(str(reduce(or_, qc)))
-        if qcc:
-            smiles.append(str(reduce(or_, qcc)))
-        return '.'.join(smiles)
+    def __format__(self, format_spec):
+        sig = []
+        for ml in (self.__reactants, self.__reagents, self.__products):
+            sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
+        return '>'.join(sig)
 
     def flush_cache(self):
         self.__dict__.clear()
         for m in self.molecules():
             m.flush_cache()
-
-    @class_cached_property
-    def _standardize_compiled_rules(self):
-        rules = []
-        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self._standardize_rules():
-            r_q = QueryContainer()
-            p_q = QueryContainer()
-            for a in r_atoms:
-                r_q.add_atom(**a)
-            for n, m, b in r_bonds:
-                r_q.add_bond(n, m, b)
-            for a in p_atoms:
-                p_q.add_atom(**a)
-            for n, m, b in p_bonds:
-                p_q.add_bond(n, m, b)
-            rules.append((r_q, p_q, fix))
-        return rules
 
 
 __all__ = ['ReactionContainer']

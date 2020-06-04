@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -47,7 +47,11 @@ class INCHIRead(CGRRead):
     also possible to pass list of keys (without inchi_pseudo_key) for mapping space/tab separated list
     of INCHI and values: header=['key1', 'key2'] # order depended
     """
-    def __init__(self, file, *args, header=None, **kwargs):
+    def __init__(self, file, header=None, **kwargs):
+        """
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
+        """
         if isinstance(file, str):
             self.__file = open(file)
             self.__is_buffer = False
@@ -59,7 +63,7 @@ class INCHIRead(CGRRead):
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
         if header is True:
             self.__header = next(self.__file).split()[1:]
@@ -136,7 +140,7 @@ class INCHIRead(CGRRead):
 
         record['meta'] = meta
         try:
-            container, mapping = self._convert_structure(record)
+            container = self._convert_structure(record)
             return container
         except ValueError:
             warning(f'record consist errors:\n{format_exc()}')

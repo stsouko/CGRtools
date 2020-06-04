@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2017-2019 Timur Madzhidov <tmadzhidov@gmail.com> atom ordering algorithm
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,10 +18,9 @@
 #
 from CachedMethods import cached_property
 from collections import Counter
-from functools import reduce
-from itertools import count
+from itertools import groupby
 from logging import warning
-from operator import mul, itemgetter
+from operator import itemgetter
 from typing import Dict
 
 
@@ -34,90 +32,44 @@ class Morgan:
         """
         Morgan like algorithm for graph nodes ordering
 
-        :return: dict of atom-weight pairs
+        :return: dict of atom-order pairs
         """
         atoms = self._atoms
-        bonds = self._bonds
-        if not len(atoms):  # for empty containers
+        if not atoms:  # for empty containers
             return {}
         elif len(atoms) == 1:  # optimize single atom containers
-            return dict.fromkeys(atoms, 2)
-
-        params = {n: (int(a), tuple(sorted(int(b) for b in bonds[n].values()))) for n, a in atoms.items()}
-        return self._morgan(self._sorted_primed(params))
-
-    @staticmethod
-    def _sorted_primed(params: Dict[int, int]) -> Dict[int, int]:
-        levels = {}
-        iter_primes = iter(primes)
-        primed = {}
-        for x, y in sorted(params.items(), key=itemgetter(1)):
-            try:
-                primed[x] = levels[y]
-            except KeyError:
-                primed[x] = levels[y] = next(iter_primes)
-        return primed
+            return dict.fromkeys(atoms, 1)
+        return self._morgan({n: hash(a) for n, a in atoms.items()})
 
     def _morgan(self, weights: Dict[int, int]) -> Dict[int, int]:
         atoms = self._atoms
         bonds = self._bonds
 
-        tries = len(atoms) * 4
+        tries = len(atoms) - 1
         numb = len(set(weights.values()))
-        stab = 0
+        stab = old_numb = 0
 
-        while tries:
-            oldnumb = numb
-
-            # weights[n] ** 2 NEED for differentiation of molecules like A-B or any other complete graphs.
-            tmp = {n: reduce(mul, (weights[x] for x in m), weights[n] ** 2) for n, m in bonds.items()}
-            weights = self._sorted_primed(tmp)
-
-            numb = len(set(weights.values()))
+        for _ in range(tries):
+            weights = {n: hash((weights[n], *sorted((weights[m], int(b)) for m, b in ms.items())))
+                       for n, ms in bonds.items()}
+            old_numb, numb = numb, len(set(weights.values()))
             if numb == len(atoms):  # each atom now unique
                 break
-            elif numb == oldnumb:
-                x = Counter(weights.values())
-                if x[min(x)] > 1:
+            elif numb == old_numb:  # not changed. molecules like benzene
+                if min(Counter(weights.values()).items(), key=itemgetter(1))[1] > 1:
                     if stab == 3:
                         break
                 elif stab >= 2:
                     break
-
                 stab += 1
-            elif stab:
+            elif stab:  # changed unique atoms number. reset stability check.
                 stab = 0
-
-            tries -= 1
-            if not tries and numb < oldnumb:
-                warning('morgan. number of attempts exceeded. uniqueness has decreased. next attempt will be made')
-                tries = 1
         else:
-            warning('morgan. number of attempts exceeded')
-        return weights
+            if numb < old_numb:
+                warning('morgan. number of attempts exceeded. uniqueness has decreased.')
 
-
-def _eratosthenes():
-    """Yields the sequence of prime numbers via the Sieve of Eratosthenes."""
-    d = {}  # map each composite integer to its first-found prime factor
-    for q in count(2):  # q gets 2, 3, 4, 5, ... ad infinitum
-        p = d.pop(q, None)
-        if p is None:
-            # q not a key in D, so q is prime, therefore, yield it
-            yield q
-            # mark q squared as not-prime (with q as first-found prime factor)
-            d[q * q] = q
-        else:
-            # let x <- smallest (N*p)+q which wasn't yet known to be composite
-            # we just learned x is composite, with p first-found prime factor,
-            # since p is the first-found prime factor of q -- find and mark it
-            x = p + q
-            while x in d:
-                x += p
-            d[x] = p
-
-
-primes = {x: n for n, x in zip(range(1000), _eratosthenes())}
+        return {n: i for i, (_, g) in enumerate(groupby(sorted(weights.items(), key=itemgetter(1)), key=itemgetter(1)),
+                                                start=1) for n, _ in g}
 
 
 __all__ = ['Morgan']

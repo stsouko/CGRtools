@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property, FrozenDict
-from collections import defaultdict
+from collections import defaultdict, deque
 from itertools import chain
 from typing import Tuple, Dict, Set, Any, Union
 from ..exceptions import ValenceError
@@ -33,13 +33,24 @@ class GraphComponents:
         """
         if not self._atoms:
             return ()
-        atoms = set(self._atoms)
+        return self._connected_components(self._bonds)
+
+    @staticmethod
+    def _connected_components(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Tuple[Tuple[int, ...], ...]:
+        atoms = set(bonds)
         components = []
         while atoms:
             start = atoms.pop()
-            component = tuple(self.__component(start))
-            components.append(component)
-            atoms.difference_update(component)
+            seen = {start}
+            queue = deque([start])
+            while queue:
+                current = queue.popleft()
+                for i in bonds[current]:
+                    if i not in seen:
+                        queue.append(i)
+                        seen.add(i)
+            components.append(tuple(seen))
+            atoms.difference_update(seen)
         return tuple(components)
 
     @property
@@ -48,17 +59,6 @@ class GraphComponents:
         Number of components in graph
         """
         return len(self.connected_components)
-
-    def __component(self, start):
-        bonds = self._bonds
-        seen = {start}
-        queue = [start]
-        while queue:
-            start = queue.pop(0)
-            yield start
-            for i in bonds[start].keys() - seen:
-                queue.append(i)
-                seen.add(i)
 
     @cached_property
     def skin_atoms(self) -> Tuple[int, ...]:
@@ -98,7 +98,7 @@ class GraphComponents:
         if len(rings) <= 1:
             return rings
 
-        rings = [set(r) for r in self.sssr]
+        rings = [set(r) for r in rings]
         out = []
         for i in range(len(rings)):
             r = rings[i]
@@ -115,7 +115,15 @@ class GraphComponents:
         """
         Atoms in rings
         """
-        return tuple(x for x in self.sssr for x in x)
+        return tuple({x for x in self.sssr for x in x})
+
+    @cached_property
+    def rings_count(self):
+        """
+        SSSR rings count.
+        """
+        bonds = self._bonds
+        return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
 
 
 class StructureComponents:
@@ -135,43 +143,30 @@ class StructureComponents:
         """
         Alkenes, allenes and cumulenes atoms numbers
         """
-        atoms = self._atoms
-        bonds = self._bonds
-        adj = defaultdict(set)  # carbon double bonds adjacency matrix
-        for n, atom in atoms.items():
-            if atom.atomic_number == 6:
-                adj_n = adj[n].add
-                b_sum = 0
-                a_sum = 0
-                for m, bond in bonds[n].items():
-                    order = bond.order
-                    if order == 4:  # count aromatic bonds
-                        a_sum += 1
-                    elif order != 8:  # ignore special bond
-                        b_sum += order
-                    if order == 2 and atoms[m].atomic_number == 6:
-                        adj_n(m)
-                if a_sum:
-                    b_sum += a_sum + 1
-                if b_sum > 4:
-                    raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
-        if not adj:
+        return self._cumulenes()
+
+    @cached_property
+    def connected_rings_cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Connected ring with attached cumulenes.
+        """
+        components = self.connected_rings
+        if not components:
             return ()
 
-        terminals = [x for x, y in adj.items() if len(y) == 1]
-        cumulenes = []
-        while terminals:
-            m = terminals.pop(0)
-            path = [m]
-            while m not in terminals:
-                n, m = m, adj[m].pop()
-                adj[m].discard(n)
-                path.append(m)
-            terminals.remove(m)
-            if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
-                # check for carbon only double-bonded chains.
-                cumulenes.append(tuple(path))
-        return cumulenes
+        components = [set(r) for r in components]
+        components.extend(set(c) for c in self.cumulenes)
+
+        out = []
+        for i in range(len(components)):
+            c = components[i]
+            for x in components[i + 1:]:
+                if not c.isdisjoint(x):
+                    x.update(c)
+                    break
+            else:  # isolated ring[s] found
+                out.append(tuple(c))
+        return tuple(out)
 
     @cached_property
     def tetrahedrons(self) -> Tuple[int, ...]:
@@ -190,6 +185,45 @@ class StructureComponents:
                         raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
                     tetra.append(n)
         return tetra
+
+    def _cumulenes(self, heteroatoms=False):
+        atoms = self._atoms
+        bonds = self._bonds
+
+        if heteroatoms:
+            atoms_numbers = {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}
+        else:
+            atoms_numbers = {6}
+
+        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        for n, atom in atoms.items():
+            if atom.atomic_number in atoms_numbers:
+                adj_n = adj[n].add
+                for m, bond in bonds[n].items():
+                    order = bond.order
+                    if order == 2 and atoms[m].atomic_number in atoms_numbers:
+                        adj_n(m)
+        if not adj:
+            return ()
+
+        for n, ms in adj.items():
+            if len(ms) > 2:
+                raise ValenceError(f'atom: {n} has invalid valence')
+
+        terminals = [x for x, y in adj.items() if len(y) == 1]
+        cumulenes = []
+        while terminals:
+            m = terminals.pop(0)
+            path = [m]
+            while m not in terminals:
+                n, m = m, adj[m].pop()
+                adj[m].discard(n)
+                path.append(m)
+            terminals.remove(m)
+            if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
+                # check for carbon only double-bonded chains.
+                cumulenes.append(tuple(path))
+        return cumulenes
 
 
 __all__ = ['GraphComponents', 'StructureComponents']

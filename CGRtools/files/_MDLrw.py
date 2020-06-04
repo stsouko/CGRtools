@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -450,6 +450,43 @@ class ERXNRead:
     __in_mol = 0
 
 
+class MDLStereo(CGRRead):
+    def __init__(self, calc_cis_trans=False, **kwargs):
+        super().__init__(**kwargs)
+        self.__calc_cis_trans = calc_cis_trans
+
+    def _convert_molecule(self, molecule, mapping):
+        mol = super()._convert_molecule(molecule, mapping)
+        if self.__calc_cis_trans:
+            mol.calculate_cis_trans_from_2d()
+
+        stereo = [(mapping[n], mapping[m], s) for n, m, s in molecule['stereo']]
+        while stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for n, m, s in stereo:
+                try:
+                    mol.add_wedge(n, m, s, clean_cache=False)
+                except NotChiral:
+                    fail_stereo.append((n, m, s))
+                except IsChiral:
+                    pass
+                except ValenceError:
+                    warning('structure has errors, stereo data skipped')
+                    mol.flush_cache()
+                    break
+            else:
+                stereo = fail_stereo
+                if len(stereo) == old_stereo:
+                    break
+                del mol.__dict__['_MoleculeStereo__chiral_centers']
+                if self.__calc_cis_trans:
+                    mol.calculate_cis_trans_from_2d(clean_cache=False)
+                continue
+            break
+        return mol
+
+
 class MDLReadMeta(type):
     def __call__(cls, *args, **kwargs):
         if kwargs.get('indexable'):
@@ -459,8 +496,8 @@ class MDLReadMeta(type):
         return obj
 
 
-class MDLRead(CGRRead, metaclass=MDLReadMeta):
-    def __init__(self, file, *args, **kwargs):
+class MDLRead(MDLStereo, metaclass=MDLReadMeta):
+    def __init__(self, file, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
             self._is_buffer = False
@@ -472,7 +509,7 @@ class MDLRead(CGRRead, metaclass=MDLReadMeta):
             self._is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
     def close(self, force=False):
         """
@@ -589,7 +626,11 @@ class MDLRead(CGRRead, metaclass=MDLReadMeta):
 
 
 class MDLWrite:
-    def __init__(self, file):
+    def __init__(self, file, *, write3d: int = 0):
+        """
+        :param write3d: write for Molecules 3D coordinates instead 2D if exists.
+            if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
+        """
         if isinstance(file, str):
             self._file = open(file, 'w')
             self._is_buffer = False
@@ -602,7 +643,13 @@ class MDLWrite:
         else:
             raise TypeError('invalid file. '
                             'TextIOWrapper, StringIO, BytesIO, BufferedReader and BufferedIOBase subclasses possible')
+
+        if not isinstance(write3d, int):
+            raise TypeError('int expected')
+        elif write3d not in (0, 1, 2):
+            raise ValueError('only 0, 1 and 2 expected')
         self.__write = True
+        self.__write3d = write3d
 
     def close(self, force=False):
         """
@@ -639,28 +686,68 @@ class MDLWrite:
         else:
             raise TypeError('Graph expected')
 
-        gp = g._plane
+        head = f'{g.name}\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n'
+
         gc = g._charges
         gr = g._radicals
         props = []
-        out = [f'{g.name}\n\n\n{g.atoms_count:3d}{g.bonds_count:3d}  0  0  0  0            999 V2000\n']
+        for n, (m, a) in enumerate(g._atoms.items(), start=1):
+            if a.isotope:
+                props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
+            if gr[m]:
+                props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
+            c = gc[m]
+            if c in (-4, 4):
+                props.append(f'M  CHG  1 {n:3d} {c:3d}\n')
+
+        if self.__write3d and isinstance(g, MoleculeContainer) and g._conformers:
+            if self.__write3d == 2:
+                out = [self.__merge(head, self.__convert_atoms3d(g, xyz), bonds, props) for xyz in g._conformers]
+            else:
+                out = self.__merge(head, self.__convert_atoms3d(g, g._conformers[0]), bonds, props)
+        else:
+            out = self.__merge(head, self.__convert_atoms2d(g), bonds, props)
+        return out
+
+    @staticmethod
+    def __merge(head, atoms, bonds, props):
+        out = [head]
+        out.extend(atoms)
+        out.extend(bonds)
+        out.extend(props)
+        out.append('M  END\n')
+        return ''.join(out)
+
+    @classmethod
+    def __convert_atoms2d(cls, g):
+        gc = g._charges
+        gp = g._plane
+
+        out = []
         for n, (m, a) in enumerate(g._atoms.items(), start=1):
             x, y = gp[m]
             c = gc[m]
             if c in (-4, 4):
                 out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
-                props.append(f'M  CHG  1 {n:3d} {c:3d}\n')
             else:
-                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
+                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
                            f'  0  0  0{m:3d}  0  0\n')
-            if a.isotope:
-                props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
-            if gr[m]:
-                props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
-        out.extend(bonds)
-        out.extend(props)
-        out.append('M  END\n')
-        return ''.join(out)
+        return out
+
+    @classmethod
+    def __convert_atoms3d(cls, g, xyz):
+        gc = g._charges
+
+        out = []
+        for n, (m, a) in enumerate(g._atoms.items(), start=1):
+            x, y, z = xyz[m]
+            c = gc[m]
+            if c in (-4, 4):
+                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+            else:
+                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
+                           f'  0  0  0{m:3d}  0  0\n')
+        return out
 
     @classmethod
     def __convert_molecule(cls, g):
@@ -763,27 +850,3 @@ class MDLWrite:
         return out
 
     __charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}
-
-
-class MOLStereo:
-    @staticmethod
-    def update_stereo(g, mapping, stereo):
-        stereo = [(mapping[n], mapping[m], s) for n, m, s in stereo]
-        old_stereo = 0
-        while len(stereo) != old_stereo:
-            fail_stereo = []
-            old_stereo = len(stereo)
-            for n, m, s in stereo:
-                try:
-                    g.add_wedge(n, m, s)
-                except NotChiral:
-                    fail_stereo.append((n, m, s))
-                except IsChiral:
-                    info(f'wedge {{{n}, {m}}} on already chiral atom')
-                except ValenceError:
-                    info('structure has errors, stereo data skipped')
-                    break
-            else:
-                stereo = fail_stereo
-                continue
-            break

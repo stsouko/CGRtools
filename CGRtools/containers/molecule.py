@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,26 +16,29 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_args_method, cached_property, class_cached_property
+from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
+from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
+from ..algorithms.pharmacophore import Pharmacophore
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens')
-    __class_cache__ = {}
+                        DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
+    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
+                 '_allenes_stereo')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -43,9 +46,15 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, bool] = {}
+        self._allenes_stereo: Dict[int, bool] = {}
+        self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
+
         super().__init__()
 
     def add_atom(self, atom: Union[Element, int, str], *args, charge=0, is_radical=False, **kwargs):
+        """
+        Add new atom.
+        """
         if not isinstance(atom, Element):
             if isinstance(atom, str):
                 atom = Element.from_symbol(atom)()
@@ -76,6 +85,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return _map
 
     def add_bond(self, n, m, bond: Union[Bond, int]):
+        """
+        Connect atoms with bonds.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         if not isinstance(bond, Bond):
             bond = Bond(bond)
 
@@ -95,6 +111,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_atom(self, n):
+        """
+        Remove atom.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         old_bonds = self._bonds[n]  # save bonds
         isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
@@ -116,6 +139,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._fix_stereo()
 
     def delete_bond(self, n, m):
+        """
+        Disconnect atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+        """
         super().delete_bond(n, m)
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
@@ -143,12 +173,16 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             hhg = h._hydrogens
             hc = h._conformers
             has = h._atoms_stereo
+            hal = h._allenes_stereo
+            hcs = h._cis_trans_stereo
         else:
             hn = {}
             hh = {}
             hhg = {}
             hc = []
             has = {}
+            hal = {}
+            hcs = {}
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
@@ -160,6 +194,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
         for n, stereo in self._atoms_stereo.items():
             has[mg(n, n)] = stereo
+        for n, stereo in self._allenes_stereo.items():
+            hal[mg(n, n)] = stereo
+        for (n, m), stereo in self._cis_trans_stereo.items():
+            hcs[(mg(n, n), mg(m, m))] = stereo
 
         if copy:
             return h
@@ -169,6 +207,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hydrogens = hhg
         self._conformers = hc
         self._atoms_stereo = has
+        self._allenes_stereo = hal
+        self._cis_trans_stereo = hcs
         return self
 
     def copy(self, **kwargs) -> 'MoleculeContainer':
@@ -178,12 +218,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
         copy._atoms_stereo = self._atoms_stereo.copy()
+        copy._allenes_stereo = self._allenes_stereo.copy()
+        copy._cis_trans_stereo = self._cis_trans_stereo.copy()
         return copy
 
     def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
                                                                                 'query.QueryContainer']:
         """
-        create substructure containing atoms from atoms list
+        Create substructure containing atoms from atoms list.
+
+        For Thiele forms of molecule In Molecule substructure causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
@@ -197,6 +243,12 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
             not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
             sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
+            sub._allenes_stereo = {n: s for n, s in self._allenes_stereo.items()
+                                   if not_skin.issuperset(self._stereo_allenes_paths[n]) and
+                                      not_skin.issuperset(x for x in self._stereo_allenes[n] if x)}
+            sub._cis_trans_stereo = {nm: s for nm, s in self._cis_trans_stereo.items()
+                                     if not_skin.issuperset(self._stereo_cis_trans_paths[nm]) and
+                                        not_skin.issuperset(x for x in self._stereo_cis_trans[nm] if x)}
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n]
@@ -209,7 +261,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._neighbors = {n: (sn[n],) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
-            sub._conformers = []
+            sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}
             for n in atoms:
                 atom = sa[n].copy()
@@ -225,19 +277,24 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
                 sub._calc_hybridization(n)
                 sub._calc_implicit(n)
+            # fix_stereo will repair data
             sub._atoms_stereo = self._atoms_stereo
+            sub._allenes_stereo = self._allenes_stereo
+            sub._cis_trans_stereo = self._cis_trans_stereo
             sub._fix_stereo()
         return sub
 
-    def union(self, other):
+    def union(self, other, **kwargs):
         if isinstance(other, MoleculeContainer):
-            u = super().union(other)
+            u, other = super().union(other, **kwargs)
             u._conformers.clear()
 
             u._neighbors.update(other._neighbors)
             u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
+            u._allenes_stereo.update(other._allenes_stereo)
+            u._cis_trans_stereo.update(other._cis_trans_stereo)
 
             ub = u._bonds
             for n in other._bonds:
@@ -256,13 +313,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):
-            return other.union(self)
+            return other.union(self, **kwargs)
         else:
             raise TypeError('Graph expected')
 
     def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
-        compose 2 graphs to CGR
+        Compose 2 graphs to CGR.
         """
         sa = self._atoms
         sc = self._charges
@@ -397,7 +454,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def implicify_hydrogens(self) -> int:
         """
-        remove explicit hydrogen if possible
+        Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
         :return: number of removed hydrogens
         """
@@ -425,7 +482,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 for m, bond in bonds[n].items():
                     if m not in hi:
                         explicit_sum += bond.order
-                        explicit_dict[(bond.order, atoms[m].__class__)] += 1
+                        explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
 
                 if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
                        for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
@@ -437,7 +494,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def explicify_hydrogens(self) -> int:
         """
-        add explicit hydrogens to atoms
+        Add explicit hydrogens to atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
 
         :return: number of added atoms
         """
@@ -453,9 +514,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def check_valence(self) -> List[int]:
         """
-        check valences of all atoms
+        Check valences of all atoms.
 
-        works only on molecules with aromatic rings in Kekule form
+        Works only on molecules with aromatic rings in Kekule form.
         :return: list of invalid atoms
         """
         atoms = self._atoms
@@ -474,7 +535,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     break
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             else:
                 try:
                     rules = atom.valence_rules(charge, is_radical, explicit_sum)
@@ -490,13 +551,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_property
     def molecular_charge(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return sum(self._charges.values())
 
     def __int__(self):
         """
-        total charge of molecule
+        Total charge of molecule
         """
         return self.molecular_charge
 
@@ -510,9 +571,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
         """
-        number of explicit hydrogen atoms connected to atom.
+        Number of explicit hydrogen atoms connected to atom.
 
-        take into account any type of bonds with hydrogen atoms.
+        Take into account any type of bonds with hydrogen atoms.
         """
         atoms = self._atoms
         return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
@@ -536,7 +597,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     return
                 elif order != 8:  # any bond used for complexes
                     explicit_sum += order
-                    explicit_dict[(order, atoms[m].__class__)] += 1
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
             try:
                 rules = atom.valence_rules(charge, is_radical, explicit_sum)
             except ValenceError:
@@ -570,20 +631,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations[n] = hybridization
         return hybridization
 
-    @class_cached_property
-    def _standardize_compiled_rules(self):
-        rules = []
-        for atoms, bonds, atom_fix, bonds_fix in self._standardize_rules():
-            q = query.QueryContainer()
-            for a in atoms:
-                q.add_atom(**a)
-            for n, m, b in bonds:
-                q.add_bond(n, m, b)
-            rules.append((q, atom_fix, bonds_fix))
-        return rules
-
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo, **super().__getstate__()}
+        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
+                'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
+                **super().__getstate__()}
 
     def __setstate__(self, state):
         if '_BaseContainer__meta' in state:  # 2.8 reverse compatibility
@@ -603,6 +654,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
             state['meta'] = state['_BaseContainer__meta']
             state['parsed_mapping'] = {}
         elif 'node' in state:  # 3.1 compatibility.
@@ -623,10 +676,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
             state['conformers'] = []
             state['atoms_stereo'] = {}
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
+        elif 'allenes_stereo' not in state:  # <4.0.22
+            state['atoms_stereo'] = {}  # flush existing stereo if exists.
+            state['allenes_stereo'] = {}
+            state['cis_trans_stereo'] = {}
 
         super().__setstate__(state)
         self._conformers = state['conformers']
         self._atoms_stereo = state['atoms_stereo']
+        self._allenes_stereo = state['allenes_stereo']
+        self._cis_trans_stereo = state['cis_trans_stereo']
 
         # restore query and hydrogen marks
         self._neighbors = sn = {}

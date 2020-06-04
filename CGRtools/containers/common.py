@@ -348,14 +348,13 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
     def __and__(self, other):
         """
-        substructure of graph
+        Substructure of graph with given nodes.
         """
         return self.substructure(other)
 
     def __sub__(self, other):
         """
-        other nodes excluded substructure of graph
-        :return graph or None
+        Given nodes excluded substructure of graph.
         """
         atoms = set(other)
         if atoms - self._atoms.keys():
@@ -389,16 +388,24 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         """
         return [self.substructure(a, **kwargs) for a in self.__augmented_substructure(atoms, deep)]
 
-    def union(self, other: 'Graph') -> 'Graph':
+    def union(self, other: 'Graph', *, remap=False) -> 'Graph':
+        """
+        Merge Graphs into one.
+
+        :param remap: if atoms has collisions then remap other graph atoms else raise exception.
+        """
         if self._atoms.keys() & other._atoms.keys():
-            raise ValueError('mapping of graphs is not disjoint')
+            if remap:
+                other = other.remap({n: i for i, n in enumerate(other, start=max(self._atoms) + 1)}, copy=True)
+            else:
+                raise ValueError('mapping of graphs is not disjoint')
 
         u = self.copy(meta=False)
         u._charges.update(other._charges)
         u._radicals.update(other._radicals)
         u._plane.update(other._plane)
         u._parsed_mapping.update(other._parsed_mapping)
-        return u
+        return u, other
 
     def __or__(self, other):
         """

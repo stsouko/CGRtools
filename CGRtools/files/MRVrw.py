@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -24,7 +24,7 @@ from logging import warning
 from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRRead
+from ._MDLrw import MDLStereo
 from ..containers import MoleculeContainer, ReactionContainer
 from ..exceptions import EmptyMolecule
 
@@ -69,13 +69,18 @@ def xml_dict(parent_element, stop_list=None):
     return out
 
 
-class MRVRead(CGRRead):
+class MRVRead(MDLStereo):
     """
     ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in binary mode file, string path to file,
     pathlib.Path object or another binary buffered reader object
     """
-    def __init__(self, file, *args, **kwargs):
+    def __init__(self, file, **kwargs):
+        """
+        :param ignore: Skip some checks of data or try to fix some errors.
+        :param remap: Remap atom numbers started from one.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        """
         if isinstance(file, str):
             self.__file = open(file, 'rb')
             self.__is_buffer = False
@@ -87,7 +92,7 @@ class MRVRead(CGRRead):
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. BytesIO, BufferedReader and BufferedIOBase subclasses possible')
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self._data = self.__reader()
 
     def close(self, force=False):
@@ -136,7 +141,7 @@ class MRVRead(CGRRead):
                     else:
                         record['meta'] = {}
                     try:
-                        container, mapping = self._convert_structure(record)
+                        container = self._convert_structure(record)
                         yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')
@@ -154,7 +159,7 @@ class MRVRead(CGRRead):
                     else:
                         record['meta'] = {}
                     try:
-                        container, mapping = self._convert_reaction(record)
+                        container = self._convert_reaction(record)
                         yield container
                     except ValueError:
                         warning(f'record consist errors:\n{format_exc()}')

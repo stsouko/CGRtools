@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -56,7 +56,7 @@ for k, v in elements.items():
     globals()[name] = cls = type(name, (DynamicElement, *v.__mro__[-3:-1]),
                                  {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
                                   'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses})
+                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
     setattr(modules[v.__module__], name, cls)
     modules[v.__module__].__all__.append(name)
     __all__.append(name)
@@ -66,7 +66,7 @@ for k, v in elements.items():
     globals()[name] = cls = type(name, (QueryElement, *v.__mro__[-3:-1]),
                                  {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
                                   'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses})
+                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
     setattr(modules[v.__module__], name, cls)
     modules[v.__module__].__all__.append(name)
     __all__.append(name)
@@ -76,7 +76,7 @@ for k, v in elements.items():
     globals()[name] = cls = type(name, (DynamicQueryElement, *v.__mro__[-3:-1]),
                                  {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
                                   'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses})
+                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
     setattr(modules[v.__module__], name, cls)
     modules[v.__module__].__all__.append(name)
     __all__.append(name)

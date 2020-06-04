@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -17,20 +17,24 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from itertools import chain
+from CachedMethods import class_cached_property
+from ..containers import query  # cyclic imports resolve
+from ..exceptions import ValenceError
 
 
 class Standardize:
     __slots__ = ()
+    __class_cache__ = {}
 
     def standardize(self) -> bool:
         """
-        standardize functional groups. return True if any not canonical group found
+        Standardize functional groups. Return True if any not canonical group found.
         """
+        neutralized = self.neutralize()
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
-        for pattern, atom_fix, bonds_fix in self._standardize_compiled_rules:
+        for pattern, atom_fix, bonds_fix in self.__standardize_compiled_rules:
             for mapping in pattern.get_mapping(self):
                 hs.update(mapping.values())
 
@@ -41,12 +45,142 @@ class Standardize:
                 for n, m, b in bonds_fix:
                     bonds[mapping[n]][mapping[m]]._Bond__order = b
         if hs:
+            if not neutralized:
+                self.flush_cache()
+            for n in hs:
+                self._calc_implicit(n)
+            return True
+        return False
+
+    def neutralize(self) -> bool:
+        """
+        Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
+        """
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+        entries, exits, rads, constrains = self.__entries()
+        hs = set()
+        while len(rads) > 1:
+            n = rads.pop()
+            for path in self.__find_delocalize_path(n, rads, constrains):
+                l, m, b = path[-1]
+                if b == 1:  # required pi-bond
+                    continue
+                try:
+                    atoms[m].valence_rules(charges[m], False, sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
+                self.__patch_path(path)
+                radicals[n] = radicals[m] = False
+                rads.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+        while entries and exits:
+            n = entries.pop()
+            for path in self.__find_delocalize_path(n, exits, constrains):
+                l, m, b = path[-1]
+                try:
+                    atoms[m].valence_rules(charges[m] - 1, radicals[m],
+                                           sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
+                self.__patch_path(path)
+                charges[n] += 1
+                charges[m] -= 1
+                exits.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+        if hs:
             self.flush_cache()
             for n in hs:
                 self._calc_implicit(n)
+                self._calc_hybridization(n)
+            return True
+        return False
+
+    def clean_isotopes(self) -> bool:
+        """
+        Clean isotope marks from molecule.
+        Return True if any isotope found.
+        """
+        atoms = self._atoms
+        isotopes = [x for x in atoms.values() if x.isotope]
+        if isotopes:
+            for i in isotopes:
+                i._Core__isotope = None
+            self.flush_cache()
+            return True
+        return False
+
+    def __patch_path(self, path):
+        bonds = self._bonds
+        for n, m, b in path:
+            bonds[n][m]._Bond__order = b
+
+    def __find_delocalize_path(self, start, finish, constrains):
+        bonds = self._bonds
+        stack = [(start, n, 0, b.order + 1) for n, b in bonds[start].items() if n in constrains and b.order < 3]
+        path = []
+        seen = {start}
+        while stack:
+            last, current, depth, order = stack.pop()
+            if len(path) > depth:
+                seen.difference_update(x for _, x, _ in path[depth:])
+                path = path[:depth]
+
+            path.append((last, current, order))
+
+            if current in finish:
+                if depth:  # one bonded ignored. we search double bond transfer! A=A-A >> A-A=A.
+                    yield path
+                continue  # stop grow
+
+            depth += 1
+            seen.add(current)
+            diff = -1 if depth % 2 else 1
+            stack.extend((current, n, depth, b) for n, b in  # I want 3.8
+                         ((n, b.order + diff) for n, b in bonds[current].items() if n not in seen and n in constrains)
+                         if 1 <= b <= 3)
+
+    def __entries(self):
+        charges = self._charges
+        radicals = self._radicals
+        atoms = self._atoms
+        hybs = self._hybridizations
+
+        transfer = set()
+        entries = set()
+        exits = set()
+        rads = set()
+        for n, a in atoms.items():
+            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52} or hybs[n] == 4:
+                # filter non-organic set, halogens and aromatics
+                continue
+            transfer.add(n)
+            if charges[n] == -1:
+                entries.add(n)
+            elif charges[n] == 1:
+                exits.add(n)
+            elif radicals[n]:
+                rads.add(n)
+        return entries, exits, rads, transfer
+
+    @class_cached_property
+    def __standardize_compiled_rules(self):
+        rules = []
+        for atoms, bonds, atom_fix, bonds_fix in self.__standardize_rules():
+            q = query.QueryContainer()
+            for a in atoms:
+                q.add_atom(**a)
+            for n, m, b in bonds:
+                q.add_bond(n, m, b)
+            rules.append((q, atom_fix, bonds_fix))
+        return rules
 
     @staticmethod
-    def _standardize_rules():
+    def __standardize_rules():
         rules = []
 
         # Nitrone
@@ -426,24 +560,39 @@ class Standardize:
         bonds_fix = ((1, 2, 3),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Ozone
+        #
+        # [O] -- O -- [O]  >>  O == [O+] -- [O-]
+        #
+
+        atoms = ({'atom': 'O', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 2},
+                 {'atom': 'O', 'neighbors': 1, 'is_radical': True})
+        bonds = ((1, 2, 1), (2, 3, 1))
+        atom_fix = {1: {'hybridization': 2, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 2},
+                    3: {'charge': -1, 'is_radical': False}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         return rules
 
 
 class StandardizeReaction:
     __slots__ = ()
+    __class_cache__ = {}
 
     def standardize(self, fix_mapping: bool = True) -> bool:
         """
-        standardize functional groups. works only for Molecules.
-        return True if in any molecule found not canonical group
+        Standardize functional groups. Works only for Molecules.
+        Return True if in any molecule found not canonical group.
 
-        :param fix_mapping: search AAM errors of functional groups.
+        :param fix_mapping: Search AAM errors of functional groups.
         """
         total = False
-        for m in chain(self.reagents, self.reactants, self.products):
-            if hasattr(m, 'standardize'):
-                if m.standardize() and not total:
-                    total = True
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.standardize() and not total:
+                total = True
 
         if fix_mapping and self.fix_mapping():
             return True
@@ -454,10 +603,10 @@ class StandardizeReaction:
 
     def fix_mapping(self) -> bool:
         """
-        fix atom-to-atom mapping of some functional groups. return True if found AAM errors
+        Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
-        for r_pattern, p_pattern, fix in self._standardize_compiled_rules:
+        for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
             for m in self.reactants:
                 for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
@@ -487,8 +636,40 @@ class StandardizeReaction:
             return True
         return False
 
+    def clean_isotopes(self) -> bool:
+        """
+        Clean isotope marks for all molecules in reaction.
+        Returns True if in any molecule found isotope.
+        """
+        flag = False
+        for m in self.molecules():
+            if hasattr(m, 'clean_isotopes'):
+                if m.clean_isotopes() and not flag:
+                    flag = True
+
+        if flag:
+            self.flush_cache()
+        return flag
+
+    @class_cached_property
+    def __standardize_compiled_rules(self):
+        rules = []
+        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self.__standardize_rules():
+            r_q = query.QueryContainer()
+            p_q = query.QueryContainer()
+            for a in r_atoms:
+                r_q.add_atom(**a)
+            for n, m, b in r_bonds:
+                r_q.add_bond(n, m, b)
+            for a in p_atoms:
+                p_q.add_atom(**a)
+            for n, m, b in p_bonds:
+                p_q.add_bond(n, m, b)
+            rules.append((r_q, p_q, fix))
+        return rules
+
     @staticmethod
-    def _standardize_rules():
+    def __standardize_rules():
         rules = []
 
         # Nitro
@@ -561,6 +742,23 @@ class StandardizeReaction:
         p_atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
                    {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 2})
         p_bonds = ((1, 2, 1), (1, 3, 1))
+        fix = {2: 3, 3: 2}
+        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
+
+        # Sulphate addition
+        #
+        #      O [3]            O -- * [2]
+        #     //               /
+        # * = S - *   >>  * = S - *
+        #     |               \\
+        #     O- [2]           O [3]
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        p_atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3},
+                   {'atom': 'O', 'neighbors': 2}, {'atom': 'O', 'neighbors': 1})
+        p_bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
 
