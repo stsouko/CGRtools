@@ -636,7 +636,7 @@ class SMILESRead(CGRRead):
                         bonds.append((atom_num, last_num, 1))
                         stereo_bonds[last_num][atom_num] = b
                         stereo_bonds[atom_num][last_num] = not b
-                    else:  # bt == 10
+                    elif bt == 10:
                         bonds.append((atom_num, last_num, 8))
                         cgr.append(((atom_num, last_num), 'bond', b))
                     order[last_num].append(atom_num)
