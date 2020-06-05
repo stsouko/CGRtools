@@ -18,7 +18,6 @@
 #
 from collections import defaultdict, namedtuple
 from itertools import count
-from logging import info
 from ..containers import CGRContainer, MoleculeContainer, QueryContainer, ReactionContainer
 from ..containers.bonds import Bond, DynamicBond
 from ..exceptions import AtomNotFound, MappingError
@@ -42,13 +41,24 @@ elements_set = set(common_isotopes)
 elements_list = list(common_isotopes)
 
 
-parse_error = namedtuple('ParseError', ('number', 'position'))
+parse_error = namedtuple('ParseError', ('number', 'position', 'log'))
 
 
 class CGRRead:
-    def __init__(self, remap=True, ignore=False):
+    def __init__(self, remap=True, ignore=False, store_log=False):
         self.__remap = remap
         self._ignore = ignore
+        self._store_log = store_log
+        self._log_buffer = []
+
+    def _info(self, msg):
+        self._log_buffer.append(msg)
+
+    def _flush_log(self):
+        self._log_buffer.clear()
+
+    def _format_log(self):
+        return '\n'.join(self._log_buffer)
 
     def _convert_reaction(self, reaction):
         if not (reaction['reactants'] or reaction['products'] or reaction['reagents']):
@@ -63,7 +73,7 @@ class CGRRead:
                         if m in used:
                             if not self._ignore:
                                 raise MappingError('mapping in molecules should be unique')
-                            info(f'non-unique mapping in molecule: {m}')
+                            self._info(f'non-unique mapping in molecule: {m}')
                         else:
                             used.add(m)
                     tmp.append(m)
@@ -83,7 +93,7 @@ class CGRRead:
                         raise MappingError('mapping in reagents or products or reactants should be unique')
                     # force remap non unique atoms in molecules.
                     remap.append(next(length))
-                    info(f'mapping changed: {m} to {remap[-1]}')
+                    self._info(f'mapping in {i} changed from {m} to {remap[-1]}')
                 else:
                     remap.append(m)
                     used.add(m)
@@ -94,7 +104,7 @@ class CGRRead:
                 e = f'reagents has map intersection with reactants or products: {tmp}'
                 if not self._ignore:
                     raise MappingError(e)
-                info(e)
+                self._info(e)
                 maps['reagents'] = [x if x not in tmp else next(length) for x in maps['reagents']]
 
         # find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
@@ -133,7 +143,7 @@ class CGRRead:
                     if not self._ignore:
                         raise MappingError('mapping in molecules should be unique')
                     remapped[n] = next(length)
-                    info(f'mapping in molecule changed: {m} to {remapped[n]}')
+                    self._info(f'mapping in molecule changed from {m} to {remapped[n]}')
                 else:
                     remapped[n] = m
                     used.add(m)

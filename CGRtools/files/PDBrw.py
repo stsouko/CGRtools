@@ -17,12 +17,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from io import StringIO, TextIOWrapper
-from logging import warning
 from pathlib import Path
 from traceback import format_exc
-from typing import List, Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional
+from ._CGRrw import parse_error
 from .XYZrw import XYZ
-from ..containers import MoleculeContainer
 
 
 one_symbol_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG',
@@ -45,66 +44,47 @@ class PDBRead(XYZ):
     def __init__(self, file, ignore=False, element_name_priority=False, parse_as_single=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         :param element_name_priority: For ligands use element symbol column value and ignore atom name column.
         :param parse_as_single: Usable if all models in file is the same structure. 2d graph will be restored from first
             model. Other models will be returned as conformers.
         """
         if isinstance(file, str):
-            self.__file = open(file)
-            self.__is_buffer = False
+            self._file = open(file)
+            self._is_buffer = False
         elif isinstance(file, Path):
-            self.__file = file.open()
-            self.__is_buffer = False
+            self._file = file.open()
+            self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
-            self.__is_buffer = True
+            self._file = file
+            self._is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__file = iter(self._file.readline, '')
         self.__ignore = ignore
         self.__element_name_priority = element_name_priority
         self.__parse_as_single = parse_as_single
         self.__parsed_first = None
         self._data = self.__reader()
 
-    def close(self, force=False):
-        """
-        Close opened file
-
-        :param force: Force closing of externally opened file or buffer
-        """
-        if not self.__is_buffer or force:
-            self.__file.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, _type, value, traceback):
-        self.close()
-
-    def read(self) -> List[MoleculeContainer]:
-        """
-        Parse whole file
-
-        :return: list of parsed molecules
-        """
-        return list(iter(self))
-
-    def __iter__(self):
-        return (x for x in self._data if x is not None)
-
-    def __next__(self):
-        return next(iter(self))
-
     def __reader(self):
         element_name_priority = self.__element_name_priority
+        file = self._file
+        seekable = file.seekable()
         ignore = self.__ignore
         failkey = False
         atoms = []
+
+        pos = 0 if seekable else None
+        count = 0
         for n, line in enumerate(self.__file):
             if failkey:
-                if line.startswith('ENDMDL'):
+                if line.startswith('END'):
                     failkey = False
+                    if seekable:
+                        pos = file.tell()
+                    count += 1
             elif line.startswith(('ATOM', 'HETATM')):
                 # COLUMNS        DATA  TYPE    FIELD        DEFINITION
                 # -------------------------------------------------------------------------------------
@@ -128,19 +108,21 @@ class PDBRead(XYZ):
                     try:
                         charge = int(charge)
                     except ValueError:
-                        warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                        self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                         failkey = True
                         atoms = []
-                        yield None
+                        yield parse_error(count, pos, self._format_log())
+                        self._flush_log()
                 else:
                     charge = None
                 try:
                     x, y, z = float(line[30:38]), float(line[38:46]), float(line[46:54])
                 except ValueError:
-                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                    self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                     failkey = True
                     atoms = []
-                    yield None
+                    yield parse_error(count, pos, self._format_log())
+                    self._flush_log()
                     continue
 
                 element = line[76:78].strip()
@@ -167,27 +149,39 @@ class PDBRead(XYZ):
                     atom_name = atom_name.capitalize()
 
                 if atom_name != element:
-                    warning(f'Atom name and Element symbol not equal: {line[:-1]}')
+                    self._info(f'Atom name and Element symbol not equal: {line[:-1]}')
                     if not ignore:
                         failkey = True
                         atoms = []
-                        yield None
+                        yield parse_error(count, pos, self._format_log())
+                        self._flush_log()
                         continue
                 atoms.append((atom_name, charge, x, y, z, residue))
             elif line.startswith('END'):  # EOF or end of complex
                 if atoms:  # convert collected atoms
                     try:
-                        yield self._convert_structure(atoms)
+                        container = self._convert_structure(atoms)
                     except ValueError:
-                        warning(f'Structure consist errors:\n{format_exc()}')
-                        yield None
+                        self._info(f'Structure consist errors:\n{format_exc()}')
+                        yield parse_error(count, pos, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        yield container
                     atoms = []
                 else:
-                    warning(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
-                    yield None
+                    self._info(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
+                    yield parse_error(count, pos, self._format_log())
+                count += 1
+                if seekable:
+                    pos = file.tell()
+                self._flush_log()
         if atoms:  # ENDMDL or END not found
-            warning('PDB not finished')
-            yield None
+            self._info('PDB not finished')
+            yield parse_error(count, pos, self._format_log())
+            self._flush_log()
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float, str]]):
         if self.__parsed_first is None:
