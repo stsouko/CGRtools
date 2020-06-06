@@ -198,8 +198,8 @@ class Aromatize:
                 elif radicals[n]:
                     if ab != 2:  # not cation-radical pyridine
                         raise InvalidAromaticRing
-                elif ab == 2:  # pyrole cation
-                    double_bonded.add(n)
+                elif ab == 2:  # pyrole cation or protonated pyridine
+                    pyroles.add(n)
                 elif ab != 3:  # not pyridine oxyde
                     raise InvalidAromaticRing
             elif an == 8:  # furan
