@@ -31,26 +31,38 @@ class Standardize:
         Standardize functional groups. Return True if any not canonical group found.
         """
         neutralized = self.neutralize()
+        hs = self.__standardize()
+        if hs:
+            if not neutralized:
+                self.flush_cache()
+            for n in hs:
+                self._calc_implicit(n)
+            # second round. need for intersected groups.
+            hs = self.__standardize()
+            for n in hs:
+                self._calc_implicit(n)
+            return True
+        return neutralized
+
+    def __standardize(self):
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
         for pattern, atom_fix, bonds_fix in self.__standardize_compiled_rules:
-            for mapping in pattern.get_mapping(self):
-                hs.update(mapping.values())
-
+            seen = set()
+            for mapping in pattern.get_mapping(self, automorphism_filter=False):
+                match = set(mapping.values())
+                if not match.isdisjoint(seen):  # skip intersected groups
+                    continue
+                seen.update(match)
                 for n, fix in atom_fix.items():
                     n = mapping[n]
                     for key, value in fix.items():
                         atom_map[key][n] = value
                 for n, m, b in bonds_fix:
                     bonds[mapping[n]][mapping[m]]._Bond__order = b
-        if hs:
-            if not neutralized:
-                self.flush_cache()
-            for n in hs:
-                self._calc_implicit(n)
-            return True
-        return False
+            hs.update(seen)
+        return hs
 
     def neutralize(self) -> bool:
         """
@@ -77,6 +89,8 @@ class Standardize:
                 rads.discard(m)
                 hs.add(n)
                 hs.update(x for _, x, _ in path)
+                break  # path found
+            # path not found. atom n keep as is
         while entries and exits:
             n = entries.pop()
             for path in self.__find_delocalize_path(n, exits, constrains):
@@ -87,11 +101,12 @@ class Standardize:
                 except ValenceError:
                     continue
                 self.__patch_path(path)
-                charges[n] += 1
-                charges[m] -= 1
+                charges[n] = charges[m] = 0
                 exits.discard(m)
                 hs.add(n)
                 hs.update(x for _, x, _ in path)
+                break  # path from negative atom to positive atom found.
+            # path not found. keep negative atom n as is
         if hs:
             self.flush_cache()
             for n in hs:
@@ -189,9 +204,24 @@ class Standardize:
         #     //         /
         # C = N  >> C = N+
         #      \         \
-        #       C         C
+        #       A         A
         #
-        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O'}, {'atom': 'C', 'hybridization': 2}, {'atom': 'C'})
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'C'}, {'atom': 'A'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrone like
+        #
+        #      N          N-
+        #     //         /
+        # C = N  >> C = N+
+        #      \         \
+        #       A         A
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
+                 {'atom': 'C'}, {'atom': 'A'})
         bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
@@ -201,9 +231,9 @@ class Standardize:
         #
         # N = N = O >> N = N+ - O-
         #     |            |
-        #     C            C
+        #     A            A
         #
-        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O'}, {'atom': 'N', 'hybridization': 2}, {'atom': 'C'})
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'N'}, {'atom': 'A'})
         bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
@@ -213,13 +243,26 @@ class Standardize:
         #
         # N- - N+ = O >> N = N+ - O-
         #      |             |
-        #      C             C
+        #      A             A
         #
-        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O'},
-                 {'atom': 'N', 'charge': -1, 'hybridization': 1}, {'atom': 'C'})
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'charge': -1, 'hybridization': 1, 'neighbors': (1, 2)}, {'atom': 'A'})
         bonds = ((1, 2, 2), (1, 3, 1), (1, 4, 1))
         atom_fix = {2: {'charge': -1, 'hybridization': 1}, 3: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 1), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitrone [CN(=O)=N(=O)C]
+        #
+        # [N+] = N = O >> [N+] = N+ - O-
+        #        |               |
+        #        A               A
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'charge': 1, 'hybridization': 2, 'neighbors': 3}, {'atom': 'A'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Nitro
@@ -230,7 +273,7 @@ class Standardize:
         #      \         \
         #       OH        O-
         #
-        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O'},
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1},
                  {'atom': 'C', 'hybridization': 2})
         bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2))
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1}, 4: {'hybridization': 1}}
@@ -245,8 +288,8 @@ class Standardize:
         #      \          \\
         #       OH         O
         #
-        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O', 'neighbors': 1},
-                 {'atom': 'C', 'hybridization': 2})
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'C', 'hybridization': 2})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
         atom_fix = {3: {'hybridization': 2}, 4: {'hybridization': 1}}
         bonds_fix = ((1, 3, 2), (1, 4, 1))
@@ -254,14 +297,15 @@ class Standardize:
 
         # Nitro
         #
-        #   O          O-
-        #  //         /
-        #  N  >> C - N+
-        #  \\        \\
-        #   O         O
+        #      O           O-
+        #     //          /
+        # A - N   >> A - N+
+        #     \\         \\
+        #      O          O
         #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 3}, {'atom': 'O'}, {'atom': 'O'})
-        bonds = ((1, 2, 2), (1, 3, 2))
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
@@ -325,23 +369,35 @@ class Standardize:
         #
         # - C # N = O >> - C # N+ - O-
         #
-        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'O'}, {'atom': 'C'})
+        atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'C'})
         bonds = ((1, 2, 2), (1, 3, 3))
         atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Tetriary N-oxide
+        # N-oxide
         #
-        #    C          C
-        #    |          |
-        #  - N -  >>  - N+ -
-        #    \\         |
-        #     O         O-
+        #    |         |
+        #  - N -? >> - N+ --?
+        #    \\        |
+        #     O        O-
         #
-        atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 2}, {'atom': 'O'}, {'atom': 'C'})
-        bonds = ((1, 2, 2), (1, 3, 1))
+        atoms = ({'atom': 'N', 'neighbors': (3, 4), 'hybridization': 2}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 1, 'hybridization': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # N-oxide radical
+        #
+        #    |         |
+        #  - N*  >>  - N
+        #    \\        |
+        #     O        O*
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'is_radical': True}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'hybridization': 1, 'is_radical': False}, 2: {'is_radical': True, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -382,7 +438,7 @@ class Standardize:
         #  N+ - C- = O  >>  N = C = O
         #
         atoms = ({'atom': 'C', 'charge': -1, 'neighbors': 2},
-                 {'atom': 'N', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 1}, {'atom': 'O'})
+                 {'atom': 'N', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -394,7 +450,19 @@ class Standardize:
         #    \\          \
         #     O           O-
         #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O'})
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O', 'neighbors': 1})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Aromatic N-Nitride?
+        #
+        #  : N :  >>  : N+ :
+        #    \\          \
+        #     N           N-
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'N', 'hybridization': 2})
         bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
@@ -404,7 +472,8 @@ class Standardize:
         #
         # - N+ - O-  >>  - N = O
         #
-        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2, 'hybridization': 1}, {'atom': 'O', 'charge': -1})
+        atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2, 'hybridization': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1})
         bonds = ((1, 2, 1),)
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -412,9 +481,10 @@ class Standardize:
 
         # Iminium
         #
-        #  C+ - N  >> C = N+
+        #  C+ - N(R2)  >> C = N+(R2)
         #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 1}, {'atom': 'C', 'charge': 1, 'hybridization': 1})
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 1},
+                 {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3)})
         bonds = ((1, 2, 1),)
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -422,12 +492,25 @@ class Standardize:
 
         # Nitrilium
         #
-        #  C+ = N  >>  C # N+
+        #  C+ = N(R)  >>  C # N+(R)
         #
-        atoms = ({'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'C', 'charge': 1, 'neighbors': 2})
+        atoms = ({'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
+                 {'atom': 'C', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 2})
         bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 1, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 3}}
         bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Amide
+        #
+        #       O        O
+        #      /        //
+        # N = C  >> N - C
+        #
+        atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Phosphonic
@@ -438,8 +521,8 @@ class Standardize:
         #      |                |
         #      O                O
         #
-        atoms = ({'atom': 'P', 'charge': 1, 'neighbors': 4}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'},
-                 {'atom': 'C'})
+        atoms = ({'atom': 'P', 'charge': 1, 'neighbors': 4}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O'}, {'atom': 'O'}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -453,7 +536,8 @@ class Standardize:
         #      |                |
         #      C                C
         #
-        atoms = ({'atom': 'P', 'charge': -1, 'neighbors': 4}, {'atom': 'C', 'charge': 1}, {'atom': 'C'}, {'atom': 'C'},
+        atoms = ({'atom': 'P', 'charge': -1, 'neighbors': 4}, {'atom': 'C', 'charge': 1, 'neighbors': (1, 2, 3)},
+                 {'atom': 'C'}, {'atom': 'C'},
                  {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
@@ -469,7 +553,8 @@ class Standardize:
         #      C                C
         #
         atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 4},
-                 {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'C'}, {'atom': 'C'})
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'C'}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -484,7 +569,7 @@ class Standardize:
         #      C                C
         #
         atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 4},
-                 {'atom': 'O', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -499,7 +584,7 @@ class Standardize:
         #        C           C
         #
         atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 3},
-                 {'atom': 'O', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'})
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'C'}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -512,7 +597,7 @@ class Standardize:
         #      C                C
         #
         atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3},
-                 {'atom': 'C', 'charge': 1, 'hybridization': 1}, {'atom': 'C'}, {'atom': 'C'})
+                 {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3)}, {'atom': 'C'}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -523,7 +608,7 @@ class Standardize:
         #  O- - S+ = C  >>  O = S = C
         #
         atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 2},
-                 {'atom': 'O', 'charge': -1}, {'atom': 'C', 'hybridization': 2})
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'C'})
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -537,13 +622,15 @@ class Standardize:
         #       \            \
         #        O            O
         #
-        atoms = ({'atom': 'Si', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'})
+        atoms = ({'atom': 'Si', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O'}, {'atom': 'O'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        atoms = ({'atom': 'Se', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1}, {'atom': 'O'}, {'atom': 'O'})
+        atoms = ({'atom': 'Se', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O'}, {'atom': 'O'})
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
