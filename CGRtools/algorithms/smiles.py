@@ -283,8 +283,10 @@ class MoleculeSmiles(Smiles):
 
     def _format_bond(self, n, m, adjacency, **kwargs):
         order = self._bonds[n][m].order
-        if kwargs.get('aromatic', True) and order == 4:
-            return ''
+        if order == 4:
+            if kwargs.get('aromatic', True):
+                return ''
+            return ':'
         elif kwargs.get('stereo', True) and order == 1:  # cis-trans /\
             ctt = self._stereo_cis_trans_terminals
             if n in ctt:
@@ -308,8 +310,20 @@ class MoleculeSmiles(Smiles):
                         n2 = ts[1] if ts[0] == m else ts[0]
                         m2 = next(x for x in adjacency[n2] if x in env)
                         return '/' if self._translate_cis_trans_sign(n2, m, m2, n) else '\\'
+
+            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+                return '-'
             return ''
-        return order_str[order]
+        elif order == 2:
+            return '='
+        elif order == 3:
+            return '#'
+        elif order == 1:
+            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+                return '-'
+            return ''
+        else:  # order == 8
+            return '~'
 
 
 class CGRSmiles(Smiles):
@@ -343,8 +357,12 @@ class CGRSmiles(Smiles):
     def _format_bond(self, n, m, **kwargs):
         bond = self._bonds[n][m]
         order, p_order = bond.order, bond.p_order
-        if kwargs.get('aromatic', True) and order == p_order == 4:
-            return ''
+        if kwargs.get('aromatic', True):
+            if order == p_order == 4:
+                return ''
+            elif order == p_order == 1 and (self._hybridizations[n] == 4 or self._p_hybridizations[n] == 4) and \
+                    (self._hybridizations[m] == 4 or self._p_hybridizations[m] == 4):
+                return '-'
         return dyn_order_str[(order, p_order)]
 
 
