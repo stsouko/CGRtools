@@ -693,6 +693,11 @@ class StandardizeReaction:
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
+        if not (self.reactants and self.products):
+            return False
+        elif not isinstance(self.reactants[0], Standardize):
+            raise TypeError('Only Molecules supported')
+
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
             for m in self.reactants:
@@ -730,9 +735,10 @@ class StandardizeReaction:
         """
         flag = False
         for m in self.molecules():
-            if hasattr(m, 'clean_isotopes'):
-                if m.clean_isotopes() and not flag:
-                    flag = True
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.clean_isotopes() and not flag:
+                flag = True
 
         if flag:
             self.flush_cache()

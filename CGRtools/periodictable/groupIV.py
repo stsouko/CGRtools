@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -91,11 +91,11 @@ class Zr(Element, PeriodV, GroupIV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({90: 0.5145, 91: 0.1122, 92: 0.1715, 94: 0.1738, 96: 0.028})
+        return FrozenDict({90: 0.5145, 91: 0.1122, 92: 0.1715, 94: 0.1738, 96: 0.028, 89: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({90: 89.904704, 91: 90.905645, 92: 91.90504, 94: 93.906316, 96: 95.908276})
+        return FrozenDict({90: 89.904704, 91: 90.905645, 92: 91.90504, 94: 93.906316, 96: 95.908276, 89: 88.908890})
 
     @property
     def _common_valences(self):
