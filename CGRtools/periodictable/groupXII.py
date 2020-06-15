@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  This file is part of CGRtools.
 #
@@ -32,11 +32,12 @@ class Zn(Element, PeriodIV, GroupXII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({64: 0.4863, 66: 0.279, 67: 0.041, 68: 0.1875, 70: 0.0062})
+        return FrozenDict({64: 0.4863, 66: 0.279, 67: 0.041, 68: 0.1875, 70: 0.0062, 62: 0., 69: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({64: 63.929147, 66: 65.926037, 67: 66.927131, 68: 67.924848, 70: 69.925325})
+        return FrozenDict({64: 63.929147, 66: 65.926037, 67: 66.927131, 68: 67.924848, 70: 69.925325, 62: 61.934330,
+                           69: 68.926550})
 
     @property
     def _common_valences(self):
@@ -98,12 +99,13 @@ class Hg(Element, PeriodVI, GroupXII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({196: 0.0015, 198: 0.0997, 199: 0.1687, 200: 0.231, 201: 0.1318, 202: 0.2986, 204: 0.0687})
+        return FrozenDict({196: 0.0015, 198: 0.0997, 199: 0.1687, 200: 0.231, 201: 0.1318, 202: 0.2986, 204: 0.0687,
+                           197: 0., 203: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({196: 195.965815, 198: 197.966752, 199: 198.968262, 200: 199.968309, 201: 200.970285,
-                           202: 201.970626, 204: 203.973476})
+                           202: 201.970626, 204: 203.973476, 197: 196.967213, 203: 202.972873})
 
     @property
     def _common_valences(self):

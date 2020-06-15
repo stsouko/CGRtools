@@ -37,7 +37,7 @@ class Core(ABC):
         """
         if isinstance(isotope, int):
             if isotope not in self.isotopes_distribution:
-                raise ValueError('isotope number impossible or not stable')
+                raise ValueError(f'isotope number {isotope} impossible or not stable for {self.__class__.__name__}')
         elif isotope is not None:
             raise TypeError('integer isotope number required')
         self.__isotope = isotope
@@ -87,6 +87,11 @@ class Core(ABC):
         """
         Isotopes distribution in earth
         """
+
+    @property
+    @abstractmethod
+    def atomic_radius(self) -> float:
+        ...
 
     @property
     def charge(self) -> int:
@@ -745,6 +750,10 @@ class AnyElement(Query):  # except Hydrogen!
     def isotopes_masses(self) -> Dict[int, float]:
         return {}
 
+    @property
+    def atomic_radius(self):
+        return 0.5
+
     def __eq__(self, other):
         """
         compare attached to molecules elements and query elements
@@ -799,6 +808,10 @@ class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
     @property
     def isotopes_masses(self) -> Dict[int, float]:
         return {}
+
+    @property
+    def atomic_radius(self):
+        return 0.5
 
     def __eq__(self, other):
         if isinstance(other, DynamicElement):

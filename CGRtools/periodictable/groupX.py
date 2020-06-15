@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  This file is part of CGRtools.
@@ -33,11 +33,11 @@ class Ni(Element, PeriodIV, GroupX):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({58: 0.680769, 60: 0.262231, 61: 0.011399, 62: 0.036345, 64: 0.009256})
+        return FrozenDict({58: 0.680769, 60: 0.262231, 61: 0.011399, 62: 0.036345, 64: 0.009256, 63: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({58: 57.935348, 60: 59.930791, 61: 60.93106, 62: 61.928349, 64: 63.92797})
+        return FrozenDict({58: 57.935348, 60: 59.930791, 61: 60.93106, 62: 61.928349, 64: 63.92797, 63: 62.929669})
 
     @property
     def _common_valences(self):
@@ -62,12 +62,13 @@ class Pd(Element, PeriodV, GroupX):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({102: 0.0102, 104: 0.1114, 105: 0.2233, 106: 0.2733, 108: 0.2646, 110: 0.1172})
+        return FrozenDict({102: 0.0102, 104: 0.1114, 105: 0.2233, 106: 0.2733, 108: 0.2646, 110: 0.1172, 103: 0.,
+                           109: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({102: 101.905608, 104: 103.904035, 105: 104.905084, 106: 105.903483, 108: 107.903894,
-                           110: 109.905152})
+                           110: 109.905152, 103: 102.906087, 109: 108.905950})
 
     @property
     def _common_valences(self):

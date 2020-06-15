@@ -3,8 +3,10 @@ CGRTools
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
 Basic operations:
-   - Read/write/convert formats: MDL .RDF and .SDF, .MRV, SMILES, INCHI (Linux and Windows), .XYZ, .PDB
+   - Read/write/convert formats: MDL .RDF (RXN) and .SDF (MOL), .MRV, SMILES, INCHI (Linux and Windows), .XYZ, .PDB
    - Standardize molecules and reactions and valid structures checker.
+   - Duplicate searching.
+   - Tetrahedron, Allene and CIS-TRANS stereo checking.
    - Produce CGRs.
    - Perform subgraph search.
    - Build/edit molecules and reactions.
@@ -12,29 +14,33 @@ Basic operations:
    - Atom-to-atom mapping checker and rule-based fixer.
    - Perform MCS search.
    - 2d depiction.
+   - Pharmacophore ligand-host interactions analyse.
 
 INSTALL
 =======
 
+Highly recommended to use python 3.8+. Python 3.6 and 3.7 deprecated.
+
+
 Linux Debian based
 ------------------
 
-* Install python3.7, virtualenv and git
+* Install python3.8, virtualenv and git
 
     ```
-    sudo apt install python3.7 python3.7-dev git python3-virtualenv
+    sudo apt install python3.8 python3.8-dev git python3-virtualenv
     ```
     
 * Create new environment and activate it.
 
     ```
-    virtualenv -p python3.7 venv
+    virtualenv -p python3.8 venv
     source venv/bin/activate
     ```
 
 Mac
 ---
-* Install python3.7 and git using [brew](<https://brew.sh>)
+* Install python3.8 and git using [brew](<https://brew.sh>)
 
     ```
     brew install git
@@ -50,14 +56,14 @@ Mac
 * Create new environment and activate it.
 
     ```
-    virtualenv -p python3.7 venv
+    virtualenv -p python3.8 venv
     source venv/bin/activate
     ```
     
 Windows
 -------
 
-* Install python3.7 and git using [Chocolatey](<https://chocolatey.org/>)
+* Install python3.8 and git using [Chocolatey](<https://chocolatey.org/>)
 
     ```
     choco install git
@@ -152,3 +158,10 @@ CONTRIBUTORS
 * Adelia Fatykhova <adelik21979@gmail.com>
 * Tagir Akhmetshin <tagirshin@gmail.com>
 * Ravil Mukhametgaleev <sonic-mc@mail.ru>
+
+CITE THIS
+=========
+
+CGRtools: Python Library for Molecule, Reaction, and Condensed Graph of Reaction Processing.
+Journal of Chemical Information and Modeling 2019 59 (6), 2516-2521.
+DOI: 10.1021/acs.jcim.9b00102 
