@@ -30,9 +30,7 @@ else:
     def njit(*args, **kwargs):
         def wrapper(f):
             return f
-
         return wrapper
-
 
     class NumbaType:
         def __getitem__(self, item):
@@ -40,7 +38,6 @@ else:
 
         def __call__(self, *args, **kwargs):
             return self
-
 
     f8 = u2 = NumbaType()
 
@@ -164,7 +161,7 @@ def cutoff(forces, cut):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:, :], boolean[:, :], u2), cache=True)
+# @njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:, :], boolean[:, :], u2), cache=True)
 def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_centers):
     end = len(xyz)
     # step 1
@@ -249,10 +246,9 @@ def calculate_center(xyz, cycle):
     for i, b in enumerate(cycle):
         if b:
             k += 1
-            x, y, z = xyz[i]
-            center_x += x
-            center_y += y
-            center_z += z
+            center_x += xyz[i][0]
+            center_y += xyz[i][1]
+            center_z += xyz[i][2]
     return array([center_x / k, center_y / k, center_z / k])
 
 
@@ -263,6 +259,7 @@ class Calculate2D:
         atoms = self._atoms
         bonds = self._bonds
         plane = self._plane
+        rings = [x for x in self.sssr if all(y in component for y in x)]
 
         mapping = {}
         springs = []
@@ -270,22 +267,20 @@ class Calculate2D:
         xyz_matrix = []
         distances_stiffness = []
         dd = defaultdict(dict)
-        c_stiff = .1
-        r_stiff = .08
+        c_stiff = .25
+        r_stiff = .15
 
         # for cycles of 4 and 6 atoms
-        c_count = 0
+        c6 = []
         ac4 = set()
         ac6 = set()
-        cc = defaultdict(list)
-        for ccl in self.sssr:
-            c_count += 1
+        for ccl in rings:
             k = len(ccl)
-            cc[k].append(ccl)
             if k == 4:
                 for a in ccl:
                     ac4.add(a)
             elif k == 6:
+                c6.append(ccl)
                 for a in ccl:
                     ac6.add(a)
 
@@ -344,32 +339,46 @@ class Calculate2D:
                     if self._is_angle(bond1, bond2):
                         mapping[-n] = end
                         dd[n][-n] = dd[-n][n] = False
-                        xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
+                        if randomize:
+                            xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
+                        else:
+                            xyz_matrix.append([*plane[n], -.1])
                         springs.append((mapping[n], end))
                         distances_stiffness.append([.825, r_stiff])
                         end += 1
 
         # add cycle centers
-        e = 0
         start_centers = end
-        sssr_matrix = zeros((c_count, end), dtype=bool)
-        for k, v in cc.items():
-            for ccl in v:
-                mapping[-end] = end
-                for a, m in zip(ccl, [mapping[x] for x in ccl]):
-                    ns = bonds[a]
-                    sssr_matrix[e][m] = True
-                    if len(ns) == 3:
-                        for n in ns:
-                            if n not in ccl:
-                                springs.append((mapping[n], end))
-                                distances_stiffness.append([.825 + c_dist[k], r_stiff])
-                xyz_matrix.append(calculate_center(array(xyz_matrix), sssr_matrix[e]))
-                end += 1
-                e += 1
+        sssr_matrix = zeros((len(rings), end), dtype=bool)
+        for e, ring in enumerate(rings):
+            k = len(ring)
+            mapping[-end] = end
+            for a, m in zip(ring, [mapping[x] for x in ring]):
+                ns = bonds[a]
+                sssr_matrix[e][m] = True
+                if len(ns) == 3:
+                    for n in ns:
+                        if n not in ring:
+                            springs.append((mapping[n], end))
+                            distances_stiffness.append([.825 + c_long[k], r_stiff])
+            xyz_matrix.append(calculate_center(array(xyz_matrix), sssr_matrix[e]))
+            end += 1
+
+        # add springs between cycles
+        ini = start_centers
+        for i, ring in enumerate(rings):
+            l = len(ring)
+            clc = ini
+            for ccl in rings[i+1:]:
+                clc += 1
+                k = len(ccl)
+                if not set(ring).isdisjoint(set(ccl)):
+                    springs.append((ini, clc))
+                    distances_stiffness.append([c_short[l] + c_short[k], c_stiff])
+            ini += 1
 
         # add springs for cycles of six atoms
-        for cycle in cc[6]:
+        for cycle in c6:
             for i, j in zip(cycle[:3], cycle[3:]):
                 springs.append((mapping[i], mapping[j]))
                 distances_stiffness.append([1.65, c_stiff])
@@ -514,7 +523,11 @@ else:  # disable clean2d support
         def clean2d(self):
             raise NotImplemented('numpy required for clean2d')
 
-c_dist = {3: 1.65 * cos(2 * pi / 3), 4: 1.65 * cos(pi / 2), 5: 1.65 * cos(2 * pi / 5), 6: 1.65 * cos(pi / 3),
+c_long = {3: 1.65 * cos(2 * pi / 3), 4: 1.65 * cos(pi / 2), 5: 1.65 * cos(2 * pi / 5), 6: 1.65 * cos(pi / 3),
           7: 1.65 * cos(2 * pi / 7), 8: 1.65 * cos(pi / 4), 9: 1.65 * cos(2 * pi / 9), 10: 1.65 * cos(pi / 5)}
+
+c_short = {3: c_long[3] * cos(pi / 3), 4: c_long[4] * cos(pi / 4), 5: c_long[5] * cos(pi / 5),
+           6: c_long[6] * cos(pi / 6), 7: c_long[7] * cos(pi / 7), 8: c_long[8] * cos(pi / 8),
+           9: c_long[9] * cos(pi / 9), 10: c_long[10] * cos(pi / 10)}
 
 __all__ = ['Calculate2DMolecule', 'Calculate2DCGR']
