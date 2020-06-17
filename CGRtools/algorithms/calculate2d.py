@@ -25,12 +25,14 @@ from random import uniform
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, zeros, uint16, zeros_like, empty
-    from numba import njit, f8, u2
+    from numba import boolean, njit, f8, u2
 else:
     def njit(*args, **kwargs):
         def wrapper(f):
             return f
+
         return wrapper
+
 
     class NumbaType:
         def __getitem__(self, item):
@@ -39,13 +41,11 @@ else:
         def __call__(self, *args, **kwargs):
             return self
 
+
     f8 = u2 = NumbaType()
 
 
-@njit(f8[:, :](f8[:, :], f8, f8, f8),
-      {'n': u2, 'i': u2, 'j': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8, 'distance': f8},
-      cache=True)
+@njit(f8[:, :](f8[:, :], f8, f8, f8), cache=True)
 def repulsive_force(xyz, coef, cut, inf):
     forces = zeros_like(xyz)
     n = len(xyz)
@@ -80,9 +80,7 @@ def repulsive_force(xyz, coef, cut, inf):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], f8, f8, f8),
-      {'n': u2, 'i': u2, 'j': u2, 'xi': f8, 'yi': f8, 'zi': f8, 'xj': f8, 'yj': f8, 'zj': f8, 'c': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fxj': f8, 'fyj': f8, 'fzj': f8}, cache=True)
+@njit(f8[:, :](f8[:, :], u2[:, :], f8, f8, f8), cache=True)
 def straight_repulsive(xyz, straights, coef, cut, inf):
     forces = zeros_like(xyz)
     inf **= 2
@@ -110,21 +108,18 @@ def straight_repulsive(xyz, straights, coef, cut, inf):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], f8[:], f8),
-      {'i': u2, 'n': u2, 'm': u2, 'r': f8, 'nx': f8, 'ny': f8, 'nz': f8, 'mx': f8, 'my': f8, 'mz': f8, 'dx': f8,
-       'dy': f8, 'dz': f8, 'distance': f8, 'f': f8, 'fxi': f8, 'fyi': f8, 'fzi': f8, 'fdx': f8, 'fdy': f8, 'fdz': f8,
-       'fxj': f8, 'fyj': f8, 'fzj': f8}, cache=True)
-def spring_force(xyz, springs, springs_distances, coef):
+@njit(f8[:, :](f8[:, :], u2[:, :], f8[:, :]), cache=True)
+def spring_force(xyz, springs, springs_distances):
     forces = zeros_like(xyz)
     for i in range(len(springs)):
         n, m = springs[i]
-        r = springs_distances[i]
+        r, stiff = springs_distances[i]
         nx, ny, nz = xyz[n]
         mx, my, mz = xyz[m]
 
         dx, dy, dz = nx - mx, ny - my, nz - mz
         distance = sqrt(dx ** 2 + dy ** 2 + dz ** 2)
-        f = coef * (distance - r)
+        f = stiff * (distance - r)
 
         if -.001 < distance < .001:
             fdx, fdy, fdz = f, .0, .0
@@ -140,8 +135,7 @@ def spring_force(xyz, springs, springs_distances, coef):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], f8[:, :], f8),
-      {'n': u2, 'ff': f8[:, :], 'i': u2, 'x': f8, 'y': f8, 'z': f8, 'fx': f8, 'fy': f8, 'fz': f8}, cache=True)
+@njit(f8[:, :](f8[:, :], f8[:, :], f8), cache=True)
 def flattening(forces, xyz, fc):
     n = len(forces)
     ff = zeros_like(xyz)
@@ -159,7 +153,7 @@ def flattening(forces, xyz, fc):
     return ff
 
 
-@njit(f8[:, :](f8[:, :], f8), {'n': u2, 'dx': f8, 'dy': f8, 'dz': f8, 'distance': f8, 'f': f8}, cache=True)
+@njit(f8[:, :](f8[:, :], f8), cache=True)
 def cutoff(forces, cut):
     for n in range(len(forces)):
         dx, dy, dz = forces[n]
@@ -170,39 +164,51 @@ def cutoff(forces, cut):
     return forces
 
 
-@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:]), cache=True)
-def steps(xyz, springs, straights, springs_distances):
+@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:, :], boolean[:, :], u2), cache=True)
+def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_centers):
+    end = len(xyz)
     # step 1
-    for _ in range(1000):
+    for _ in range(2000):
         r_forces = repulsive_force(xyz, .05, .2, 10)
-        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        s_forces = spring_force(xyz, springs, distances_stiffness)
         forces = r_forces + s_forces
         forces = cutoff(forces, .3)
         xyz = forces + xyz
+        c = 0
+        for i in range(start_centers, end):
+            xyz[i] = calculate_center(xyz, sssr_matrix[c])
+            c += 1
 
     # step 2
     for _ in range(1000):
         r_forces = repulsive_force(xyz, .02, .3, 3)
-        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        s_forces = spring_force(xyz, springs, distances_stiffness)
         forces = r_forces + s_forces
-        forces = flattening(forces, xyz, .2)
+        forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
+        c = 0
+        for i in range(start_centers, end):
+            xyz[i] = calculate_center(xyz, sssr_matrix[c])
+            c += 1
 
     # step 3
     for _ in range(1000):
         r_forces = repulsive_force(xyz, .005, .4, 1.17) + straight_repulsive(xyz, straights, .05, .4, 2.)
-        s_forces = spring_force(xyz, springs, springs_distances, .2)
+        s_forces = spring_force(xyz, springs, distances_stiffness)
         forces = r_forces + s_forces
-        forces = flattening(forces, xyz, .2)
+        forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
+        c = 0
+        for i in range(start_centers, end):
+            xyz[i] = calculate_center(xyz, sssr_matrix[c])
+            c += 1
 
     return xyz
 
 
-@njit(f8[:](f8[:, :], u2[:, :], u2),
-      {'angles': f8[:], 'i': u2, 'n': u2, 'm': u2, 'nx': f8, 'ny': f8, 'mx': f8, 'my': f8, 'nm': f8}, cache=True)
+@njit(f8[:](f8[:, :], u2[:, :], u2), cache=True)
 def get_angles(xyz, springs, bonds_count):
     angles = zeros(bonds_count)
     for i in range(bonds_count):
@@ -216,9 +222,7 @@ def get_angles(xyz, springs, bonds_count):
     return angles
 
 
-@njit(f8[:, :](f8[:, :], u2, f8, f8),
-      {'cos_rad': f8, 'sin_rad': f8, 'dx': f8, 'dy': f8, 'px': f8, 'py': f8, 'p': u2, 'shift_y': f8, 'shift_r': f8},
-      cache=True)
+@njit(f8[:, :](f8[:, :], u2, f8, f8), cache=True)
 def rotate(xyz, atoms_count, shift_x, angle):
     cos_rad = cos(angle)
     sin_rad = sin(angle)
@@ -238,36 +242,63 @@ def rotate(xyz, atoms_count, shift_x, angle):
     return xy
 
 
+@njit(f8[:](f8[:, :], boolean[:]), cache=True)
+def calculate_center(xyz, cycle):
+    center_x, center_y, center_z = .0, .0, .0
+    k = 0
+    for i, b in enumerate(cycle):
+        if b:
+            k += 1
+            x, y, z = xyz[i]
+            center_x += x
+            center_y += y
+            center_z += z
+    return array([center_x / k, center_y / k, center_z / k])
+
+
 class Calculate2D:
     __slots__ = ()
 
-    def __prepare(self, component):
+    def __prepare(self, component, randomize):
         atoms = self._atoms
         bonds = self._bonds
+        plane = self._plane
 
         mapping = {}
         springs = []
         straights = []
         xyz_matrix = []
-        springs_distances = []
+        distances_stiffness = []
         dd = defaultdict(dict)
+        c_stiff = .1
+        r_stiff = .08
 
         # for cycles of 4 and 6 atoms
-        ac6 = []
+        c_count = 0
         ac4 = set()
-        for c in self.sssr:
-            k = len(c)
+        ac6 = set()
+        cc = defaultdict(list)
+        for ccl in self.sssr:
+            c_count += 1
+            k = len(ccl)
+            cc[k].append(ccl)
             if k == 4:
-                for a in c:
+                for a in ccl:
                     ac4.add(a)
             elif k == 6:
-                ac6.append(c)
+                for a in ccl:
+                    ac6.add(a)
 
         # create matrix of coordinates
         cube = len(component)
-        for i, n in enumerate(component):
-            mapping[n] = i
-            xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
+        if randomize:
+            for i, n in enumerate(component):
+                mapping[n] = i
+                xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
+        else:
+            for i, n in enumerate(component):
+                mapping[n] = i
+                xyz_matrix.append([*plane[n], .1])
 
         # create matrix of connecting, springs and springs distances
         for n, m_bond in sorted(bonds.items(), reverse=True, key=lambda x: len(x[1])):
@@ -294,9 +325,13 @@ class Calculate2D:
                 j = mapping[m]
                 if (j, i) not in springs:
                     springs.append((i, j))
-                    springs_distances.append(1.32 if dist else .825)
+                    if n in ac6 and m in ac6:
+                        stiff = c_stiff
+                    else:
+                        stiff = r_stiff
+                    distances_stiffness.append([1.32, stiff] if dist else [.825, stiff])
 
-        bonds_count = len(springs_distances)
+        bonds_count = len(distances_stiffness)
         # add virtual atoms and complement matrices of bonds and coordinates
         end = cube
         for n, m_bond in bonds.items():
@@ -311,18 +346,40 @@ class Calculate2D:
                         dd[n][-n] = dd[-n][n] = False
                         xyz_matrix.append([uniform(-cube, cube), uniform(-cube, cube), uniform(-cube, cube)])
                         springs.append((mapping[n], end))
-                        springs_distances.append(.825)
+                        distances_stiffness.append([.825, r_stiff])
                         end += 1
 
+        # add cycle centers
+        e = 0
+        start_centers = end
+        sssr_matrix = zeros((c_count, end), dtype=bool)
+        for k, v in cc.items():
+            for ccl in v:
+                mapping[-end] = end
+                for a, m in zip(ccl, [mapping[x] for x in ccl]):
+                    ns = bonds[a]
+                    sssr_matrix[e][m] = True
+                    if len(ns) == 3:
+                        for n in ns:
+                            if n not in ccl:
+                                springs.append((mapping[n], end))
+                                distances_stiffness.append([.825 + c_dist[k], r_stiff])
+                xyz_matrix.append(calculate_center(array(xyz_matrix), sssr_matrix[e]))
+                end += 1
+                e += 1
+
         # add springs for cycles of six atoms
-        for cycle in ac6:
+        for cycle in cc[6]:
             for i, j in zip(cycle[:3], cycle[3:]):
                 springs.append((mapping[i], mapping[j]))
-                springs_distances.append(1.65)
-
+                distances_stiffness.append([1.65, c_stiff])
         # add virtual bonds and complement matrices of bonds and coordinates
         for n, m_bond in dd.items():
             if len(m_bond) == 3:
+                if n in ac6:
+                    stiff = c_stiff
+                else:
+                    stiff = r_stiff
                 for m1, m2 in combinations(m_bond, 2):
                     if m2 not in dd[m1]:
                         i, j = mapping[m1], mapping[m2]
@@ -330,19 +387,20 @@ class Calculate2D:
                             springs.append((i, j))
                             long1, long2 = m_bond[m1], m_bond[m2]
                             if m1 in ac4 and m2 in ac4:
-                                springs_distances.append(1.17)
+                                distances_stiffness.append([1.17, stiff])
                             elif not long1 and not long2:
-                                springs_distances.append(1.43)
+                                distances_stiffness.append([1.43, stiff])
                             elif long1 or long2:
-                                springs_distances.append(1.87)
+                                distances_stiffness.append([1.87, stiff])
                             else:
-                                springs_distances.append(2.29)
+                                distances_stiffness.append([2.29, stiff])
 
         if not straights:
             straights = empty(shape=(0, 2), dtype=uint16)
         else:
             straights = array(straights, dtype=uint16)
-        return array(xyz_matrix), array(springs, dtype=uint16), straights, array(springs_distances), cube, bonds_count
+        return array(xyz_matrix), array(springs, dtype=uint16), straights, array(distances_stiffness), cube, \
+               bonds_count, sssr_matrix, start_centers
 
     def _is_angle(self, bond1, bond2):
         pass
@@ -369,7 +427,7 @@ class Calculate2D:
         xy = rotate(xyz, atoms_count, shift_x, angle)
         return xy, xy[:, 0].max() + .825
 
-    def clean2d(self):
+    def clean2d(self, *, randomize=False):
         """
         Calculate 2d layout of graph.
 
@@ -377,6 +435,8 @@ class Calculate2D:
         Frączek, T. (2016). Simulation-Based Algorithm for Two-Dimensional Chemical Structure Diagram Generation of
         Complex Molecules and Ligand–Protein Interactions. Journal of Chemical Information and Modeling, 56(12),
         2320–2335. doi:10.1021/acs.jcim.6b00391 (https://doi.org/10.1021/acs.jcim.6b00391)
+
+        :param randomize: if True generating random coordinates for molecule
         """
         plane = self._plane
 
@@ -390,8 +450,11 @@ class Calculate2D:
                 plane[component[1]] = (shift_x, .825)
                 shift_x += .825
             else:
-                xyz, springs, straights, springs_distances, atoms_count, bonds_count = self.__prepare(component)
-                xyz = steps(xyz, springs, straights, springs_distances)
+                if not randomize and all(-.0001 < x[0] < .0001 and -.0001 < x[1] < .0001 for x in plane.values()):
+                    randomize = True
+                xyz, springs, straights, distances_stiffness, atoms_count, bonds_count, sssr_matrix, start_centers = \
+                    self.__prepare(component, randomize)
+                xyz = steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_centers)
                 xy, shift_x = self.__finish_xyz(xyz, springs, atoms_count, bonds_count, shift_x)
                 for i, n in enumerate(component):
                     plane[n] = tuple(xy[i])
@@ -444,11 +507,14 @@ else:  # disable clean2d support
         def clean2d(self):
             raise NotImplemented('numpy required for clean2d')
 
+
     class Calculate2DCGR:
         __slots__ = ()
 
         def clean2d(self):
             raise NotImplemented('numpy required for clean2d')
 
+c_dist = {3: 1.65 * cos(2 * pi / 3), 4: 1.65 * cos(pi / 2), 5: 1.65 * cos(2 * pi / 5), 6: 1.65 * cos(pi / 3),
+          7: 1.65 * cos(2 * pi / 7), 8: 1.65 * cos(pi / 4), 9: 1.65 * cos(2 * pi / 9), 10: 1.65 * cos(pi / 5)}
 
 __all__ = ['Calculate2DMolecule', 'Calculate2DCGR']
