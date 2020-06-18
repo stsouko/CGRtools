@@ -33,7 +33,7 @@ from ..containers import MoleculeContainer
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, uint16, empty
     from numba import njit, f8, u2, u4
-    from numba.types import Tuple as nTuple
+    from numba.core.types import Tuple as nTuple
 
     @njit(nTuple((u2[:, :], f8[:]))(f8[:, :], f8[:], f8),
           {'size': u2, 'max_bonds': u4, 'c': u4, 'n': u2, 'm': u2, 'rn': f8, 'r': f8, 'd': f8,

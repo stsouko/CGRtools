@@ -524,7 +524,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def close(self, force=False):
         """
-        close opened file
+        Close opened file
 
         :param force: force closing of externally opened file or buffer
         """
@@ -539,7 +539,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def _load_cache(self):
         """
-        the method is implemented for the purpose of optimization, byte positions will not be re-read from a file
+        The method is implemented for the purpose of optimization, byte positions will not be re-read from a file
         that has already been used, if the content of the file has changed, and the name has been left the same,
         the old version of byte offsets will be loaded
         :return: list of byte offsets from existing file
@@ -567,7 +567,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def read(self):
         """
-        parse whole file
+        Parse whole file
 
         :return: list of parsed molecules
         """
@@ -581,45 +581,37 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def __getitem__(self, item):
         """
-        getting the item by index from the original file,
-        if the required record of the file with an error,
-        then only the correct record are returned
-        :param item: int or slice
+        Getting the item by index from the original file,
+        For slices records with errors skipped.
+        For indexed access records with errors returned as error container.
         :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
         """
         if self._shifts:
             _len = len(self._shifts) - 1
-            _current_pos = self.tell()
-
             if isinstance(item, int):
                 if item >= _len or item < -_len:
                     raise IndexError('List index out of range')
                 if item < 0:
                     item += _len
                 self.seek(item)
-                records = next(self._data)
+                return next(self._data)
             elif isinstance(item, slice):
                 start, stop, step = item.indices(_len)
                 if start == stop:
                     return []
-
                 if step == 1:
                     self.seek(start)
-                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
+                    records = [x for x in islice(self._data, stop - start) if not isinstance(x, parse_error)]
                 else:
                     records = []
                     for index in range(start, stop, step):
                         self.seek(index)
                         record = next(self._data)
-                        if record:
+                        if not isinstance(record, parse_error):
                             records.append(record)
+                return records
             else:
                 raise TypeError('Indices must be integers or slices')
-
-            self.seek(_current_pos)
-            if records is None:
-                raise IndexError('Data block with requested index contain errors')
-            return records
         raise self._implement_error
 
     def _prepare_meta(self, meta):
