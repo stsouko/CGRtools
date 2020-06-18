@@ -234,8 +234,8 @@ def rotate(xyz, atoms_count, shift_x, angle):
 
 @njit(f8[:, :](f8[:, :], b1[:, :]), cache=True)
 def calculate_center(xyz, sssr_matrix):
-    centers = []
-    for line in sssr_matrix:
+    centers = zeros((len(sssr_matrix), 3))
+    for n, line in enumerate(sssr_matrix):
         k = 0
         center_x, center_y, center_z = .0, .0, .0
         for i, b in enumerate(line):
@@ -244,8 +244,10 @@ def calculate_center(xyz, sssr_matrix):
                 center_x += xyz[i][0]
                 center_y += xyz[i][1]
                 center_z += xyz[i][2]
-        centers.append([center_x / k, center_y / k, center_z / k])
-    return array(centers)
+        centers[n][0] = center_x / k
+        centers[n][1] = center_y / k
+        centers[n][2] = center_z / k
+    return centers
 
 
 class Calculate2D:
