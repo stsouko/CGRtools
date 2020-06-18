@@ -25,7 +25,7 @@ from random import uniform
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, zeros, uint16, zeros_like, empty
-    from numba import boolean, njit, f8, u2
+    from numba import b1, njit, f8, u2
 else:
     def njit(*args, **kwargs):
         def wrapper(f):
@@ -161,9 +161,8 @@ def cutoff(forces, cut):
     return forces
 
 
-# @njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:, :], boolean[:, :], u2), cache=True)
+@njit(f8[:, :](f8[:, :], u2[:, :], u2[:, :], f8[:, :], b1[:, :], u2), cache=True)
 def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_centers):
-    end = len(xyz)
     # step 1
     for _ in range(2000):
         r_forces = repulsive_force(xyz, .05, .2, 10)
@@ -171,10 +170,8 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = r_forces + s_forces
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        c = 0
-        for i in range(start_centers, end):
-            xyz[i] = calculate_center(xyz, sssr_matrix[c])
-            c += 1
+        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
+            xyz[start_centers + i] = line
 
     # step 2
     for _ in range(1000):
@@ -184,10 +181,8 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        c = 0
-        for i in range(start_centers, end):
-            xyz[i] = calculate_center(xyz, sssr_matrix[c])
-            c += 1
+        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
+            xyz[start_centers + i] = line
 
     # step 3
     for _ in range(1000):
@@ -197,10 +192,8 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        c = 0
-        for i in range(start_centers, end):
-            xyz[i] = calculate_center(xyz, sssr_matrix[c])
-            c += 1
+        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
+            xyz[start_centers + i] = line
 
     return xyz
 
@@ -239,23 +232,26 @@ def rotate(xyz, atoms_count, shift_x, angle):
     return xy
 
 
-@njit(f8[:](f8[:, :], boolean[:]), cache=True)
-def calculate_center(xyz, cycle):
-    center_x, center_y, center_z = .0, .0, .0
-    k = 0
-    for i, b in enumerate(cycle):
-        if b:
-            k += 1
-            center_x += xyz[i][0]
-            center_y += xyz[i][1]
-            center_z += xyz[i][2]
-    return array([center_x / k, center_y / k, center_z / k])
+@njit(f8[:, :](f8[:, :], b1[:, :]), cache=True)
+def calculate_center(xyz, sssr_matrix):
+    centers = []
+    for line in sssr_matrix:
+        k = 0
+        center_x, center_y, center_z = .0, .0, .0
+        for i, b in enumerate(line):
+            if b:
+                k += 1
+                center_x += xyz[i][0]
+                center_y += xyz[i][1]
+                center_z += xyz[i][2]
+        centers.append([center_x / k, center_y / k, center_z / k])
+    return array(centers)
 
 
 class Calculate2D:
     __slots__ = ()
 
-    def __prepare(self, component, randomize):
+    def __prepare(self, component, randomize, c_stiff, r_stiff):
         atoms = self._atoms
         bonds = self._bonds
         plane = self._plane
@@ -267,8 +263,6 @@ class Calculate2D:
         xyz_matrix = []
         distances_stiffness = []
         dd = defaultdict(dict)
-        c_stiff = .25
-        r_stiff = .15
 
         # for cycles of 4 and 6 atoms
         c6 = []
@@ -361,20 +355,21 @@ class Calculate2D:
                         if n not in ring:
                             springs.append((mapping[n], end))
                             distances_stiffness.append([.825 + c_long[k], r_stiff])
-            xyz_matrix.append(calculate_center(array(xyz_matrix), sssr_matrix[e]))
             end += 1
+        for line in calculate_center(array(xyz_matrix), sssr_matrix):
+            xyz_matrix.append(line)
 
         # add springs between cycles
         ini = start_centers
         for i, ring in enumerate(rings):
-            l = len(ring)
+            ln = len(ring)
             clc = ini
             for ccl in rings[i+1:]:
                 clc += 1
                 k = len(ccl)
                 if not set(ring).isdisjoint(set(ccl)):
                     springs.append((ini, clc))
-                    distances_stiffness.append([c_short[l] + c_short[k], c_stiff])
+                    distances_stiffness.append([c_short[ln] + c_short[k], c_stiff])
             ini += 1
 
         # add springs for cycles of six atoms
@@ -436,7 +431,7 @@ class Calculate2D:
         xy = rotate(xyz, atoms_count, shift_x, angle)
         return xy, xy[:, 0].max() + .825
 
-    def clean2d(self, *, randomize=False):
+    def clean2d(self, *, randomize=False, cycle_stiff=.1, bond_stiff=.05):
         """
         Calculate 2d layout of graph.
 
@@ -446,6 +441,8 @@ class Calculate2D:
         2320–2335. doi:10.1021/acs.jcim.6b00391 (https://doi.org/10.1021/acs.jcim.6b00391)
 
         :param randomize: if True generating random coordinates for molecule
+        :param cycle_stiff: stiffness for springs in cycles
+        :param bond_stiff: stiffness for other springs
         """
         plane = self._plane
 
@@ -462,7 +459,7 @@ class Calculate2D:
                 if not randomize and all(-.0001 < x[0] < .0001 and -.0001 < x[1] < .0001 for x in plane.values()):
                     randomize = True
                 xyz, springs, straights, distances_stiffness, atoms_count, bonds_count, sssr_matrix, start_centers = \
-                    self.__prepare(component, randomize)
+                    self.__prepare(component, randomize, cycle_stiff, bond_stiff)
                 xyz = steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_centers)
                 xy, shift_x = self.__finish_xyz(xyz, springs, atoms_count, bonds_count, shift_x)
                 for i, n in enumerate(component):
