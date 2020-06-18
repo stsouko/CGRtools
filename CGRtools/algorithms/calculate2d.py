@@ -170,8 +170,7 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = r_forces + s_forces
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
-            xyz[start_centers + i] = line
+        xyz = calculate_center(xyz, sssr_matrix, start_centers)
 
     # step 2
     for _ in range(1000):
@@ -181,8 +180,7 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
-            xyz[start_centers + i] = line
+        xyz = calculate_center(xyz, sssr_matrix, start_centers)
 
     # step 3
     for _ in range(1000):
@@ -192,8 +190,7 @@ def steps(xyz, springs, straights, distances_stiffness, sssr_matrix, start_cente
         forces = flattening(forces, xyz, .1)
         forces = cutoff(forces, .3)
         xyz = forces + xyz
-        for i, line in enumerate(calculate_center(xyz, sssr_matrix)):
-            xyz[start_centers + i] = line
+        xyz = calculate_center(xyz, sssr_matrix, start_centers)
 
     return xyz
 
@@ -232,9 +229,8 @@ def rotate(xyz, atoms_count, shift_x, angle):
     return xy
 
 
-@njit(f8[:, :](f8[:, :], b1[:, :]), cache=True)
-def calculate_center(xyz, sssr_matrix):
-    centers = zeros((len(sssr_matrix), 3))
+@njit(f8[:, :](f8[:, :], b1[:, :], u2), cache=True)
+def calculate_center(xyz, sssr_matrix, start):
     for n, line in enumerate(sssr_matrix):
         k = 0
         center_x, center_y, center_z = .0, .0, .0
@@ -244,10 +240,11 @@ def calculate_center(xyz, sssr_matrix):
                 center_x += xyz[i][0]
                 center_y += xyz[i][1]
                 center_z += xyz[i][2]
-        centers[n][0] = center_x / k
-        centers[n][1] = center_y / k
-        centers[n][2] = center_z / k
-    return centers
+        n += start
+        xyz[n][0] = center_x / k
+        xyz[n][1] = center_y / k
+        xyz[n][2] = center_z / k
+    return xyz
 
 
 class Calculate2D:
@@ -357,9 +354,9 @@ class Calculate2D:
                         if n not in ring:
                             springs.append((mapping[n], end))
                             distances_stiffness.append([.825 + c_long[k], r_stiff])
+            xyz_matrix.append([.0, .0, .0])
             end += 1
-        for line in calculate_center(array(xyz_matrix), sssr_matrix):
-            xyz_matrix.append(line)
+        xyz_matrix = calculate_center(array(xyz_matrix), sssr_matrix, start_centers)
 
         # add springs between cycles
         ini = start_centers
@@ -405,8 +402,8 @@ class Calculate2D:
             straights = empty(shape=(0, 2), dtype=uint16)
         else:
             straights = array(straights, dtype=uint16)
-        return array(xyz_matrix), array(springs, dtype=uint16), straights, array(distances_stiffness), cube, \
-               bonds_count, sssr_matrix, start_centers
+        return xyz_matrix, array(springs, dtype=uint16), straights, array(distances_stiffness), cube, bonds_count, \
+               sssr_matrix, start_centers
 
     def _is_angle(self, bond1, bond2):
         pass
