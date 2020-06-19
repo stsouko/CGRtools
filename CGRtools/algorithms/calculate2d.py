@@ -265,8 +265,10 @@ class Calculate2D:
         c6 = []
         ac4 = set()
         ac6 = set()
+        cycles_atoms = set()
         for ccl in rings:
             k = len(ccl)
+            cycles_atoms.update(set(ccl))
             if k == 4:
                 for a in ccl:
                     ac4.add(a)
@@ -311,7 +313,7 @@ class Calculate2D:
                 j = mapping[m]
                 if (j, i) not in springs:
                     springs.append((i, j))
-                    if n in ac6 and m in ac6:
+                    if n in cycles_atoms and m in cycles_atoms:
                         stiff = c_stiff
                     else:
                         stiff = r_stiff
@@ -378,7 +380,7 @@ class Calculate2D:
         # add virtual bonds and complement matrices of bonds and coordinates
         for n, m_bond in dd.items():
             if len(m_bond) == 3:
-                if n in ac6:
+                if n in cycles_atoms:
                     stiff = c_stiff
                 else:
                     stiff = r_stiff
