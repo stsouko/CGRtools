@@ -367,7 +367,10 @@ class DepictMolecule(Depict):
         font3 = .3 * font_size
         font4 = .4 * font_size
         font5 = .5 * font_size
+        font6 = .6 * font_size
         font7 = .7 * font_size
+        font15 = .15 * font_size
+        font25 = .25 * font_size
         mask = defaultdict(list)
         for n, atom in self._atoms.items():
             x, y = plane[n]
@@ -407,7 +410,13 @@ class DepictMolecule(Depict):
                 if len(symbol) > 1:
                     dx = font7
                     dx_mm = dx_m + font5
-                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                    if symbol[-1] in ('l', 'i', 'r', 't'):
+                        rx = font6
+                        ax = font25
+                    else:
+                        rx = font7
+                        ax = font15
+                    mask['center'].append(f'        <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
                 else:
                     dx = font4
                     dx_mm = dx_m + font2
@@ -826,7 +835,10 @@ class DepictCGR(Depict):
         dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
         symbols_font_style = config['symbols_font_style']
         font4 = .4 * font_size
+        font6 = .6 * font_size
         font7 = .7 * font_size
+        font15 = .15 * font_size
+        font25 = .25 * font_size
         din_charges = {m[0]: m[1] != n[1] for m, n in zip(charges.items(), p_charges.items())}
         din_radicals = {m[0]: m[1] != n[1] for m, n in zip(radicals.items(), p_radicals.items())}
 
@@ -881,7 +893,13 @@ class DepictCGR(Depict):
                            f'font-family="{symbols_font_style}">')
                 if len(symbol) > 1:
                     dx = font7
-                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                    if symbol[-1] in ('l', 'i', 'r', 't'):
+                        rx = font6
+                        ax = font25
+                    else:
+                        rx = font7
+                        ax = font15
+                    mask['center'].append(f'        <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
                 else:
                     dx = font4
                     mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
@@ -958,7 +976,10 @@ class DepictQuery(Depict):
         font3 = .3 * font_size
         font4 = .4 * font_size
         font5 = .5 * font_size
+        font6 = .6 * font_size
         font7 = .7 * font_size
+        font15 = .15 * font_size
+        font25 = .25 * font_size
 
         # for cumulenes
         cumulenes = {y for x in self._cumulenes(heteroatoms=True) if len(x) > 2 for y in x[1:-1]}
@@ -1001,7 +1022,13 @@ class DepictQuery(Depict):
                     dx = font7
                     dx_mm = dx_m + font5
                     dx_nhh = dx_nh + font5
-                    mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
+                    if symbol[-1] in ('l', 'i', 'r', 't'):
+                        rx = font6
+                        ax = font25
+                    else:
+                        rx = font7
+                        ax = font15
+                    mask['center'].append(f'        <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
                 else:
                     dx = font4
                     dx_mm = dx_m + font2
@@ -1344,7 +1371,10 @@ class DepictQueryCGR(Depict):
         font2 = .2 * font_size
         font4 = .4 * font_size
         font5 = .5 * font_size
+        font6 = .6 * font_size
         font7 = .7 * font_size
+        font15 = .15 * font_size
+        font25 = .25 * font_size
 
         if monochrome:
             query_fill = other_fill = 'black'
@@ -1381,6 +1411,12 @@ class DepictQueryCGR(Depict):
                 if len(symbol) > 1:
                     dx = font7
                     dx_nhh = dx_nh + font5
+                    if symbol[-1] in ('l', 'i', 'r', 't'):
+                        rx = font6
+                        ax = font25
+                    else:
+                        rx = font7
+                        ax = font15
                     mask['center'].append(f'        <ellipse cx="{x:.2f}" cy="{y:.2f}" rx="{font7}" ry="{font4}"/>')
                 else:
                     dx = font4
