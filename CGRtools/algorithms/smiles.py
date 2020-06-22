@@ -58,6 +58,7 @@ class Smiles:
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
             !r - Use aromatic bonds instead aromatic atoms.
+            m - Set atom mapping.
 
             Combining possible. Order independent. Another keys ignored.
         """
@@ -73,6 +74,8 @@ class Smiles:
                 kwargs['neighbors'] = False
             if '!r' in format_spec:
                 kwargs['aromatic'] = False
+            if 'm' in format_spec:
+                kwargs['mapping'] = True
             return ''.join(self._smiles(self.atoms_order.get, **kwargs))
         return str(self)
 
@@ -249,6 +252,7 @@ class MoleculeSmiles(Smiles):
                '',  # stereo
                '',  # hydrogen
                '',  # charge
+               f':{n}' if kwargs.get('mapping', False) else '',  # mapping
                '']  # ]
 
         if kwargs.get('stereo', True):
