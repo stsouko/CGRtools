@@ -30,7 +30,7 @@ class Standardize:
         """
         Standardize functional groups. Return True if any not canonical group found.
         """
-        neutralized = self.neutralize()
+        neutralized = self.neutralize(skip_stereo_fix=True)
         hs = self.__standardize()
         if hs:
             if not neutralized:
@@ -41,8 +41,12 @@ class Standardize:
             hs = self.__standardize()
             for n in hs:
                 self._calc_implicit(n)
+            self._fix_stereo()
             return True
-        return neutralized
+        if neutralized:
+            self._fix_stereo()
+            return True
+        return False
 
     def __standardize(self):
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
@@ -64,7 +68,7 @@ class Standardize:
             hs.update(seen)
         return hs
 
-    def neutralize(self) -> bool:
+    def neutralize(self, *, skip_stereo_fix=False) -> bool:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
         """
@@ -112,6 +116,8 @@ class Standardize:
             for n in hs:
                 self._calc_implicit(n)
                 self._calc_hybridization(n)
+            if not skip_stereo_fix:
+                self._fix_stereo()
             return True
         return False
 
@@ -126,6 +132,7 @@ class Standardize:
             for i in isotopes:
                 i._Core__isotope = None
             self.flush_cache()
+            self._fix_stereo()
             return True
         return False
 
@@ -503,9 +510,9 @@ class Standardize:
 
         # Amide
         #
-        #       O        O
-        #      /        //
-        # N = C  >> N - C
+        #       OH        O
+        #      /         //
+        # N = C  >> NH - C
         #
         atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'hybridization': 2})
         bonds = ((1, 2, 1), (1, 3, 2))

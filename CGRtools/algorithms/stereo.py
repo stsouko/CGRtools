@@ -126,6 +126,15 @@ def _allene_sign(n, u, v, w):
 class Stereo:
     __slots__ = ()
 
+    def clean_stereo(self):
+        """
+        Remove stereo data
+        """
+        self._atoms_stereo.clear()
+        self._allenes_stereo.clear()
+        self._cis_trans_stereo.clear()
+        self.flush_cache()
+
     def get_mapping(self, other, **kwargs):
         yield from super().get_mapping(other, **kwargs)
         return  # todo: reimplement

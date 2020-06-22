@@ -84,6 +84,7 @@ class MRVRead(MDLStereo):
         :param remap: Remap atom numbers started from one.
         :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
             self.__file = open(file, 'rb')

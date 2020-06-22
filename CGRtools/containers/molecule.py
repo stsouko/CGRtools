@@ -105,10 +105,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if self._atoms[n].atomic_number != 1:  # not hydrogen
             self._neighbors[m] += 1
             self._calc_hybridization(m)
+            fix = True
+        else:
+            fix = False
         if self._atoms[m].atomic_number != 1:  # not hydrogen
             self._neighbors[n] += 1
             self._calc_hybridization(n)
-        self._fix_stereo()
+            if fix:  # fix stereo if formed not to hydrogen bond
+                self._fix_stereo()
 
     def delete_atom(self, n):
         """
@@ -129,14 +133,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         del self._hydrogens[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
+        for m in old_bonds:
+            self._calc_implicit(m)
+
         if isnt_hydrogen:
             for m in old_bonds:
                 self._calc_hybridization(m)
                 sn[m] -= 1
-
-        for m in old_bonds:
-            self._calc_implicit(m)
-        self._fix_stereo()
+            self._fix_stereo()
 
     def delete_bond(self, n, m):
         """
@@ -156,10 +160,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if self._atoms[n].atomic_number != 1:
             self._calc_hybridization(m)
             self._neighbors[m] -= 1
+            fix = True
+        else:
+            fix = False
         if self._atoms[m].atomic_number != 1:
             self._calc_hybridization(n)
             self._neighbors[n] -= 1
-        self._fix_stereo()
+            if fix:
+                self._fix_stereo()
 
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)

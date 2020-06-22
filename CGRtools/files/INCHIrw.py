@@ -47,12 +47,13 @@ class INCHIRead(CGRRead):
     also possible to pass list of keys (without inchi_pseudo_key) for mapping space/tab separated list
     of INCHI and values: header=['key1', 'key2'] # order depended
     """
-    def __init__(self, file, header=None, **kwargs):
+    def __init__(self, file, header=None, ignore_stereo=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
         :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
             self._file = open(file)
@@ -77,6 +78,7 @@ class INCHIRead(CGRRead):
         else:
             self.__header = None
 
+        self.__ignore_stereo = ignore_stereo
         self._data = self.__data()
 
     def __data(self):
@@ -100,6 +102,7 @@ class INCHIRead(CGRRead):
         """
         obj = object.__new__(cls)
         obj._INCHIRead__header = None
+        obj._INCHIRead__ignore_stereo = False
         super(INCHIRead, obj).__init__(*args, **kwargs)
         return obj.parse
 

@@ -241,6 +241,7 @@ class MoleculeSmiles(Smiles):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
+        hyb = self._hybridizations[n]
 
         smi = ['',  # [
                str(atom.isotope) if atom.isotope else '',  # isotope
@@ -274,8 +275,15 @@ class MoleculeSmiles(Smiles):
                 smi[4] = 'H'
             elif ih:
                 smi[4] = f'H{ih}'
+        elif hyb == 4 and ih and atom.atomic_number in (7, 15):  # pyrole
+            smi[0] = '['
+            smi[-1] = ']'
+            if ih == 1:
+                smi[4] = 'H'
+            else:
+                smi[4] = f'H{ih}'
 
-        if kwargs.get('aromatic', True) and self._hybridizations[n] == 4:
+        if kwargs.get('aromatic', True) and hyb == 4:
             smi[2] = atom.atomic_symbol.lower()
         else:
             smi[2] = atom.atomic_symbol

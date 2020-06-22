@@ -338,7 +338,7 @@ class Element(Core):
         elements_classes = {x.__name__: x.atomic_number.fget(None) for x in Element.__subclasses__()}
 
         rules = defaultdict(list)
-        if self._common_valences[0]:  # atom has implicit hydrogens by default
+        if self._common_valences[0] and self.atomic_number != 1:  # atom has implicit hydrogens by default except H.
             prev = -1
             for valence in self._common_valences:
                 for h in range(valence - prev):

@@ -17,8 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict, deque
-from itertools import product
 from typing import List, Optional, Tuple
+from .._functions import lazy_product
 from ..exceptions import InvalidAromaticRing
 
 
@@ -80,6 +80,7 @@ class Aromatize:
             sh[n] = 4
 
         self.flush_cache()
+        self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
     def kekule(self) -> bool:
@@ -183,8 +184,11 @@ class Aromatize:
                         if ab != 2:
                             raise InvalidAromaticRing
                         double_bonded.add(n)
-                    elif ab == 3:  # pyrole or P-oxyde only possible
-                        double_bonded.add(n)
+                    elif ab == 3:
+                        if an == 7:  # pyrole only possible
+                            double_bonded.add(n)
+                        else:  # P(III) or P(V)H
+                            pyroles.add(n)
                     elif ab == 2:
                         pyroles.add(n)
                     elif ab != 4 or an != 15:  # P(V) in ring
@@ -264,8 +268,8 @@ class Aromatize:
             components.append(component)
             atoms.difference_update(component)
 
-        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
-                              for c in components)):
+        for keks in lazy_product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
+                                   for c in components)):
             yield [x for x in keks for x in x]
 
     @staticmethod

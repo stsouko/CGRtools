@@ -462,12 +462,16 @@ class ERXNRead:
 
 
 class MDLStereo(CGRRead):
-    def __init__(self, calc_cis_trans=False, **kwargs):
+    def __init__(self, calc_cis_trans=False, ignore_stereo=False, **kwargs):
         super().__init__(**kwargs)
         self.__calc_cis_trans = calc_cis_trans
+        self.__ignore_stereo = ignore_stereo
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        if self.__ignore_stereo:
+            return mol
+
         if self.__calc_cis_trans:
             mol.calculate_cis_trans_from_2d()
 

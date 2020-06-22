@@ -51,6 +51,7 @@ class RDFRead(MDLRead):
         :param remap: Remap atom numbers started from one.
         :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         super().__init__(file, **kwargs)
         self.__file = iter(self._file.readline, '')

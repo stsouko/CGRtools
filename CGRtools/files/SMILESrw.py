@@ -88,11 +88,12 @@ class SMILESRead(CGRRead):
 
     For reactions . [dot] in bonds should be used only for molecules separation.
     """
-    def __init__(self, file, header=None, **kwargs):
+    def __init__(self, file, header=None, ignore_stereo=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
         :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
             self._file = open(file)
@@ -117,6 +118,7 @@ class SMILESRead(CGRRead):
         else:
             self.__header = None
 
+        self.__ignore_stereo = ignore_stereo
         self._data = self.__data()
 
     def __data(self):
@@ -140,6 +142,7 @@ class SMILESRead(CGRRead):
         """
         obj = object.__new__(cls)
         obj._SMILESRead__header = None
+        obj._SMILESRead__ignore_stereo = False
         super(SMILESRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -264,6 +267,8 @@ class SMILESRead(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        if self.__ignore_stereo:
+            return mol
 
         st = mol._stereo_tetrahedrons
         sa = mol._stereo_allenes

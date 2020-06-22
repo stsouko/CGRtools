@@ -39,7 +39,7 @@ else:
         def __call__(self, *args, **kwargs):
             return self
 
-    f8 = u2 = NumbaType()
+    b1 = f8 = u2 = NumbaType()
 
 
 @njit(f8[:, :](f8[:, :], f8, f8, f8), cache=True)
