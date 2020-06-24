@@ -225,8 +225,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                 un = u._neighbors
                 uh = u._hybridizations
                 oh = other._hybridizations
-                for n, m in other._neighbors.items():
-                    un[n] = (m,)
+                for n, m_bond in other._bonds.items():
+                    un[n] = (len(m_bond),)
                     uh[n] = (oh[n],)
 
                 ua = u._atoms
@@ -236,14 +236,13 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                     atom._attach_to_graph(u, n)
 
             ub = u._bonds
-            for n in other._bonds:
-                ub[n] = {}
-            seen = set()
             for n, m_bond in other._bonds.items():
-                seen.add(n)
+                ub[n] = ubn = {}
                 for m, bond in m_bond.items():
-                    if m not in seen:
-                        ub[n][m] = ub[m][n] = bond.copy()
+                    if m in ub:  # bond partially exists. need back-connection.
+                        ubn[m] = ub[m][n]
+                    else:
+                        ubn[m] = bond.copy()
 
             u._atoms_stereo.update(other._atoms_stereo)
             u._allenes_stereo.update(other._allenes_stereo)

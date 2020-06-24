@@ -26,7 +26,7 @@ from ..algorithms.mcs import MCS
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
 from ..exceptions import AtomNotFound
-from ..periodictable.element import Core
+from ..periodictable import AnyAtom
 
 
 class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
@@ -37,7 +37,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         """
         Empty data object initialization or conversion from another object type
         """
-        self._atoms: Dict[int, Core] = {}
+        self._atoms: Dict[int, AnyAtom] = {}
         self._charges: Dict[int, int] = {}
         self._radicals: Dict[int, bool] = {}
         self._plane: Dict[int, Tuple[float, float]] = {}
@@ -75,13 +75,13 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     def __bool__(self):
         return bool(self._atoms)
 
-    def atom(self, n: int) -> Core:
+    def atom(self, n: int) -> AnyAtom:
         return self._atoms[n]
 
     def has_atom(self, n: int) -> bool:
         return n in self._atoms
 
-    def atoms(self) -> Iterator[Tuple[int, Core]]:
+    def atoms(self) -> Iterator[Tuple[int, AnyAtom]]:
         """
         iterate over all atoms
         """
@@ -96,7 +96,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         return tuple(self._atoms)
 
     @cached_args_method
-    def environment(self, atom: int) -> Tuple[Tuple[Union[Bond, DynamicBond], Core], ...]:
+    def environment(self, atom: int) -> Tuple[Tuple[Union[Bond, DynamicBond], AnyAtom], ...]:
         """
         pairs of (bond, atom) connected to atom
 
@@ -273,6 +273,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
         self._bonds = hb
         self._parsed_mapping = hm
+        self.__dict__.clear()
         return self
 
     @abstractmethod
@@ -295,13 +296,14 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         copy._plane = self._plane.copy()
         copy._parsed_mapping = self._parsed_mapping.copy()
 
-        copy._bonds = cb = {n: {} for n in self._bonds}
-        seen = set()
+        copy._bonds = cb = {}
         for n, m_bond in self._bonds.items():
-            seen.add(n)
+            cb[n] = cbn = {}
             for m, bond in m_bond.items():
-                if m not in seen:
-                    cb[n][m] = cb[m][n] = bond.copy()
+                if m in cb:  # bond partially exists. need back-connection.
+                    cbn[m] = cb[m][n]
+                else:
+                    cbn[m] = bond.copy()
 
         copy._atoms = ca = {}
         for n, atom in self._atoms.items():
@@ -336,14 +338,14 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         sub._plane = {n: sp[n] for n in atoms}
         sub._parsed_mapping = {n: m for n, m in self._parsed_mapping.items() if n in atoms}
 
-        sub._bonds = cb = {n: {} for n in atoms}
-        seen = set()
+        sub._bonds = cb = {}
         for n in atoms:
-            seen.add(n)
+            cb[n] = cbn = {}
             for m, bond in sb[n].items():
-                if m not in seen and m in atoms:
-                    cb[n][m] = cb[m][n] = bond.copy()
-
+                if m in cb:  # bond partially exists. need back-connection.
+                    cbn[m] = cb[m][n]
+                elif m in atoms:
+                    cbn[m] = bond.copy()
         return sub, atoms
 
     def __and__(self, other):
