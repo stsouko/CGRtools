@@ -40,9 +40,9 @@ class _bdist_wheel(bdist_wheel):
 
 setup(
     name='CGRtools',
-    version='4.0.29',
+    version='4.0.30',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
-              'CGRtools.periodictable', 'CGRtools.utils', 'CGRtools.attributes'],
+              'CGRtools.periodictable', 'CGRtools.periodictable.element', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',

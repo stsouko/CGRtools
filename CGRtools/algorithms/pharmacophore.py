@@ -452,16 +452,13 @@ class Pharmacophore:
         bonds = self._bonds
         charges = self._charges
         hybridizations = self._hybridizations
-        neighbors = self._neighbors
 
         out = []
         for n, a in atoms.items():
-            if not neighbors[n]:  # not charged and not water or ammonia
-                continue
             if not charges[n]:
                 if a.atomic_number == 7:  # N
                     if hybridizations[n] == 1:
-                        if neighbors[n] == 1:  # ArNH2 or RNH2
+                        if sum(atoms[x].atomic_number != 1 for x in bonds[n]) == 1:  # ArNH2 or RNH2
                             if all(hybridizations[m] in (1, 4) for m in bonds[n]):
                                 out.append(n)
                         elif all(hybridizations[m] not in (2, 3) for m in bonds[n]):  # secondary and third amines
@@ -496,17 +493,17 @@ class Pharmacophore:
         bonds = self._bonds
         charges = self._charges
         hybridizations = self._hybridizations
-        neighbors = self._neighbors
 
         out = []
         for n, a in atoms.items():
+            ngb = sum(atoms[x].atomic_number != 1 for x in bonds[n])
             if hybridizations[n] == 1:  # amines, alcoholes, phenoles, thioles
-                if a.atomic_number in (8, 16) and not charges[n] and neighbors[n] == 1 or \
-                        a.atomic_number == 7 and (not charges[n] and neighbors[n] in (1, 2) or
-                                                  charges[n] == 1 and neighbors[n] in (1, 2, 3)):
+                if a.atomic_number in (8, 16) and not charges[n] and ngb == 1 or \
+                        a.atomic_number == 7 and (not charges[n] and ngb in (1, 2) or
+                                                  charges[n] == 1 and ngb in (1, 2, 3)):
                     out.append((n, next((m for m in bonds[n] if atoms[m].atomic_number == 1), None)))
             # imine, guanidine
-            elif hybridizations[n] == 2 and a.atomic_number == 7 and not charges[n] and neighbors[n] == 1:
+            elif hybridizations[n] == 2 and a.atomic_number == 7 and not charges[n] and ngb == 1:
                 out.append((n, next((m for m in bonds[n] if atoms[m].atomic_number == 1), None)))
         return tuple(out)
 
@@ -553,13 +550,10 @@ class Pharmacophore:
         atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
-        neighbors = self._neighbors
         hybridizations = self._hybridizations
 
         out = set()
         for n, c in charges.items():
-            if not neighbors[n]:  # skip [NH4+], etc
-                continue
             if c > 0 and not any(charges[m] < 0 for m in bonds[n]):
                 out.add(n)
                 if atoms[n].atomic_number == 7 and hybridizations[n] == 2:
@@ -580,12 +574,9 @@ class Pharmacophore:
         atoms = self._atoms
         bonds = self._bonds
         charges = self._charges
-        neighbors = self._neighbors
 
         out = set()
         for n, c in charges.items():
-            if not neighbors[n]:  # skip [OH-], etc
-                continue
             if c < 0 and not any(charges[m] > 0 for m in bonds[n]):
                 out.add(n)
                 if atoms[n].atomic_number in (8, 16):

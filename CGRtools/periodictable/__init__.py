@@ -20,7 +20,7 @@
 Periodic table of elements classes
 """
 from abc import ABCMeta
-from .element import Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement
+from .element import *
 from .groups import *
 from .periods import *
 from .groupI import *
@@ -51,32 +51,13 @@ __all__.extend(k for k in globals() if k.startswith('Period'))
 __all__.extend(elements)
 
 
-for k, v in elements.items():
-    name = f'Dynamic{k}'
-    globals()[name] = cls = type(name, (DynamicElement, *v.__mro__[-3:-1]),
-                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
-                                  'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
-    setattr(modules[v.__module__], name, cls)
-    modules[v.__module__].__all__.append(name)
-    __all__.append(name)
-
-for k, v in elements.items():
-    name = f'Query{k}'
-    globals()[name] = cls = type(name, (QueryElement, *v.__mro__[-3:-1]),
-                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
-                                  'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
-    setattr(modules[v.__module__], name, cls)
-    modules[v.__module__].__all__.append(name)
-    __all__.append(name)
-
-for k, v in elements.items():
-    name = f'DynamicQuery{k}'
-    globals()[name] = cls = type(name, (DynamicQueryElement, *v.__mro__[-3:-1]),
-                                 {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
-                                  'isotopes_distribution': v.isotopes_distribution,
-                                  'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
-    setattr(modules[v.__module__], name, cls)
-    modules[v.__module__].__all__.append(name)
-    __all__.append(name)
+for _class in (DynamicElement, QueryElement, DynamicQueryElement):
+    for k, v in elements.items():
+        name = f'{_class.__name__[:-7]}{k}'
+        globals()[name] = cls = type(name, (_class, *v.__mro__[-3:-1]),
+                                     {'__module__': v.__module__, '__slots__': (), 'atomic_number': v.atomic_number,
+                                      'isotopes_distribution': v.isotopes_distribution,
+                                      'isotopes_masses': v.isotopes_masses, 'atomic_radius': v.atomic_radius})
+        setattr(modules[v.__module__], name, cls)
+        modules[v.__module__].__all__.append(name)
+        __all__.append(name)

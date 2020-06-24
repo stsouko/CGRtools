@@ -603,24 +603,28 @@ class MoleculeStereo(Stereo):
             raise NotChiral
 
     def _fix_stereo(self):
-        # todo: fix
-        if self._atoms_stereo:
-            atoms = self._atoms
-            stereo = {k: v for k, v in self._atoms_stereo.items() if k in atoms}
-            self._atoms_stereo = new_stereo = {}
+        if self._atoms_stereo:  # filter tetrahedrons
+            stereo_tetrahedrons = self._stereo_tetrahedrons
+            atoms_stereo = {k: v for k, v in self._atoms_stereo.items() if k in stereo_tetrahedrons}
+            self._atoms_stereo = {}
+        else:
+            atoms_stereo = {}
 
-            old_stereo = 0
-            while stereo and len(stereo) != old_stereo:
-                old_stereo = len(stereo)
-                failed_stereo = {}
-                chiral = self._chiral_tetrahedrons
-                del self.__dict__['_MoleculeStereo__chiral_centers']
-                for n, s in stereo.items():
-                    if n in chiral:
-                        new_stereo[n] = s
-                    else:
-                        failed_stereo[n] = s
-                stereo = failed_stereo
+        if self._allenes_stereo:  # filter allenes
+            stereo_allenes = self._stereo_allenes
+            allenes_stereo = {k: v for k, v in self._allenes_stereo.items() if k in stereo_allenes}
+            self._allenes_stereo = {}
+        else:
+            allenes_stereo = {}
+
+        if self._cis_trans_stereo:  # filter cis-trans
+            stereo_cis_trans = self._stereo_cis_trans
+            cis_trans_stereo = {k: v for k, v in self._cis_trans_stereo.items() if k in stereo_cis_trans}
+            self._cis_trans_stereo = {}
+        else:
+            cis_trans_stereo = {}
+
+        # todo: implement
 
     @property
     def _chiral_tetrahedrons(self) -> Set[int]:

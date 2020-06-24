@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Ravil Mukhametgaleev <sonic-mc@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -32,16 +32,13 @@ from ..periodictable import DynamicElement, Element, DynamicQueryElement
 
 
 class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
-    __slots__ = ('_conformers', '_p_charges', '_p_radicals', '_neighbors', '_hybridizations', '_p_neighbors',
-                 '_p_hybridizations')
+    __slots__ = ('_conformers', '_p_charges', '_p_radicals', '_hybridizations', '_p_hybridizations')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
         self._p_charges: Dict[int, int] = {}
         self._p_radicals: Dict[int, bool] = {}
-        self._neighbors: Dict[int, int] = {}
         self._hybridizations: Dict[int, int] = {}
-        self._p_neighbors: Dict[int, int] = {}
         self._p_hybridizations: Dict[int, int] = {}
         super().__init__()
 
@@ -63,9 +60,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
         _map = super().add_atom(atom, *args, **kwargs)
         self._p_charges[_map] = p_charge
         self._p_radicals[_map] = p_is_radical
-        self._neighbors[_map] = 0
         self._hybridizations[_map] = 1
-        self._p_neighbors[_map] = 0
         self._p_hybridizations[_map] = 1
         self._conformers.clear()  # clean conformers. need full recalculation for new system
         return _map
@@ -83,248 +78,55 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
             bond = DynamicBond(order, order)
 
         super().add_bond(n, m, bond)
-        self._conformers.clear()  # clean conformers. need full recalculation for new system
+        self._conformers.clear()
 
-        sh = self._hybridizations
-        sph = self._p_hybridizations
-
-        # calc query marks dynamically.
-        if self._atoms[n].atomic_number != 1:  # not hydrogen
-            if order:
-                self._neighbors[m] += 1
-                if order == 4:
-                    if sh[m] != 4:
-                        sh[m] = 4
-                elif order == 3:
-                    if sh[m] not in (3, 4):
-                        sh[m] = 3
-                elif order == 2:
-                    if sh[m] == 1:
-                        sh[m] = 2
-                    elif sh[m] == 2:
-                        sh[m] = 3
-            if p_order:
-                self._p_neighbors[m] += 1
-                if p_order == 4:
-                    if sph[m] != 4:
-                        sph[m] = 4
-                elif p_order == 3:
-                    if sph[m] not in (3, 4):
-                        sph[m] = 3
-                elif p_order == 2:
-                    if sph[m] == 1:
-                        sph[m] = 2
-                    elif sph[m] == 2:
-                        sph[m] = 3
-        if self._atoms[m].atomic_number != 1:  # not hydrogen
-            if order:
-                self._neighbors[n] += 1
-                if order == 4:
-                    if sh[n] != 4:
-                        sh[n] = 4
-                elif order == 3:
-                    if sh[n] not in (3, 4):
-                        sh[n] = 3
-                elif order == 2:
-                    if sh[n] == 1:
-                        sh[n] = 2
-                    elif sh[n] == 2:
-                        sh[n] = 3
-            if p_order:
-                self._p_neighbors[n] += 1
-                if p_order == 4:
-                    if sph[n] != 4:
-                        sph[n] = 4
-                elif p_order == 3:
-                    if sph[n] not in (3, 4):
-                        sph[n] = 3
-                elif p_order == 2:
-                    if sph[n] == 1:
-                        sph[n] = 2
-                    elif sph[n] == 2:
-                        sph[n] = 3
+        if order != 1 or p_order != 1:  # 1 is neutral.
+            self._calc_hybridization(n)
+            self._calc_hybridization(m)
 
     def delete_atom(self, n):
-        del self._p_charges[n]
-        del self._p_radicals[n]
-
-        atoms = self._atoms
         old_bonds = self._bonds[n]  # save bonds
-        sn = self._neighbors
-        sh = self._hybridizations
-        spn = self._p_neighbors
-        sph = self._p_hybridizations
-        sb = self._bonds
-        isnt_hydrogen = atoms[n].atomic_number != 1
         super().delete_atom(n)
 
-        del sn[n]
-        del sh[n]
-        del spn[n]
-        del sph[n]
-        self._conformers.clear()  # clean conformers. need full recalculation for new system
+        del self._p_charges[n]
+        del self._p_radicals[n]
+        del self._hybridizations[n]
+        del self._p_hybridizations[n]
 
-        if isnt_hydrogen:  # neighbors query marks fix. ignore removed hydrogen
-            for m, old_bond in old_bonds.items():
-                if old_bond.order:
-                    sn[m] -= 1
-                if old_bond.p_order:
-                    spn[m] -= 1
-
-                hybridization = p_hybridization = 1
-                for x, bond in sb[m].items():
-                    if atoms[x].atomic_number == 1:  # ignore hydrogen
-                        continue
-                    order = bond.order
-                    p_order = bond.p_order
-                    if order:
-                        if hybridization != 4:
-                            if order == 4:
-                                hybridization = 4
-                            elif order == 3:
-                                if hybridization != 3:
-                                    hybridization = 3
-                            elif order == 2:
-                                if hybridization == 2:
-                                    hybridization = 3
-                                elif hybridization == 1:
-                                    hybridization = 2
-                    if p_order:
-                        if p_hybridization != 4:
-                            if p_order == 4:
-                                p_hybridization = 4
-                            elif p_order == 3:
-                                if p_hybridization != 3:
-                                    p_hybridization = 3
-                            elif p_order == 2:
-                                if p_hybridization == 2:
-                                    p_hybridization = 3
-                                elif p_hybridization == 1:
-                                    p_hybridization = 2
-                sh[m] = hybridization
-                sph[m] = p_hybridization
+        for m in old_bonds:
+            self._calc_hybridization(m)
+        self._conformers.clear()
 
     def delete_bond(self, n, m):
-        old_bond = self._bonds[n][m]  # save bond
         super().delete_bond(n, m)
-        self._conformers.clear()  # clean conformers. need full recalculation for new system
-
-        atoms = self._atoms
-        sh = self._hybridizations
-        sn = self._neighbors
-        sph = self._p_hybridizations
-        spn = self._p_neighbors
-
-        # neighbors query marks fix. ignore removed hydrogen
-        if atoms[n].atomic_number != 1:
-            if old_bond.order:
-                sn[m] -= 1
-            if old_bond.p_order:
-                spn[m] -= 1
-
-            hybridization = p_hybridization = 1
-            for x, bond in self._bonds[m].items():
-                if atoms[x].atomic_number == 1:  # ignore hydrogen
-                    continue
-                order = bond.order
-                p_order = bond.p_order
-                if order:
-                    if hybridization != 4:
-                        if order == 4:
-                            hybridization = 4
-                        elif order == 3:
-                            if hybridization != 3:
-                                hybridization = 3
-                        elif order == 2:
-                            if hybridization == 2:
-                                hybridization = 3
-                            elif hybridization == 1:
-                                hybridization = 2
-                if p_order:
-                    if p_hybridization != 4:
-                        if p_order == 4:
-                            p_hybridization = 4
-                        elif p_order == 3:
-                            if p_hybridization != 3:
-                                p_hybridization = 3
-                        elif p_order == 2:
-                            if p_hybridization == 2:
-                                p_hybridization = 3
-                            elif p_hybridization == 1:
-                                p_hybridization = 2
-            sh[m] = hybridization
-            sph[m] = p_hybridization
-        if atoms[m].atomic_number != 1:
-            if old_bond.order:
-                sn[n] -= 1
-            if old_bond.p_order:
-                spn[n] -= 1
-
-            hybridization = p_hybridization = 1
-            for x, bond in self._bonds[n].items():
-                if atoms[x].atomic_number == 1:
-                    continue
-                order = bond.order
-                p_order = bond.p_order
-                if order:
-                    if hybridization != 4:
-                        if order == 4:
-                            hybridization = 4
-                        elif order == 3:
-                            if hybridization != 3:
-                                hybridization = 3
-                        elif order == 2:
-                            if hybridization == 2:
-                                hybridization = 3
-                            elif hybridization == 1:
-                                hybridization = 2
-                if p_order:
-                    if p_hybridization != 4:
-                        if p_order == 4:
-                            p_hybridization = 4
-                        elif p_order == 3:
-                            if p_hybridization != 3:
-                                p_hybridization = 3
-                        elif p_order == 2:
-                            if p_hybridization == 2:
-                                p_hybridization = 3
-                            elif p_hybridization == 1:
-                                p_hybridization = 2
-            sh[n] = hybridization
-            sph[n] = p_hybridization
+        self._conformers.clear()
+        self._calc_hybridization(n)
+        self._calc_hybridization(m)
 
     def remap(self, mapping, *, copy=False) -> 'CGRContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
         spr = self._p_radicals
-        sn = self._neighbors
         sh = self._hybridizations
-        spn = self._p_neighbors
         sph = self._p_hybridizations
 
         if copy:
             hpc = h._p_charges
             hpr = h._p_radicals
-            hn = h._neighbors
             hh = h._hybridizations
             hc = h._conformers
-            hpn = h._p_neighbors
             hph = h._p_hybridizations
         else:
             hpc = {}
             hpr = {}
-            hn = {}
             hh = {}
             hc = []
-            hpn = {}
             hph = {}
 
         for n, c in self._p_charges.items():
             m = mg(n, n)
             hpc[m] = c
             hpr[m] = spr[n]
-            hn[m] = sn[n]
-            hpn[m] = spn[n]
             hh[m] = sh[n]
             hph[m] = sph[n]
 
@@ -335,19 +137,15 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
 
         self._p_charges = hpc
         self._p_radicals = hpr
-        self._neighbors = hn
         self._hybridizations = hh
         self._conformers = hc
-        self._p_neighbors = hpn
         self._p_hybridizations = hph
         return self
 
     def copy(self, **kwargs) -> 'CGRContainer':
         copy = super().copy(**kwargs)
-        copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._conformers = [c.copy() for c in self._conformers]
-        copy._p_neighbors = self._p_neighbors.copy()
         copy._p_hybridizations = self._p_hybridizations.copy()
         copy._p_radicals = self._p_radicals.copy()
         copy._p_charges = self._p_charges.copy()
@@ -378,13 +176,12 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
                 ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
-            sn = self._neighbors
+            sb = self._bonds
             sh = self._hybridizations
-            spn = self._p_neighbors
             sph = self._p_hybridizations
-            sub._neighbors = {n: (sn[n],) for n in atoms}
+            sub._neighbors = {n: (sum(x.order is not None for x in sb[n].values()),) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
-            sub._p_neighbors = {n: (spn[n],) for n in atoms}
+            sub._p_neighbors = {n: (sum(x.p_order is not None for x in sb[n].values()),) for n in atoms}
             sub._p_hybridizations = {n: (sph[n],) for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
@@ -395,49 +192,11 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
                 atom._attach_to_graph(sub, n)
 
             # recalculate query marks
-            sub._neighbors = sn = {}
-            sub._hybridizations = sh = {}
-            sub._p_neighbors = spn = {}
-            sub._p_hybridizations = sph = {}
-            atoms = sub._atoms
-            for n, m_bonds in sub._bonds.items():
-                neighbors = p_neighbors = 0
-                hybridization = p_hybridization = 1
-                for m, bond in m_bonds.items():
-                    if atoms[m].atomic_number == 1:  # ignore hydrogen
-                        continue
-                    order = bond.order
-                    p_order = bond.p_order
-                    if order:
-                        neighbors += 1
-                        if hybridization != 4:
-                            if order == 4:
-                                hybridization = 4
-                            elif order == 3:
-                                if hybridization != 3:
-                                    hybridization = 3
-                            elif order == 2:
-                                if hybridization == 2:
-                                    hybridization = 3
-                                elif hybridization == 1:
-                                    hybridization = 2
-                    if p_order:
-                        p_neighbors += 1
-                        if p_hybridization != 4:
-                            if p_order == 4:
-                                p_hybridization = 4
-                            elif p_order == 3:
-                                if p_hybridization != 3:
-                                    p_hybridization = 3
-                            elif p_order == 2:
-                                if p_hybridization == 2:
-                                    p_hybridization = 3
-                                elif p_hybridization == 1:
-                                    p_hybridization = 2
-                sn[n] = neighbors
-                sh[n] = hybridization
-                spn[n] = p_neighbors
-                sph[n] = p_hybridization
+                # recalculate query marks
+            sub._hybridizations = {}
+            sub._p_hybridizations = {}
+            for n in sub._atoms:
+                sub._calc_hybridization(n)
         return sub
 
     def union(self, other, **kwargs):
@@ -447,9 +206,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
 
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
-            u._neighbors.update(other._neighbors)
             u._hybridizations.update(other._hybridizations)
-            u._p_neighbors.update(other._p_neighbors)
             u._p_hybridizations.update(other._p_hybridizations)
 
             ub = u._bonds
@@ -472,9 +229,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
             u, other = super().union(other, **kwargs)
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
-            u._neighbors.update(other._neighbors)
             u._hybridizations.update(other._hybridizations)
-            u._p_neighbors.update(other._neighbors)
             u._p_hybridizations.update(other._hybridizations)
 
             ub = u._bonds
@@ -663,9 +418,17 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
         while center:
             n = center.pop()
             if n in adj:
-                c = set(plain_bfs(adj, n))
-                out.append(tuple(c))
-                center.difference_update(c)
+                seen = set()
+                nextlevel = {n}
+                while nextlevel:
+                    thislevel = nextlevel
+                    nextlevel = set()
+                    for v in thislevel:
+                        if v not in seen:
+                            seen.add(v)
+                            nextlevel.update(adj[v])
+                out.append(tuple(seen))
+                center.difference_update(seen)
             else:
                 out.append((n,))
         return tuple(out)
@@ -739,6 +502,36 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
         """
         return self.decompose()
 
+    def _calc_hybridization(self, n: int):
+        hybridization = p_hybridization = 1
+        for bond in self._bonds[n].values():
+            order = bond.order
+            p_order = bond.p_order
+            if order and hybridization != 4:
+                if order == 4:
+                    hybridization = 4
+                elif order == 3:
+                    if hybridization != 3:
+                        hybridization = 3
+                elif order == 2:
+                    if hybridization == 2:
+                        hybridization = 3
+                    elif hybridization == 1:
+                        hybridization = 2
+            if p_order and p_hybridization != 4:
+                if p_order == 4:
+                    p_hybridization = 4
+                elif p_order == 3:
+                    if p_hybridization != 3:
+                        p_hybridization = 3
+                elif p_order == 2:
+                    if p_hybridization == 2:
+                        p_hybridization = 3
+                    elif p_hybridization == 1:
+                        p_hybridization = 2
+        self._hybridizations[n] = hybridization
+        self._p_hybridizations[n] = p_hybridization
+
     def __getstate__(self):
         return {'conformers': self._conformers, 'p_charges': self._p_charges, 'p_radicals': self._p_radicals,
                 **super().__getstate__()}
@@ -750,66 +543,13 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
         if 'conformers' in state:
             self._conformers = state['conformers']
         else:
-            self._conformers = []
+            self._conformers = []  # < 4.0.23 compatibility
 
         # restore query marks
-        self._neighbors = sn = {}
-        self._hybridizations = sh = {}
-        self._p_neighbors = spn = {}
-        self._p_hybridizations = sph = {}
-        atoms = state['atoms']
-        for n, m_bonds in state['bonds'].items():
-            neighbors = p_neighbors = 0
-            hybridization = p_hybridization = 1
-            for m, bond in m_bonds.items():
-                if atoms[m].atomic_number == 1:  # ignore hydrogen
-                    continue
-                order = bond.order
-                p_order = bond.p_order
-                if order:
-                    neighbors += 1
-                    if hybridization != 4:
-                        if order == 4:
-                            hybridization = 4
-                        elif order == 3:
-                            if hybridization != 3:
-                                hybridization = 3
-                        elif order == 2:
-                            if hybridization == 2:
-                                hybridization = 3
-                            elif hybridization == 1:
-                                hybridization = 2
-                if p_order:
-                    p_neighbors += 1
-                    if p_hybridization != 4:
-                        if p_order == 4:
-                            p_hybridization = 4
-                        elif p_order == 3:
-                            if p_hybridization != 3:
-                                p_hybridization = 3
-                        elif p_order == 2:
-                            if p_hybridization == 2:
-                                p_hybridization = 3
-                            elif p_hybridization == 1:
-                                p_hybridization = 2
-            sn[n] = neighbors
-            sh[n] = hybridization
-            spn[n] = p_neighbors
-            sph[n] = p_hybridization
-
-
-def plain_bfs(adj, source):
-    """modified NX fast BFS node generator"""
-    seen = set()
-    nextlevel = {source}
-    while nextlevel:
-        thislevel = nextlevel
-        nextlevel = set()
-        for v in thislevel:
-            if v not in seen:
-                yield v
-                seen.add(v)
-                nextlevel.update(adj[v])
+        self._hybridizations = {}
+        self._p_hybridizations = {}
+        for n in state['bonds']:
+            self._calc_hybridization(n)
 
 
 __all__ = ['CGRContainer']

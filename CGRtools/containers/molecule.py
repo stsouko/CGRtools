@@ -37,12 +37,11 @@ from ..periodictable import Element, QueryElement
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
                         DepictMolecule, Calculate2DMolecule, Pharmacophore, X3domMolecule):
-    __slots__ = ('_conformers', '_neighbors', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
+    __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
-        self._neighbors: Dict[int, int] = {}
         self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, bool] = {}
@@ -64,7 +63,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 raise TypeError('Element object expected')
 
         _map = super().add_atom(atom, *args, charge=charge, is_radical=is_radical, **kwargs)
-        self._neighbors[_map] = 0
         self._hybridizations[_map] = 1
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
@@ -101,18 +99,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._calc_implicit(n)
         self._calc_implicit(m)
 
-        # calc query marks dynamically.
-        if self._atoms[n].atomic_number != 1:  # not hydrogen
-            self._neighbors[m] += 1
-            self._calc_hybridization(m)
-            fix = True
-        else:
-            fix = False
-        if self._atoms[m].atomic_number != 1:  # not hydrogen
-            self._neighbors[n] += 1
+        if bond.order != 1:  # 1 is neutral. 8 is rare. skip.
             self._calc_hybridization(n)
-            if fix:  # fix stereo if formed not to hydrogen bond
-                self._fix_stereo()
+            self._calc_hybridization(m)
+
+        if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:  # not hydrogen
+            # fix stereo if formed not to hydrogen bond
+            self._fix_stereo()
 
     def delete_atom(self, n):
         """
@@ -126,9 +119,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
 
-        sn = self._neighbors
-
-        del sn[n]
         del self._hybridizations[n]
         del self._hydrogens[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
@@ -136,10 +126,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         for m in old_bonds:
             self._calc_implicit(m)
 
-        if isnt_hydrogen:
-            for m in old_bonds:
-                self._calc_hybridization(m)
-                sn[m] -= 1
+        for m in old_bonds:
+            self._calc_hybridization(m)
+        if isnt_hydrogen:  # hydrogen atom not used for stereo coding
             self._fix_stereo()
 
     def delete_bond(self, n, m):
@@ -155,28 +144,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
         self._calc_implicit(n)
         self._calc_implicit(m)
+        self._calc_hybridization(n)
+        self._calc_hybridization(m)
 
-        # neighbors query marks fix. ignore removed hydrogen
-        if self._atoms[n].atomic_number != 1:
-            self._calc_hybridization(m)
-            self._neighbors[m] -= 1
-            fix = True
-        else:
-            fix = False
-        if self._atoms[m].atomic_number != 1:
-            self._calc_hybridization(n)
-            self._neighbors[n] -= 1
-            if fix:
-                self._fix_stereo()
+        if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:
+            self._fix_stereo()
 
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
-        sn = self._neighbors
         shg = self._hydrogens
 
         if copy:
-            hn = h._neighbors
             hh = h._hybridizations
             hhg = h._hydrogens
             hc = h._conformers
@@ -184,7 +163,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             hal = h._allenes_stereo
             hcs = h._cis_trans_stereo
         else:
-            hn = {}
             hh = {}
             hhg = {}
             hc = []
@@ -194,7 +172,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
-            hn[m] = sn[n]
             hh[m] = hyb
             hhg[m] = shg[n]
 
@@ -210,7 +187,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if copy:
             return h
 
-        self._neighbors = hn
         self._hybridizations = hh
         self._hydrogens = hhg
         self._conformers = hc
@@ -221,7 +197,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def copy(self, **kwargs) -> 'MoleculeContainer':
         copy = super().copy(**kwargs)
-        copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
@@ -264,9 +239,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 ca[n] = atom
                 atom._attach_to_graph(sub, n)
 
-            sn = self._neighbors
             sh = self._hybridizations
-            sub._neighbors = {n: (sn[n],) for n in atoms}
+            sub._neighbors = {n: (len(sb[n]),) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
@@ -277,12 +251,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(sub, n)
 
             # recalculate query marks
-            sub._neighbors = sn = {}
             sub._hybridizations = {}
             sub._hydrogens = {}
-            atoms = sub._atoms
-            for n, m_bonds in sub._bonds.items():
-                sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
+            for n in sub._atoms:
                 sub._calc_hybridization(n)
                 sub._calc_implicit(n)
             # fix_stereo will repair data
@@ -297,7 +268,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             u, other = super().union(other, **kwargs)
             u._conformers.clear()
 
-            u._neighbors.update(other._neighbors)
             u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
@@ -305,14 +275,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             u._cis_trans_stereo.update(other._cis_trans_stereo)
 
             ub = u._bonds
-            for n in other._bonds:
-                ub[n] = {}
-            seen = set()
             for n, m_bond in other._bonds.items():
-                seen.add(n)
+                ub[n] = ubn = {}
                 for m, bond in m_bond.items():
-                    if m not in seen:
-                        ub[n][m] = ub[m][n] = bond.copy()
+                    if m in ub:  # bond partially exists. need back-connection.
+                        ubn[m] = ub[m][n]
+                    else:
+                        ubn[m] = bond.copy()
 
             ua = u._atoms
             for n, atom in other._atoms.items():
@@ -590,7 +559,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def _total_hydrogens(self, n: int) -> int:
         return self._hydrogens[n] + self._explicit_hydrogens(n)
 
-    def _calc_implicit(self, n: int) -> Optional[int]:
+    def _calc_implicit(self, n: int):
         atoms = self._atoms
         atom = atoms[n]
         if atom.atomic_number != 1:
@@ -614,20 +583,16 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             for s, d, h in rules:
                 if h and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
                     self._hydrogens[n] = h
-                    return h
+                    return
         self._hydrogens[n] = 0
-        return 0
 
-    def _calc_hybridization(self, n: int) -> int:
-        atoms = self._atoms
+    def _calc_hybridization(self, n: int):
         hybridization = 1
-        for m, bond in self._bonds[n].items():
-            if atoms[m].atomic_number == 1:  # ignore hydrogen
-                continue
+        for bond in self._bonds[n].values():
             order = bond.order
             if order == 4:
                 self._hybridizations[n] = 4
-                return 4
+                return
             elif order == 3:
                 if hybridization != 3:
                     hybridization = 3
@@ -637,7 +602,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 elif hybridization == 1:
                     hybridization = 2
         self._hybridizations[n] = hybridization
-        return hybridization
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
@@ -698,12 +662,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._cis_trans_stereo = state['cis_trans_stereo']
 
         # restore query and hydrogen marks
-        self._neighbors = sn = {}
         self._hybridizations = {}
         self._hydrogens = {}
-        atoms = state['atoms']
-        for n, m_bonds in state['bonds'].items():
-            sn[n] = sum(atoms[m].atomic_number != 1 for m in m_bonds)
+        for n in state['bonds']:
             self._calc_hybridization(n)
             self._calc_implicit(n)
 
