@@ -221,9 +221,27 @@ class Standardize:
 
         # Boron
         #
-        # B - N >> B- - N+
+        #     A   A            A    A
+        #     |   |            |    |
+        # A - B - N - A >> A - B- - N+ - A
+        #     |   |            |    |
+        #     A   A            A    A
         #
-        atoms = ({'atom': 'B'}, {'atom': 'N'})
+        atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 1}, {'atom': 'N', 'neighbors': 4, 'hybridization': 1})
+        bonds = ((1, 2, 1),)
+        atom_fix = {1: {'charge': -1}, 2: {'charge': 1}}
+        bonds_fix = ()
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Boron
+        #
+        #     A    A       A     A
+        #     |   //       |    //
+        # A - B - N >> A - B- - N+
+        #     |    \       |     \
+        #     A     A      A      A
+        #
+        atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 1}, {'atom': 'N', 'neighbors': 3, 'hybridization': 2})
         bonds = ((1, 2, 1),)
         atom_fix = {1: {'charge': -1}, 2: {'charge': 1}}
         bonds_fix = ()
@@ -509,6 +527,17 @@ class Standardize:
         atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1}, {'atom': 'C', 'hybridization': 2})
         bonds = ((1, 2, 3), (1, 3, 2))
         atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Diazo
+        #
+        # ? - C # N == N - A >> ? - C- == N+ == N - A
+        #
+        atoms = ({'atom': 'C', 'neighbors': (1, 2), 'hybridization': 3}, {'atom': 'N', 'neighbors': 2, 'hybridization': 3},
+                 {'atom': 'N', 'neighbors': 2, 'hybridization': 2})
+        bonds = ((1, 2, 3), (2, 3, 2))
+        atom_fix = {1: {'charge': -1, 'hybridization': 2}, 2: {'charge': 1}}
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
