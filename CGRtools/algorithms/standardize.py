@@ -420,7 +420,7 @@ class Standardize:
 
         # Azide
         #
-        #  N- - N+ # N  >>  N = N+ = N-
+        #  A - N- - N+ # N  >> A - N = N+ = N-
         #
         atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2},
                  {'atom': 'N', 'charge': -1, 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 1})
@@ -431,18 +431,18 @@ class Standardize:
 
         # Azide
         #
-        #  N+ # N = N-  >>  N = N+ = N-
+        #  A - N+ # N = N-  >> A - N = N+ = N-
         #
         atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
-                 {'atom': 'N', 'charge': -1, 'neighbors': 1})
-        bonds = ((1, 2, 3), (1, 3, 2))
+                 {'atom': 'N', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 3), (1, 3, 2), (2, 4, 1))
         atom_fix = {1: {'charge': 1}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Azide
         #
-        # N = N # N >> N = N+ = N-
+        # A - N = N # N >> A - N = N+ = N-
         #
         atoms = ({'atom': 'N', 'neighbors': 2},
                  {'atom': 'N', 'neighbors': 2, 'hybridization': 2}, {'atom': 'N', 'neighbors': 1})
@@ -453,7 +453,7 @@ class Standardize:
 
         # Azide
         #
-        # - N = N = N >> - N = N+ = N-
+        # A - N = N = N >> A - N = N+ = N-
         #
         atoms = ({'atom': 'N', 'neighbors': 2},
                  {'atom': 'N', 'neighbors': 2, 'hybridization': 2}, {'atom': 'N', 'neighbors': 1})
@@ -464,7 +464,7 @@ class Standardize:
 
         # Azide
         #
-        # - NH - N # N >> - N = N+ = N-
+        # A - NH - N # N >> A - N = N+ = N-
         #
         atoms = ({'atom': 'N', 'neighbors': 2},
                  {'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 1})
