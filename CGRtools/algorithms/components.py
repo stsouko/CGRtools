@@ -195,34 +195,37 @@ class StructureComponents:
         else:
             atoms_numbers = {6}
 
-        adj = defaultdict(set)  # carbon double bonds adjacency matrix
+        adj = defaultdict(set)  # double bonds adjacency matrix
         for n, atom in atoms.items():
             if atom.atomic_number in atoms_numbers:
                 adj_n = adj[n].add
                 for m, bond in bonds[n].items():
-                    order = bond.order
-                    if order == 2 and atoms[m].atomic_number in atoms_numbers:
+                    if bond.order == 2 and atoms[m].atomic_number in atoms_numbers:
                         adj_n(m)
         if not adj:
             return ()
 
-        for n, ms in adj.items():
-            if len(ms) > 2:
-                raise ValenceError(f'atom: {n} has invalid valence')
-
         terminals = [x for x, y in adj.items() if len(y) == 1]
         cumulenes = []
         while terminals:
-            m = terminals.pop(0)
-            path = [m]
+            n = terminals.pop(0)
+            m = adj[n].pop()
+            path = [n, m]
             while m not in terminals:
-                n, m = m, adj[m].pop()
-                adj[m].discard(n)
+                adj_m = adj[m]
+                if len(adj_m) > 2:  # not cumulene. SO3 etc.
+                    cumulenes.extend(zip(path, path[1:]))  # keep single double bonds.
+                    break
+                adj_m.discard(n)
+                n, m = m, adj_m.pop()
                 path.append(m)
-            terminals.remove(m)
-            if sum(1 for b in chain(bonds[path[0]].values(), bonds[path[-1]].values()) if b.order == 2) == 2:
-                # check for carbon only double-bonded chains.
+            else:
+                terminals.remove(m)
+                adj[m].pop()
                 cumulenes.append(tuple(path))
+        if not heteroatoms:
+            return [x for x in cumulenes
+                    if sum(b.order == 2 for b in chain(bonds[x[0]].values(), bonds[x[-1]].values())) == 2]
         return cumulenes
 
 
