@@ -416,7 +416,7 @@ class Standardize:
         bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # N-same
+        # Nitro
         #
         #         O              [O-]
         #        //              /
@@ -429,6 +429,20 @@ class Standardize:
         bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Nitro
+        #
+        # O : N : O      O = [N+] - [O-]
+        #     |      >>       |
+        #     A               A
+        #
+        atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 4), (1, 3, 4), (1, 4, 1))
+        atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1},
+                    3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 1), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # N-same
@@ -448,7 +462,7 @@ class Standardize:
 
         # Nitrite
         #
-        #   O         [O-]
+        #   O        [O-]
         #  //        /
         # [N-]  >>  N
         #  \\       \\
