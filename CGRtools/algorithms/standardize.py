@@ -213,8 +213,9 @@ class Standardize:
         #  \     /       \        /
         #   B - N        [B-] - [N+]
         #
-        atoms = ({'atom': 'B', 'neighbors': 4}, {'atom': 'N', 'neighbors': 4}, {'atom': 'B', 'neighbors': 4},
-                 {'atom': 'N', 'neighbors': 4}, {'atom': 'B', 'neighbors': 4}, {'atom': 'N', 'neighbors': 4})
+        atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 1}, {'atom': 'N', 'neighbors': 4, 'hybridization': 1},
+                 {'atom': 'B', 'neighbors': 4, 'hybridization': 1}, {'atom': 'N', 'neighbors': 4, 'hybridization': 1},
+                 {'atom': 'B', 'neighbors': 4, 'hybridization': 1}, {'atom': 'N', 'neighbors': 4, 'hybridization': 1})
         bonds = ((1, 2, 1), (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 6, 1), (1, 6, 1))
         atom_fix = {1: {'charge': -1}, 2: {'charge': 1}, 3: {'charge': -1}, 4: {'charge': 1}, 5: {'charge': -1},
                     6: {'charge': 1}}
