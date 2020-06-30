@@ -418,8 +418,12 @@ class DepictMolecule(Depict):
                         ax = font15
                     mask['center'].append(f'        <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
                 else:
-                    dx = font4
-                    dx_mm = dx_m + font2
+                    if symbol == 'I':
+                        dx = font15
+                        dx_mm = dx_m
+                    else:
+                        dx = font4
+                        dx_mm = dx_m + font2
                     mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
                 svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
                            f'font-size="{font_size:.2f}">{symbol}{h}{span}</text>')
