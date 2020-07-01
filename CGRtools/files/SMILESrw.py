@@ -267,7 +267,7 @@ class SMILESRead(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
-        if self.__ignore_stereo:
+        if self.__ignore_stereo or not molecule['stereo_atoms'] and not molecule['stereo_bonds']:
             return mol
 
         st = mol._stereo_tetrahedrons

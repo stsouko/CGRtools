@@ -26,33 +26,58 @@ class Standardize:
     __slots__ = ()
     __class_cache__ = {}
 
-    def standardize(self) -> bool:
+    def canonicalize(self):
         """
-        Standardize functional groups. Return True if any not canonical group found.
+        Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         """
-        neutralized = self.neutralize(skip_stereo_fix=True)
-        hs = self.__standardize()
+        s = self.standardize(fix_stereo=False)
+        k = self.kekule()
+        h = self.implicify_hydrogens(fix_stereo=False)
+        t = self.thiele()
+        return s or k or h or t
+
+    def standardize(self, *, fix_stereo=True, logging=False) -> bool:
+        """
+        Standardize functional groups. Return True if any non-canonical group found.
+
+        :param logging: return list of fixed atoms with matched rules.
+        """
+        neutralized = self.neutralize(fix_stereo=False)
+        hs, log = self.__standardize()
         if hs:
             if not neutralized:
                 self.flush_cache()
             for n in hs:
                 self._calc_implicit(n)
             # second round. need for intersected groups.
-            hs = self.__standardize()
+            hs, lg = self.__standardize()
+            log.extend(lg)
             for n in hs:
                 self._calc_implicit(n)
-            self._fix_stereo()
+            if fix_stereo:
+                self._fix_stereo()
+            if logging:
+                if neutralized:
+                    log.append(((), -1, 'neutralized'))
+                return log
             return True
         if neutralized:
-            self._fix_stereo()
+            if fix_stereo:
+                self._fix_stereo()
+            if logging:
+                log.append(((), -1, 'neutralized'))
+                return log
             return True
+        if logging:
+            return log
         return False
 
     def __standardize(self):
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
-        for pattern, atom_fix, bonds_fix in self.__standardize_compiled_rules:
+        log = []
+        for r, (pattern, atom_fix, bonds_fix) in enumerate(self.__standardize_compiled_rules):
             seen = set()
             for mapping in pattern.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
@@ -65,10 +90,11 @@ class Standardize:
                         atom_map[key][n] = value
                 for n, m, b in bonds_fix:
                     bonds[mapping[n]][mapping[m]]._Bond__order = b
+                log.append((tuple(match), r, str(pattern)))
             hs.update(seen)
-        return hs
+        return hs, log
 
-    def neutralize(self, *, skip_stereo_fix=False) -> bool:
+    def neutralize(self, *, fix_stereo=True) -> bool:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
         """
@@ -116,7 +142,7 @@ class Standardize:
             for n in hs:
                 self._calc_implicit(n)
                 self._calc_hybridization(n)
-            if not skip_stereo_fix:
+            if fix_stereo:
                 self._fix_stereo()
             return True
         return False
@@ -1015,6 +1041,16 @@ class StandardizeReaction:
         if flag:
             self.flush_cache()
         return flag
+
+    def clean_stereo(self):
+        """
+        Remove stereo data
+        """
+        for m in self.molecules():
+            if not hasattr(m, 'clean_stereo'):
+                raise TypeError('Only Molecules and Queries supported')
+            m.clean_stereo()
+        self.flush_cache()
 
     @class_cached_property
     def __standardize_compiled_rules(self):

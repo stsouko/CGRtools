@@ -429,7 +429,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             return super().get_mcs_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer expected')
 
-    def implicify_hydrogens(self) -> int:
+    def implicify_hydrogens(self, *, fix_stereo=True) -> int:
         """
         Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
@@ -467,9 +467,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     break
         for n in to_remove:
             self.delete_atom(n)
+        if to_remove and fix_stereo:
+            self._fix_stereo()
         return len(to_remove)
 
-    def explicify_hydrogens(self) -> int:
+    def explicify_hydrogens(self, *, fix_stereo=True) -> int:
         """
         Add explicit hydrogens to atoms.
 
@@ -487,6 +489,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 raise ValenceError(f'atom {{{n}}} has valence error')
         for n in to_add:
             self.add_bond(n, self.add_atom('H'), 1)
+        if to_add and fix_stereo:
+            self._fix_stereo()
         return len(to_add)
 
     def check_valence(self) -> List[int]:
