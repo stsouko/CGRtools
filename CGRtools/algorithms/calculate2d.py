@@ -342,13 +342,17 @@ class Calculate2D:
 
         # add cycle centers
         start_centers = end
-        sssr_matrix = zeros((len(rings), end), dtype=bool)
-        for e, ring in enumerate(rings):
+        sssr_matrix = []
+        for ring in rings:
             k = len(ring)
+            if k >= 11:  # skip big rings
+                continue
             mapping[-end] = end
+            sme = [False] * start_centers
+            sssr_matrix.append(sme)
             for a, m in zip(ring, [mapping[x] for x in ring]):
                 ns = bonds[a]
-                sssr_matrix[e][m] = True
+                sme[m] = True
                 if len(ns) == 3:
                     for n in ns:
                         if n not in ring:
@@ -357,16 +361,21 @@ class Calculate2D:
             xyz_matrix.append([.0, .0, .0])
             end += 1
         xyz_matrix = array(xyz_matrix)
+        sssr_matrix = array(sssr_matrix, dtype=bool)
         calculate_center(xyz_matrix, sssr_matrix, start_centers)
 
         # add springs between cycles
         ini = start_centers
         for i, ring in enumerate(rings):
             ln = len(ring)
+            if ln >= 11:
+                continue
             clc = ini
             for ccl in rings[i+1:]:
-                clc += 1
                 k = len(ccl)
+                if k >= 11:
+                    continue
+                clc += 1
                 if not set(ring).isdisjoint(set(ccl)):
                     springs.append((ini, clc))
                     distances_stiffness.append([c_short[ln] + c_short[k], c_stiff])
