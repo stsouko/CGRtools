@@ -4,7 +4,7 @@ CGRtools package
 ================
 
 .. automodule:: CGRtools
-    :members:
+    :members: smiles, inchi
     :undoc-members:
     :show-inheritance:
 

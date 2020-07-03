@@ -6,12 +6,11 @@ dependencies:
   - pandoc
   - rdkit
   - pip
+  - ipython
+  - wheel
+  - lxml
+  - numba
+  - sphinx_rtd_theme
+  - nbsphinx
   - pip:
-    - ipython
-    - wheel
-    - lxml
-    - numba
-    - numpy
-    - sphinx_rtd_theme
-    - nbsphinx
     - .

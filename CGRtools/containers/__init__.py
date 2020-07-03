@@ -16,9 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-"""
-Data classes
-"""
 from .molecule import *
 from .cgr import *
 from .query import *
