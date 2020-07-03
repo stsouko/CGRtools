@@ -139,22 +139,17 @@ class DynamicQueryElement(DynamicQuery):
 
     def __eq__(self, other):
         if isinstance(other, DynamicElement):
-            if self.atomic_number == other.atomic_number and self.isotope == other.isotope and \
+            if self.atomic_number == other.atomic_number and \
                     self.charge == other.charge and self.p_charge == other.p_charge and \
                     self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical:
-                if self.neighbors:  # neighbors and p_neighbors all times paired
-                    if (other.neighbors, other.p_neighbors) in zip(self.neighbors, self.p_neighbors):
-                        if self.hybridization:
-                            if (other.hybridization, other.p_hybridization) in zip(self.hybridization,
-                                                                                   self.p_hybridization):
-                                return True
-                        else:
-                            return True
-                elif self.hybridization:
-                    if (other.hybridization, other.p_hybridization) in zip(self.hybridization, self.p_hybridization):
-                        return True
-                else:
-                    return True
+                if self.isotope and self.isotope != other.isotope:
+                    return False
+                if self.neighbors and (other.neighbors, other.p_neighbors) not in zip(self.neighbors, self.p_neighbors):
+                    return False
+                if self.hybridization and (other.hybridization, other.p_hybridization) not in zip(self.hybridization,
+                                                                                                  self.p_hybridization):
+                    return False
+                return True
         elif isinstance(other, DynamicQueryElement) and self.atomic_number == other.atomic_number and \
                 self.isotope == other.isotope and self.charge == other.charge and self.p_charge == other.p_charge and \
                 self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
@@ -176,6 +171,9 @@ class DynamicQueryElement(DynamicQuery):
 
 class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
     __slots__ = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     @property
     def atomic_symbol(self) -> str:
@@ -201,19 +199,12 @@ class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
         if isinstance(other, DynamicElement):
             if self.charge == other.charge and self.p_charge == other.p_charge and \
                     self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical:
-                if self.neighbors:  # neighbors and p_neighbors all times paired
-                    if (other.neighbors, other.p_neighbors) in zip(self.neighbors, self.p_neighbors):
-                        if self.hybridization:
-                            if (other.hybridization, other.p_hybridization) in zip(self.hybridization,
-                                                                                   self.p_hybridization):
-                                return True
-                        else:
-                            return True
-                elif self.hybridization:
-                    if (other.hybridization, other.p_hybridization) in zip(self.hybridization, self.p_hybridization):
-                        return True
-                else:
-                    return True
+                if self.neighbors and (other.neighbors, other.p_neighbors) not in zip(self.neighbors, self.p_neighbors):
+                    return False
+                if self.hybridization and (other.hybridization, other.p_hybridization) not in zip(self.hybridization,
+                                                                                                  self.p_hybridization):
+                    return False
+                return True
         elif isinstance(other, DynamicQuery) and self.charge == other.charge and self.p_charge == other.p_charge and \
                 self.is_radical == other.is_radical and self.p_is_radical == other.p_is_radical and \
                 self.neighbors == other.neighbors and self.hybridization and other.hybridization and \
