@@ -1,6 +1,0 @@
-wheel
-m2r
-Flask-Sphinx-Themes
-nbsphinx
-ipython
-ipykernel

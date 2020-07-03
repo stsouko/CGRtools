@@ -1,4 +1,4 @@
-.. mdinclude:: ../README.md
+.. include:: ../README.rst
 
 CGRtools package
 ================
@@ -24,6 +24,12 @@ Tutorial
 ========
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
     tutorial/1_data_types_and_operations.ipynb
+    tutorial/2_signatures.ipynb
+    tutorial/3_standardization.ipynb
+    tutorial/4_isomorphism.ipynb
+    tutorial/5_transformation_rules.ipynb
+    tutorial/6_reactor.ipynb
+    tutorial/7_input_output.ipynb

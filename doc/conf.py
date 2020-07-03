@@ -11,9 +11,7 @@ version = '4.0'
 project = 'CGRtools'
 
 needs_sphinx = '1.8'
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'm2r', 'nbsphinx']
-
-nbsphinx_kernel_name = 'python3'
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'nbsphinx']
 
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
 templates_path = ['_templates']
@@ -21,10 +19,13 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 language = None
-pygments_style = 'flasky'
+pygments_style = 'sphinx'
 todo_include_todos = False
 autoclass_content = 'both'
 
+html_theme = 'sphinx_rtd_theme'
+html_logo = 'logo.jpg'
+html_favicon = 'favicon.ico'
 html_theme_options = {'github_user': 'cimm-kzn', 'github_repo': 'CGRtools', 'show_related': True}
 html_show_copyright = True
 html_show_sourcelink = False
@@ -36,3 +37,5 @@ html_sidebars = {
         'searchbox.html',
     ]
 }
+
+nbsphinx_execute = 'never'
