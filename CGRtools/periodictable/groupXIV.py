@@ -118,12 +118,13 @@ class Sn(Element, PeriodV, GroupXIV):
     @property
     def isotopes_distribution(self):
         return FrozenDict({112: 0.0097, 114: 0.0066, 115: 0.0034, 116: 0.1454, 117: 0.0768, 118: 0.2422, 119: 0.0859,
-                           120: 0.3258, 122: 0.0463, 124: 0.0579})
+                           120: 0.3258, 122: 0.0463, 124: 0.0579, 113: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({112: 111.904821, 114: 113.902782, 115: 114.903346, 116: 115.901744, 117: 116.902954,
-                           118: 117.901606, 119: 118.903309, 120: 119.902197, 122: 121.90344, 124: 123.905275})
+                           118: 117.901606, 119: 118.903309, 120: 119.902197, 122: 121.90344, 124: 123.905275,
+                           113: 112.905171})
 
     @property
     def _common_valences(self):
@@ -154,11 +155,11 @@ class Pb(Element, PeriodVI, GroupXIV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({204: 0.014, 206: 0.241, 207: 0.221, 208: 0.524})
+        return FrozenDict({204: 0.014, 206: 0.241, 207: 0.221, 208: 0.524, 210: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({204: 203.973029, 206: 205.974449, 207: 206.975881, 208: 207.976636})
+        return FrozenDict({204: 203.973029, 206: 205.974449, 207: 206.975881, 208: 207.976636, 210: 209.984189})
 
     @property
     def _common_valences(self):

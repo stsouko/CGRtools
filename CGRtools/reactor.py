@@ -19,10 +19,11 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count, permutations, product
+from itertools import chain, count, permutations
 from logging import info
 from operator import or_
 from typing import Union, Iterable
+from ._functions import lazy_product
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
 from .periodictable import Element, DynamicElement
 
@@ -229,8 +230,8 @@ class Reactor(BaseReactor):
             ignored_numbers = {x for x in ignored for x in x}
             chosen = [structures[x] for x in chosen]
             united_chosen = reduce(or_, chosen)
-            for match in product(*(x.get_mapping(y, automorphism_filter=automorphism_filter)
-                                   for x, y in zip(self.__patterns, chosen))):
+            for match in lazy_product(*(x.get_mapping(y, automorphism_filter=automorphism_filter)
+                                        for x, y in zip(self.__patterns, chosen))):
                 mapping = match[0]
                 for m in match[1:]:
                     mapping.update(m)

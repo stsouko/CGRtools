@@ -20,7 +20,7 @@
 from collections import defaultdict
 from itertools import permutations
 from io import StringIO, TextIOWrapper
-from logging import info, warning
+from logging import warning
 from pathlib import Path
 from re import split, compile, fullmatch
 from traceback import format_exc
@@ -88,23 +88,26 @@ class SMILESRead(CGRRead):
 
     For reactions . [dot] in bonds should be used only for molecules separation.
     """
-    def __init__(self, file, header=None, **kwargs):
+    def __init__(self, file, header=None, ignore_stereo=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
-            self.__file = open(file)
+            self._file = open(file)
             self.__is_buffer = False
         elif isinstance(file, Path):
-            self.__file = file.open()
+            self._file = file.open()
             self.__is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
+            self._file = file
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__file = iter(self._file.readline, '')
 
         if header is True:
             self.__header = next(self.__file).split()[1:]
@@ -115,17 +118,18 @@ class SMILESRead(CGRRead):
         else:
             self.__header = None
 
+        self.__ignore_stereo = ignore_stereo
         self._data = self.__data()
 
     def __data(self):
-        file = self.__file
+        file = self._file
         parse = self.parse
         seekable = file.seekable()
         pos = file.tell() if seekable else None
-        for n, line in enumerate(file):
+        for n, line in enumerate(self.__file):
             x = parse(line)
             if x is None:
-                yield parse_error(n, pos)
+                yield parse_error(n, pos, self._format_log())
                 if seekable:
                     pos = file.tell()
             else:
@@ -138,6 +142,7 @@ class SMILESRead(CGRRead):
         """
         obj = object.__new__(cls)
         obj._SMILESRead__header = None
+        obj._SMILESRead__ignore_stereo = False
         super(SMILESRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -148,7 +153,7 @@ class SMILESRead(CGRRead):
         :param force: Force closing of externally opened file or buffer.
         """
         if not self.__is_buffer or force:
-            self.__file.close()
+            self._file.close()
 
     def __enter__(self):
         return self
@@ -172,15 +177,19 @@ class SMILESRead(CGRRead):
 
     def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
         """SMILES string parser."""
+        self._flush_log()
         smi, *data = smiles.split()
-        if self.__header is None:
+        if not smi:
+            self._info('empty smiles')
+            return
+        elif self.__header is None:
             meta = {}
             for x in data:
                 try:
                     k, v = split(delimiter, x, 1)
                     meta[k] = v
                 except ValueError:
-                    info(f'invalid metadata entry: {x}')
+                    self._info(f'invalid metadata entry: {x}')
         else:
             meta = dict(zip(self.__header, data))
 
@@ -189,54 +198,77 @@ class SMILESRead(CGRRead):
             try:
                 reactants, reagents, products = smi.split('>')
             except ValueError:
-                info('invalid SMIRKS')
+                self._info('invalid SMIRKS')
                 return
 
             try:
                 if reactants:
                     for x in reactants.split('.'):
-                        if not x and self._ignore:
-                            info('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['reactants'].append(self.__parse_tokens(x))
                 if products:
                     for x in products.split('.'):
-                        if not x and self._ignore:
-                            info('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['products'].append(self.__parse_tokens(x))
                 if reagents:
                     for x in reagents.split('.'):
-                        if not x and self._ignore:
-                            info('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['reagents'].append(self.__parse_tokens(x))
             except ValueError:
-                info(f'record consist errors:\n{format_exc()}')
+                self._info(f'record consist errors:\n{format_exc()}')
                 return
 
             try:
                 container = self._convert_reaction(record)
-                return container
             except ValueError:
-                info(f'record consist errors:\n{format_exc()}')
-                return
+                self._info(f'record consist errors:\n{format_exc()}')
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                return container
         else:
             try:
                 record = self.__parse_tokens(smi)
             except ValueError:
-                info(f'line: {smi}\nconsist errors:\n{format_exc()}')
+                self._info(f'line: {smi}\nconsist errors:\n{format_exc()}')
                 return
 
             record['meta'] = meta
             try:
                 container = self._convert_structure(record)
-                return container
             except ValueError:
-                info(f'record consist errors:\n{format_exc()}')
+                self._info(f'record consist errors:\n{format_exc()}')
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                return container
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        if self.__ignore_stereo or not molecule['stereo_atoms'] and not molecule['stereo_bonds']:
+            return mol
 
         st = mol._stereo_tetrahedrons
         sa = mol._stereo_allenes
@@ -283,7 +315,7 @@ class SMILESRead(CGRRead):
                 except IsChiral:
                     pass
                 except ValenceError:
-                    info('structure has errors, stereo data skipped')
+                    self._info('structure has errors, stereo data skipped')
                     mol.flush_cache()
                     break
             else:
@@ -571,7 +603,7 @@ class SMILESRead(CGRRead):
                         if strong_cycle:
                             raise IncorrectSmiles('reused closure number')
                         else:
-                            info(f'reused closure number: {token}')
+                            self._info(f'reused closure number: {token}')
                     else:
                         used_cycles.add(token)
                     cycles[token] = (last_num, previous, len(order[last_num]))

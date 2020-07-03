@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Tansu Nasyrova <tansu.nasyrova@gmail.com>
 #  This file is part of CGRtools.
@@ -93,11 +93,11 @@ class Ga(Element, PeriodIV, GroupXIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({69: 0.60108, 71: 0.39892})
+        return FrozenDict({69: 0.60108, 71: 0.39892, 67: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({69: 68.925581, 71: 70.924705})
+        return FrozenDict({69: 68.925581, 71: 70.924705, 67: 66.928202})
 
     @property
     def _common_valences(self):
@@ -127,11 +127,11 @@ class In(Element, PeriodV, GroupXIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({113: 0.0429, 115: 0.9571})
+        return FrozenDict({113: 0.0429, 115: 0.9571, 111: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({113: 112.904061, 115: 114.903878})
+        return FrozenDict({113: 112.904061, 115: 114.903878, 111: 110.905103})
 
     @property
     def _common_valences(self):

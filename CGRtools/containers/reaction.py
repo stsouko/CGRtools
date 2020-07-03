@@ -366,15 +366,19 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @staticmethod
     def __fix_positions(molecule, shift_x):
         plane = molecule._plane
-        atoms = molecule._atoms
 
-        values = plane.values()
-        min_x = min(x for x, _ in values) - shift_x
-
+        left_atom, left_atom_plane = min((x for x in plane.items()), key=lambda x: x[1][0])
         right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+
+        if len(molecule._atoms[left_atom].atomic_symbol) == 2:
+            min_x = left_atom_plane[0] - shift_x - .2
+        else:
+            min_x = left_atom_plane[0] - shift_x
+
         max_x = right_atom_plane[0]
         max_x -= min_x
 
+        values = plane.values()
         min_y = min(y for _, y in values)
         max_y = max(y for _, y in values)
         mean_y = (max_y + min_y) / 2
@@ -382,7 +386,7 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
             plane[n] = (x - min_x, y - mean_y)
 
         r_y = plane[right_atom][1]
-        if isinstance(molecule, MoleculeContainer) and len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18:
+        if isinstance(molecule, MoleculeContainer) and -.18 <= r_y <= .18:
             factor = molecule._hydrogens[right_atom]
             if factor == 1:
                 max_x += .15

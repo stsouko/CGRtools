@@ -19,14 +19,13 @@
 from base64 import urlsafe_b64encode
 from collections import defaultdict
 from csv import reader
-from logging import warning, info
 from io import StringIO, TextIOWrapper
 from itertools import chain, islice
 from os.path import abspath, join
 from pathlib import Path
 from pickle import dump, load, UnpicklingError
 from tempfile import gettempdir
-from ._CGRrw import CGRRead, common_isotopes
+from ._CGRrw import CGRRead, common_isotopes, parse_error
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..exceptions import EmptyMolecule, NotChiral, IsChiral, ValenceError
 
@@ -36,7 +35,7 @@ query_keys = {'atomhyb': 'hybridization', 'hybridization': 'hybridization', 'hyb
 
 
 class MOLRead:
-    def __init__(self, line):
+    def __init__(self, line, log_buffer=None):
         atom_count = int(line[0:3])
         if not atom_count:
             raise EmptyMolecule
@@ -48,6 +47,9 @@ class MOLRead:
         self.__atoms = []
         self.__bonds = []
         self.__stereo = []
+        if log_buffer is None:
+            log_buffer = []
+        self.__log_buffer = log_buffer
 
     def getvalue(self):
         if self.__mend:
@@ -102,7 +104,7 @@ class MOLRead:
             elif s == '  6':
                 self.__stereo.append((a1, a2, -1))
             elif s != '  0':
-                warning('unsupported or invalid stereo')
+                self.__log_buffer.append('unsupported or invalid stereo')
             self.__bonds.append((a1, a2, int(line[6:9])))
         elif line.startswith('M  END'):
             cgr = []
@@ -133,7 +135,7 @@ class MOLRead:
                         bond, p_bond = x['value'].split('>')
                         cgr.append((atoms, 'bond', (int(bond) or None, int(p_bond) or None)))
                     else:
-                        warning(f'ignored data: {x}')
+                        self.__log_buffer.append(f'ignored data: {x}')
                 except KeyError:
                     raise ValueError(f'CGR spec invalid {x}')
             self.__cgr = cgr
@@ -179,11 +181,14 @@ class MOLRead:
 
 
 class EMOLRead:
-    def __init__(self):
+    def __init__(self, log_buffer=None):
         self.__atoms = []
         self.__bonds = []
         self.__atom_map = {}
         self.__stereo = []
+        if log_buffer is None:
+            log_buffer = []
+        self.__log_buffer = log_buffer
 
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
@@ -271,7 +276,7 @@ class EMOLRead:
                 elif v == '3':
                     self.__stereo.append((self.__atom_map[a1], self.__atom_map[a2], -1))
                 else:
-                    warning('invalid or unsupported stereo')
+                    self.__log_buffer.append('invalid or unsupported stereo')
                 break
 
     def __atom_parser(self, line):
@@ -308,12 +313,15 @@ class EMOLRead:
 
 
 class RXNRead:
-    def __init__(self, line, ignore=False):
+    def __init__(self, line, ignore=False, log_buffer=None):
         self.__reactants_count = int(line[:3])
         self.__products_count = int(line[3:6]) + self.__reactants_count
         self.__reagents_count = int(line[6:].rstrip() or 0) + self.__products_count
         self.__molecules = []
         self.__ignore = ignore
+        if log_buffer is None:
+            log_buffer = []
+        self.__log_buffer = log_buffer
 
     def __call__(self, line):
         if self.__parser:
@@ -344,11 +352,11 @@ class RXNRead:
             self.__im -= 1
         else:
             try:
-                self.__parser = MOLRead(line)
+                self.__parser = MOLRead(line, self.__log_buffer)
             except EmptyMolecule:
                 if not self.__ignore:
                     raise
-                warning('empty molecule ignored')
+                self.__log_buffer.append('empty molecule ignored')
                 if len(self.__molecules) < self.__reactants_count:
                     self.__reactants_count -= 1
                     self.__products_count -= 1
@@ -376,7 +384,7 @@ class RXNRead:
 
 
 class ERXNRead:
-    def __init__(self, line, ignore=False):
+    def __init__(self, line, ignore=False, log_buffer=None):
         tmp = line[13:].split()
         self.__reactants_count = int(tmp[0])
         self.__products_count = int(tmp[1])
@@ -386,6 +394,9 @@ class ERXNRead:
         self.__products = []
         self.__reagents = []
         self.__ignore = ignore
+        if log_buffer is None:
+            log_buffer = []
+        self.__log_buffer = log_buffer
 
     def __call__(self, line):
         lineu = line.upper()
@@ -402,14 +413,14 @@ class ERXNRead:
                 self.__empty_skip = True
                 self.__in_mol -= 1
                 if self.__in_mol:
-                    self.__parser = EMOLRead()
-                warning('empty molecule ignored')
+                    self.__parser = EMOLRead(self.__log_buffer)
+                self.__log_buffer.append('empty molecule ignored')
             else:
                 if x:
                     x = self.__parser.getvalue()
                     self.__in_mol -= 1
                     if self.__in_mol:
-                        self.__parser = EMOLRead()
+                        self.__parser = EMOLRead(self.__log_buffer)
                     if self.__parser_group == 'REACTANT':
                         self.__reactants.append(x)
                     elif self.__parser_group == 'PRODUCT':
@@ -433,7 +444,7 @@ class ERXNRead:
                 raise ValueError('invalid RXN CTAB')
             self.__parser_group = x
             if self.__in_mol:
-                self.__parser = EMOLRead()
+                self.__parser = EMOLRead(self.__log_buffer)
         elif lineu.startswith('M  END'):
             self.__rend = True
             return True
@@ -451,12 +462,16 @@ class ERXNRead:
 
 
 class MDLStereo(CGRRead):
-    def __init__(self, calc_cis_trans=False, **kwargs):
+    def __init__(self, calc_cis_trans=False, ignore_stereo=False, **kwargs):
         super().__init__(**kwargs)
         self.__calc_cis_trans = calc_cis_trans
+        self.__ignore_stereo = ignore_stereo
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        if self.__ignore_stereo:
+            return mol
+
         if self.__calc_cis_trans:
             mol.calculate_cis_trans_from_2d()
 
@@ -472,7 +487,7 @@ class MDLStereo(CGRRead):
                 except IsChiral:
                     pass
                 except ValenceError:
-                    warning('structure has errors, stereo data skipped')
+                    self._info('structure has errors, stereo data skipped')
                     mol.flush_cache()
                     break
             else:
@@ -513,7 +528,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def close(self, force=False):
         """
-        close opened file
+        Close opened file
 
         :param force: force closing of externally opened file or buffer
         """
@@ -528,7 +543,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def _load_cache(self):
         """
-        the method is implemented for the purpose of optimization, byte positions will not be re-read from a file
+        The method is implemented for the purpose of optimization, byte positions will not be re-read from a file
         that has already been used, if the content of the file has changed, and the name has been left the same,
         the old version of byte offsets will be loaded
         :return: list of byte offsets from existing file
@@ -556,69 +571,60 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def read(self):
         """
-        parse whole file
+        Parse whole file
 
         :return: list of parsed molecules
         """
         return list(iter(self))
 
     def __iter__(self):
-        return (x for x in self._data if x is not None)
+        return (x for x in self._data if not isinstance(x, parse_error))
 
     def __next__(self):
         return next(iter(self))
 
     def __getitem__(self, item):
         """
-        getting the item by index from the original file,
-        if the required record of the file with an error,
-        then only the correct record are returned
-        :param item: int or slice
+        Getting the item by index from the original file,
+        For slices records with errors skipped.
+        For indexed access records with errors returned as error container.
         :return: [Molecule, Reaction]Container or list of [Molecule, Reaction]Containers
         """
         if self._shifts:
             _len = len(self._shifts) - 1
-            _current_pos = self.tell()
-
             if isinstance(item, int):
                 if item >= _len or item < -_len:
                     raise IndexError('List index out of range')
                 if item < 0:
                     item += _len
                 self.seek(item)
-                records = next(self._data)
+                return next(self._data)
             elif isinstance(item, slice):
                 start, stop, step = item.indices(_len)
                 if start == stop:
                     return []
-
                 if step == 1:
                     self.seek(start)
-                    records = [x for x in islice(self._data, 0, stop - start) if x is not None]
+                    records = [x for x in islice(self._data, stop - start) if not isinstance(x, parse_error)]
                 else:
                     records = []
                     for index in range(start, stop, step):
                         self.seek(index)
                         record = next(self._data)
-                        if record:
+                        if not isinstance(record, parse_error):
                             records.append(record)
+                return records
             else:
                 raise TypeError('Indices must be integers or slices')
-
-            self.seek(_current_pos)
-            if records is None:
-                raise IndexError('Data block with requested index contain errors')
-            return records
         raise self._implement_error
 
-    @staticmethod
-    def _prepare_meta(meta):
+    def _prepare_meta(self, meta):
         new_meta = {}
         for k, v in meta.items():
             if v:
                 new_meta[k] = '\n'.join(v)
             else:
-                warning(f'invalid metadata entry: {k}: {v}')
+                self._info(f'invalid metadata entry: {k}: {v}')
         return new_meta
 
     _shifts = None

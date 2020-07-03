@@ -58,6 +58,7 @@ class Smiles:
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
             !r - Use aromatic bonds instead aromatic atoms.
+            m - Set atom mapping.
 
             Combining possible. Order independent. Another keys ignored.
         """
@@ -73,6 +74,8 @@ class Smiles:
                 kwargs['neighbors'] = False
             if '!r' in format_spec:
                 kwargs['aromatic'] = False
+            if 'm' in format_spec:
+                kwargs['mapping'] = True
             return ''.join(self._smiles(self.atoms_order.get, **kwargs))
         return str(self)
 
@@ -126,7 +129,12 @@ class Smiles:
                     seen[m] = d
 
             def mod_weights(x):
-                return weights(x), seen[x]
+                lb = len(bonds[x])
+                return (groups[weights(x)],  # rare groups
+                        -lb,  # more neighbors
+                        lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                        weights(x),  # smallest weight
+                        seen[x])  # BFS nearest to starting
 
             # modified NX dfs with cycle detection
             stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=mod_weights)))]
@@ -236,6 +244,7 @@ class MoleculeSmiles(Smiles):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
+        hyb = self._hybridizations[n]
 
         smi = ['',  # [
                str(atom.isotope) if atom.isotope else '',  # isotope
@@ -243,6 +252,7 @@ class MoleculeSmiles(Smiles):
                '',  # stereo
                '',  # hydrogen
                '',  # charge
+               f':{n}' if kwargs.get('mapping', False) else '',  # mapping
                '']  # ]
 
         if kwargs.get('stereo', True):
@@ -269,8 +279,15 @@ class MoleculeSmiles(Smiles):
                 smi[4] = 'H'
             elif ih:
                 smi[4] = f'H{ih}'
+        elif hyb == 4 and ih and atom.atomic_number in (7, 15):  # pyrole
+            smi[0] = '['
+            smi[-1] = ']'
+            if ih == 1:
+                smi[4] = 'H'
+            else:
+                smi[4] = f'H{ih}'
 
-        if kwargs.get('aromatic', True) and self._hybridizations[n] == 4:
+        if kwargs.get('aromatic', True) and hyb == 4:
             smi[2] = atom.atomic_symbol.lower()
         else:
             smi[2] = atom.atomic_symbol
@@ -278,8 +295,10 @@ class MoleculeSmiles(Smiles):
 
     def _format_bond(self, n, m, adjacency, **kwargs):
         order = self._bonds[n][m].order
-        if kwargs.get('aromatic', True) and order == 4:
-            return ''
+        if order == 4:
+            if kwargs.get('aromatic', True):
+                return ''
+            return ':'
         elif kwargs.get('stereo', True) and order == 1:  # cis-trans /\
             ctt = self._stereo_cis_trans_terminals
             if n in ctt:
@@ -303,8 +322,20 @@ class MoleculeSmiles(Smiles):
                         n2 = ts[1] if ts[0] == m else ts[0]
                         m2 = next(x for x in adjacency[n2] if x in env)
                         return '/' if self._translate_cis_trans_sign(n2, m, m2, n) else '\\'
+
+            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+                return '-'
             return ''
-        return order_str[order]
+        elif order == 2:
+            return '='
+        elif order == 3:
+            return '#'
+        elif order == 1:
+            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+                return '-'
+            return ''
+        else:  # order == 8
+            return '~'
 
 
 class CGRSmiles(Smiles):
@@ -338,8 +369,12 @@ class CGRSmiles(Smiles):
     def _format_bond(self, n, m, **kwargs):
         bond = self._bonds[n][m]
         order, p_order = bond.order, bond.p_order
-        if kwargs.get('aromatic', True) and order == p_order == 4:
-            return ''
+        if kwargs.get('aromatic', True):
+            if order == p_order == 4:
+                return ''
+            elif order == p_order == 1 and (self._hybridizations[n] == 4 or self._p_hybridizations[n] == 4) and \
+                    (self._hybridizations[m] == 4 or self._p_hybridizations[m] == 4):
+                return '-'
         return dyn_order_str[(order, p_order)]
 
 

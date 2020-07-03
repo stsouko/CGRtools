@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -88,11 +88,12 @@ class Ca(Element, PeriodIV, GroupII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({40: 0.96941, 42: 0.00647, 43: 0.00135, 44: 0.02086, 46: 4e-05, 48: 0.00187})
+        return FrozenDict({40: 0.96941, 42: 0.00647, 43: 0.00135, 44: 0.02086, 46: 4e-05, 48: 0.00187, 45: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({40: 39.962591, 42: 41.958618, 43: 42.958767, 44: 43.955481, 46: 45.953693, 48: 47.952534})
+        return FrozenDict({40: 39.962591, 42: 41.958618, 43: 42.958767, 44: 43.955481, 46: 45.953693, 48: 47.952534,
+                           45: 44.956186})
 
     @property
     def _common_valences(self):
@@ -174,11 +175,11 @@ class Ra(Element, PeriodVII, GroupII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({226: 1.0})
+        return FrozenDict({226: 1.0, 228: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({226: 226.02541})
+        return FrozenDict({226: 226.02541, 228: 228.031070})
 
     @property
     def _common_valences(self):
