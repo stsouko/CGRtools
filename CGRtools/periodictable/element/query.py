@@ -136,20 +136,15 @@ class QueryElement(Query):
         compare attached to molecules elements and query elements
         """
         if isinstance(other, Element):
-            if self.atomic_number == other.atomic_number and self.isotope == other.isotope and \
-                    self.charge == other.charge and self.is_radical == other.is_radical:
-                if self.neighbors:
-                    if other.neighbors in self.neighbors:
-                        if self.hybridization:
-                            if other.hybridization in self.hybridization:
-                                return True
-                        else:
-                            return True
-                elif self.hybridization:
-                    if other.hybridization in self.hybridization:
-                        return True
-                else:
-                    return True
+            if self.atomic_number == other.atomic_number and self.charge == other.charge and \
+                    self.is_radical == other.is_radical:
+                if self.isotope and self.isotope != other.isotope:
+                    return False
+                if self.neighbors and other.neighbors not in self.neighbors:
+                    return False
+                if self.hybridization and other.hybridization not in self.hybridization:
+                    return False
+                return True
         elif isinstance(other, QueryElement) and self.atomic_number == other.atomic_number and \
                 self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical \
                 and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
@@ -167,6 +162,9 @@ class QueryElement(Query):
 
 class AnyElement(Query):  # except Hydrogen!
     __slots__ = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     @property
     def atomic_symbol(self) -> str:
@@ -212,18 +210,11 @@ class AnyElement(Query):  # except Hydrogen!
         """
         if isinstance(other, Element):
             if self.charge == other.charge and self.is_radical == other.is_radical:
-                if self.neighbors:
-                    if other.neighbors in self.neighbors:
-                        if self.hybridization:
-                            if other.hybridization in self.hybridization:
-                                return True
-                        else:
-                            return True
-                elif self.hybridization:
-                    if other.hybridization in self.hybridization:
-                        return True
-                else:
-                    return True
+                if self.neighbors and other.neighbors not in self.neighbors:
+                    return False
+                if self.hybridization and other.hybridization not in self.hybridization:
+                    return False
+                return True
         elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
                 and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
             return True

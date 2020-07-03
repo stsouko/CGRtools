@@ -361,7 +361,10 @@ class Calculate2D:
             xyz_matrix.append([.0, .0, .0])
             end += 1
         xyz_matrix = array(xyz_matrix)
-        sssr_matrix = array(sssr_matrix, dtype=bool)
+        if sssr_matrix:
+            sssr_matrix = array(sssr_matrix, dtype=bool)
+        else:
+            sssr_matrix = zeros((0, start_centers), dtype=bool)
         calculate_center(xyz_matrix, sssr_matrix, start_centers)
 
         # add springs between cycles
@@ -413,7 +416,7 @@ class Calculate2D:
         else:
             straights = array(straights, dtype=uint16)
         return xyz_matrix, array(springs, dtype=uint16), straights, array(distances_stiffness), cube, bonds_count, \
-               sssr_matrix, start_centers
+            sssr_matrix, start_centers
 
     def _is_angle(self, bond1, bond2):
         pass
