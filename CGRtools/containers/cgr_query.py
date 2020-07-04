@@ -82,7 +82,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
                 bond = object.__new__(DynamicBond)
                 bond._DynamicBond__order = bond._DynamicBond__p_order = bond.order
             else:
-                bond = DynamicBond(bond)
+                bond = DynamicBond(bond, bond)
         super().add_bond(n, m, bond)
 
     def delete_atom(self, n):
