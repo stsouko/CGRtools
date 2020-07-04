@@ -50,6 +50,9 @@ class Core(ABC):
         self.__isotope = state['isotope']
 
     def __int__(self):
+        """
+        Same as hash
+        """
         return hash(self)
 
     @property
@@ -61,6 +64,9 @@ class Core(ABC):
 
     @property
     def isotope(self) -> Optional[int]:
+        """
+        Isotope number
+        """
         return self.__isotope
 
     @property
@@ -81,7 +87,7 @@ class Core(ABC):
     @abstractmethod
     def isotopes_masses(self) -> Dict[int, float]:
         """
-        Isotopes distribution in earth
+        Isotopes masses
         """
 
     @property
@@ -93,6 +99,9 @@ class Core(ABC):
 
     @property
     def charge(self) -> int:
+        """
+        Charge of atom
+        """
         try:
             return self._graph()._charges[self._map]
         except AttributeError:
@@ -100,6 +109,9 @@ class Core(ABC):
 
     @property
     def is_radical(self) -> bool:
+        """
+        Radical state of atoms
+        """
         try:
             return self._graph()._radicals[self._map]
         except AttributeError:
@@ -107,6 +119,9 @@ class Core(ABC):
 
     @property
     def x(self) -> float:
+        """
+        X coordinate of atom on 2D plane
+        """
         try:
             return self._graph()._plane[self._map][0]
         except AttributeError:
@@ -114,6 +129,9 @@ class Core(ABC):
 
     @property
     def y(self) -> float:
+        """
+        Y coordinate of atom on 2D plane
+        """
         try:
             return self._graph()._plane[self._map][1]
         except AttributeError:
@@ -121,6 +139,9 @@ class Core(ABC):
 
     @property
     def xy(self) -> Tuple[float, float]:
+        """
+        (X, Y) coordinates of atom on 2D plane
+        """
         try:
             return self._graph()._plane[self._map]
         except AttributeError:

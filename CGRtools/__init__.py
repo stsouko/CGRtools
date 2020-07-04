@@ -17,9 +17,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-"""
-CGRtools main module. Contains all common classes and functions.
-"""
 from .containers import *
 from .files import *
 from .preparer import *
