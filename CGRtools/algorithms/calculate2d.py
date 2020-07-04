@@ -522,14 +522,14 @@ else:  # disable clean2d support
     class Calculate2DMolecule:
         __slots__ = ()
 
-        def clean2d(self):
+        def clean2d(self, **kwargs):
             raise NotImplemented('numpy required for clean2d')
 
 
     class Calculate2DCGR:
         __slots__ = ()
 
-        def clean2d(self):
+        def clean2d(self, **kwargs):
             raise NotImplemented('numpy required for clean2d')
 
 c_long = {3: 1.65 * cos(2 * pi / 3), 4: 1.65 * cos(pi / 2), 5: 1.65 * cos(2 * pi / 5), 6: 1.65 * cos(pi / 3),

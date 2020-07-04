@@ -18,6 +18,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import class_cached_property
+from collections import defaultdict
+from typing import List
 from ..containers import query  # cyclic imports resolve
 from ..exceptions import ValenceError
 
@@ -26,7 +28,7 @@ class Standardize:
     __slots__ = ()
     __class_cache__ = {}
 
-    def canonicalize(self):
+    def canonicalize(self) -> bool:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         """
@@ -71,28 +73,6 @@ class Standardize:
         if logging:
             return log
         return False
-
-    def __standardize(self):
-        atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
-        bonds = self._bonds
-        hs = set()
-        log = []
-        for r, (pattern, atom_fix, bonds_fix) in enumerate(self.__standardize_compiled_rules):
-            seen = set()
-            for mapping in pattern.get_mapping(self, automorphism_filter=False):
-                match = set(mapping.values())
-                if not match.isdisjoint(seen):  # skip intersected groups
-                    continue
-                seen.update(match)
-                for n, fix in atom_fix.items():
-                    n = mapping[n]
-                    for key, value in fix.items():
-                        atom_map[key][n] = value
-                for n, m, b in bonds_fix:
-                    bonds[mapping[n]][mapping[m]]._Bond__order = b
-                log.append((tuple(match), r, str(pattern)))
-            hs.update(seen)
-        return hs, log
 
     def neutralize(self, *, fix_stereo=True) -> bool:
         """
@@ -147,6 +127,106 @@ class Standardize:
             return True
         return False
 
+    def implicify_hydrogens(self, *, fix_stereo=True) -> int:
+        """
+        Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
+
+        :return: number of removed hydrogens
+        """
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+        explicit = defaultdict(list)
+        for n, atom in atoms.items():
+            if atom.atomic_number == 1:
+                for m in bonds[n]:
+                    if atoms[m].atomic_number != 1:
+                        explicit[m].append(n)
+
+        to_remove = set()
+        for n, hs in explicit.items():
+            atom = atoms[n]
+            charge = charges[n]
+            is_radical = radicals[n]
+            len_h = len(hs)
+            for i in range(len_h, 0, -1):
+                hi = hs[:i]
+                explicit_sum = 0
+                explicit_dict = defaultdict(int)
+                for m, bond in bonds[n].items():
+                    if m not in hi:
+                        explicit_sum += bond.order
+                        explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
+
+                if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
+                       for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
+                    to_remove.update(hi)
+                    break
+        for n in to_remove:
+            self.delete_atom(n)
+        if to_remove and fix_stereo:
+            self._fix_stereo()
+        return len(to_remove)
+
+    def explicify_hydrogens(self, *, fix_stereo=True) -> int:
+        """
+        Add explicit hydrogens to atoms.
+
+        For Thiele forms of molecule causes invalidation of internal state.
+        Implicit hydrogens marks will not be set if atoms in aromatic rings.
+        Call `kekule()` and `thiele()` in sequence to fix marks.
+
+        :return: number of added atoms
+        """
+        to_add = []
+        for n, h in self._hydrogens.items():
+            try:
+                to_add.extend([n] * h)
+            except TypeError:
+                raise ValenceError(f'atom {{{n}}} has valence error')
+        for n in to_add:
+            self.add_bond(n, self.add_atom('H'), 1)
+        if to_add and fix_stereo:
+            self._fix_stereo()
+        return len(to_add)
+
+    def check_valence(self) -> List[int]:
+        """
+        Check valences of all atoms.
+
+        Works only on molecules with aromatic rings in Kekule form.
+        :return: list of invalid atoms
+        """
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
+        bonds = self._bonds
+        errors = set(atoms)
+        for n, atom in atoms.items():
+            charge = charges[n]
+            is_radical = radicals[n]
+            explicit_sum = 0
+            explicit_dict = defaultdict(int)
+            for m, bond in bonds[n].items():
+                order = bond.order
+                if order == 4:  # aromatic rings not supported
+                    break
+                elif order != 8:  # any bond used for complexes
+                    explicit_sum += order
+                    explicit_dict[(order, atoms[m].atomic_number)] += 1
+            else:
+                try:
+                    rules = atom.valence_rules(charge, is_radical, explicit_sum)
+                except ValenceError:
+                    pass
+                else:
+                    for s, d, h in rules:
+                        if s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                            errors.discard(n)
+                            break
+        return list(errors)
+
     def clean_isotopes(self) -> bool:
         """
         Clean isotope marks from molecule.
@@ -161,6 +241,28 @@ class Standardize:
             self._fix_stereo()
             return True
         return False
+
+    def __standardize(self):
+        atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
+        bonds = self._bonds
+        hs = set()
+        log = []
+        for r, (pattern, atom_fix, bonds_fix) in enumerate(self.__standardize_compiled_rules):
+            seen = set()
+            for mapping in pattern.get_mapping(self, automorphism_filter=False):
+                match = set(mapping.values())
+                if not match.isdisjoint(seen):  # skip intersected groups
+                    continue
+                seen.update(match)
+                for n, fix in atom_fix.items():
+                    n = mapping[n]
+                    for key, value in fix.items():
+                        atom_map[key][n] = value
+                for n, m, b in bonds_fix:
+                    bonds[mapping[n]][mapping[m]]._Bond__order = b
+                log.append((tuple(match), r, str(pattern)))
+            hs.update(seen)
+        return hs, log
 
     def __patch_path(self, path):
         bonds = self._bonds
@@ -965,6 +1067,28 @@ class StandardizeReaction:
     __slots__ = ()
     __class_cache__ = {}
 
+    def canonicalize(self, fix_mapping: bool = True) -> bool:
+        """
+        Convert molecules to canonical forms of functional groups and aromatic rings without explicit hydrogens.
+        Works only for Molecules.
+        Return True if in any molecule found not canonical group.
+
+        :param fix_mapping: Search AAM errors of functional groups.
+        """
+        total = False
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.canonicalize() and not total:
+                total = True
+
+        if fix_mapping and self.fix_mapping():
+            return True
+
+        if total:
+            self.flush_cache()
+        return total
+
     def standardize(self, fix_mapping: bool = True) -> bool:
         """
         Standardize functional groups. Works only for Molecules.
@@ -982,6 +1106,22 @@ class StandardizeReaction:
         if fix_mapping and self.fix_mapping():
             return True
 
+        if total:
+            self.flush_cache()
+        return total
+
+    def neutralize(self) -> bool:
+        """
+        Transform biradical or dipole resonance structures into neutral form.
+        Works only for Molecules.
+        Return True if these groups found in any molecule.
+        """
+        total = False
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.neutralize() and not total:
+                total = True
         if total:
             self.flush_cache()
         return total
@@ -1025,6 +1165,66 @@ class StandardizeReaction:
             self.flush_cache()
             return True
         return False
+
+    def implicify_hydrogens(self) -> int:
+        """
+        Remove explicit hydrogens if possible
+
+        :return: number of removed hydrogens
+        """
+        total = 0
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            total += m.implicify_hydrogens()
+        if total:
+            self.flush_cache()
+        return total
+
+    def explicify_hydrogens(self) -> int:
+        """
+        Add explicit hydrogens to atoms
+
+        :return: number of added atoms
+        """
+        total = 0
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            total += m.explicify_hydrogens()
+        if total:
+            self.flush_cache()
+        return total
+
+    def thiele(self) -> bool:
+        """
+        Convert structures to aromatic form. Works only for Molecules.
+        Return True if in any molecule found kekule ring
+        """
+        total = False
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.thiele() and not total:
+                total = True
+        if total:
+            self.flush_cache()
+        return total
+
+    def kekule(self) -> bool:
+        """
+        Convert structures to kekule form. Works only for Molecules.
+        Return True if in any molecule found aromatic ring
+        """
+        total = False
+        for m in self.molecules():
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            if m.kekule() and not total:
+                total = True
+        if total:
+            self.flush_cache()
+        return total
 
     def clean_isotopes(self) -> bool:
         """
