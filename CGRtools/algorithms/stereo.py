@@ -674,7 +674,7 @@ class MoleculeStereo(Stereo):
                     self_allenes_stereo[n] = s
                 else:
                     tmp[n] = s
-            allenes_stereo[n] = tmp
+            allenes_stereo = tmp
 
             tmp = {}
             for n, s in cis_trans_stereo.items():
@@ -682,7 +682,7 @@ class MoleculeStereo(Stereo):
                     self_stereo_cis_trans[n] = s
                 else:
                     tmp[n] = s
-            cis_trans_stereo[n] = tmp
+            cis_trans_stereo = tmp
 
             fail_stereo = len(atoms_stereo) + len(allenes_stereo) + len(cis_trans_stereo)
             if fail_stereo == old_stereo:
