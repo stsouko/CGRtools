@@ -14,7 +14,6 @@ Basic operations:
    - Atom-to-atom mapping checker and rule-based fixer.
    - Perform MCS search.
    - 2d depiction.
-   - Pharmacophore ligand-host interactions analyse.
 
 INSTALL
 =======

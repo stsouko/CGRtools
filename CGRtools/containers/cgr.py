@@ -396,7 +396,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
 
     @cached_property
     def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
-        """ get a list of lists of atoms of reaction centers
+        """ Get a list of lists of atoms of reaction centers
         """
         radicals = self._radicals
         p_charges = self._p_charges
@@ -413,6 +413,28 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
                 if bond.order != bond.p_order:
                     adj[n].add(m)
         center.update(adj)
+
+        # changes in condensed aromatic rings.
+        if self.aromatic_rings:
+            adj_update = defaultdict(set)
+            for r in self.aromatic_rings:
+                if not center.isdisjoint(r):
+                    n = r[0]
+                    m = r[-1]
+                    if n in adj and m in adj[n]:
+                        for n, m in zip(r, r[1:]):
+                            if m not in adj[n]:
+                                adj_update[n].add(m)
+                                adj_update[m].add(n)
+                    elif any(n in adj and m in adj[n] for n, m in zip(r, r[1:])):
+                        adj_update[n].add(m)
+                        adj_update[m].add(n)
+                        for n, m in zip(r, r[1:]):
+                            if m not in adj[n]:
+                                adj_update[n].add(m)
+                                adj_update[m].add(n)
+            for n, ms in adj_update.items():
+                adj[n].update(ms)
 
         out = []
         while center:
@@ -435,7 +457,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
 
     @cached_property
     def center_atoms(self) -> Tuple[int, ...]:
-        """ get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
+        """ Get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
         """
         radicals = self._radicals
         p_charges = self._p_charges
@@ -454,7 +476,7 @@ class CGRContainer(Graph, CGRSmiles, DepictCGR, Calculate2DCGR, X3domCGR):
 
     @cached_property
     def center_bonds(self) -> Tuple[Tuple[int, int], ...]:
-        """ get list of bonds of reaction center (bonds with dynamic orders).
+        """ Get list of bonds of reaction center (bonds with dynamic orders).
         """
         return tuple((n, m) for n, m, bond in self.bonds() if bond.order != bond.p_order)
 
