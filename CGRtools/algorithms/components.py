@@ -17,10 +17,17 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property, FrozenDict
-from collections import defaultdict, deque
-from itertools import chain
-from typing import Tuple, Dict, Set, Any, Union
+from collections import defaultdict, deque, ChainMap
+from functools import reduce
+from itertools import chain, product
+from operator import or_
+from typing import List, Tuple, Dict, Set, Any, Union, TYPE_CHECKING, Iterator
+from ..containers import molecule  # cyclic imports resolve
 from ..exceptions import ValenceError
+
+
+if TYPE_CHECKING:
+    from CGRtools import ReactionContainer
 
 
 class GraphComponents:
@@ -33,10 +40,10 @@ class GraphComponents:
         """
         if not self._atoms:
             return ()
-        return self._connected_components(self._bonds)
+        return tuple(tuple(x) for x in self._connected_components(self._bonds))
 
     @staticmethod
-    def _connected_components(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Tuple[Tuple[int, ...], ...]:
+    def _connected_components(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> List[Set[int]]:
         atoms = set(bonds)
         components = []
         while atoms:
@@ -49,9 +56,9 @@ class GraphComponents:
                     if i not in seen:
                         queue.append(i)
                         seen.add(i)
-            components.append(tuple(seen))
+            components.append(seen)
             atoms.difference_update(seen)
-        return tuple(components)
+        return components
 
     @property
     def connected_components_count(self) -> int:
@@ -229,4 +236,224 @@ class StructureComponents:
         return cumulenes
 
 
-__all__ = ['GraphComponents', 'StructureComponents']
+class CGRComponents:
+    __slots__ = ()
+
+    @cached_property
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """ Get a list of lists of atoms of reaction centers
+        """
+        radicals = self._radicals
+        p_charges = self._p_charges
+        p_radicals = self._p_radicals
+        center = set()
+        adj = defaultdict(set)
+
+        for n, c in self._charges.items():
+            if c != p_charges[n] or radicals[n] != p_radicals[n]:
+                center.add(n)
+
+        for n, m_bond in self._bonds.items():
+            for m, bond in m_bond.items():
+                if bond.order != bond.p_order:
+                    adj[n].add(m)
+        center.update(adj)
+
+        # changes in condensed aromatic rings.
+        if self.aromatic_rings:
+            adj_update = defaultdict(set)
+            for r in self.aromatic_rings:
+                if not center.isdisjoint(r):
+                    n = r[0]
+                    m = r[-1]
+                    if n in adj and m in adj[n]:
+                        for n, m in zip(r, r[1:]):
+                            if m not in adj[n]:
+                                adj_update[n].add(m)
+                                adj_update[m].add(n)
+                    elif any(n in adj and m in adj[n] for n, m in zip(r, r[1:])):
+                        adj_update[n].add(m)
+                        adj_update[m].add(n)
+                        for n, m in zip(r, r[1:]):
+                            if m not in adj[n]:
+                                adj_update[n].add(m)
+                                adj_update[m].add(n)
+            for n, ms in adj_update.items():
+                adj[n].update(ms)
+
+        out = []
+        while center:
+            n = center.pop()
+            if n in adj:
+                seen = set()
+                nextlevel = {n}
+                while nextlevel:
+                    thislevel = nextlevel
+                    nextlevel = set()
+                    for v in thislevel:
+                        if v not in seen:
+                            seen.add(v)
+                            nextlevel.update(adj[v])
+                out.append(tuple(seen))
+                center.difference_update(seen)
+            else:
+                out.append((n,))
+        return tuple(out)
+
+    @cached_property
+    def center_atoms(self) -> Tuple[int, ...]:
+        """ Get list of atoms of reaction center (atoms with dynamic: bonds, charges, radicals).
+        """
+        radicals = self._radicals
+        p_charges = self._p_charges
+        p_radicals = self._p_radicals
+
+        center = set()
+        for n, c in self._charges.items():
+            if c != p_charges[n] or radicals[n] != p_radicals[n]:
+                center.add(n)
+
+        for n, m_bond in self._bonds.items():
+            if any(bond.order != bond.p_order for bond in m_bond.values()):
+                center.add(n)
+
+        return tuple(center)
+
+    @cached_property
+    def center_bonds(self) -> Tuple[Tuple[int, int], ...]:
+        """ Get list of bonds of reaction center (bonds with dynamic orders).
+        """
+        return tuple((n, m) for n, m, bond in self.bonds() if bond.order != bond.p_order)
+
+    @cached_property
+    def aromatic_rings(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        existed or formed aromatic rings atoms numbers
+        """
+        adj = self._bonds
+        return tuple(ring for ring in self.sssr if
+                     adj[ring[0]][ring[-1]].order == 4 and all(adj[n][m].order == 4 for n, m in zip(ring, ring[1:])) or
+                     adj[ring[0]][ring[-1]].p_order == 4 and all(adj[n][m].p_order == 4 for n, m in zip(ring, ring[1:]))
+                     )
+
+
+class ReactionComponents:
+    __slots__ = ()
+
+    @cached_property
+    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Reaction centers with leaving and coming groups.
+        """
+        if not self.reactants or not self.products:
+            return ()  # no rc
+        elif not isinstance(self.reactants[0], molecule.MoleculeContainer):
+            raise TypeError('Only Molecules supported')
+
+        reactants = reduce(or_, self.reactants)
+        products = reduce(or_, self.products)
+        cgr = reactants ^ products
+        bonds = cgr._bonds
+        all_groups = set(reactants) ^ set(products)
+        all_groups = cgr._connected_components({n: bonds[n].keys() & all_groups for n in all_groups})
+        centers_list = list(cgr.centers_list)
+
+        for x in all_groups:
+            intersection = []
+            for i, y in enumerate(centers_list):
+                if not x.isdisjoint(y):
+                    intersection.append(i)
+            if intersection:
+                for i in reversed(intersection):
+                    x.update(centers_list.pop(i))
+                centers_list.append(x)
+        return tuple(tuple(x) for x in centers_list)
+
+    def enumerate_centers(self) -> Iterator['ReactionContainer']:
+        """
+        Get all possible single stage reactions from multistage.
+        Note multicomponent molecules (salts etc) can be treated incorrectly.
+        """
+        if len(self.centers_list) > 1:
+            centers_list = self.centers_list
+
+            charges = ChainMap(*(x._charges for x in self.reactants))
+            radicals = ChainMap(*(x._radicals for x in self.reactants))
+            bonds = ChainMap(*(x._bonds for x in self.reactants))
+            atoms = ChainMap(*(x._atoms for x in self.reactants))
+            p_charges = ChainMap(*(x._charges for x in self.products))
+            p_radicals = ChainMap(*(x._radicals for x in self.products))
+            p_bonds = ChainMap(*(x._bonds for x in self.products))
+            p_atoms = ChainMap(*(x._atoms for x in self.products))
+
+            centers = {x for x in centers_list for x in x}
+            common = {x for x in chain(self.reactants, self.products) for x in x if x not in centers}
+            reactants = {x for x in self.reactants for x in x}
+            products = {x for x in self.products for x in x}
+
+            common_molecule = molecule.MoleculeContainer()
+            for n in common:
+                common_molecule.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
+            seen = set()
+            for n in common:
+                seen.add(n)
+                for m, b in bonds[n].items():
+                    if m not in seen and m in common:
+                        common_molecule.add_bond(n, m, b.copy())
+
+            products_bonds = {}
+            reactants_bonds = {}
+            for c in centers_list:
+                products_bonds[c] = (tmp, seen) = [], set()
+                for n in products.intersection(c):
+                    seen.add(n)
+                    for m, b in p_bonds[n].items():
+                        if m not in seen and m in products:
+                            tmp.append((n, m, b))
+                reactants_bonds[c] = (tmp, seen) = [], set()
+                for n in reactants.intersection(c):
+                    seen.add(n)
+                    for m, b in bonds[n].items():
+                        if m not in seen and m in reactants:
+                            tmp.append((n, m, b))
+
+            for rc in range(len(centers_list)):
+                not_rc = centers_list[:rc] + centers_list[rc + 1:]
+                for combo in list(product((False, True), repeat=len(not_rc))):
+                    r = common_molecule.copy()
+                    p = common_molecule.copy()
+                    for is_p, center in zip(combo, not_rc):
+                        if is_p:
+                            c_bonds, c_atoms = products_bonds[center]
+                            for n in c_atoms:
+                                r.add_atom(p_atoms[n].copy(), n, charge=p_charges[n], is_radical=p_radicals[n])
+                                p.add_atom(p_atoms[n].copy(), n, charge=p_charges[n], is_radical=p_radicals[n])
+                        else:
+                            c_bonds, c_atoms = reactants_bonds[center]
+                            for n in c_atoms:
+                                r.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
+                                p.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
+                        for n, m, b in c_bonds:
+                            r.add_bond(n, m, b.copy())
+                            p.add_bond(n, m, b.copy())
+
+                    center = centers_list[rc]
+                    c_bonds, c_atoms = products_bonds[center]
+                    for n in c_atoms:
+                        p.add_atom(p_atoms[n].copy(), n, charge=p_charges[n], is_radical=p_radicals[n])
+                    for n, m, b in c_bonds:
+                        p.add_bond(n, m, b.copy())
+                    c_bonds, c_atoms = reactants_bonds[center]
+                    for n in c_atoms:
+                        r.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
+                    for n, m, b in c_bonds:
+                        r.add_bond(n, m, b.copy())
+
+                    yield self.__class__((r,), (p,), [x.copy() for x in self.reagents])
+        else:
+            cp = self.copy()
+            cp.meta.clear()
+            yield cp
+
+
+__all__ = ['GraphComponents', 'StructureComponents', 'CGRComponents', 'ReactionComponents']

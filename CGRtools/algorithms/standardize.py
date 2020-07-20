@@ -20,7 +20,7 @@
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from typing import List
-from ..containers import query  # cyclic imports resolve
+from ..containers import molecule, query  # cyclic imports resolve
 from ..exceptions import ValenceError
 
 
@@ -1251,6 +1251,98 @@ class StandardizeReaction:
                 raise TypeError('Only Molecules and Queries supported')
             m.clean_stereo()
         self.flush_cache()
+
+    def clean2d(self, **kwargs):
+        """
+        Recalculate 2d coordinates
+        """
+        for m in self.molecules():
+            m.clean2d(**kwargs)
+        self.fix_positions()
+
+    def fix_positions(self):
+        """
+        Fix coordinates of molecules in reaction
+        """
+        shift_x = 0
+        reactants = self.reactants
+        amount = len(reactants) - 1
+        signs = []
+        for m in reactants:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                max_x += .2
+                signs.append(max_x)
+                amount -= 1
+            shift_x = max_x + 1
+        arrow_min = shift_x
+
+        if self.reagents:
+            for m in self.reagents:
+                max_x = self.__fix_reagent_positions(m, shift_x)
+                shift_x = max_x + 1
+            if shift_x - arrow_min < 3:
+                shift_x = arrow_min + 3
+        else:
+            shift_x += 3
+        arrow_max = shift_x - 1
+
+        products = self.products
+        amount = len(products) - 1
+        for m in products:
+            max_x = self.__fix_positions(m, shift_x)
+            if amount:
+                max_x += .2
+                signs.append(max_x)
+                amount -= 1
+            shift_x = max_x + 1
+        self._arrow = (arrow_min, arrow_max)
+        self._signs = tuple(signs)
+        self.flush_cache()
+
+    @staticmethod
+    def __fix_reagent_positions(molecule, shift_x):
+        plane = molecule._plane
+        shift_y = .5
+
+        values = plane.values()
+        min_x = min(x for x, _ in values) - shift_x
+        max_x = max(x for x, _ in values) - min_x
+        min_y = min(y for _, y in values) - shift_y
+        for n, (x, y) in plane.items():
+            plane[n] = (x - min_x, y - min_y)
+        return max_x
+
+    @staticmethod
+    def __fix_positions(mol, shift_x):
+        plane = mol._plane
+
+        left_atom, left_atom_plane = min((x for x in plane.items()), key=lambda x: x[1][0])
+        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
+
+        if len(mol._atoms[left_atom].atomic_symbol) == 2:
+            min_x = left_atom_plane[0] - shift_x - .2
+        else:
+            min_x = left_atom_plane[0] - shift_x
+
+        max_x = right_atom_plane[0]
+        max_x -= min_x
+
+        values = plane.values()
+        min_y = min(y for _, y in values)
+        max_y = max(y for _, y in values)
+        mean_y = (max_y + min_y) / 2
+        for n, (x, y) in plane.items():
+            plane[n] = (x - min_x, y - mean_y)
+
+        r_y = plane[right_atom][1]
+        if isinstance(mol, molecule.MoleculeContainer) and -.18 <= r_y <= .18:
+            factor = mol._hydrogens[right_atom]
+            if factor == 1:
+                max_x += .15
+            elif factor:
+                max_x += .25
+        return max_x
 
     @class_cached_property
     def __standardize_compiled_rules(self):

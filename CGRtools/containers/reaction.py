@@ -27,6 +27,7 @@ from .cgr import CGRContainer
 from .cgr_query import QueryCGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryContainer
+from ..algorithms.components import ReactionComponents
 from ..algorithms.depict import DepictReaction
 from ..algorithms.standardize import StandardizeReaction
 
@@ -34,7 +35,7 @@ from ..algorithms.standardize import StandardizeReaction
 graphs = Union[MoleculeContainer, QueryContainer, CGRContainer, QueryCGRContainer]
 
 
-class ReactionContainer(StandardizeReaction, DepictReaction):
+class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction):
     """
     Reaction storage. Contains reactants, products and reagents lists.
 
@@ -182,38 +183,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         copy._signs = self._signs
         return copy
 
-    @property
-    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
-        """
-        Union reaction centers by leaving or substitute group
-        """
-        if not self.__reactants or self.__products:
-            return ()  # no rc
-        elif not isinstance(self.__reactants[0], MoleculeContainer):
-            raise TypeError('Only Molecules supported')
-
-        reactants = reduce(or_, self.__reactants)
-        products = reduce(or_, self.__products)
-        cgr = reactants ^ products
-        all_atoms = set(reactants) ^ set(products)
-        all_groups = cgr.substructure(all_atoms).connected_components
-        new_centers_list = list(cgr.centers_list)
-
-        for x in all_groups:
-            x = set(x)
-            intersection = []
-            for i, y in enumerate(new_centers_list):
-                if not x.isdisjoint(y):
-                    intersection.append(i)
-
-            if len(intersection) > 1:
-                union = []
-                for i in reversed(intersection):
-                    union.extend(new_centers_list.pop(i))
-                new_centers_list.append(union)
-
-        return tuple(tuple(x) for x in new_centers_list)
-
     @cached_method
     def compose(self) -> CGRContainer:
         """
@@ -244,98 +213,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         Get CGR of reaction
         """
         return self.compose()
-
-    def clean2d(self, **kwargs):
-        """
-        Recalculate 2d coordinates
-        """
-        for m in self.molecules():
-            m.clean2d(**kwargs)
-        self.fix_positions()
-
-    def fix_positions(self):
-        """
-        Fix coordinates of molecules in reaction
-        """
-        shift_x = 0
-        reactants = self.__reactants
-        amount = len(reactants) - 1
-        signs = []
-        for m in reactants:
-            max_x = self.__fix_positions(m, shift_x)
-            if amount:
-                max_x += .2
-                signs.append(max_x)
-                amount -= 1
-            shift_x = max_x + 1
-        arrow_min = shift_x
-
-        if self.__reagents:
-            for m in self.__reagents:
-                max_x = self.__fix_reagent_positions(m, shift_x)
-                shift_x = max_x + 1
-            if shift_x - arrow_min < 3:
-                shift_x = arrow_min + 3
-        else:
-            shift_x += 3
-        arrow_max = shift_x - 1
-
-        products = self.__products
-        amount = len(products) - 1
-        for m in products:
-            max_x = self.__fix_positions(m, shift_x)
-            if amount:
-                max_x += .2
-                signs.append(max_x)
-                amount -= 1
-            shift_x = max_x + 1
-        self._arrow = (arrow_min, arrow_max)
-        self._signs = tuple(signs)
-        self.flush_cache()
-
-    @staticmethod
-    def __fix_reagent_positions(molecule, shift_x):
-        plane = molecule._plane
-        shift_y = .5
-
-        values = plane.values()
-        min_x = min(x for x, _ in values) - shift_x
-        max_x = max(x for x, _ in values) - min_x
-        min_y = min(y for _, y in values) - shift_y
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - min_y)
-        return max_x
-
-    @staticmethod
-    def __fix_positions(molecule, shift_x):
-        plane = molecule._plane
-
-        left_atom, left_atom_plane = min((x for x in plane.items()), key=lambda x: x[1][0])
-        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
-
-        if len(molecule._atoms[left_atom].atomic_symbol) == 2:
-            min_x = left_atom_plane[0] - shift_x - .2
-        else:
-            min_x = left_atom_plane[0] - shift_x
-
-        max_x = right_atom_plane[0]
-        max_x -= min_x
-
-        values = plane.values()
-        min_y = min(y for _, y in values)
-        max_y = max(y for _, y in values)
-        mean_y = (max_y + min_y) / 2
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - mean_y)
-
-        r_y = plane[right_atom][1]
-        if isinstance(molecule, MoleculeContainer) and -.18 <= r_y <= .18:
-            factor = molecule._hydrogens[right_atom]
-            if factor == 1:
-                max_x += .15
-            elif factor:
-                max_x += .25
-        return max_x
 
     def __eq__(self, other):
         return isinstance(other, ReactionContainer) and str(self) == str(other)
