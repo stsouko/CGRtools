@@ -403,25 +403,39 @@ class ReactionComponents:
 
             products_bonds = {}
             reactants_bonds = {}
+            common_bonds = []
+            seen = set()
+            p_seen = set()
             for c in centers_list:
-                products_bonds[c] = (tmp, seen) = [], set()
-                for n in products.intersection(c):
-                    seen.add(n)
-                    for m, b in p_bonds[n].items():
-                        if m not in seen and m in products:
-                            tmp.append((n, m, b))
-                reactants_bonds[c] = (tmp, seen) = [], set()
-                for n in reactants.intersection(c):
+                not_rc = centers.difference(c)
+                reactants_bonds[c] = (c_bonds, c_atoms) = [], reactants.intersection(c)
+                for n in c_atoms:
                     seen.add(n)
                     for m, b in bonds[n].items():
                         if m not in seen and m in reactants:
-                            tmp.append((n, m, b))
+                            if m in not_rc:
+                                common_bonds.append((n, m, b))
+                            else:
+                                c_bonds.append((n, m, b))
+                products_bonds[c] = (c_bonds, c_atoms) = [], products.intersection(c)
+                for n in c_atoms:
+                    p_seen.add(n)
+                    for m, b in p_bonds[n].items():
+                        if m not in p_seen and m in products and m not in not_rc:
+                            c_bonds.append((n, m, b))
 
             for rc in range(len(centers_list)):
                 not_rc = centers_list[:rc] + centers_list[rc + 1:]
+                rc = centers_list[rc]
                 for combo in list(product((False, True), repeat=len(not_rc))):
                     r = common_molecule.copy()
                     p = common_molecule.copy()
+
+                    for n in reactants_bonds[rc][1]:
+                        r.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
+                    for n in products_bonds[rc][1]:
+                        p.add_atom(p_atoms[n].copy(), n, charge=p_charges[n], is_radical=p_radicals[n])
+
                     for is_p, center in zip(combo, not_rc):
                         if is_p:
                             c_bonds, c_atoms = products_bonds[center]
@@ -437,19 +451,14 @@ class ReactionComponents:
                             r.add_bond(n, m, b.copy())
                             p.add_bond(n, m, b.copy())
 
-                    center = centers_list[rc]
-                    c_bonds, c_atoms = products_bonds[center]
-                    for n in c_atoms:
-                        p.add_atom(p_atoms[n].copy(), n, charge=p_charges[n], is_radical=p_radicals[n])
-                    for n, m, b in c_bonds:
+                    for n, m, b in products_bonds[rc][0]:
                         p.add_bond(n, m, b.copy())
-                    c_bonds, c_atoms = reactants_bonds[center]
-                    for n in c_atoms:
-                        r.add_atom(atoms[n].copy(), n, charge=charges[n], is_radical=radicals[n])
-                    for n, m, b in c_bonds:
+                    for n, m, b in reactants_bonds[rc][0]:
                         r.add_bond(n, m, b.copy())
-
-                    yield self.__class__((r,), (p,), [x.copy() for x in self.reagents])
+                    for n, m, b in common_bonds:
+                        r.add_bond(n, m, b.copy())
+                        p.add_bond(n, m, b.copy())
+                    yield self.__class__(r.split(), p.split(), [x.copy() for x in self.reagents])
         else:
             cp = self.copy()
             cp.meta.clear()
