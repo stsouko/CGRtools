@@ -24,8 +24,8 @@ from ._CGRrw import parse_error
 from .XYZrw import XYZ
 
 
-one_symbol_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG',
-                    'SER', 'THR', 'VAL', 'TRP', 'TYR',  # Amino acids
+one_symbol_names = {'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN',
+                    'ARG', 'SER', 'THR', 'VAL', 'TRP', 'TYR',  # Amino acids
                     'ASH',  # H-asparagine
                     'DA', 'DC', 'DG', 'DT', 'DI',  # Deoxyribonucleotides
                     'A', 'C', 'G', 'U', 'I',  # Ribonucleotides
@@ -41,13 +41,15 @@ class PDBRead(XYZ):
     Supported multiple structures in same file separated by ENDMDL. Supported only ATOM and HETATM parsing.
     END or ENDMDL required in the end.
     """
-    def __init__(self, file, ignore=False, element_name_priority=False, parse_as_single=False, **kwargs):
+    def __init__(self, file, ignore=False, element_name_priority=False, parse_as_single=False, atom_name_map=None,
+                 **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         :param element_name_priority: For ligands use element symbol column value and ignore atom name column.
         :param parse_as_single: Usable if all models in file is the same structure. 2d graph will be restored from first
             model. Other models will be returned as conformers.
+        :param atom_name_map: dictionary with atom names replacements. e.g.: {'Ow': 'O'}. Keys should be capitalized.
         """
         if isinstance(file, str):
             self._file = open(file)
@@ -66,10 +68,12 @@ class PDBRead(XYZ):
         self.__element_name_priority = element_name_priority
         self.__parse_as_single = parse_as_single
         self.__parsed_first = None
+        self.__atom_name_map = atom_name_map or {}
         self._data = self.__reader()
 
     def __reader(self):
         element_name_priority = self.__element_name_priority
+        atom_name_map = self.__atom_name_map
         file = self._file
         seekable = file.seekable()
         ignore = self.__ignore
@@ -147,6 +151,7 @@ class PDBRead(XYZ):
                     atom_name = element
                 else:
                     atom_name = atom_name.capitalize()
+                    atom_name = atom_name_map.get(atom_name, atom_name)
 
                 if atom_name != element:
                     self._info(f'Atom name and Element symbol not equal: {line[:-1]}')
