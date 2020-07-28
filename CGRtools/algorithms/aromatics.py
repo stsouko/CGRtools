@@ -227,12 +227,29 @@ class Aromatize:
                         raise InvalidAromaticRing('S, Se, Te hypervalent ring')
             elif an == 5:  # boron
                 if ac == 0:
-                    if ab == 3 and not radicals[n] or ab == 2:
+                    if ab == 2:
+                        if radicals[n]:  # C=1O[B]OC=1
+                            double_bonded.add(n)
+                        else:  # b1ccccc1 or C=1O[BH]OC=1
+                            pyroles.add(n)
+                    elif not radicals[n]:
                         double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing
-                elif ac in (-1, 1) and ab == 2 and not radicals[n]:
-                    double_bonded.add(n)
+                elif ac == 1:
+                    if ab == 2 and not radicals[n]:
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                elif ac == -1:
+                    if ab == 2:
+                        if not radicals[n]:  # C=1O[B-]OC=1 or [bH-]1ccccc1
+                            pyroles.add(n)
+                        # anion-radical is benzene like
+                    elif radicals[n]:  # C=1O[B-*](R)OC=1
+                        double_bonded.add(n)
+                    else:
+                        pyroles.add(n)
                 else:
                     raise InvalidAromaticRing
             else:

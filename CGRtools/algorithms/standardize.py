@@ -406,6 +406,21 @@ class Standardize:
         bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Boron-Nitrogen
+        #
+        #   A      A       A   A
+        #   |      |       |   |
+        #  [B-] = [N+] >>  B - N
+        #   |      |       |   |
+        #   A      A       A   A
+        #
+        atoms = ({'atom': 'B', 'charge': -1, 'neighbors': 3, 'hybridization': 2},
+                 {'atom': 'N', 'charge': 1, 'neighbors': 3, 'hybridization': 2})
+        bonds = ((1, 2, 2),)
+        atom_fix = {1: {'charge': 0, 'hybridization': 1}, 2: {'charge': 0, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Ammonium
         #
         #     A         A
