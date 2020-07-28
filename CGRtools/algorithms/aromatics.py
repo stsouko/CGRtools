@@ -299,9 +299,17 @@ class Aromatize:
         else:  # select not pyrole not condensed atom
             try:
                 start = next(n for n, ms in rings.items() if len(ms) == 2 and n not in pyroles)
-            except StopIteration:  # all pyroles
-                start = next(n for n, ms in rings.items() if len(ms) == 2)
-            stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
+            except StopIteration:  # all pyroles. select not condensed atom.
+                try:
+                    start = next(n for n, ms in rings.items() if len(ms) == 2)
+                except StopIteration:  # fullerene?
+                    start = next(iter(rings))
+                    double_bonded.add(start)
+                    stack = [[(next_atom, start, 2, 0)] for next_atom in rings[start]]
+                else:
+                    stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
+            else:
+                stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
 
         size = sum(len(x) for x in rings.values()) // 2
         path = []
@@ -321,7 +329,7 @@ class Aromatize:
                 if stack:
                     path = path[:stack[-1][-1][-1]]
                     hashed_path = {x for x, *_ in path}
-            elif atom != start:  # we finished. next step is final closure
+            elif atom != start:
                 for_stack = []
                 closures = []
                 loop = 0
