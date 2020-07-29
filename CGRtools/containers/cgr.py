@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2018 Ravil Mukhametgaleev <sonic-mc@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify

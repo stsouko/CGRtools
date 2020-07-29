@@ -375,7 +375,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         :param meta: copy metadata to each substructure
         :param as_query: return Query object based on graph substructure. for Molecule and CGR only
         """
-        return self.substructure(self.__augmented_substructure(atoms, deep)[-1], **kwargs)
+        return self.substructure(self._augmented_substructure(atoms, deep)[-1], **kwargs)
 
     def augmented_substructures(self, atoms: Iterable[int], deep: int = 1, **kwargs) -> List['Graph']:
         """
@@ -388,7 +388,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         :return: list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
             etc up to deep or while new nodes available
         """
-        return [self.substructure(a, **kwargs) for a in self.__augmented_substructure(atoms, deep)]
+        return [self.substructure(a, **kwargs) for a in self._augmented_substructure(atoms, deep)]
 
     def union(self, other: 'Graph', *, remap=False) -> 'Graph':
         """
@@ -440,18 +440,6 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         if not isinstance(is_radical, bool):
             raise TypeError('radical state should be bool')
         return is_radical
-
-    def __augmented_substructure(self, atoms, deep):
-        atoms = set(atoms)
-        if atoms - self._atoms.keys():
-            raise ValueError('invalid atom numbers')
-        nodes = [atoms]
-        for i in range(deep):
-            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
-            if n in nodes:
-                break
-            nodes.append(n)
-        return nodes
 
 
 __all__ = ['Graph']

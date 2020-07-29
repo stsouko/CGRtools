@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020 Ravil Mukhametgaleev <sonic-mc@mail.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,9 +19,7 @@
 #
 from CachedMethods import cached_property, FrozenDict
 from collections import defaultdict, deque, ChainMap
-from functools import reduce
 from itertools import chain, product
-from operator import or_
 from typing import List, Tuple, Dict, Set, Any, Union, TYPE_CHECKING, Iterator
 from ..containers import molecule  # cyclic imports resolve
 from ..exceptions import ValenceError
@@ -131,6 +130,19 @@ class GraphComponents:
         """
         bonds = self._bonds
         return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
+
+    def _augmented_substructure(self, atoms, deep):
+        atoms = set(atoms)
+        bonds = self._bonds
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        nodes = [atoms]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in bonds[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+        return nodes
 
 
 class StructureComponents:
@@ -350,11 +362,9 @@ class ReactionComponents:
         elif not isinstance(self.reactants[0], molecule.MoleculeContainer):
             raise TypeError('Only Molecules supported')
 
-        reactants = reduce(or_, self.reactants)
-        products = reduce(or_, self.products)
-        cgr = reactants ^ products
+        cgr = self.compose()
         bonds = cgr._bonds
-        all_groups = set(reactants) ^ set(products)
+        all_groups = {x for x in self.reactants for x in x} ^ {x for x in self.products for x in x}
         all_groups = cgr._connected_components({n: bonds[n].keys() & all_groups for n in all_groups})
         centers_list = list(cgr.centers_list)
 
@@ -368,6 +378,60 @@ class ReactionComponents:
                     x.update(centers_list.pop(i))
                 centers_list.append(x)
         return tuple(tuple(x) for x in centers_list)
+
+    @cached_property
+    def extended_centers_list(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Additionally to `centers_list` include:
+        * First environment of dynamic atoms.
+        * Whole formed cycles. For condensed cycles smallest is taken.
+        * Whole aromatic cycle with at least one dynamic atom.
+        * Whole small (3, 4) cycle with at least one dynamic atom.
+        * Double or triple bonds connected to previous atoms.
+
+        Note for multiple RCs intersection possible. Use `enumerate_centers` to prevent unobvious RCs.
+        """
+        cgr = self.compose()
+        bonds = cgr._bonds
+        center_atoms = set(cgr.center_atoms)
+
+        formed_rings = {}
+        small_aromatic_rings = set()
+        for r in cgr.sssr:
+            if len(r) < 5 and not center_atoms.isdisjoint(r):
+                small_aromatic_rings.add(frozenset(r))
+
+            n, m = r[0], r[-1]
+            if bonds[n][m].order is None:
+                nm = frozenset((n, m))
+                if nm not in formed_rings or len(formed_rings[nm]) > len(r):
+                    formed_rings[nm] = r
+            for n, m in zip(r, r[1:]):
+                if bonds[n][m].order is None:
+                    nm = frozenset((n, m))
+                    if nm not in formed_rings or len(formed_rings[nm]) > len(r):
+                        formed_rings[nm] = r
+
+        for r in cgr.aromatic_rings:
+            if not center_atoms.isdisjoint(r):
+                small_aromatic_rings.add(frozenset(r))
+
+        out = []
+        for rc in self.centers_list:
+            c = center_atoms.intersection(rc)
+            fe = {m for n in c for m in bonds[n]}  # add first environment
+            # add double or triple bond to first env
+            fe |= {m for n in fe for m, b in bonds[n].items() if m not in fe and b.order in (2, 3)}
+            fe.update(rc)  # add leaving|coming groups and alone center atoms
+
+            for rk, r in formed_rings.items():  # add formed rings to RC
+                if c.issuperset(rk):
+                    fe.update(r)
+            for r in small_aromatic_rings:  # add small or aromatic rings with dyn atoms
+                if not c.isdisjoint(r):
+                    fe.update(r)
+            out.append(tuple(fe))
+        return tuple(out)
 
     def enumerate_centers(self) -> Iterator['ReactionContainer']:
         """
