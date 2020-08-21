@@ -299,11 +299,14 @@ class RDFWrite(MDLWrite):
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *, write3d: bool = False):
+    def __init__(self, file, *, header: bool = True, write3d: bool = False):
         """
-        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
+        :param header: add RDF header
+        :param write3d: write for Molecules first 3D coordinates instead 2D if exists
         """
         super().__init__(file, write3d=int(write3d))
+        if not header:
+            self.write = self.__write
 
     def write(self, data):
         """

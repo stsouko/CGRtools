@@ -225,6 +225,9 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
 
+    def __bool__(self):
+        return bool(self.__reactants or self.__products or self.__reagents)
+
     @cached_method
     def __str__(self):
         sig = []
