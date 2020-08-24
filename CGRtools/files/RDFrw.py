@@ -22,7 +22,6 @@ from collections import defaultdict
 from itertools import chain
 from logging import warning
 from os.path import getsize
-from os import remove
 from subprocess import check_output
 from sys import platform
 from time import strftime
