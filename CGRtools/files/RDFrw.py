@@ -305,6 +305,8 @@ class RDFWrite(MDLWrite):
         :param write3d: write for Molecules first 3D coordinates instead 2D if exists
         """
         super().__init__(file, append=append, write3d=int(write3d))
+        if append and (self._is_buffer or self._file.tell() != 0):
+            self.write = self.__write
 
     def write(self, data):
         """

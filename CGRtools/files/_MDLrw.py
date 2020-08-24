@@ -637,7 +637,10 @@ class MDLWrite:
         :param write3d: write for Molecules 3D coordinates instead 2D if exists.
             if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
         """
-        if isinstance(file, str) or isinstance(file, Path):
+        if isinstance(file, str):
+            self._file = open(file, 'a' if append else 'w')
+            self._is_buffer = False
+        elif isinstance(file, Path):
             self._file = open(file, 'a' if append else 'w')
             self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
