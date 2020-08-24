@@ -301,16 +301,10 @@ class RDFWrite(MDLWrite):
     """
     def __init__(self, file, *, append: bool = False, write3d: bool = False):
         """
-        :param header: add RDF header
+        :param append: append to existing file or rewrite it
         :param write3d: write for Molecules first 3D coordinates instead 2D if exists
         """
-        if append:
-            super().__init__(file, delete=False, write3d=int(write3d))
-            if self._file_existed:
-                self.write = self.__write
-        else:
-            super().__init__(file, delete=True, write3d=int(write3d))
-
+        super().__init__(file, append=append, write3d=int(write3d))
 
     def write(self, data):
         """
