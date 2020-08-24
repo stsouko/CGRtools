@@ -21,7 +21,7 @@ from collections import defaultdict
 from csv import reader
 from io import StringIO, TextIOWrapper
 from itertools import chain, islice
-from os.path import abspath, join
+from os.path import abspath, join, isfile
 from pathlib import Path
 from pickle import dump, load, UnpicklingError
 from tempfile import gettempdir
@@ -632,16 +632,19 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
 
 class MDLWrite:
-    def __init__(self, file, *, write3d: int = 0):
+    def __init__(self, file, *, delete: bool = False, write3d: int = 0):
         """
         :param write3d: write for Molecules 3D coordinates instead 2D if exists.
             if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
         """
-        if isinstance(file, str):
-            self._file = open(file, 'w')
-            self._is_buffer = False
-        elif isinstance(file, Path):
-            self._file = file.open('w')
+        self._file_existed = False
+        if isinstance(file, str) or isinstance(file, Path):
+            if delete is False:
+                if isfile(file):
+                    self._file_existed = True
+                self._file = open(file, 'a')
+            else:
+                self._file = open(file, 'w')
             self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
             self._file = file

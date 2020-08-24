@@ -22,6 +22,7 @@ from collections import defaultdict
 from itertools import chain
 from logging import warning
 from os.path import getsize
+from os import remove
 from subprocess import check_output
 from sys import platform
 from time import strftime
@@ -299,14 +300,18 @@ class RDFWrite(MDLWrite):
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *, header: bool = True, write3d: bool = False):
+    def __init__(self, file, *, append: bool = False, write3d: bool = False):
         """
         :param header: add RDF header
         :param write3d: write for Molecules first 3D coordinates instead 2D if exists
         """
-        super().__init__(file, write3d=int(write3d))
-        if not header:
-            self.write = self.__write
+        if append:
+            super().__init__(file, delete=False, write3d=int(write3d))
+            if self._file_existed:
+                self.write = self.__write
+        else:
+            super().__init__(file, delete=True, write3d=int(write3d))
+
 
     def write(self, data):
         """
