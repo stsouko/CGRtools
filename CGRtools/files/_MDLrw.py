@@ -641,7 +641,7 @@ class MDLWrite:
             self._file = open(file, 'a' if append else 'w')
             self._is_buffer = False
         elif isinstance(file, Path):
-            self._file = open(file, 'a' if append else 'w')
+            self._file = file.open('a' if append else 'w')
             self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
             self._file = file
