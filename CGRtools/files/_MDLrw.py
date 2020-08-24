@@ -632,16 +632,16 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
 
 class MDLWrite:
-    def __init__(self, file, *, write3d: int = 0):
+    def __init__(self, file, *, append: bool = False, write3d: int = 0):
         """
         :param write3d: write for Molecules 3D coordinates instead 2D if exists.
             if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
         """
         if isinstance(file, str):
-            self._file = open(file, 'w')
+            self._file = open(file, 'a' if append else 'w')
             self._is_buffer = False
         elif isinstance(file, Path):
-            self._file = file.open('w')
+            self._file = file.open('a' if append else 'w')
             self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
             self._file = file
