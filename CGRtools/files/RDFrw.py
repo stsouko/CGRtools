@@ -21,9 +21,6 @@ from bisect import bisect_left
 from collections import defaultdict
 from itertools import chain
 from logging import warning
-from os.path import getsize
-from subprocess import check_output
-from sys import platform
 from time import strftime
 from traceback import format_exc
 from warnings import warn
@@ -53,25 +50,15 @@ class RDFRead(MDLRead):
         :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
         :param ignore_stereo: Ignore stereo data.
         """
-        super().__init__(file, **kwargs)
+        super().__init__(file, indexable=indexable, **kwargs)
         self.__file = iter(self._file.readline, '')
         self._data = self.__reader()
 
-        if indexable and platform != 'win32' and not self._is_buffer:
-            def update_shifts():
-                """
-                This function creates(rewrites) indexation table. The function will be created only for object that
-                matches indexable param criterion.
-                """
-                self._shifts = [int(x.split(b':', 1)[0]) for x in
-                                check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
-                self._shifts.append(getsize(self._file.name))
-                self._dump_cache(self._shifts)
-            self.update_shifts = update_shifts
+        if indexable:
             if next(self._data):
                 self._shifts = self._load_cache()
                 if self._shifts is None:
-                    self.update_shifts()
+                    self.reset_index()
         else:
             next(self._data)
 

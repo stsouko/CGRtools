@@ -21,14 +21,15 @@ from collections import defaultdict
 from csv import reader
 from io import StringIO, TextIOWrapper
 from itertools import chain, islice
-from os.path import abspath, join
+from os.path import abspath, join, getsize
 from pathlib import Path
 from pickle import dump, load, UnpicklingError
+from subprocess import check_output
+from sys import platform
 from tempfile import gettempdir
 from ._CGRrw import CGRRead, common_isotopes, parse_error
 from ..containers import MoleculeContainer, CGRContainer, QueryContainer, QueryCGRContainer
 from ..exceptions import EmptyMolecule, NotChiral, IsChiral, ValenceError
-
 
 query_keys = {'atomhyb': 'hybridization', 'hybridization': 'hybridization', 'hyb': 'hybridization',
               'atomneighbors': 'neighbors', 'neighbors': 'neighbors'}
@@ -512,7 +513,7 @@ class MDLReadMeta(type):
 
 
 class MDLRead(MDLStereo, metaclass=MDLReadMeta):
-    def __init__(self, file, **kwargs):
+    def __init__(self, file, indexable=False, **kwargs):
         if isinstance(file, str):
             self._file = open(file)
             self._is_buffer = False
@@ -525,6 +526,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self._indexable = indexable
 
     def close(self, force=False):
         """
@@ -540,6 +542,25 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def __exit__(self, _type, value, traceback):
         self.close()
+
+    def reset_index(self):
+        """
+        This function creates(rewrites) indexation table. The function will be created only for object that
+        matches indexable param criterion.
+        """
+        if self._indexable and platform != 'win32' and not self._is_buffer:
+            self._shifts = [int(x.split(b':', 1)[0]) for x in
+                            check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
+            self._shifts.append(getsize(self._file.name))
+
+            with open(self.__cache_path, 'wb') as f:
+                dump(self._shifts, f)
+        else:
+            raise self._implement_error
+
+    @property
+    def __cache_path(self):
+        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
 
     def _load_cache(self):
         """
@@ -557,17 +578,6 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
             raise IsADirectoryError(f'Please delete {self.__cache_path} directory') from e
         except (UnpicklingError, EOFError) as e:
             raise UnpicklingError(f'Invalid cache file {self.__cache_path}. Please delete it') from e
-
-    @property
-    def __cache_path(self):
-        return abspath(join(gettempdir(), 'cgrtools_' + urlsafe_b64encode(abspath(self._file.name).encode()).decode()))
-
-    def _dump_cache(self, _shifts):
-        """
-        _shifts dumps in /tmp directory after reboot it will drop
-        """
-        with open(self.__cache_path, 'wb') as f:
-            dump(_shifts, f)
 
     def read(self):
         """
