@@ -58,13 +58,20 @@ class RDFRead(MDLRead):
         self._data = self.__reader()
 
         if indexable and platform != 'win32' and not self._is_buffer:
+            def update_shifts():
+                """
+                This function creates(rewrites) indexation table. The function will be created only for object that
+                matches indexable param criterion.
+                """
+                self._shifts = [int(x.split(b':', 1)[0]) for x in
+                                check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
+                self._shifts.append(getsize(self._file.name))
+                self._dump_cache(self._shifts)
+            self.update_shifts = update_shifts
             if next(self._data):
                 self._shifts = self._load_cache()
                 if self._shifts is None:
-                    self._shifts = [int(x.split(b':', 1)[0]) for x in
-                                    check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
-                    self._shifts.append(getsize(self._file.name))
-                    self._dump_cache(self._shifts)
+                    self.update_shifts()
         else:
             next(self._data)
 
