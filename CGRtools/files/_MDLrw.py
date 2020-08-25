@@ -545,8 +545,8 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
     def reset_index(self):
         """
-        This function creates(rewrites) indexation table. The function will be created only for object that
-        matches indexable param criterion.
+        This function creates(rewrites) indexation table. The function implemented only for object that
+        is a real file (the path to the file is specified) because the external grep utility is used.
         """
         if self._indexable and platform != 'win32' and not self._is_buffer:
             self._shifts = [int(x.split(b':', 1)[0]) for x in
