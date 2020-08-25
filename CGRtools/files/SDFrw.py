@@ -21,7 +21,6 @@ from collections import defaultdict
 from io import BytesIO
 from logging import warning
 from subprocess import check_output
-from sys import platform
 from traceback import format_exc
 from warnings import warn
 from ._CGRrw import parse_error
@@ -53,14 +52,16 @@ class SDFRead(MDLRead):
         self._data = self.__reader()
         next(self._data)
 
-        if indexable and platform != 'win32' and not self._is_buffer:
-            self._shifts = self._load_cache()
-            if self._shifts is None:
-                self._shifts = [0]
-                for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
-                    _pos, _line = x.split(b':', 1)
-                    self._shifts.append(int(_pos) + len(_line))
-                self._dump_cache(self._shifts)
+        if indexable:
+            self._load_cache()
+
+    @staticmethod
+    def _get_shifts(file):
+        shifts = [0]
+        for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', file])):
+            pos, line = x.split(b':', 1)
+            shifts.append(int(pos) + len(line))
+        return shifts
 
     def seek(self, offset):
         """

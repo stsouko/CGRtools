@@ -23,7 +23,6 @@ from itertools import chain
 from logging import warning
 from os.path import getsize
 from subprocess import check_output
-from sys import platform
 from time import strftime
 from traceback import format_exc
 from warnings import warn
@@ -57,16 +56,18 @@ class RDFRead(MDLRead):
         self.__file = iter(self._file.readline, '')
         self._data = self.__reader()
 
-        if indexable and platform != 'win32' and not self._is_buffer:
+        if indexable:
             if next(self._data):
-                self._shifts = self._load_cache()
-                if self._shifts is None:
-                    self._shifts = [int(x.split(b':', 1)[0]) for x in
-                                    check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
-                    self._shifts.append(getsize(self._file.name))
-                    self._dump_cache(self._shifts)
+                self._load_cache()
         else:
             next(self._data)
+
+    @staticmethod
+    def _get_shifts(file):
+        shifts = [int(x.split(b':', 1)[0]) for x in
+                  check_output(['grep', '-boE', r'^\$[RM]FMT', file]).split()]
+        shifts.append(getsize(file))
+        return shifts
 
     def seek(self, offset):
         """
