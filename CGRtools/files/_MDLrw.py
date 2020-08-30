@@ -93,8 +93,9 @@ class MOLRead:
             else:
                 isotope = None
 
+            mapping = line[60:63]
             self.__atoms.append({'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': False,
-                                 'mapping': int(line[60:63]),
+                                 'mapping': int(mapping) if mapping else 0,
                                  'x': float(line[0:10]), 'y': float(line[10:20]), 'z': float(line[20:30])})
 
         elif len(self.__bonds) < self.__bonds_count:
