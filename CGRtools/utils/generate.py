@@ -1,3 +1,4 @@
+from itertools import combinations
 
 
 def augmented(molecule, deep):
@@ -5,30 +6,21 @@ def augmented(molecule, deep):
 
     if deep < 1:
         raise ValueError('Deep should be >= 1')
-    stack = []
-    groups = set()
-    response = []
-    deep -= 1
-    for a, n in bonds.items():
-        n = [x for x in n]
-        aug = (a, *n)
-        if aug not in groups:
-            groups.add(aug)
-            response.append(molecule.substructure(aug, as_query=True))
-            stack.append((list(aug), [*n], deep))
 
+    response = set()
+    groups = set()
+    stack = [([a], list(n)) for a, n in bonds.items()]
     while stack:
-        augs, nei, st = stack.pop(0)
-        st -= 1
-        level = []
-        for a in nei:
-            n = list(bonds[a])
-            level.extend(n)
-        augs.extend(level)
-        aug = tuple(set(augs))
-        if aug not in groups:
-            groups.add(aug)
-            response.append(molecule.substructure(aug, as_query=True))
-            if st:
-                stack.append((augs, level, st))
+        aug, nei = stack.pop(0)
+        for x in nei:
+            augx = (*aug, x)
+            if augx not in groups:
+                groups.add(augx)
+                response.add(molecule.substructure(augx, as_query=True))
+                nt = nei.copy()
+                nt.remove(x)
+                nt.extend(list(bonds[x]))
+                if len(augx) < deep:
+                    stack.append((augx, nt))
+
     return response
