@@ -1,4 +1,3 @@
-from itertools import combinations
 
 
 def augmented(molecule, deep):
@@ -7,7 +6,7 @@ def augmented(molecule, deep):
     if deep < 1:
         raise ValueError('Deep should be >= 1')
 
-    response = set()
+    response = []
     groups = set()
     stack = [([a], list(n)) for a, n in bonds.items()]
     while stack:
@@ -16,7 +15,7 @@ def augmented(molecule, deep):
             augx = (*aug, x)
             if augx not in groups:
                 groups.add(augx)
-                response.add(molecule.substructure(augx, as_query=True))
+                response.append(molecule.substructure(augx, as_query=True))
                 nt = nei.copy()
                 nt.remove(x)
                 nt.extend(list(bonds[x]))
