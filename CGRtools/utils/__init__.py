@@ -16,9 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from .functional_groups import functional_groups
 from importlib.util import find_spec
 
-__all__ = []
+__all__ = ['functional_groups']
 
 
 if find_spec('rdkit'):

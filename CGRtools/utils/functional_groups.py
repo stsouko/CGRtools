@@ -18,7 +18,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 
-def augmented(molecule, deep):
+def functional_groups(molecule, deep):
     """
     :param molecule: MoleculeContainer
     :param deep: chain length
@@ -49,4 +49,4 @@ def augmented(molecule, deep):
     return response
 
 
-__all__ = ['augmented']
+__all__ = ['functional_groups']
