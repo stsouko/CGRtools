@@ -20,10 +20,11 @@
 
 def functional_groups(molecule, deep):
     """
+    Outputs all combinations of the atom and its neighbors with a given search depth
+
     :param molecule: MoleculeContainer
     :param deep: chain length
-
-    return: list of molecule functional groups
+    :return: list of molecule functional groups
     """
     bonds = molecule._bonds
 
