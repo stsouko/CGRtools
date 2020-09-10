@@ -18,18 +18,18 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 
-def functional_groups(molecule, deep):
+def functional_groups(molecule, limit):
     """
-    Outputs all combinations of the atom and its neighbors with a given search depth
+    Generate all connected atom groups up to limit atoms.
 
     :param molecule: MoleculeContainer
-    :param deep: chain length
+    :param limit: chain length
     :return: list of molecule functional groups
     """
     bonds = molecule._bonds
 
-    if deep < 1:
-        raise ValueError('Deep should be >= 1')
+    if limit < 1:
+        raise ValueError('limit should be >= 1')
 
     response = []
     groups = set()
@@ -44,9 +44,8 @@ def functional_groups(molecule, deep):
                 nt = nei.copy()
                 nt.remove(x)
                 nt.extend(list(bonds[x]))
-                if len(augx) < deep:
+                if len(augx) < limit:
                     stack.append((augx, nt))
-
     return response
 
 
