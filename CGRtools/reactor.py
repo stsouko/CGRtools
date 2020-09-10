@@ -43,6 +43,7 @@ class BaseReactor:
         for n, atom in products.atoms():
             if atom.neighbors or atom.hybridization:
                 info('neighbors and hybridization for new atoms unusable')
+
             atoms[n].update(charge=atom.charge, is_radical=atom.is_radical)
             elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
             if n not in reactants:
@@ -51,10 +52,11 @@ class BaseReactor:
                 atoms[n].update(p_is_radical=atom.p_is_radical, p_charge=atom.p_charge)
 
         self.__atom_attrs = dict(atoms)
-        self.__bond_attrs = list(products.bonds())
+        self.__products = products
 
     def _patcher(self, structure, mapping):
         elements = self.__elements
+        products = self.__products
 
         plane = structure._plane
         bonds = structure._bonds
@@ -112,7 +114,7 @@ class BaseReactor:
                 if n not in old_atoms and n not in to_delete:
                     new.add_atom(atom.copy(), n, charge=charges[n], is_radical=radicals[n], xy=plane[n])
 
-        for n, m, bond in self.__bond_attrs:  # add patch bonds
+        for n, m, bond in products.bonds():  # add patch bonds
             n = mapping[n]
             m = mapping[m]
             new.add_bond(n, m, bond.copy())
@@ -126,17 +128,40 @@ class BaseReactor:
                     continue
                 new.add_bond(n, m, bond.copy())
 
-        # todo: calculate stereo mark based on new atom order
+        bonds = new._bonds
+        chiral_tetrahedrons = new._chiral_tetrahedrons
+        chiral_cis_trans = new._chiral_cis_trans
+        chiral_allenes = new._chiral_allenes
+        atoms_stereo = new._atoms_stereo
+        allenes_stereo = new._allenes_stereo
+        cis_trans_stereo = new._cis_trans_stereo
+
+        translate_tetrahedron_sign = products._translate_tetrahedron_sign
+        translate_allene_sign = products._translate_allene_sign
+        translate_cis_trans_sign = products._translate_cis_trans_sign
+
+        reversed_mapping = {m: n for n, m in mapping.items()}
+        for n in products._atoms_stereo:
+            m = mapping[n]
+            if m in chiral_tetrahedrons:
+                atoms_stereo[m] = translate_tetrahedron_sign(n, [reversed_mapping[x] for x in bonds[m]])
+        for n in products._allenes_stereo:
+            m = mapping[n]
+            if m in chiral_allenes:
+                allenes_stereo[m] = tra
+
         return new
 
     def __getstate__(self):
-        return {'elements': self.__elements, 'atom_attrs': self.__atom_attrs, 'bond_attrs': self.__bond_attrs,
+        return {'elements': self.__elements, 'atom_attrs': self.__atom_attrs, 'products': self.__products,
                 'is_cgr': self.__is_cgr, 'to_delete': self.__to_delete}
 
     def __setstate__(self, state):
+        if 'bond_attrs' in state:  # <=4.0.31
+            raise ValueError('version incompatible. use 4.0.31 or older version.')
         self.__elements = state['elements']
         self.__atom_attrs = state['atom_attrs']
-        self.__bond_attrs = state['bond_attrs']
+        self.__products = state['products']
         self.__is_cgr = state['is_cgr']
         self.__to_delete = state['to_delete']
 
