@@ -49,6 +49,7 @@ class Mn(Element, PeriodIV, GroupVII):
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'),)),  # MnO
                 (0, False, 0, ((2, 'O'), (1, 'O'))),  # Mn2O3
+                (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),  # MnO2
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),  # [MnO4]2-
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'), (1, 'O'))))  # [MnO4]-

@@ -72,7 +72,11 @@ class Mg(Element, PeriodIII, GroupII):
 
     @property
     def _valences_exceptions(self):
-        return (2, False, 0, ()), (1, False, 0, ((1, 'C'),)), (1, False, 0, ((1, 'O'),)), (1, False, 0, ((1, 'Br'),))
+        return ((2, False, 0, ()),
+                (1, False, 0, ((1, 'C'),)),
+                (1, False, 0, ((1, 'O'),)),
+                (1, False, 0, ((1, 'Br'),)),
+                (1, False, 0, ((1, 'Cl'),)))
 
     @property
     def atomic_radius(self):
