@@ -1270,7 +1270,6 @@ class StandardizeReaction:
                 fix.update(fx)
             rules.append((bad_query, good_query, fix, strange_atoms))
         cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
-        return rules
     
     @class_cached_property
     def __remapping_compiled_rules(self):
