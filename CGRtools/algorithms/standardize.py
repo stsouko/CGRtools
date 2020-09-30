@@ -1146,14 +1146,9 @@ class StandardizeReaction:
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
-        if not (self.reactants and self.products):
-            return False
-        elif not isinstance(self.reactants[0], Standardize):
-            raise TypeError('Only Molecules supported')
-
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
-            for m in self.reactants:
+            for m in self.reaction.reactants:
                 for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
                     if mapping[1] not in seen:
                         found.append(({fix.get(k, k): v for k, v in mapping.items()},
@@ -1161,7 +1156,7 @@ class StandardizeReaction:
 
             if not found:
                 continue
-            for m in self.products:
+            for m in  self.reaction.products:
                 for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
                     atom = mapping[1]
                     if atom in seen:
@@ -1175,12 +1170,107 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+        if seen:
+            self.reaction.flush_cache()
+            flag = True
+            seen = set()
+        else:
+            flag = False
+
+        for bad_query, good_query, fix, strange_atoms in  self.rule:
+            cgr = ~self.reaction
+            
+            del  self.reaction.__dict__['__cached_method_compose']
+
+            set_fix = set(fix).difference(strange_atoms)
+            for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
+                if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
+                    continue
+                mapping = {key : mapping.get(value, value) for key, value in fix.items()}
+                mapping.update(fix)
+                
+                reverse = {m: n for n, m in mapping.items()}
+                for m in  self.reaction.products:
+                    m.remap(mapping)
+                
+                check = ~self.reaction
+                if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
+                    seen.update(mapping)
+                    continue
+    
+                # restore old mapping
+                for m in self.reaction.products:
+                    m.remap(reverse)
+                del self.reaction.__dict__['__cached_method_compose']
 
         if seen:
-            self.flush_cache()
+            self.reaction.flush_cache()
             return True
-        return False
+        return flag
 
+    @classmethod
+    def load_remapping_rules(cls, reactions):
+        
+        for bad, good in reactions:
+            if len(good.reagents) == 0:
+                if str(bad) != str(good):
+                    raise ValueError('bad and good reaction should be equal')
+            else:  
+                str_good = str(good)[:str(good).find('>')+1] + str(good)[str(good).rfind('>'):]
+                if str_good != str(bad):
+                    raise ValueError('bad and good reaction should be equal') 
+
+            gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
+            bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
+
+            atoms = set(bc.atoms_numbers + gc.atoms_numbers)
+
+            for num_p, p in enumerate(bad.products):
+                if p.aromatic_rings:
+                    for i in zip(good.products[num_p].aromatic_rings, bad.products[num_p].aromatic_rings):
+                        if i[0] != i[1]:
+                            for k in i[1]:
+                                atoms.add(k)       
+
+            pr_g, pr_b = [], []
+            strange_atoms = set()
+            for pr in good.products:
+                pr_g.extend([num for num in pr.atoms_numbers])
+            for pr in bad.products:
+                pr_b.extend([num for num in pr.atoms_numbers]) 
+            if set(pr_b).difference(set(pr_g)):
+                for s in set(pr_b).difference(set(pr_g)):
+                    atoms.add(s)
+                    strange_atoms.add(s)
+                    
+
+            pr = set(pr_g + pr_b)
+            bad_query = (~bad).substructure(atoms.intersection(pr), as_query=True)
+            good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
+            
+            dif_g = atoms.difference(set(gc.center_atoms))
+            dif_b = atoms.difference(set(bc.center_atoms))
+
+            for k in good_query._neighbors.keys():
+                if k in dif_g:
+                    good_query._neighbors[k] = () 
+                    good_query._p_neighbors[k] = ()
+            for k_2  in bad_query._neighbors.keys():
+                if k_2 in dif_b:
+                    bad_query._neighbors[k_2] = ()
+                    bad_query._p_neighbors[k_2] = ()
+
+            fix = {}
+            rules = []
+            for mb, mg in zip(bad.products, good.products):
+                fx = min((m for m in
+                         ({k: v for k, v in m.items() if k != v}
+                          for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
+                         if atoms.issuperset(m)), key=len)
+                fix.update(fx)
+            rules.append((bad_query, good_query, fix, strange_atoms))
+        return rules
+        
     def implicify_hydrogens(self) -> int:
         """
         Remove explicit hydrogens if possible
