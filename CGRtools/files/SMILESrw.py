@@ -267,6 +267,27 @@ class SMILESRead(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        hydrogens = mol._hydrogens
+        radicals = mol._radicals
+        calc_implicit = mol._calc_implicit
+        for n, h in molecule['hydrogens'].items():
+            n = mapping[n]
+            hc = hydrogens[n]
+            if hc is None:  # aromatic rings or valence errors. just store given H count.
+                hydrogens[n] = h
+            elif hc != h:  # H count mismatch. try radical state of atom.
+                radicals[n] = True
+                calc_implicit(n)
+                if hydrogens[n] != h:  # radical state also has errors.
+                    if self._ignore:
+                        radicals[n] = False  # reset radical state
+                        hydrogens[n] = h  # set parsed hydrogens count
+                        self._info(f'implicit hydrogen count ({h}) mismatch with '
+                                   f'calculated ({hc}) on atom {n}. calculated count replaced.')
+                    else:
+                        raise ValueError(f'implicit hydrogen count ({h}) mismatch with '
+                                         f'calculated ({hc}) on atom {n}.')
+
         if self.__ignore_stereo or not molecule['stereo_atoms'] and not molecule['stereo_bonds']:
             return mol
 
@@ -449,7 +470,7 @@ class SMILESRead(CGRRead):
         for token_type, token in tokens:
             if token_type in (0, 8):  # simple atom
                 out.append((token_type, {'element': token, 'charge': 0, 'isotope': None, 'is_radical': False,
-                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': 0, 'stereo': None}))
+                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': None, 'stereo': None}))
             elif token_type == 5:
                 if '>' in token:  # dynamic bond or atom
                     if len(token) == 3:  # bond only possible
@@ -681,7 +702,7 @@ class SMILESRead(CGRRead):
                     if stereo is not None:
                         stereo_atoms[atom_num] = stereo
                     hydrogen = token.pop('hydrogen')
-                    if hydrogen:
+                    if hydrogen is not None:
                         hydrogens[atom_num] = hydrogen
 
                 atoms.append(token)
