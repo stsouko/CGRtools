@@ -1209,7 +1209,7 @@ class StandardizeReaction:
         return flag
 
     @classmethod
-    def load_remapping_rules(cls,  reactions: Iterable[Tuple['ReactionContainer', 'ReactionContainer']]):
+    def load_remapping_rules(cls, reactions):
         
         for bad, good in reactions:
             if len(good.reagents) == 0:
