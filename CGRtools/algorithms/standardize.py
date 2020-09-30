@@ -19,12 +19,9 @@
 #
 from CachedMethods import class_cached_property
 from collections import defaultdict
-from typing import List, Iterable, Tuple, TYPE_CHECKING
+from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
 from ..exceptions import ValenceError
-
-if TYPE_CHECKING:
-    from CGRtools import ReactionContainer
 
 class Standardize:
     __slots__ = ()
