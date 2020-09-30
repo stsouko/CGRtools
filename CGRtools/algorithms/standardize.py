@@ -1148,7 +1148,7 @@ class StandardizeReaction:
         seen = set()
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
-            for m in self.reaction.reactants:
+            for m in self.reactants:
                 for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
                     if mapping[1] not in seen:
                         found.append(({fix.get(k, k): v for k, v in mapping.items()},
@@ -1156,7 +1156,7 @@ class StandardizeReaction:
 
             if not found:
                 continue
-            for m in  self.reaction.products:
+            for m in  self.products:
                 for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
                     atom = mapping[1]
                     if atom in seen:
@@ -1171,16 +1171,16 @@ class StandardizeReaction:
                     m.remap(v)
                     seen.add(atom)
         if seen:
-            self.reaction.flush_cache()
+            self.flush_cache()
             flag = True
             seen = set()
         else:
             flag = False
 
-        for bad_query, good_query, fix, strange_atoms in  self.rule:
-            cgr = ~self.reaction
+        for bad_query, good_query, fix, strange_atoms in  self.__remapping_compiled_rules:
+            cgr = ~self
             
-            del  self.reaction.__dict__['__cached_method_compose']
+            del  self.__dict__['__cached_method_compose']
 
             set_fix = set(fix).difference(strange_atoms)
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
@@ -1190,26 +1190,26 @@ class StandardizeReaction:
                 mapping.update(fix)
                 
                 reverse = {m: n for n, m in mapping.items()}
-                for m in  self.reaction.products:
+                for m in self.products:
                     m.remap(mapping)
                 
-                check = ~self.reaction
+                check = ~self
                 if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
                     seen.update(mapping)
                     continue
     
                 # restore old mapping
-                for m in self.reaction.products:
+                for m in self.products:
                     m.remap(reverse)
-                del self.reaction.__dict__['__cached_method_compose']
+                del self.__dict__['__cached_method_compose']
 
         if seen:
-            self.reaction.flush_cache()
+            self.flush_cache()
             return True
         return flag
 
     @classmethod
-    def load_remapping_rules(cls, reactions):
+    def load_remapping_rules(cls,  reactions: Iterable[Tuple['ReactionContainer', 'ReactionContainer']]):
         
         for bad, good in reactions:
             if len(good.reagents) == 0:
@@ -1269,6 +1269,7 @@ class StandardizeReaction:
                          if atoms.issuperset(m)), key=len)
                 fix.update(fx)
             rules.append((bad_query, good_query, fix, strange_atoms))
+        cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
         return rules
         
     def implicify_hydrogens(self) -> int:
