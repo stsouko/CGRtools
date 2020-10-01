@@ -91,50 +91,51 @@ class Smiles:
         return sha512(str(self).encode()).digest()
 
     def _smiles(self, weights, *, asymmetric_closures=False, open_parenthesis='(', close_parenthesis=')',
-                delimiter='.', **kwargs):
+                delimiter='.', _return_order=False, **kwargs):
         if not self._atoms:
             return []
         bonds = self._bonds
         atoms_set = set(self._atoms)
+        seen = {}
         cycles = count()
         casted_cycles = {}
         string = []
+        order = []
         if asymmetric_closures:
             visited_bond = set()
 
+        groups = defaultdict(int)
+        for n in atoms_set:
+            groups[weights(n)] += 1
+
+        def mod_weights_start(x):
+            # precedence of:
+            lb = len(bonds[x])
+            if lb:
+                return (groups[weights(x)],  # rare groups
+                        -lb,  # more neighbors
+                        lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                        weights(x))  # smallest weight
+            else:
+                return groups[weights(x)], weights(x)  # rare groups > smallest weight
+
+        def mod_weights(x):
+            lb = len(bonds[x])
+            return (groups[weights(x)],  # rare groups
+                    -lb,  # more neighbors
+                    lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                    weights(x),  # smallest weight
+                    seen[x])  # BFS nearest to starting
+
         while True:
-            groups = defaultdict(int)
-            for n in atoms_set:
-                groups[weights(n)] += 1
-
-            def mod_weights(x):
-                # precedence of:
-                lb = len(bonds[x])
-                if lb:
-                    return (groups[weights(x)],  # rare groups
-                            -lb,  # more neighbors
-                            lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
-                            weights(x))  # smallest weight
-                else:
-                    return groups[weights(x)], weights(x)  # rare groups > smallest weight
-
-            start = min(atoms_set, key=mod_weights)
-
-            seen = {start: 0}
+            start = min(atoms_set, key=mod_weights_start)
+            seen[start] = 0
             queue = [(start, 1)]
             while queue:
                 n, d = queue.pop(0)
                 for m in bonds[n].keys() - seen.keys():
                     queue.append((m, d + 1))
                     seen[m] = d
-
-            def mod_weights(x):
-                lb = len(bonds[x])
-                return (groups[weights(x)],  # rare groups
-                        -lb,  # more neighbors
-                        lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
-                        weights(x),  # smallest weight
-                        seen[x])  # BFS nearest to starting
 
             # modified NX dfs with cycle detection
             stack = [(start, len(atoms_set), iter(sorted(bonds[start], key=mod_weights)))]
@@ -209,6 +210,7 @@ class Smiles:
             for token in smiles:
                 if isinstance(token, int):  # atoms
                     string.append(self._format_atom(token, adjacency=visited, **kwargs))
+                    order.append(token)
                     if token in tokens:
                         for m, c in tokens[token]:
                             if asymmetric_closures:
@@ -230,6 +232,8 @@ class Smiles:
                 string.append(delimiter)
             else:
                 break
+        if _return_order:
+            return string, order
         return string
 
     @staticmethod
