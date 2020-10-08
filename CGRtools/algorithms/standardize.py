@@ -1138,7 +1138,7 @@ class Standardize:
                  {'atom': 'C', 'charge': 0, 'neighbors': 3}, {'atom': 'N', 'neighbors': 3},
                  {'atom': 'N', 'neighbors': 3}, {'atom': 'C', 'hybridization': 2}, {'atom': 'C', 'hybridization': 2})
         bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1), (4, 6, 1), (5, 7, 1), (6, 7, 2))
-        atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 3: {'charge': 1}}
+        atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 3: {'charge': 1, 'hybridization': 1}}
         bonds_fix = ((1, 2, 8), (2, 3, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
