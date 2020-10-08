@@ -1049,8 +1049,8 @@ class Standardize:
         #          \           \
         #           N           N
         #
-        atoms = ({'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'N', 'neighbors': 2, 'hybridization': 1},
-                 {'atom': 'S', 'charge': 1, 'neighbors': 3, 'hybridization': 1}, {'atom': 'A'})
+        atoms = ({'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'N', 'hybridization': 1},
+                 {'atom': 'S', 'charge': 1, 'neighbors': 3}, {'atom': 'A'})
         bonds = ((1, 3, 1), (2, 3, 1), (2, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 3, 2),)
@@ -1120,7 +1120,7 @@ class Standardize:
         #        A           A
         #
         atoms = ({'atom': 'Br', 'charge': -1, 'neighbors': 0}, {'atom': 'A'}, {'atom': 'A'},
-                 {'atom': 'I', 'charge': 1, 'neighbors': 2, 'hybridization': 1},)
+                 {'atom': 'I', 'charge': 1, 'neighbors': 2},)
         bonds = ((2, 4, 1), (3, 4, 1))
         atom_fix = {1: {'charge': 0}, 4: {'charge': 0}}
         bonds_fix = ((1, 4, 1),)
@@ -1128,16 +1128,16 @@ class Standardize:
 
         # CuCl
         #
-        #             N                      N
-        #            /                      /
-        # Cl - Cu = C   >> [Cl-] --- Cu - [C+]
-        #            \                      \
-        #             N                      N
+        #             N - C                       N - C
+        #            /    ||                     /    ||
+        # Cl - Cu = C     || >> [Cl-] --- Cu - [C+]   ||
+        #            \    ||                     \    ||
+        #             N - C                       N - C
         #
-        atoms = ({'atom': 'Cl', 'charge': 0, 'neighbors': 1}, {'atom': 'Cu', 'neighbors': 2, 'hybridization': 2},
-                 {'atom': 'C', 'charge': 0, 'neighbors': 3, 'hybridization': 2}, {'atom': 'N', 'neighbors': 3},
-                 {'atom': 'N', 'neighbors': 3})
-        bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1))
+        atoms = ({'atom': 'Cl', 'charge': 0, 'neighbors': 1}, {'atom': 'Cu', 'neighbors': 2},
+                 {'atom': 'C', 'charge': 0, 'neighbors': 3}, {'atom': 'N', 'neighbors': 3},
+                 {'atom': 'N', 'neighbors': 3}, {'atom': 'C', 'hybridization': 2}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1), (4, 6, 1), (5, 7, 1), (6, 7, 2))
         atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 3: {'charge': 1}}
         bonds_fix = ((1, 2, 8), (2, 3, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
