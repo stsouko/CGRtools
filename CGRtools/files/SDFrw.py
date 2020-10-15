@@ -25,6 +25,7 @@ from traceback import format_exc
 from warnings import warn
 from ._CGRrw import parse_error
 from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
+from ..exceptions import EmptyMolecule
 
 
 class SDFRead(MDLRead):
@@ -186,7 +187,14 @@ class SDFRead(MDLRead):
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLRead(line, self._log_buffer)
+                        try:
+                            parser = MOLRead(line, self._log_buffer)
+                        except EmptyMolecule:
+                            if self._ignore:
+                                parser = EMOLRead(self._log_buffer)
+                                self._info(f'line:\n{line}\nconsist errors:\nempty atoms list. try to parse as V3000')
+                            else:
+                                raise
                     elif 'V3000' in line:
                         parser = EMOLRead(self._log_buffer)
                     else:

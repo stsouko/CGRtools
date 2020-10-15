@@ -37,12 +37,8 @@ query_keys = {'atomhyb': 'hybridization', 'hybridization': 'hybridization', 'hyb
 
 class MOLRead:
     def __init__(self, line, log_buffer=None):
-        atom_count = int(line[0:3])
-        if not atom_count:
-            raise EmptyMolecule
-
+        self.__atoms_count = int(line[0:3])
         self.__bonds_count = int(line[3:6])
-        self.__atoms_count = atom_count
         self.__cgr = {}
         self.__query = []
         self.__atoms = []
@@ -51,6 +47,11 @@ class MOLRead:
         if log_buffer is None:
             log_buffer = []
         self.__log_buffer = log_buffer
+
+    def __new__(cls, line, log_buffer=None):
+        if line.startswith('  0'):
+            raise EmptyMolecule
+        return super().__new__(cls)
 
     def getvalue(self):
         if self.__mend:
