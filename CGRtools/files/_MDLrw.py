@@ -639,10 +639,11 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
 
 
 class MDLWrite:
-    def __init__(self, file, *, append: bool = False, write3d: int = 0):
+    def __init__(self, file, *, append: bool = False, write3d: int = 0, mapping: bool = True):
         """
         :param write3d: write for Molecules 3D coordinates instead 2D if exists.
             if 0 - 2D only, 1 - first 3D, 2 - all 3D in sequence.
+        :param mapping: write atom mapping.
         """
         if isinstance(file, str):
             self._file = open(file, 'a' if append else 'w')
@@ -663,6 +664,7 @@ class MDLWrite:
             raise ValueError('only 0, 1 and 2 expected')
         self.__write = True
         self.__write3d = write3d
+        self.__mapping = mapping
 
     def close(self, force=False):
         """
@@ -731,8 +733,7 @@ class MDLWrite:
         out.append('M  END\n')
         return ''.join(out)
 
-    @classmethod
-    def __convert_atoms2d(cls, g):
+    def __convert_atoms2d(self, g):
         gc = g._charges
         gp = g._plane
 
@@ -741,14 +742,22 @@ class MDLWrite:
             x, y = gp[m]
             c = gc[m]
             if c in (-4, 4):
-                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+                if self.__mapping:
+                    out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} '
+                               f'0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+                else:
+                    out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} '
+                               f'0  0  0  0  0  0  0  0  0  0  0  0\n')
             else:
-                out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
-                           f'  0  0  0{m:3d}  0  0\n')
+                if self.__mapping:
+                    out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
+                               f'  0  0  0{m:3d}  0  0\n')
+                else:
+                    out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
+                               f'  0  0  0  0  0  0\n')
         return out
 
-    @classmethod
-    def __convert_atoms3d(cls, g, xyz):
+    def __convert_atoms3d(self, g, xyz):
         gc = g._charges
 
         out = []
@@ -756,10 +765,18 @@ class MDLWrite:
             x, y, z = xyz[m]
             c = gc[m]
             if c in (-4, 4):
-                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+                if self.__mapping:
+                    out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} '
+                               f'0  0  0  0  0  0  0  0  0{m:3d}  0  0\n')
+                else:
+                    out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0  0  0  0  0  0  0  0  0  0  0  0\n')
             else:
-                out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{cls.__charge_map[c]}  0  0  0  0'
-                           f'  0  0  0{m:3d}  0  0\n')
+                if self.__mapping:
+                    out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
+                               f'  0  0  0{m:3d}  0  0\n')
+                else:
+                    out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
+                               f'  0  0  0  0  0  0\n')
         return out
 
     @classmethod

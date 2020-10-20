@@ -45,6 +45,14 @@ parse_error = namedtuple('ParseError', ('number', 'position', 'log'))
 
 
 class CGRRead:
+    """
+    Override classes below then inheritance used.
+    """
+    CGRContainer = CGRContainer
+    MoleculeContainer = MoleculeContainer
+    QueryContainer = QueryContainer
+    ReactionContainer = ReactionContainer
+
     def __init__(self, remap=True, ignore=False, store_log=False):
         self.__remap = remap
         self._ignore = ignore
@@ -152,9 +160,8 @@ class CGRRead:
         g.meta.update(molecule['meta'])
         return g
 
-    @staticmethod
-    def _convert_molecule(molecule, mapping):
-        g = object.__new__(MoleculeContainer)
+    def _convert_molecule(self, molecule, mapping):
+        g = object.__new__(self.MoleculeContainer)
         pm = {}
         atoms = {}
         plane = {}
@@ -188,8 +195,7 @@ class CGRRead:
                         'atoms_stereo': {}, 'allenes_stereo': {}, 'cis_trans_stereo': {}})
         return g
 
-    @staticmethod
-    def _convert_cgr(molecule, mapping):
+    def _convert_cgr(self, molecule, mapping):
         atoms = molecule['atoms']
         bonds = defaultdict(dict)
 
@@ -202,7 +208,7 @@ class CGRRead:
                 n, m = nm
                 bonds[n][m] = bonds[m][n] = DynamicBond(*value)
 
-        g = object.__new__(CGRContainer)
+        g = object.__new__(self.CGRContainer)
         pm = {}
         g_atoms = {}
         plane = {}
@@ -241,13 +247,12 @@ class CGRRead:
                         'p_radicals': p_radicals})
         return g
 
-    @staticmethod
-    def _convert_query(molecule, mapping):
+    def _convert_query(self, molecule, mapping):
         atoms = molecule['atoms']
         for n, _type, value in molecule['query']:
             atoms[n][_type] = value
 
-        g = QueryContainer()
+        g = self.QueryContainer()
         pm = g._parsed_mapping
         for n, atom in enumerate(atoms):
             n = g.add_atom(QueryElement.from_symbol(atom['element'])(atom['isotope']), mapping[n],

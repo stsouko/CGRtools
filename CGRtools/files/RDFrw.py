@@ -300,13 +300,14 @@ class RDFWrite(MDLWrite):
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *, append: bool = False, write3d: bool = False):
+    def __init__(self, file, *, append: bool = False, write3d: bool = False, mapping: bool = True):
         """
         :param append: append to existing file (True) or rewrite it (False). For buffered writer object append = False
             will write RDF header and append = True will omit the header.
-        :param write3d: write for Molecules first 3D coordinates instead 2D if exists
+        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
+        :param mapping: write atom mapping.
         """
-        super().__init__(file, append=append, write3d=int(write3d))
+        super().__init__(file, append=append, write3d=int(write3d), mapping=mapping)
         if append and (self._is_buffer or self._file.tell() != 0):
             self.write = self.__write
 

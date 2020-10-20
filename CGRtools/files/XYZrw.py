@@ -81,6 +81,11 @@ charge_priority = {0: 0, -1: 1, 1: 2, 2: 3, 3: 4, -2: 5, -3: 6, 4: 7, -4: 8}
 
 
 class XYZ:
+    """
+    Override class below then inheritance used.
+    """
+    MoleculeContainer = MoleculeContainer
+
     def __init__(self, radius_multiplier=1.25, store_log=False):
         """
         :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
@@ -129,7 +134,7 @@ class XYZ:
         return next(iter(self))
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float]], charge=0, radical=0):
-        mol = MoleculeContainer()
+        mol = self.MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
         radicals = mol._radicals
