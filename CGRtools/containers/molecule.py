@@ -149,6 +149,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:
             self._fix_stereo()
 
+    @cached_args_method
+    def neighbors(self, n: int) -> int:
+        """number of neighbors atoms excluding any-bonded"""
+        return sum(b.order != 8 for b in self._bonds[n].values())
+
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get

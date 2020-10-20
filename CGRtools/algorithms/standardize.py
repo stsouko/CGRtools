@@ -128,6 +128,42 @@ class Standardize:
             return True
         return False
 
+    def remove_hydrogen_bonds(self, *, keep_to_terminal=True, fix_stereo=True) -> int:
+        """Remove hydrogen bonds marked with 8 (any) bond
+
+        :param keep_to_terminal: Keep any bonds to terminal hydrogens
+        :return: removed bonds count
+        """
+        bonds = self._bonds
+        hg = defaultdict(set)
+        for n, atom in self._atoms.items():
+            if atom.atomic_number == 1:
+                for m, b in bonds[n].items():
+                    if b.order == 8:
+                        hg[n].add(m)
+
+        if keep_to_terminal:
+            for n, ms in hg.items():
+                if len(bonds[n]) == len(ms):  # H~A or A~H~A etc case
+                    m = ms.pop()
+                    if m in hg: # H~H case
+                        hg[m].discard(n)
+
+        seen = set()
+        count = 0
+        for n, ms in hg.items():
+            seen.add(n)
+            for m in ms:
+                if m in seen:
+                    continue
+                count += 1
+                del bonds[n][m], bonds[m][n]
+        if count:
+            self.flush_cache()
+            if fix_stereo:
+                self._fix_stereo()
+        return count
+
     def implicify_hydrogens(self, *, fix_stereo=True) -> int:
         """
         Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
@@ -141,9 +177,14 @@ class Standardize:
         explicit = defaultdict(list)
         for n, atom in atoms.items():
             if atom.atomic_number == 1:
-                for m in bonds[n]:
-                    if atoms[m].atomic_number != 1:
-                        explicit[m].append(n)
+                if len(bonds[n]) > 1:
+                    raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence. Try to use remove_hydrogen_bonds()')
+                for m, b in bonds[n].items():
+                    if b.order == 1:
+                        if atoms[m].atomic_number != 1:  # not H-H
+                            explicit[m].append(n)
+                    elif b.order != 8:
+                        raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence {{{b.order}}}.')
 
         to_remove = set()
         for n, hs in explicit.items():

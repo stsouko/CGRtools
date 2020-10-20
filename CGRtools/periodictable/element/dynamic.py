@@ -117,14 +117,14 @@ class DynamicElement(Dynamic):
     @property
     def neighbors(self):
         try:
-            return sum(b.order is not None for b in self._graph()._bonds[self._map].values())
+            return self._graph().neighbors(self._map)[0]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
     def p_neighbors(self):
         try:
-            return sum(b.p_order is not None for b in self._graph()._bonds[self._map].values())
+            return self._graph().neighbors(self._map)[1]
         except AttributeError:
             raise IsNotConnectedAtom
 

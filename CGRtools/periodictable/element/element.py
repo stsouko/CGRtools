@@ -78,7 +78,7 @@ class Element(Core):
     @property
     def neighbors(self) -> int:
         try:
-            return len(self._graph()._bonds[self._map])
+            return self._graph().neighbors(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
