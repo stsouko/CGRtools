@@ -1008,7 +1008,7 @@ class Standardize:
         bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfoxide
+        # Sulfodioxide
         #
         #       C                   C
         #       |                   |
@@ -1039,7 +1039,7 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfon
+        # Sulfoxide
         #
         #           C            C
         #          /            /
@@ -1052,6 +1052,38 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfone
+        #
+        #       [O-]          O
+        #       /            //
+        # A = [S+2]  >>  A = S
+        #       \            \\
+        #       [O-]          O
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfone
+        #
+        #          A                  A
+        #          |                  |
+        # [O-] - [S+2] - [O-] >>  O = S = O
+        #          |                  |
+        #          A                  A
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 4}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Sulfonium ylide
