@@ -1058,16 +1058,16 @@ class Standardize:
         #
         #       [O-]          O
         #       /            //
-        # A - [S+2]  >>  A = S
+        # A = [S+2]  >>  A = S
         #       \            \\
         #       [O-]          O
         #
         atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
                  {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
-        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
         atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
                     3: {'charge': 0, 'hybridization': 2}}
-        bonds_fix = ((1, 2, 2), (1, 3, 2), (1, 4, 2))
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Sulfone
