@@ -26,7 +26,7 @@ from re import split, compile, fullmatch
 from traceback import format_exc
 from typing import Union, List
 from warnings import warn
-from ._CGRrw import CGRRead, parse_error
+from ._mdl import CGRRead, parse_error
 from ..containers import MoleculeContainer, CGRContainer, ReactionContainer
 from ..exceptions import IncorrectSmiles, IsChiral, NotChiral, ValenceError
 

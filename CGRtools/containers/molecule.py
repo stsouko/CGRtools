@@ -149,6 +149,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:
             self._fix_stereo()
 
+    @cached_args_method
+    def neighbors(self, n: int) -> int:
+        """number of neighbors atoms excluding any-bonded"""
+        return sum(b.order != 8 for b in self._bonds[n].values())
+
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
@@ -417,6 +422,27 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         G ^ H is CGR generation
         """
         return self.compose(other)
+
+    def get_fast_mapping(self, other: 'MoleculeContainer', *, threshold: int = 16) -> Optional[Dict[int, int]]:
+        """
+        Get self to other fast (suboptimal) structure mapping.
+        Only one possible atoms mapping returned.
+        Effective only for big molecules.
+
+        :param threshold: molecules less than `size` atoms processed by .get_mapping
+        """
+        if isinstance(other, MoleculeContainer):
+            if len(self) != len(other):
+                return
+            if len(self) < threshold:
+                return next(self.get_mapping(other), None)
+
+            ss, so = self._smiles(self.atoms_order.get, _return_order=True)
+            os, oo = other._smiles(other.atoms_order.get, _return_order=True)
+            if ss != os:
+                return
+            return dict(zip(so, oo))
+        raise TypeError('MoleculeContainer expected')
 
     def get_mapping(self, other: 'MoleculeContainer', **kwargs):
         if isinstance(other, MoleculeContainer):

@@ -21,6 +21,7 @@ from CachedMethods import class_cached_property
 from collections import defaultdict
 from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
+from ..containers.bonds import Bond
 from ..exceptions import ValenceError
 
 class Standardize:
@@ -126,6 +127,42 @@ class Standardize:
             return True
         return False
 
+    def remove_hydrogen_bonds(self, *, keep_to_terminal=True, fix_stereo=True) -> int:
+        """Remove hydrogen bonds marked with 8 (any) bond
+
+        :param keep_to_terminal: Keep any bonds to terminal hydrogens
+        :return: removed bonds count
+        """
+        bonds = self._bonds
+        hg = defaultdict(set)
+        for n, atom in self._atoms.items():
+            if atom.atomic_number == 1:
+                for m, b in bonds[n].items():
+                    if b.order == 8:
+                        hg[n].add(m)
+
+        if keep_to_terminal:
+            for n, ms in hg.items():
+                if len(bonds[n]) == len(ms):  # H~A or A~H~A etc case
+                    m = ms.pop()
+                    if m in hg: # H~H case
+                        hg[m].discard(n)
+
+        seen = set()
+        count = 0
+        for n, ms in hg.items():
+            seen.add(n)
+            for m in ms:
+                if m in seen:
+                    continue
+                count += 1
+                del bonds[n][m], bonds[m][n]
+        if count:
+            self.flush_cache()
+            if fix_stereo:
+                self._fix_stereo()
+        return count
+
     def implicify_hydrogens(self, *, fix_stereo=True) -> int:
         """
         Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
@@ -139,9 +176,14 @@ class Standardize:
         explicit = defaultdict(list)
         for n, atom in atoms.items():
             if atom.atomic_number == 1:
-                for m in bonds[n]:
-                    if atoms[m].atomic_number != 1:
-                        explicit[m].append(n)
+                if len(bonds[n]) > 1:
+                    raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence. Try to use remove_hydrogen_bonds()')
+                for m, b in bonds[n].items():
+                    if b.order == 1:
+                        if atoms[m].atomic_number != 1:  # not H-H
+                            explicit[m].append(n)
+                    elif b.order != 8:
+                        raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence {{{b.order}}}.')
 
         to_remove = set()
         for n, hs in explicit.items():
@@ -258,7 +300,12 @@ class Standardize:
                     for key, value in fix.items():
                         atom_map[key][n] = value
                 for n, m, b in bonds_fix:
-                    bonds[mapping[n]][mapping[m]]._Bond__order = b
+                    n = mapping[n]
+                    m = mapping[m]
+                    if m in bonds[n]:
+                        bonds[n][m]._Bond__order = b
+                    else:
+                        bonds[n][m] = bonds[m][n] = Bond(b)
                 log.append((tuple(match), r, str(pattern)))
             hs.update(seen)
         return hs, log
@@ -960,7 +1007,7 @@ class Standardize:
         bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfoxide
+        # Sulfodioxide
         #
         #       C                   C
         #       |                   |
@@ -991,7 +1038,7 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfon
+        # Sulfoxide
         #
         #           C            C
         #          /            /
@@ -1006,6 +1053,38 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Sulfone
+        #
+        #       [O-]          O
+        #       /            //
+        # A = [S+2]  >>  A = S
+        #       \            \\
+        #       [O-]          O
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfone
+        #
+        #          A                  A
+        #          |                  |
+        # [O-] - [S+2] - [O-] >>  O = S = O
+        #          |                  |
+        #          A                  A
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 4}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Sulfonium ylide
         #
         #  C - [S-] - [C+]  >>  C - S = C
@@ -1017,6 +1096,36 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfite
+        #
+        #  O              O
+        #  \\             \\
+        #  [S-] - A  >>    S - A
+        #  //             /
+        #  O            [O-]
+        #
+        atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfite
+        #
+        #           A           A
+        #          /           /
+        # [O-] - [S+]  >> O = S
+        #          \           \
+        #           N           N
+        #
+        atoms = ({'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'N', 'hybridization': 1},
+                 {'atom': 'S', 'charge': 1, 'neighbors': 3}, {'atom': 'A'})
+        bonds = ((1, 3, 1), (2, 3, 1), (2, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 3, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Sulfine
@@ -1072,6 +1181,37 @@ class Standardize:
         atom_fix = {1: {'hybridization': 2, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 2},
                     3: {'charge': -1, 'is_radical': False}}
         bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Br-ion + I-ion
+        #
+        #        A           A
+        #        |           |
+        # [Br-].[I+] >> Br - I
+        #        |           |
+        #        A           A
+        #
+        atoms = ({'atom': 'Br', 'charge': -1, 'neighbors': 0}, {'atom': 'A'}, {'atom': 'A'},
+                 {'atom': 'I', 'charge': 1, 'neighbors': 2},)
+        bonds = ((2, 4, 1), (3, 4, 1))
+        atom_fix = {1: {'charge': 0}, 4: {'charge': 0}}
+        bonds_fix = ((1, 4, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # CuCl
+        #
+        #             N - C                       N - C
+        #            /    ||                     /    ||
+        # Cl - Cu = C     || >> [Cl-] --- Cu - [C+]   ||
+        #            \    ||                     \    ||
+        #             N - C                       N - C
+        #
+        atoms = ({'atom': 'Cl', 'charge': 0, 'neighbors': 1}, {'atom': 'Cu', 'neighbors': 2},
+                 {'atom': 'C', 'charge': 0, 'neighbors': 3}, {'atom': 'N', 'neighbors': 3},
+                 {'atom': 'N', 'neighbors': 3}, {'atom': 'C', 'hybridization': 2}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1), (4, 6, 1), (5, 7, 1), (6, 7, 2))
+        atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 3: {'charge': 1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 8), (2, 3, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         return rules

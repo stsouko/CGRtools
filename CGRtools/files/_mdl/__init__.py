@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
+#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,19 +16,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from .containers import *
-from .files import *
-from .preparer import *
-from .reactor import *
-from .utils import *
-
-
-smiles = SMILESRead.create_parser(ignore=True)
-xyz = XYZRead.create_parser()
-
-
-__all__ = ['smiles', 'xyz']
-
-if 'INCHIRead' in locals():
-    inchi = INCHIRead.create_parser()
-    __all__.append('inchi')
+from .emol import EMOLRead
+from .erxn import ERXNRead
+from .ewrite import EMDLWrite
+from .mol import MOLRead, common_isotopes
+from .parser import CGRRead, parse_error
+from .rxn import RXNRead
+from .stereo import MDLStereo
+from .rw import MDLRead
+from .write import MDLWrite

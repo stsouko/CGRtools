@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_args_method
 from collections import defaultdict
 from typing import List, Union, Tuple, Dict, Optional
 from . import cgr_query as query, molecule  # cyclic imports resolve
@@ -101,6 +102,20 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
         self._conformers.clear()
         self._calc_hybridization(n)
         self._calc_hybridization(m)
+
+    @cached_args_method
+    def neighbors(self, n: int) -> Tuple[int, int]:
+        """number of neighbors atoms excluding any-bonded"""
+        s = p = 0
+        for b in self._bonds[n].values():
+            if b.order is not None:
+                if b.order != 8:
+                    s += 1
+                if b.p_order is not None and b.p_order != 8:
+                    p += 1
+            elif b.p_order != 8:
+                p += 1
+        return s, p
 
     def remap(self, mapping, *, copy=False) -> 'CGRContainer':
         h = super().remap(mapping, copy=copy)

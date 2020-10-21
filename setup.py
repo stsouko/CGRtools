@@ -43,7 +43,7 @@ class _sdist(sdist):
 
 setup(
     name='CGRtools',
-    version='4.0.36',
+    version='4.0.37',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.containers', 'CGRtools.files',
               'CGRtools.periodictable', 'CGRtools.periodictable.element', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/cimm-kzn/CGRtools',

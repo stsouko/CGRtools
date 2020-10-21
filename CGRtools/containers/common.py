@@ -96,14 +96,29 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         return tuple(self._atoms)
 
     @cached_args_method
-    def environment(self, atom: int) -> Tuple[Tuple[Union[Bond, DynamicBond], AnyAtom], ...]:
+    def environment(self, atom: int, include_bond: bool = True, include_atom: bool = True) -> \
+            Tuple[Union[Tuple[int, Union[Bond, DynamicBond], AnyAtom],
+                        Tuple[int, AnyAtom],
+                        Tuple[int, Union[Bond, DynamicBond]],
+                        int], ...]:
         """
-        pairs of (bond, atom) connected to atom
+        groups of (atom_number, bond, atom) connected to atom or
+        groups of (atom_number, bond) connected to atom or
+        groups of (atom_number, atom) connected to atom or
+        neighbors atoms connected to atom
 
         :param atom: number
+        :param include_atom: include atom object
+        :param include_bond: include bond object
         """
-        atoms = self._atoms
-        return tuple((bond, atoms[n]) for n, bond in self._bonds[atom].items())
+        if include_atom:
+            atoms = self._atoms
+            if include_bond:
+                return tuple((n, bond, atoms[n]) for n, bond in self._bonds[atom].items())
+            return tuple((n, atoms[n]) for n in self._bonds[atom])
+        elif include_bond:
+            return tuple(self._bonds[atom].items())
+        return tuple(self._bonds[atom])
 
     def bond(self, n: int, m: int) -> Union[Bond, DynamicBond]:
         return self._bonds[n][m]

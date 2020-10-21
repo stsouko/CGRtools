@@ -27,7 +27,7 @@ from sys import prefix, exec_prefix
 from traceback import format_exc
 from typing import List, Optional
 from warnings import warn
-from ._CGRrw import CGRRead, common_isotopes, parse_error
+from ._mdl import CGRRead, common_isotopes, parse_error
 from ..containers import MoleculeContainer
 
 
