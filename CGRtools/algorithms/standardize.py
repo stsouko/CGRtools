@@ -1316,12 +1316,11 @@ class StandardizeReaction:
         else:
             flag = False
 
-        for bad_query, good_query, fix, strange_atoms in  self.__remapping_compiled_rules:
+        for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
             cgr = ~self
             
             del  self.__dict__['__cached_method_compose']
 
-            set_fix = set(fix).difference(strange_atoms)
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
@@ -1333,9 +1332,9 @@ class StandardizeReaction:
                     m.remap(mapping)
                 
                 check = ~self
-                if any(set_fix.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
+                if any(valid.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
                     seen.update(mapping)
-                    continue
+                    break
     
                 # restore old mapping
                 for m in self.products:
@@ -1351,25 +1350,13 @@ class StandardizeReaction:
     def load_remapping_rules(cls, reactions):
         
         for bad, good in reactions:
-            if len(good.reagents) == 0:
-                if str(bad) != str(good):
-                    raise ValueError('bad and good reaction should be equal')
-            else:  
-                str_good = str(good)[:str(good).find('>')+1] + str(good)[str(good).rfind('>'):]
-                if str_good != str(bad):
-                    raise ValueError('bad and good reaction should be equal') 
+            if str(bad) != str(good):
+                raise ValueError('bad and good reaction should be equal')
 
             gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
             bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
 
-            atoms = set(bc.atoms_numbers + gc.atoms_numbers)
-
-            for num_p, p in enumerate(bad.products):
-                if p.aromatic_rings:
-                    for i in zip(good.products[num_p].aromatic_rings, bad.products[num_p].aromatic_rings):
-                        if i[0] != i[1]:
-                            for k in i[1]:
-                                atoms.add(k)       
+            atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
             pr_g, pr_b = [], []
             strange_atoms = set()
@@ -1382,22 +1369,8 @@ class StandardizeReaction:
                     atoms.add(s)
                     strange_atoms.add(s)
                     
-
-            pr = set(pr_g + pr_b)
-            bad_query = (~bad).substructure(atoms.intersection(pr), as_query=True)
+            bad_query = (~bad).substructure(atoms, as_query=True)
             good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
-            
-            dif_g = atoms.difference(set(gc.center_atoms))
-            dif_b = atoms.difference(set(bc.center_atoms))
-
-            for k in good_query._neighbors.keys():
-                if k in dif_g:
-                    good_query._neighbors[k] = () 
-                    good_query._p_neighbors[k] = ()
-            for k_2  in bad_query._neighbors.keys():
-                if k_2 in dif_b:
-                    bad_query._neighbors[k_2] = ()
-                    bad_query._p_neighbors[k_2] = ()
 
             fix = {}
             rules = []
@@ -1407,9 +1380,11 @@ class StandardizeReaction:
                           for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
                          if atoms.issuperset(m)), key=len)
                 fix.update(fx)
-            rules.append((bad_query, good_query, fix, strange_atoms))
+            valid = set(fix).difference(strange_atoms)
+            rules.append((bad_query, good_query, fix, valid))
+        
         cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
-        return rules
+
     
     @class_cached_property
     def __remapping_compiled_rules(self):
