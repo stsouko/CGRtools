@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import defaultdict
 from .rw import _MDLWrite
 from ...containers import MoleculeContainer
 
@@ -38,8 +39,18 @@ class EMDLWrite(_MDLWrite):
             mol.append(self.__convert_atoms2d(g))
         mol.append('M  V30 END ATOM\nM  V30 BEGIN BOND')
         mapping = {m: n for n, m in enumerate(g, start=1)}
-        for i, (n, m, b) in enumerate(g.bonds(), start=1):
-            mol.append(f'M  V30 {i} {b.order} {mapping[n]} {mapping[m]}')
+
+        wedge = defaultdict(set)
+        bonds = g._bonds
+        i = 0
+        for i, (n, m, s) in enumerate(g._wedge_map, start=1):
+            mol.append(f'M  V30 {i} {bonds[n][m].order} {mapping[n]} {mapping[m]} CFG={s == 1 and "1" or "3"}')
+            wedge[n].add(m)
+            wedge[m].add(n)
+
+        for i, (n, m, b) in enumerate(g.bonds(), start=i + 1):
+            if m not in wedge[n]:
+                mol.append(f'M  V30 {i} {b.order} {mapping[n]} {mapping[m]}')
         mol.append('M  V30 END BOND\nM  V30 END CTAB\n')
         return '\n'.join(mol)
 
