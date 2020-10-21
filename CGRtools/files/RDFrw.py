@@ -26,9 +26,9 @@ from subprocess import check_output
 from time import strftime
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import parse_error
-from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
-from ..containers import ReactionContainer
+from ._mdl import parse_error
+from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead, EMDLWrite
+from ..containers import ReactionContainer, MoleculeContainer
 from ..containers.common import Graph
 
 
@@ -294,12 +294,7 @@ class RDFRead(MDLRead):
     __already_seeked = False
 
 
-class RDFWrite(MDLWrite):
-    """
-    MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
-    on initialization accept opened for writing in text mode file, string path to file,
-    pathlib.Path object or another buffered writer object
-    """
+class _RDFWrite:
     def __init__(self, file, *, append: bool = False, write3d: bool = False, mapping: bool = True):
         """
         :param append: append to existing file (True) or rewrite it (False). For buffered writer object append = False
@@ -308,32 +303,72 @@ class RDFWrite(MDLWrite):
         :param mapping: write atom mapping.
         """
         super().__init__(file, append=append, write3d=int(write3d), mapping=mapping)
-        if append and (self._is_buffer or self._file.tell() != 0):
+        if not append or not (self._is_buffer or self._file.tell() != 0):
             self.write = self.__write
 
-    def write(self, data):
+    def __write(self, data):
         """
         write single molecule or reaction into file
         """
+        del self.write
         self._file.write(strftime('$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n'))
-        self.__write(data)
-        self.write = self.__write
+        self.write(data)
 
-    def __write(self, data):
+
+class RDFWrite(_RDFWrite, MDLWrite):
+    """
+    MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
+    def write(self, data):
         if isinstance(data, Graph):
             m = self._convert_structure(data)
             self._file.write('$MFMT\n')
             self._file.write(m)
         elif isinstance(data, ReactionContainer):
-            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n'
-                             f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
+            ag = f'{len(data.reagents):3d}' if data.reagents else ''
+            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n{len(data.reactants):3d}{len(data.products):3d}{ag}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)
                 self._file.write('$MOL\n')
                 self._file.write(m)
         else:
             raise TypeError('Graph or Reaction object expected')
+        for k, v in data.meta.items():
+            self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
+
+class ERDFWrite(_RDFWrite, EMDLWrite):
+    """
+    MDL V3000 RDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
+    def write(self, data):
+        if isinstance(data, MoleculeContainer):
+            m = self._convert_structure(data)
+            self._file.write(f'$MFMT\n{data.name}\n\n\n  0  0  0     0  0            999 V3000\n')
+            self._file.write(m)
+            self._file.write('M  END\n')
+        elif isinstance(data, ReactionContainer):
+            ag = f' {len(data.reagents)}' if data.reagents else ''
+            self._file.write(f'$RFMT\n$RXN V3000\n{data.name}\n\n\n'
+                             f'M  V30 COUNTS {len(data.reactants)} {len(data.products)}{ag}\nM  V30 BEGIN REACTANT\n')
+            for m in data.reactants:
+                self._file.write(self._convert_structure(m))
+            self._file.write('M  V30 END REACTANT\nM  V30 BEGIN PRODUCT\n')
+            for m in data.products:
+                self._file.write(self._convert_structure(m))
+            self._file.write('M  V30 END PRODUCT\n')
+            if data.reagents:
+                self._file.write('M  V30 BEGIN AGENT\n')
+                for m in data.reagents:
+                    self._file.write(self._convert_structure(m))
+                self._file.write('M  V30 END AGENT\n')
+            self._file.write('M  END\n')
+        else:
+            raise TypeError('Molecule or Reaction object expected')
         for k, v in data.meta.items():
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
@@ -382,4 +417,4 @@ class RDFwrite:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['RDFRead', 'RDFWrite', 'RDFread', 'RDFwrite']
+__all__ = ['RDFRead', 'RDFWrite', 'ERDFWrite', 'RDFread', 'RDFwrite']

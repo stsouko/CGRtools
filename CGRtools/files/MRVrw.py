@@ -24,7 +24,7 @@ from logging import warning
 from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._MDLrw import MDLStereo
+from ._mdl import MDLStereo
 from ..containers import MoleculeContainer, ReactionContainer
 from ..exceptions import EmptyMolecule
 

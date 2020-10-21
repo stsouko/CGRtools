@@ -23,8 +23,8 @@ from logging import warning
 from subprocess import check_output
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import parse_error
-from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
+from ._mdl import parse_error
+from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, EMDLWrite
 from ..exceptions import EmptyMolecule
 
 
@@ -257,6 +257,29 @@ class SDFWrite(MDLWrite):
         self._file.write('$$$$\n')
 
 
+class ESDFWrite(EMDLWrite):
+    """
+    MDL V3000 SDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
+    def write(self, data):
+        """
+        write single molecule into file
+        """
+        mol = self._convert_structure(data)
+        self._file.write(f'{data.name}\n\n\n  0  0  0     0  0            999 V3000\n')
+        if isinstance(mol, list):
+            self._file.write(f'M  END\n$$$$\n{data.name}\n\n\n  0  0  0     0  0            999 V3000\n'.join(mol))
+        else:
+            self._file.write(mol)
+        self._file.write('M  END\n')
+
+        for k, v in data.meta.items():
+            self._file.write(f'>  <{k}>\n{v}\n')
+        self._file.write('$$$$\n')
+
+
 class SDFread:
     def __init__(self, *args, **kwargs):
         warn('SDFread deprecated. Use SDFRead instead', DeprecationWarning)
@@ -301,4 +324,4 @@ class SDFwrite:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['SDFRead', 'SDFWrite', 'SDFread', 'SDFwrite']
+__all__ = ['SDFRead', 'SDFWrite', 'ESDFWrite', 'SDFread', 'SDFwrite']

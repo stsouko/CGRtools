@@ -27,8 +27,9 @@ from random import shuffle
 from traceback import format_exc
 from typing import List, Iterable, Tuple, Optional
 from warnings import warn
-from ._CGRrw import parse_error
+from ._mdl import parse_error
 from ..containers import MoleculeContainer
+
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, uint16, empty
@@ -485,12 +486,30 @@ class XYZRead(XYZ):
         return super()._convert_structure([(e, None, x, y, z) for e, x, y, z in matrix], charge, radical)
 
     def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge: int = 0, radical: int = 0):
-        return self._convert_structure(matrix, charge, radical)
+        try:
+            container = self._convert_structure(matrix, charge, radical)
+        except ValueError:
+            self._flush_log()
+        else:
+            if self._store_log:
+                log = self._format_log()
+                if log:
+                    container.meta['CGRtoolsParserLog'] = log
+            return container
 
     def from_xyz(self, matrix, charge=0, radical=0):
-        warn('.from_xyz() deprecated. Use .parse() instead', DeprecationWarning)
-        warning('.from_xyz() deprecated. Use .parse() instead')
-        return self._convert_structure(matrix, charge, radical)
+        warn('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead', DeprecationWarning)
+        warning('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead')
+        return self.parse(matrix, charge, radical)
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create XYZ parser function configured same as XYZRead object.
+        """
+        obj = object.__new__(cls)
+        super(XYZRead, obj).__init__(*args, **kwargs)
+        return obj.parse
 
 
-__all__ = ['XYZRead', 'XYZ']
+__all__ = ['XYZRead']
