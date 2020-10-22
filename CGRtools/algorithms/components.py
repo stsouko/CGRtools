@@ -209,18 +209,22 @@ class StructureComponents:
         atoms = self._atoms
         bonds = self._bonds
 
+        adj = defaultdict(set)  # double bonds adjacency matrix
         if heteroatoms:
             atoms_numbers = {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}
+            for n, atom in atoms.items():
+                if atom.atomic_number in atoms_numbers:
+                    adj_n = adj[n].add
+                    for m, bond in bonds[n].items():
+                        if bond.order == 2 and atoms[m].atomic_number in atoms_numbers:
+                            adj_n(m)
         else:
-            atoms_numbers = {6}
-
-        adj = defaultdict(set)  # double bonds adjacency matrix
-        for n, atom in atoms.items():
-            if atom.atomic_number in atoms_numbers:
-                adj_n = adj[n].add
-                for m, bond in bonds[n].items():
-                    if bond.order == 2 and atoms[m].atomic_number in atoms_numbers:
-                        adj_n(m)
+            for n, atom in atoms.items():
+                if atom.atomic_number == 6:
+                    adj_n = adj[n].add
+                    for m, bond in bonds[n].items():
+                        if bond.order == 2 and atoms[m].atomic_number == 6:
+                            adj_n(m)
         if not adj:
             return ()
 
@@ -242,9 +246,6 @@ class StructureComponents:
                 terminals.remove(m)
                 adj[m].pop()
                 cumulenes.append(tuple(path))
-        if not heteroatoms:
-            return [x for x in cumulenes
-                    if sum(b.order == 2 for b in chain(bonds[x[0]].values(), bonds[x[-1]].values())) == 2]
         return cumulenes
 
 

@@ -533,7 +533,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations[n] = hybridization
 
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
+        return {'conformers': self._conformers, 'hydrogens': self._hydrogens, 'atoms_stereo': self._atoms_stereo,
                 'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
                 **super().__getstate__()}
 
@@ -590,12 +590,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._allenes_stereo = state['allenes_stereo']
         self._cis_trans_stereo = state['cis_trans_stereo']
 
-        # restore query and hydrogen marks
+        if 'hydrogens' not in state:  # <4.0.38
+            self._hydrogens = {}
+            for n in state['atoms']:
+                self._calc_implicit(n)
+        else:
+            self._hydrogens = state['hydrogens']
+
+        # restore query marks
         self._hybridizations = {}
-        self._hydrogens = {}
-        for n in state['bonds']:
+        for n in state['atoms']:
             self._calc_hybridization(n)
-            self._calc_implicit(n)
 
 
 __all__ = ['MoleculeContainer']
