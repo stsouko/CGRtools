@@ -24,6 +24,7 @@ from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..exceptions import ValenceError
 
+
 class Standardize:
     __slots__ = ()
     __class_cache__ = {}
@@ -1285,6 +1286,11 @@ class StandardizeReaction:
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
+        if not (self.reactants and self.products):	
+            return False	
+        elif not isinstance(self.reactants[0], Standardize):	
+            raise TypeError('Only Molecules supported')
+        
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
             for m in self.reactants:
@@ -1295,7 +1301,7 @@ class StandardizeReaction:
 
             if not found:
                 continue
-            for m in  self.products:
+            for m in self.products:
                 for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
                     atom = mapping[1]
                     if atom in seen:
@@ -1348,7 +1354,11 @@ class StandardizeReaction:
 
     @classmethod
     def load_remapping_rules(cls, reactions):
-        
+        """
+        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
+        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Products should be equal but with different atom numbers.
+        """
         for bad, good in reactions:
             if str(bad) != str(good):
                 raise ValueError('bad and good reaction should be equal')
@@ -1358,16 +1368,15 @@ class StandardizeReaction:
 
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
-            pr_g, pr_b = [], []
+            pr_g, pr_b = set(), set()
             strange_atoms = set()
             for pr in good.products:
-                pr_g.extend([num for num in pr.atoms_numbers])
+                pr_g.update(pr)
             for pr in bad.products:
-                pr_b.extend([num for num in pr.atoms_numbers]) 
-            if set(pr_b).difference(set(pr_g)):
-                for s in set(pr_b).difference(set(pr_g)):
-                    atoms.add(s)
-                    strange_atoms.add(s)
+                pr_b.update(pr) 
+            for s in pr_b.difference(pr_g):
+                atoms.add(s)
+                strange_atoms.add(s)
                     
             bad_query = (~bad).substructure(atoms, as_query=True)
             good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
