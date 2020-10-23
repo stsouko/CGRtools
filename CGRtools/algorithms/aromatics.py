@@ -127,6 +127,7 @@ class Aromatize:
         charges = self._charges
         radicals = self._radicals
         bonds = self._bonds
+        hydrogens = self._hydrogens
 
         rings = defaultdict(set)  # aromatic skeleton
         pyroles = set()
@@ -190,7 +191,13 @@ class Aromatize:
                         else:  # P(III) or P(V)H
                             pyroles.add(n)
                     elif ab == 2:
-                        pyroles.add(n)
+                        ah = hydrogens[n]
+                        if not ah:
+                            pyroles.add(n)
+                        elif ah == 1:  # only pyrole
+                            double_bonded.add(n)
+                        else:
+                            raise InvalidAromaticRing
                     elif ab != 4 or an != 15:  # P(V) in ring
                         raise InvalidAromaticRing
                 elif ac == -1:  # pyrole only

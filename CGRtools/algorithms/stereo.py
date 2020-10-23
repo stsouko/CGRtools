@@ -401,9 +401,14 @@ class Stereo:
         atoms = self._atoms
         cumulenes = {}
         for path in self.cumulenes:
+            nf = bonds[path[0]]
+            nl = bonds[path[-1]]
             n1, m1 = path[1], path[-2]
-            nn = [x for x in bonds[path[0]] if x != n1 and atoms[x].atomic_number != 1]
-            mn = [x for x in bonds[path[-1]] if x != m1 and atoms[x].atomic_number != 1]
+            if any(b.order not in (1, 4) for m, b in nf.items() if m != n1) or \
+                    any(b.order not in (1, 4) for m, b in nl.items() if m != m1):
+                continue
+            nn = [x for x in nf if x != n1 and atoms[x].atomic_number != 1]
+            mn = [x for x in nl if x != m1 and atoms[x].atomic_number != 1]
             if nn and mn:
                 sn = nn[1] if len(nn) == 2 else None
                 sm = mn[1] if len(mn) == 2 else None
