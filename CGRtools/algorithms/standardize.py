@@ -1286,11 +1286,11 @@ class StandardizeReaction:
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
         seen = set()
-        if not (self.reactants and self.products):	
-            return False	
-        elif not isinstance(self.reactants[0], Standardize):	
+        if not (self.reactants and self.products):
+            return False
+        elif not isinstance(self.reactants[0], Standardize):
             raise TypeError('Only Molecules supported')
-        
+
         for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
             found = []
             for m in self.reactants:
@@ -1324,7 +1324,6 @@ class StandardizeReaction:
 
         for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
             cgr = ~self
-            
             del  self.__dict__['__cached_method_compose']
 
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
@@ -1332,16 +1331,16 @@ class StandardizeReaction:
                     continue
                 mapping = {key : mapping.get(value, value) for key, value in fix.items()}
                 mapping.update(fix)
-                
+
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
                     m.remap(mapping)
-                
+
                 check = ~self
                 if any(valid.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
                     seen.update(mapping)
                     break
-    
+
                 # restore old mapping
                 for m in self.products:
                     m.remap(reverse)
@@ -1369,15 +1368,14 @@ class StandardizeReaction:
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
             pr_g, pr_b = set(), set()
-            strange_atoms = set()
             for pr in good.products:
                 pr_g.update(pr)
             for pr in bad.products:
                 pr_b.update(pr) 
-            for s in pr_b.difference(pr_g):
-                atoms.add(s)
-                strange_atoms.add(s)
-                    
+
+            strange_atoms = pr_b.difference(pr_g)
+            atoms.update(strange_atoms)
+
             bad_query = (~bad).substructure(atoms, as_query=True)
             good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
 
@@ -1391,14 +1389,13 @@ class StandardizeReaction:
                 fix.update(fx)
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
-        
+
         cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
 
-    
     @class_cached_property
     def __remapping_compiled_rules(self):
         return ()
-        
+
     def implicify_hydrogens(self) -> int:
         """
         Remove explicit hydrogens if possible
