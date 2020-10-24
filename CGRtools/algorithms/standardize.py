@@ -1315,11 +1315,86 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+        if seen:
+            self.flush_cache()
+            flag = True
+            seen = set()
+        else:
+            flag = False
+
+        for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
+            cgr = ~self
+            del  self.__dict__['__cached_method_compose']
+
+            for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
+                if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
+                    continue
+                mapping = {key : mapping.get(value, value) for key, value in fix.items()}
+                mapping.update(fix)
+
+                reverse = {m: n for n, m in mapping.items()}
+                for m in self.products:
+                    m.remap(mapping)
+
+                check = ~self
+                if any(valid.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
+                    seen.update(mapping)
+                    break
+
+                # restore old mapping
+                for m in self.products:
+                    m.remap(reverse)
+                del self.__dict__['__cached_method_compose']
 
         if seen:
             self.flush_cache()
             return True
-        return False
+        return flag
+
+    @classmethod
+    def load_remapping_rules(cls, reactions):
+        """
+        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
+        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Products should be equal but with different atom numbers.
+        """
+        for bad, good in reactions:
+            if str(bad) != str(good):
+                raise ValueError('bad and good reaction should be equal')
+
+            gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
+            bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
+
+            atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
+
+            pr_g, pr_b = set(), set()
+            for pr in good.products:
+                pr_g.update(pr)
+            for pr in bad.products:
+                pr_b.update(pr) 
+
+            strange_atoms = pr_b.difference(pr_g)
+            atoms.update(strange_atoms)
+
+            bad_query = (~bad).substructure(atoms, as_query=True)
+            good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
+
+            fix = {}
+            rules = []
+            for mb, mg in zip(bad.products, good.products):
+                fx = min((m for m in
+                         ({k: v for k, v in m.items() if k != v}
+                          for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
+                         if atoms.issuperset(m)), key=len)
+                fix.update(fx)
+            valid = set(fix).difference(strange_atoms)
+            rules.append((bad_query, good_query, fix, valid))
+
+        cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
+
+    @class_cached_property
+    def __remapping_compiled_rules(self):
+        return ()
 
     def implicify_hydrogens(self) -> int:
         """
