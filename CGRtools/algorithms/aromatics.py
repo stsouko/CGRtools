@@ -148,7 +148,19 @@ class Aromatize:
             return rings, pyroles, set()
         elif not triple_bonded.isdisjoint(rings):
             raise InvalidAromaticRing('triple bonds connected to rings')
-        elif any(len(ms) not in (2, 3) for ms in rings.values()):
+
+        for r in self.sssr:
+            if set(r).issubset(rings):
+                n, *_, m = r
+                if n not in rings[m]:
+                    rings[m].add(n)
+                    rings[n].add(m)
+                for n, m in zip(r, r[1:]):
+                    if n not in rings[m]:
+                        rings[m].add(n)
+                        rings[n].add(m)
+
+        if any(len(ms) not in (2, 3) for ms in rings.values()):
             raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
 
         double_bonded &= rings.keys()
