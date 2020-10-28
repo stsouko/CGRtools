@@ -232,7 +232,8 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
     @abstractmethod
     def remap(self, mapping: Dict[int, int], *, copy: bool = False):
-        if len(mapping) != len(set(mapping.values())):
+        if len(mapping) != len(set(mapping.values())) or \
+                not (self._atoms.keys() - mapping.keys()).isdisjoint(mapping.values()):
             raise ValueError('mapping overlap')
 
         mg = mapping.get
