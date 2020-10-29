@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Alexander Nikanshin <17071996sasha@gmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
@@ -33,11 +33,11 @@ class Cu(Element, PeriodIV, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({63: 0.6917, 65: 0.3083})
+        return FrozenDict({63: 0.6917, 65: 0.3083, 64: 0., 67: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({63: 62.929601, 65: 64.927794})
+        return FrozenDict({63: 62.929601, 65: 64.927794, 64: 63.929764, 67: 66.927730})
 
     @property
     def _common_valences(self):
@@ -63,11 +63,11 @@ class Ag(Element, PeriodV, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({107: 0.51839, 109: 0.48161})
+        return FrozenDict({107: 0.51839, 109: 0.48161, 110: 0., 111: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({107: 106.905093, 109: 108.904756})
+        return FrozenDict({107: 106.905093, 109: 108.904756, 110: 109.906107, 111: 110.905291})
 
     @property
     def _common_valences(self):
@@ -78,7 +78,8 @@ class Ag(Element, PeriodV, GroupXI):
         return ((-1, False, 0, ((1, 'Cl'), (1, 'Cl'))),  # AgCl2^1-
                 (-1, False, 0, ((1, 'O'), (1, 'O'))),  # Ag(OH)2^1-
                 (-1, False, 0, ((1, 'S'), (1, 'S'))),  # AgS2^1-
-                (-1, False, 0, ((1, 'C'), (1, 'C'))))  # Ag(CN)2^1-
+                (-1, False, 0, ((1, 'C'), (1, 'C'))),  # Ag(CN)2^1-
+                (1, False, 0, ()))
 
     @property
     def atomic_radius(self):
@@ -94,11 +95,11 @@ class Au(Element, PeriodVI, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({197: 1.0})
+        return FrozenDict({197: 1.0, 195: 0., 198: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({197: 196.966552})
+        return FrozenDict({197: 196.966552, 195: 194.965035, 198: 197.968244})
 
     @property
     def _common_valences(self):

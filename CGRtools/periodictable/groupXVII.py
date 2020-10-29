@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Alexander Nikanshin <17071996sasha@gmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
@@ -61,11 +61,11 @@ class Cl(Element, PeriodIII, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({35: 0.7578, 37: 0.2422})
+        return FrozenDict({35: 0.7578, 37: 0.2422, 36: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({35: 34.968853, 37: 36.965903})
+        return FrozenDict({35: 34.968853, 37: 36.965903, 36: 35.968307})
 
     @property
     def _common_valences(self):
@@ -100,11 +100,11 @@ class Br(Element, PeriodIV, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({79: 0.5069, 81: 0.4931})
+        return FrozenDict({79: 0.5069, 81: 0.4931, 76: 0., 77: 0., 82: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({79: 78.918338, 81: 80.916291})
+        return FrozenDict({79: 78.918338, 81: 80.916291, 76: 75.924541, 77: 76.921379, 82: 81.916804})
 
     @property
     def _common_valences(self):
@@ -142,11 +142,12 @@ class I(Element, PeriodV, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({125: 0., 127: 1.0, 131: 0.})
+        return FrozenDict({125: 0., 127: 1.0, 131: 0., 123: 0., 124: 0., 129: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({125: 124.904630, 127: 126.904468, 131: 130.906125})
+        return FrozenDict({125: 124.904630, 127: 126.904468, 131: 130.906125, 123: 122.905589, 124: 123.906210,
+                           129: 128.904988})
 
     @property
     def _common_valences(self):
@@ -158,6 +159,7 @@ class I(Element, PeriodV, GroupXVII):
                 (-1, False, 0, ((1, 'I'), (1, 'I'))),  # [I-I-I]-
 
                 (0, False, 0, ((1, 'O'), (2, 'O'))),  # HIO2
+                (0, False, 0, ((1, 'C'), (2, 'O'))),
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))),  # HIO3
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'), (2, 'O'))),  # HIO4
                 (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (2, 'O'), (2, 'O'))),  # H3IO5
@@ -169,10 +171,13 @@ class I(Element, PeriodV, GroupXVII):
                 (0, False, 0, ((1, 'Br'), (1, 'Br'), (1, 'Br'))),
                 (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'Cl'))),
                 (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'C'))),
+                (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'O'))),
+                (0, False, 0, ((1, 'C'), (1, 'F'), (1, 'F'))),
 
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # IF5
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'))),  # IOF3
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'))),  # IO2F
+                (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'O'), (2, 'O'))),
 
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # IF7
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'))),  # IOF5
@@ -193,11 +198,11 @@ class At(Element, PeriodVI, GroupXVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({210: 1.0})
+        return FrozenDict({210: 1.0, 211: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({210: 209.987155})
+        return FrozenDict({210: 209.987155, 211: 210.987496})
 
     @property
     def _common_valences(self):

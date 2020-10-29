@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Alexander Nikanshin <17071996sasha@gmail.com>
 #  This file is part of CGRtools.
@@ -33,11 +33,11 @@ class Mn(Element, PeriodIV, GroupVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({55: 1.0})
+        return FrozenDict({55: 1.0, 52: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({55: 54.93805})
+        return FrozenDict({55: 54.93805, 52: 51.945566})
 
     @property
     def _common_valences(self):
@@ -49,6 +49,7 @@ class Mn(Element, PeriodIV, GroupVII):
                 (0, False, 0, ((2, 'O'), (2, 'O'))),
                 (0, False, 0, ((2, 'O'),)),  # MnO
                 (0, False, 0, ((2, 'O'), (1, 'O'))),  # Mn2O3
+                (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((2, 'O'), (2, 'O'))),  # MnO2
                 (0, False, 0, ((2, 'O'), (2, 'O'), (1, 'O'), (1, 'O'))),  # [MnO4]2-
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'), (1, 'O'))))  # [MnO4]-
@@ -67,11 +68,11 @@ class Tc(Element, PeriodV, GroupVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({99: 1.0})
+        return FrozenDict({99: 1.0, 98: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({99: 98.906255})
+        return FrozenDict({99: 98.906255, 98: 97.907216})
 
     @property
     def _common_valences(self):
@@ -96,11 +97,11 @@ class Re(Element, PeriodVI, GroupVII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({185: 0.374, 187: 0.626})
+        return FrozenDict({185: 0.374, 187: 0.626, 186: 0., 188: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({185: 184.952956, 187: 186.955751})
+        return FrozenDict({185: 184.952956, 187: 186.955751, 186: 185.954986, 188: 187.958114})
 
     @property
     def _common_valences(self):

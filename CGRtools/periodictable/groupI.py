@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -31,11 +31,11 @@ class H(Element, PeriodI, GroupI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({1: 0.999885, 2: 0.000115})
+        return FrozenDict({1: 0.999885, 2: 0.000115, 3: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({1: 1.007825, 2: 2.014102})
+        return FrozenDict({1: 1.007825, 2: 2.014102, 3: 3.016049})
 
     @property
     def _common_valences(self):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -23,7 +23,8 @@ from .common import Graph
 from ..algorithms.calculate2d import Calculate2DCGR
 from ..algorithms.depict import DepictQueryCGR
 from ..algorithms.smiles import QueryCGRSmiles
-from ..periodictable import Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement
+from ..periodictable import (Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement,
+                             AnyAtom)
 
 
 class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
@@ -38,8 +39,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
         self._p_hybridizations: Dict[int, Tuple[int, ...]] = {}
         super().__init__()
 
-    def add_atom(self, atom: Union[DynamicQueryElement, DynamicElement, QueryElement, Element,
-                                   AnyElement, DynamicAnyElement, int, str], *args,
+    def add_atom(self, atom: Union[AnyAtom, int, str], *args,
                  p_charge: int = 0, p_is_radical: bool = False,
                  neighbors: Union[int, List[int], Tuple[int, ...], None] = None,
                  hybridization: Union[int, List[int], Tuple[int, ...], None] = None,
@@ -82,7 +82,7 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
                 bond = object.__new__(DynamicBond)
                 bond._DynamicBond__order = bond._DynamicBond__p_order = bond.order
             else:
-                bond = DynamicBond(bond)
+                bond = DynamicBond(bond, bond)
         super().add_bond(n, m, bond)
 
     def delete_atom(self, n):
@@ -201,12 +201,11 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
                 upn = u._p_neighbors
                 uph = u._p_hybridizations
                 oh = other._hybridizations
-                opn = other._p_neighbors
                 oph = other._p_hybridizations
-                for n, m in other._neighbors.items():
-                    un[n] = (m,)
+                for n, m_bond in other._bonds.items():
+                    un[n] = (sum(b.order is not None for b in m_bond.values()),)
+                    upn[n] = (sum(b.p_order is not None for b in m_bond.values()),)
                     uh[n] = (oh[n],)
-                    upn[n] = (opn[n],)
                     uph[n] = (oph[n],)
 
                 ua = u._atoms
@@ -241,8 +240,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
                 upn = u._p_neighbors
                 uph = u._p_hybridizations
                 oh = other._hybridizations
-                for n, m in other._neighbors.items():
-                    un[n] = upn[n] = (m,)
+                for n, m_bond in other._bonds.items():
+                    un[n] = upn[n] = (len(m_bond),)
                     uh[n] = uph[n] = (oh[n],)
 
             ua = u._atoms

@@ -27,12 +27,14 @@ from random import shuffle
 from traceback import format_exc
 from typing import List, Iterable, Tuple, Optional
 from warnings import warn
+from ._mdl import parse_error
 from ..containers import MoleculeContainer
+
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, uint16, empty
     from numba import njit, f8, u2, u4
-    from numba.types import Tuple as nTuple
+    from numba.core.types import Tuple as nTuple
 
     @njit(nTuple((u2[:, :], f8[:]))(f8[:, :], f8[:], f8),
           {'size': u2, 'max_bonds': u4, 'c': u4, 'n': u2, 'm': u2, 'rn': f8, 'r': f8, 'd': f8,
@@ -80,14 +82,60 @@ charge_priority = {0: 0, -1: 1, 1: 2, 2: 3, 3: 4, -2: 5, -3: 6, 4: 7, -4: 8}
 
 
 class XYZ:
-    def __init__(self, radius_multiplier=1.25):
+    """
+    Override class below then inheritance used.
+    """
+    MoleculeContainer = MoleculeContainer
+
+    def __init__(self, radius_multiplier=1.25, store_log=False):
         """
         :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
         """
         self.__radius = radius_multiplier
+        self._store_log = store_log
+        self._log_buffer = []
+
+    def _info(self, msg):
+        self._log_buffer.append(msg)
+
+    def _flush_log(self):
+        self._log_buffer.clear()
+
+    def _format_log(self):
+        return '\n'.join(self._log_buffer)
+
+    def close(self, force=False):
+        """
+        Close opened file
+
+        :param force: Force closing of externally opened file or buffer
+        """
+        if not self._is_buffer or force:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    def read(self) -> List[MoleculeContainer]:
+        """
+        Parse whole file
+
+        :return: list of parsed molecules
+        """
+        return list(iter(self))
+
+    def __iter__(self):
+        return (x for x in self._data if not isinstance(x, parse_error))
+
+    def __next__(self):
+        return next(iter(self))
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float]], charge=0, radical=0):
-        mol = MoleculeContainer()
+        mol = self.MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
         radicals = mol._radicals
@@ -177,7 +225,7 @@ class XYZ:
                             radicals[n] = r
                         elif attempt == len(combo_ua):  # all states has radical. balancing impossible
                             chg.append(atom)  # fuck it horse. we in last attempt
-                            warning('Radical state not balanced.')
+                            self._info('Radical state not balanced.')
                         else:  # do next attempt
                             break
                 else:
@@ -194,9 +242,9 @@ class XYZ:
                     if sum(charges.values()) == charge:
                         break
             else:
-                warning('Charge state not balanced.')
+                self._info('Charge state not balanced.')
         elif sum(radicals.values()) != radical or sum(charges.values()) != charge:
-            warning('Charge or radical state not balanced.')
+            self._info('Charge or radical state not balanced.')
 
         for n in unsaturated:
             mol._calc_implicit(n)
@@ -346,59 +394,38 @@ class XYZRead(XYZ):
     """
     def __init__(self, file, **kwargs):
         if isinstance(file, str):
-            self.__file = open(file)
-            self.__is_buffer = False
+            self._file = open(file)
+            self._is_buffer = False
         elif isinstance(file, Path):
-            self.__file = file.open()
-            self.__is_buffer = False
+            self._file = file.open()
+            self._is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
-            self.__is_buffer = True
+            self._file = file
+            self._is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__file = iter(self._file.readline, '')
         self._data = self.__reader()
-
-    def close(self, force=False):
-        """
-        Close opened file
-
-        :param force: Force closing of externally opened file or buffer
-        """
-        if not self.__is_buffer or force:
-            self.__file.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, _type, value, traceback):
-        self.close()
-
-    def read(self) -> List[MoleculeContainer]:
-        """
-        Parse whole file
-
-        :return: list of parsed molecules
-        """
-        return list(iter(self))
-
-    def __iter__(self):
-        return (x for x in self._data if x is not None)
-
-    def __next__(self):
-        return next(iter(self))
 
     def __reader(self):
         failkey = True
         meta = False
         xyz = charge = size = radical = None
+        file = self._file
+        seekable = file.seekable()
+        pos = None
+        count = -1
         for n, line in enumerate(self.__file):
             if failkey:
                 try:
                     size = int(line)
                 except ValueError:
-                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                    pass
                 else:
+                    if seekable:
+                        pos = file.tell() - len(line)
+                    count += 1
                     meta = True
                     failkey = False
                     xyz = []
@@ -411,16 +438,18 @@ class XYZRead(XYZ):
                             charge = int(line[7:])
                         except ValueError:
                             failkey = True
-                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield None
+                            self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield parse_error(count, pos, self._format_log())
+                            self._flush_log()
                             break
                     elif x.startswith('radical='):
                         try:
                             radical = int(line[8:])
                         except ValueError:
                             failkey = True
-                            warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield None
+                            self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                            yield parse_error(count, pos, self._format_log())
+                            self._flush_log()
                             break
                 else:
                     meta = False
@@ -430,25 +459,57 @@ class XYZRead(XYZ):
                     xyz.append((symbol, float(x), float(y), float(z)))
                 except ValueError:
                     failkey = True
-                    warning(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
+                    yield parse_error(count, pos, self._format_log())
+                    self._flush_log()
                 else:
                     if len(xyz) == size:
-                        yield self._convert_structure(xyz, charge, radical)
+                        try:
+                            container = self._convert_structure(xyz, charge, radical)
+                        except ValueError:
+                            self._info(f'record consist errors:\n{format_exc()}')
+                            yield parse_error(count, pos, self._format_log())
+                        else:
+                            if self._store_log:
+                                log = self._format_log()
+                                if log:
+                                    container.meta['CGRtoolsParserLog'] = log
+                            yield container
+                        self._flush_log()
                         failkey = True  # trigger end of XYZ
         if not failkey:  # cut XYZ
-            warning('Last structure not finished')
-            yield None
+            self._info('Last structure not finished')
+            yield parse_error(count, pos, self._format_log())
+            self._flush_log()
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
         return super()._convert_structure([(e, None, x, y, z) for e, x, y, z in matrix], charge, radical)
 
     def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge: int = 0, radical: int = 0):
-        return self._convert_structure(matrix, charge, radical)
+        try:
+            container = self._convert_structure(matrix, charge, radical)
+        except ValueError:
+            self._flush_log()
+        else:
+            if self._store_log:
+                log = self._format_log()
+                if log:
+                    container.meta['CGRtoolsParserLog'] = log
+            return container
 
     def from_xyz(self, matrix, charge=0, radical=0):
-        warn('.from_xyz() deprecated. Use .parse() instead', DeprecationWarning)
-        return self._convert_structure(matrix, charge, radical)
+        warn('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead', DeprecationWarning)
+        warning('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead')
+        return self.parse(matrix, charge, radical)
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create XYZ parser function configured same as XYZRead object.
+        """
+        obj = object.__new__(cls)
+        super(XYZRead, obj).__init__(*args, **kwargs)
+        return obj.parse
 
 
-__all__ = ['XYZRead', 'XYZ']
+__all__ = ['XYZRead']

@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import defaultdict
 from itertools import permutations
 from io import StringIO, TextIOWrapper
 from logging import warning
@@ -25,9 +26,9 @@ from re import split, compile, fullmatch
 from traceback import format_exc
 from typing import Union, List
 from warnings import warn
-from ._CGRrw import CGRRead
+from ._mdl import CGRRead, parse_error
 from ..containers import MoleculeContainer, CGRContainer, ReactionContainer
-from ..exceptions import IncorrectSmiles
+from ..exceptions import IncorrectSmiles, IsChiral, NotChiral, ValenceError
 
 
 # tokens structure:
@@ -87,23 +88,26 @@ class SMILESRead(CGRRead):
 
     For reactions . [dot] in bonds should be used only for molecules separation.
     """
-    def __init__(self, file, header=None, **kwargs):
+    def __init__(self, file, header=None, ignore_stereo=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
-            self.__file = open(file)
+            self._file = open(file)
             self.__is_buffer = False
         elif isinstance(file, Path):
-            self.__file = file.open()
+            self._file = file.open()
             self.__is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
+            self._file = file
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__file = iter(self._file.readline, '')
 
         if header is True:
             self.__header = next(self.__file).split()[1:]
@@ -114,7 +118,22 @@ class SMILESRead(CGRRead):
         else:
             self.__header = None
 
-        self._data = (self.parse(line) for line in self.__file)
+        self.__ignore_stereo = ignore_stereo
+        self._data = self.__data()
+
+    def __data(self):
+        file = self._file
+        parse = self.parse
+        seekable = file.seekable()
+        pos = file.tell() if seekable else None
+        for n, line in enumerate(self.__file):
+            x = parse(line)
+            if x is None:
+                yield parse_error(n, pos, self._format_log())
+                if seekable:
+                    pos = file.tell()
+            else:
+                yield x
 
     @classmethod
     def create_parser(cls, *args, **kwargs):
@@ -123,6 +142,7 @@ class SMILESRead(CGRRead):
         """
         obj = object.__new__(cls)
         obj._SMILESRead__header = None
+        obj._SMILESRead__ignore_stereo = False
         super(SMILESRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -133,7 +153,7 @@ class SMILESRead(CGRRead):
         :param force: Force closing of externally opened file or buffer.
         """
         if not self.__is_buffer or force:
-            self.__file.close()
+            self._file.close()
 
     def __enter__(self):
         return self
@@ -150,75 +170,183 @@ class SMILESRead(CGRRead):
         return list(iter(self))
 
     def __iter__(self):
-        return (x for x in self._data if x is not None)
+        return (x for x in self._data if not isinstance(x, parse_error))
 
     def __next__(self):
         return next(iter(self))
 
     def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
         """SMILES string parser."""
+        self._flush_log()
         smi, *data = smiles.split()
-        if self.__header is None:
+        if not smi:
+            self._info('empty smiles')
+            return
+        elif self.__header is None:
             meta = {}
             for x in data:
                 try:
                     k, v = split(delimiter, x, 1)
                     meta[k] = v
                 except ValueError:
-                    warning(f'invalid metadata entry: {x}')
+                    self._info(f'invalid metadata entry: {x}')
         else:
             meta = dict(zip(self.__header, data))
 
         if '>' in smi and (smi[smi.index('>') + 1] in '>([' or smi[smi.index('>') + 1].isalpha()):
-            record = dict(reactants=[], reagents=[], products=[], meta=meta, title='')
+            record = {'reactants': [], 'reagents': [], 'products': [], 'meta': meta, 'title': ''}
             try:
                 reactants, reagents, products = smi.split('>')
             except ValueError:
-                warning('invalid SMIRKS')
+                self._info('invalid SMIRKS')
                 return
 
             try:
                 if reactants:
                     for x in reactants.split('.'):
-                        if not x and self._ignore:
-                            warning('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['reactants'].append(self.__parse_tokens(x))
                 if products:
                     for x in products.split('.'):
-                        if not x and self._ignore:
-                            warning('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['products'].append(self.__parse_tokens(x))
                 if reagents:
                     for x in reagents.split('.'):
-                        if not x and self._ignore:
-                            warning('empty molecule ignored')
+                        if not x:
+                            if self._ignore:
+                                self._info('two dots in line ignored')
+                            else:
+                                self._info('two dots in line')
+                                return
                         else:
                             record['reagents'].append(self.__parse_tokens(x))
             except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
+                self._info(f'record consist errors:\n{format_exc()}')
                 return
 
             try:
                 container = self._convert_reaction(record)
-                return container
             except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
-                return
+                self._info(f'record consist errors:\n{format_exc()}')
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                return container
         else:
             try:
                 record = self.__parse_tokens(smi)
             except ValueError:
-                warning(f'line: {smi}\nconsist errors:\n{format_exc()}')
+                self._info(f'line: {smi}\nconsist errors:\n{format_exc()}')
                 return
 
             record['meta'] = meta
             try:
                 container = self._convert_structure(record)
-                return container
             except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
+                self._info(f'record consist errors:\n{format_exc()}')
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                return container
+
+    def _convert_molecule(self, molecule, mapping):
+        mol = super()._convert_molecule(molecule, mapping)
+        hydrogens = mol._hydrogens
+        radicals = mol._radicals
+        calc_implicit = mol._calc_implicit
+        for n, h in molecule['hydrogens'].items():
+            n = mapping[n]
+            hc = hydrogens[n]
+            if hc is None:  # aromatic rings or valence errors. just store given H count.
+                hydrogens[n] = h
+            elif hc != h:  # H count mismatch. try radical state of atom.
+                radicals[n] = True
+                calc_implicit(n)
+                if hydrogens[n] != h:  # radical state also has errors.
+                    if self._ignore:
+                        radicals[n] = False  # reset radical state
+                        hydrogens[n] = h  # set parsed hydrogens count
+                        self._info(f'implicit hydrogen count ({h}) mismatch with '
+                                   f'calculated ({hc}) on atom {n}. calculated count replaced.')
+                    else:
+                        raise ValueError(f'implicit hydrogen count ({h}) mismatch with '
+                                         f'calculated ({hc}) on atom {n}.')
+
+        if self.__ignore_stereo or not molecule['stereo_atoms'] and not molecule['stereo_bonds']:
+            return mol
+
+        st = mol._stereo_tetrahedrons
+        sa = mol._stereo_allenes
+        sat = mol._stereo_allenes_terminals
+        ctt = mol._stereo_cis_trans_terminals
+
+        order = {mapping[n]: [mapping[m] for m in ms] for n, ms in molecule['order'].items()}
+
+        stereo = []
+        for n, s in molecule['stereo_atoms'].items():
+            n = mapping[n]
+            if n in st:
+                stereo.append((mol.add_atom_stereo, n, order[n], s))
+            elif n in sa:
+                t1, t2 = sat[n]
+                env = sa[n]
+                n1 = next(x for x in order[t1] if x in env)
+                n2 = next(x for x in order[t2] if x in env)
+                stereo.append((mol.add_atom_stereo, n, (n1, n2), s))
+
+        stereo_bonds = {mapping[n]: {mapping[m]: s for m, s in ms.items()}
+                        for n, ms in molecule['stereo_bonds'].items()}
+        seen = set()
+        for n, ns in stereo_bonds.items():
+            if n in seen:
+                continue
+            if n in ctt:
+                nm = ctt[n]
+                m = nm[1] if nm[0] == n else nm[0]
+                if m in stereo_bonds:
+                    seen.add(m)
+                    n2, s2 = stereo_bonds[m].popitem()
+                    n1, s1 = ns.popitem()
+                    stereo.append((mol.add_cis_trans_stereo, n, m, n1, n2, s1 == s2))
+
+        while stereo:
+            fail_stereo = []
+            old_stereo = len(stereo)
+            for f, *args in stereo:
+                try:
+                    f(*args, clean_cache=False)
+                except NotChiral:
+                    fail_stereo.append((f, *args))
+                except IsChiral:
+                    pass
+                except ValenceError:
+                    self._info('structure has errors, stereo data skipped')
+                    mol.flush_cache()
+                    break
+            else:
+                stereo = fail_stereo
+                if len(stereo) == old_stereo:
+                    break
+                del mol.__dict__['_MoleculeStereo__chiral_centers']
+                continue
+            break
+        return mol
 
     @staticmethod
     def _raw_tokenize(smiles):
@@ -342,7 +470,7 @@ class SMILESRead(CGRRead):
         for token_type, token in tokens:
             if token_type in (0, 8):  # simple atom
                 out.append((token_type, {'element': token, 'charge': 0, 'isotope': None, 'is_radical': False,
-                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': 0, 'stereo': 0}))
+                                         'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'hydrogen': None, 'stereo': None}))
             elif token_type == 5:
                 if '>' in token:  # dynamic bond or atom
                     if len(token) == 3:  # bond only possible
@@ -372,7 +500,7 @@ class SMILESRead(CGRRead):
             isotope = int(isotope)
 
         if stereo:
-            stereo = -1 if stereo == '@@' else 1
+            stereo = stereo == '@'
 
         if hydrogen:
             if len(hydrogen) > 1:
@@ -455,6 +583,7 @@ class SMILESRead(CGRRead):
 
         atoms = []
         bonds = []
+        order = defaultdict(list)
         atoms_types = []
         atom_num = 0
         last_num = 0
@@ -462,7 +591,7 @@ class SMILESRead(CGRRead):
         cycles = {}
         used_cycles = set()
         cgr = []
-        stereo_bonds = []
+        stereo_bonds = defaultdict(dict)
         stereo_atoms = {}
         hydrogens = {}
         previous = None
@@ -495,58 +624,85 @@ class SMILESRead(CGRRead):
                         if strong_cycle:
                             raise IncorrectSmiles('reused closure number')
                         else:
-                            warning(f'reused closure number: {token}')
+                            self._info(f'reused closure number: {token}')
                     else:
                         used_cycles.add(token)
-                    cycles[token] = (last_num, previous)
+                    cycles[token] = (last_num, previous, len(order[last_num]))
+                    order[last_num].append(None)  # Reserve a table
                 else:
-                    a, b = cycles[token]
-                    if b:
+                    a, ob, ind = cycles[token]
+                    if ob:
                         if not previous:
-                            if strong_cycle:
+                            bt, b = ob
+                            if bt == 9:  # closure open is \/ bonded
+                                stereo_bonds[a][last_num] = b
+                                bt = b = 1
+                            elif strong_cycle:
                                 raise IncorrectSmiles('not equal cycle bonds')
-                            previous = b
-                        elif previous != b:
-                            raise IncorrectSmiles('not equal cycle bonds')
+                        else:
+                            bt, b = previous
+                            obt, ob = ob
+                            if bt == 9:  # \/ bonds can be unequal
+                                if obt == 9:
+                                    stereo_bonds[a][last_num] = ob
+                                elif ob != 1:
+                                    raise IncorrectSmiles('not equal cycle bonds')
+                                stereo_bonds[last_num][a] = b
+                                bt = b = 1
+                            elif obt == 9:
+                                if b != 1:
+                                    raise IncorrectSmiles('not equal cycle bonds')
+                                stereo_bonds[a][last_num] = ob
+                            elif b != ob:
+                                raise IncorrectSmiles('not equal cycle bonds')
                     elif previous:
-                        if strong_cycle:
+                        bt, b = previous
+                        if bt == 9:  # stereo \/
+                            stereo_bonds[last_num][a] = b
+                            bt = b = 1
+                        elif strong_cycle:
                             raise IncorrectSmiles('not equal cycle bonds')
                     else:
-                        previous = (1, 4) if atoms_types[last_num] == atoms_types[a] == 8 else (1, 1)
+                        bt = 1
+                        b = 4 if atoms_types[last_num] == atoms_types[a] == 8 else 1
 
-                    bt = previous[0]
                     if bt == 1:
-                        bonds.append((last_num, a, previous[1]))
-                    elif bt == 9:
-                        bonds.append((last_num, a, 1))
-                        stereo_bonds.append((last_num, a, previous[1]))
+                        bonds.append((last_num, a, b))
                     else:  # bt == 10
                         bonds.append((last_num, a, 8))
-                        cgr.append(((last_num, a), 'bond', previous[1]))
+                        cgr.append(((last_num, a), 'bond', b))
+                    order[a][ind] = last_num
+                    order[last_num].append(a)
                     del cycles[token]
                 previous = None
             else:  # atom
                 if atoms:
                     if not previous:
-                        previous = (1, 4) if atoms_types[last_num] == token_type == 8 else (1, 1)
-                    bt = previous[0]
+                        bt = 1
+                        b = 4 if atoms_types[last_num] == token_type == 8 else 1
+                    else:
+                        bt, b = previous
+
                     if bt == 1:
-                        bonds.append((atom_num, last_num, previous[1]))
+                        bonds.append((atom_num, last_num, b))
                     elif bt == 9:
                         bonds.append((atom_num, last_num, 1))
-                        stereo_bonds.append((last_num, atom_num, previous[1]))
+                        stereo_bonds[last_num][atom_num] = b
+                        stereo_bonds[atom_num][last_num] = not b
                     elif bt == 10:
                         bonds.append((atom_num, last_num, 8))
-                        cgr.append(((atom_num, last_num), 'bond', previous[1]))
+                        cgr.append(((atom_num, last_num), 'bond', b))
+                    order[last_num].append(atom_num)
+                    order[atom_num].append(last_num)
 
                 if token_type == 11:
                     cgr.extend((atom_num, *x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
-                    if stereo:
+                    if stereo is not None:
                         stereo_atoms[atom_num] = stereo
                     hydrogen = token.pop('hydrogen')
-                    if hydrogen:
+                    if hydrogen is not None:
                         hydrogens[atom_num] = hydrogen
 
                 atoms.append(token)
@@ -562,7 +718,9 @@ class SMILESRead(CGRRead):
             raise IncorrectSmiles('cycle is not finished')
         elif previous:
             raise IncorrectSmiles('bond on the end')
-        mol = {'atoms': atoms, 'bonds': bonds,
+
+        stereo_bonds = {n: ms for n, ms in stereo_bonds.items() if len(ms) == 1 or len(ms) == set(ms.values())}
+        mol = {'atoms': atoms, 'bonds': bonds, 'order': order,
                'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
         if cgr or any(x == 11 for x in atoms_types):
             mol['cgr'] = cgr

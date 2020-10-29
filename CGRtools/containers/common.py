@@ -26,7 +26,7 @@ from ..algorithms.mcs import MCS
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
 from ..exceptions import AtomNotFound
-from ..periodictable.element import Core
+from ..periodictable import AnyAtom
 
 
 class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
@@ -37,7 +37,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         """
         Empty data object initialization or conversion from another object type
         """
-        self._atoms: Dict[int, Core] = {}
+        self._atoms: Dict[int, AnyAtom] = {}
         self._charges: Dict[int, int] = {}
         self._radicals: Dict[int, bool] = {}
         self._plane: Dict[int, Tuple[float, float]] = {}
@@ -75,13 +75,13 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     def __bool__(self):
         return bool(self._atoms)
 
-    def atom(self, n: int) -> Core:
+    def atom(self, n: int) -> AnyAtom:
         return self._atoms[n]
 
     def has_atom(self, n: int) -> bool:
         return n in self._atoms
 
-    def atoms(self) -> Iterator[Tuple[int, Core]]:
+    def atoms(self) -> Iterator[Tuple[int, AnyAtom]]:
         """
         iterate over all atoms
         """
@@ -96,14 +96,29 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         return tuple(self._atoms)
 
     @cached_args_method
-    def environment(self, atom: int) -> Tuple[Tuple[Union[Bond, DynamicBond], Core], ...]:
+    def environment(self, atom: int, include_bond: bool = True, include_atom: bool = True) -> \
+            Tuple[Union[Tuple[int, Union[Bond, DynamicBond], AnyAtom],
+                        Tuple[int, AnyAtom],
+                        Tuple[int, Union[Bond, DynamicBond]],
+                        int], ...]:
         """
-        pairs of (bond, atom) connected to atom
+        groups of (atom_number, bond, atom) connected to atom or
+        groups of (atom_number, bond) connected to atom or
+        groups of (atom_number, atom) connected to atom or
+        neighbors atoms connected to atom
 
         :param atom: number
+        :param include_atom: include atom object
+        :param include_bond: include bond object
         """
-        atoms = self._atoms
-        return tuple((bond, atoms[n]) for n, bond in self._bonds[atom].items())
+        if include_atom:
+            atoms = self._atoms
+            if include_bond:
+                return tuple((n, bond, atoms[n]) for n, bond in self._bonds[atom].items())
+            return tuple((n, atoms[n]) for n in self._bonds[atom])
+        elif include_bond:
+            return tuple(self._bonds[atom].items())
+        return tuple(self._bonds[atom])
 
     def bond(self, n: int, m: int) -> Union[Bond, DynamicBond]:
         return self._bonds[n][m]
@@ -217,7 +232,8 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
     @abstractmethod
     def remap(self, mapping: Dict[int, int], *, copy: bool = False):
-        if len(mapping) != len(set(mapping.values())):
+        if len(mapping) != len(set(mapping.values())) or \
+                not (self._atoms.keys() - mapping.keys()).isdisjoint(mapping.values()):
             raise ValueError('mapping overlap')
 
         mg = mapping.get
@@ -273,6 +289,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
         self._bonds = hb
         self._parsed_mapping = hm
+        self.__dict__.clear()
         return self
 
     @abstractmethod
@@ -295,13 +312,14 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         copy._plane = self._plane.copy()
         copy._parsed_mapping = self._parsed_mapping.copy()
 
-        copy._bonds = cb = {n: {} for n in self._bonds}
-        seen = set()
+        copy._bonds = cb = {}
         for n, m_bond in self._bonds.items():
-            seen.add(n)
+            cb[n] = cbn = {}
             for m, bond in m_bond.items():
-                if m not in seen:
-                    cb[n][m] = cb[m][n] = bond.copy()
+                if m in cb:  # bond partially exists. need back-connection.
+                    cbn[m] = cb[m][n]
+                else:
+                    cbn[m] = bond.copy()
 
         copy._atoms = ca = {}
         for n, atom in self._atoms.items():
@@ -336,14 +354,14 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         sub._plane = {n: sp[n] for n in atoms}
         sub._parsed_mapping = {n: m for n, m in self._parsed_mapping.items() if n in atoms}
 
-        sub._bonds = cb = {n: {} for n in atoms}
-        seen = set()
+        sub._bonds = cb = {}
         for n in atoms:
-            seen.add(n)
+            cb[n] = cbn = {}
             for m, bond in sb[n].items():
-                if m not in seen and m in atoms:
-                    cb[n][m] = cb[m][n] = bond.copy()
-
+                if m in cb:  # bond partially exists. need back-connection.
+                    cbn[m] = cb[m][n]
+                elif m in atoms:
+                    cbn[m] = bond.copy()
         return sub, atoms
 
     def __and__(self, other):
@@ -373,7 +391,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         :param meta: copy metadata to each substructure
         :param as_query: return Query object based on graph substructure. for Molecule and CGR only
         """
-        return self.substructure(self.__augmented_substructure(atoms, deep)[-1], **kwargs)
+        return self.substructure(self._augmented_substructure(atoms, deep)[-1], **kwargs)
 
     def augmented_substructures(self, atoms: Iterable[int], deep: int = 1, **kwargs) -> List['Graph']:
         """
@@ -386,7 +404,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         :return: list of graphs containing atoms, atoms + first circle, atoms + 1st + 2nd,
             etc up to deep or while new nodes available
         """
-        return [self.substructure(a, **kwargs) for a in self.__augmented_substructure(atoms, deep)]
+        return [self.substructure(a, **kwargs) for a in self._augmented_substructure(atoms, deep)]
 
     def union(self, other: 'Graph', *, remap=False) -> 'Graph':
         """
@@ -438,18 +456,6 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         if not isinstance(is_radical, bool):
             raise TypeError('radical state should be bool')
         return is_radical
-
-    def __augmented_substructure(self, atoms, deep):
-        atoms = set(atoms)
-        if atoms - self._atoms.keys():
-            raise ValueError('invalid atom numbers')
-        nodes = [atoms]
-        for i in range(deep):
-            n = {y for x in nodes[-1] for y in self._bonds[x]} | nodes[-1]
-            if n in nodes:
-                break
-            nodes.append(n)
-        return nodes
 
 
 __all__ = ['Graph']

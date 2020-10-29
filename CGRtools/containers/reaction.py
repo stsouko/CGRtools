@@ -24,13 +24,18 @@ from itertools import chain
 from operator import or_
 from typing import Dict, Iterable as TIterable, Iterator, Optional, Tuple, Union
 from .cgr import CGRContainer
+from .cgr_query import QueryCGRContainer
 from .molecule import MoleculeContainer
 from .query import QueryContainer
+from ..algorithms.components import ReactionComponents
 from ..algorithms.depict import DepictReaction
 from ..algorithms.standardize import StandardizeReaction
 
 
-class ReactionContainer(StandardizeReaction, DepictReaction):
+graphs = Union[MoleculeContainer, QueryContainer, CGRContainer, QueryCGRContainer]
+
+
+class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction):
     """
     Reaction storage. Contains reactants, products and reagents lists.
 
@@ -38,10 +43,8 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
 
-    def __init__(self, reactants: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
-                 products: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
-                 reagents: TIterable[Union[MoleculeContainer, QueryContainer, CGRContainer]] = (),
-                 meta: Optional[Dict] = None, name: Optional[str] = None):
+    def __init__(self, reactants: TIterable[graphs] = (), products: TIterable[graphs] = (),
+                 reagents: TIterable[graphs] = (), meta: Optional[Dict] = None, name: Optional[str] = None):
         """
         New reaction object creation
 
@@ -62,8 +65,9 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
             base_type = next(chain(reactants, products, reagents)).__class__
         except StopIteration:
             raise ValueError('At least one graph object required')
-        if not any(issubclass(base_type, x) for x in (MoleculeContainer, QueryContainer, CGRContainer)):
-            raise TypeError('MoleculeContainer or QueryContainer or CGRContainer expected')
+        if not any(issubclass(base_type, x) for x in
+                   (MoleculeContainer, QueryContainer, CGRContainer, QueryCGRContainer)):
+            raise TypeError('MoleculeContainer or QueryContainer or CGRContainer or QueryCGRContainer expected')
         elif not all(isinstance(x, base_type) for x in chain(reactants, products, reagents)):
             raise TypeError(f'{base_type.__name__} expected for all graphs')
 
@@ -128,18 +132,18 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         self._signs = None
 
     @property
-    def reactants(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
+    def reactants(self) -> Tuple[graphs, ...]:
         return self.__reactants
 
     @property
-    def reagents(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
+    def reagents(self) -> Tuple[graphs, ...]:
         return self.__reagents
 
     @property
-    def products(self) -> Tuple[Union[MoleculeContainer, QueryContainer, CGRContainer], ...]:
+    def products(self) -> Tuple[graphs, ...]:
         return self.__products
 
-    def molecules(self) -> Iterator[Union[MoleculeContainer, QueryContainer, CGRContainer]]:
+    def molecules(self) -> Iterator[graphs]:
         """
         Iterator of all reaction molecules
         """
@@ -179,98 +183,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         copy._signs = self._signs
         return copy
 
-    @property
-    def centers_list(self) -> Tuple[Tuple[int, ...], ...]:
-        """
-        Union reaction centers by leaving or substitute group
-        """
-        if not self.__reactants or self.__products:
-            return ()  # no rc
-        elif not isinstance(self.__reactants[0], MoleculeContainer):
-            raise TypeError('Only Molecules supported')
-
-        reactants = reduce(or_, self.__reactants)
-        products = reduce(or_, self.__products)
-        cgr = reactants ^ products
-        all_atoms = set(reactants) ^ set(products)
-        all_groups = cgr.substructure(all_atoms).connected_components
-        new_centers_list = list(cgr.centers_list)
-
-        for x in all_groups:
-            x = set(x)
-            intersection = []
-            for i, y in enumerate(new_centers_list):
-                if not x.isdisjoint(y):
-                    intersection.append(i)
-
-            if len(intersection) > 1:
-                union = []
-                for i in reversed(intersection):
-                    union.extend(new_centers_list.pop(i))
-                new_centers_list.append(union)
-
-        return tuple(tuple(x) for x in new_centers_list)
-
-    def implicify_hydrogens(self) -> int:
-        """
-        Remove explicit hydrogens if possible
-
-        :return: number of removed hydrogens
-        """
-        total = 0
-        for m in self.molecules():
-            if not isinstance(m, MoleculeContainer):
-                raise TypeError('Only Molecules supported')
-            total += m.implicify_hydrogens()
-        if total:
-            self.flush_cache()
-        return total
-
-    def explicify_hydrogens(self) -> int:
-        """
-        Add explicit hydrogens to atoms
-
-        :return: number of added atoms
-        """
-        total = 0
-        for m in self.molecules():
-            if not isinstance(m, MoleculeContainer):
-                raise TypeError('Only Molecules supported')
-            total += m.explicify_hydrogens()
-        if total:
-            self.flush_cache()
-        return total
-
-    def thiele(self) -> bool:
-        """
-        Convert structures to aromatic form. Works only for Molecules.
-        Return True if in any molecule found kekule ring
-        """
-        total = False
-        for m in self.molecules():
-            if not isinstance(m, MoleculeContainer):
-                raise TypeError('Only Molecules supported')
-            if m.thiele() and not total:
-                total = True
-        if total:
-            self.flush_cache()
-        return total
-
-    def kekule(self) -> bool:
-        """
-        Convert structures to kekule form. Works only for Molecules.
-        Return True if in any molecule found aromatic ring
-        """
-        total = False
-        for m in self.molecules():
-            if not isinstance(m, MoleculeContainer):
-                raise TypeError('Only Molecules supported')
-            if m.kekule() and not total:
-                total = True
-        if total:
-            self.flush_cache()
-        return total
-
     @cached_method
     def compose(self) -> CGRContainer:
         """
@@ -302,94 +214,6 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
         """
         return self.compose()
 
-    def clean2d(self):
-        """
-        Recalculate 2d coordinates
-        """
-        for m in self.molecules():
-            m.clean2d()
-        self.fix_positions()
-
-    def fix_positions(self):
-        """
-        Fix coordinates of molecules in reaction
-        """
-        shift_x = 0
-        reactants = self.__reactants
-        amount = len(reactants) - 1
-        signs = []
-        for m in reactants:
-            max_x = self.__fix_positions(m, shift_x)
-            if amount:
-                max_x += .2
-                signs.append(max_x)
-                amount -= 1
-            shift_x = max_x + 1
-        arrow_min = shift_x
-
-        if self.__reagents:
-            for m in self.__reagents:
-                max_x = self.__fix_reagent_positions(m, shift_x)
-                shift_x = max_x + 1
-            if shift_x - arrow_min < 3:
-                shift_x = arrow_min + 3
-        else:
-            shift_x += 3
-        arrow_max = shift_x - 1
-
-        products = self.__products
-        amount = len(products) - 1
-        for m in products:
-            max_x = self.__fix_positions(m, shift_x)
-            if amount:
-                max_x += .2
-                signs.append(max_x)
-                amount -= 1
-            shift_x = max_x + 1
-        self._arrow = (arrow_min, arrow_max)
-        self._signs = tuple(signs)
-        self.flush_cache()
-
-    @staticmethod
-    def __fix_reagent_positions(molecule, shift_x):
-        plane = molecule._plane
-        shift_y = .5
-
-        values = plane.values()
-        min_x = min(x for x, _ in values) - shift_x
-        max_x = max(x for x, _ in values) - min_x
-        min_y = min(y for _, y in values) - shift_y
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - min_y)
-        return max_x
-
-    @staticmethod
-    def __fix_positions(molecule, shift_x):
-        plane = molecule._plane
-        atoms = molecule._atoms
-
-        values = plane.values()
-        min_x = min(x for x, _ in values) - shift_x
-
-        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
-        max_x = right_atom_plane[0]
-        max_x -= min_x
-
-        min_y = min(y for _, y in values)
-        max_y = max(y for _, y in values)
-        mean_y = (max_y + min_y) / 2
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - mean_y)
-
-        r_y = plane[right_atom][1]
-        if isinstance(molecule, MoleculeContainer) and len(atoms[right_atom].atomic_symbol) == 2 and -.18 <= r_y <= .18:
-            factor = molecule._hydrogens[right_atom]
-            if factor == 1:
-                max_x += .15
-            elif factor:
-                max_x += .25
-        return max_x
-
     def __eq__(self, other):
         return isinstance(other, ReactionContainer) and str(self) == str(other)
 
@@ -400,6 +224,9 @@ class ReactionContainer(StandardizeReaction, DepictReaction):
     @cached_method
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
+
+    def __bool__(self):
+        return bool(self.__reactants or self.__products or self.__reagents)
 
     @cached_method
     def __str__(self):
