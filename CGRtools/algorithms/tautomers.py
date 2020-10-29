@@ -53,13 +53,13 @@ class Tautomers:
         seen = {self, mol}
         queue = [mol]
         while queue:
-            for mol in queue.pop(0)._enumerate_tautomers():
+            for mol in queue.pop(0)._create_mol():
                 if mol not in seen:
                     yield mol
                     seen.add(mol)
                     queue.append(mol)
 
-    def _enumerate_tautomers(self):
+    def _create_mol(self):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
@@ -69,7 +69,7 @@ class Tautomers:
         hybridizations = self._hybridizations
         hydrogens = self._hydrogens
 
-        for path in self.__enumerate_bonds():
+        for path in self.__classic_case():
             mol = self.__class__()
             m_atoms = mol._atoms
             m_charges = mol._charges
@@ -92,7 +92,7 @@ class Tautomers:
                 adj[n] = set()
 
             seen = set()
-            for n, m, bond, depth in path:
+            for n, m, bond in path:
                 if bond is not None:
                     m_bonds[n][m] = m_bonds[m][n] = Bond(bond)
                 adj[n].add(m)
@@ -118,53 +118,57 @@ class Tautomers:
             mol.thiele()
             yield mol
 
-    def __enumerate_bonds(self):
+    def __classic_case(self):
         bonds = self._bonds
         hydrogens = self._hydrogens
-        hybridizations = self._hybridizations
 
         # for each atom in entries
-        for enter, has_hydrogen in self.__entries():
-            path = [enter]
+        for entry, has_hydrogen in self.__entries():
+            seen = [entry]
             new_bonds = []
 
             # stack is neighbors
-            stack = []
-            for nbg, bond in bonds[enter].items():
-                if bond.order == 1:
-                    stack.append((enter, nbg, bond.order + 1, 1))
-                elif bond.order == 2:
-                    stack.append((enter, nbg, bond.order - 1, 1))
+            stack = [(entry, n, b.order - 1, 1, True) for n, b in  # ketone case
+                     bonds[entry].items() if 2 <= b.order <= 3]
+            stack.extend((entry, n, b.order + 1, 0, False) for n, b in  # enol case
+                         bonds[entry].items() if b.order <= 2 and has_hydrogen)
 
             while stack:
-                previous, current, bond, depth = step = stack.pop()
+                previous, current, bond, depth, flag = stack.pop()
 
                 # branch processing
-                if len(path) > depth:
-                    path = path[:depth]
-                    new_bonds = new_bonds[:depth - 1]
+                if flag:
+                    if len(seen) > depth:
+                        seen = seen[:depth]
+                        new_bonds = new_bonds[:depth - 1]
+                else:
+                    if len(seen) > depth + 1:
+                        seen = seen[:depth + 1]
+                        new_bonds = new_bonds[:depth]
 
                 # adding new bonds
-                new_bonds.append(step)
-                path.append(current)
+                new_bonds.append((previous, current, bond))
+                seen.append(current)
 
                 # adding neighbors
                 depth += 1
-                for n, b in bonds[current].items():
-                    if (hybridizations[n] != 4) and (n not in path):
-                        if b.order == bond == 1:
-                            stack.append((path[-1], n, b.order + 1, depth))
-                        elif b.order == bond == 2:
-                            stack.append((path[-1], n, b.order - 1, depth))
+                diff = -1 if depth % 2 else 1
+                stack.extend((current, nbg, bond, depth, flag) for nbg, bond in
+                             ((nbg, bond.order + diff) for nbg, bond in
+                              bonds[current].items() if nbg not in seen) if 1 <= bond <= 3)
 
                 # time to yield
-                if len(path) % 2:
+                if len(seen) % 2:
                     if has_hydrogen:  # enol
                         yield new_bonds
                     elif hydrogens[current]:  # ketone
                         yield new_bonds
 
+    def __chain2circle(self):
+        pass
 
+    def __aromatic_case(self):
+        pass
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
