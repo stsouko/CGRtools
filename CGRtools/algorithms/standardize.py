@@ -1329,8 +1329,7 @@ class StandardizeReaction:
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
-                mapping = {key : mapping.get(value, value) for key, value in fix.items()}
-                mapping.update(fix)
+                mapping = {key : value for key, value in fix.items()}
 
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
@@ -1364,6 +1363,7 @@ class StandardizeReaction:
 
             gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
             bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
+            cgr_good, cgr_bad = ~good, ~bad
 
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
@@ -1376,8 +1376,8 @@ class StandardizeReaction:
             strange_atoms = pr_b.difference(pr_g)
             atoms.update(strange_atoms)
 
-            bad_query = (~bad).substructure(atoms, as_query=True)
-            good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
+            bad_query = (cgr_bad).substructure(atoms.intersection(cgr_bad), as_query=True)
+            good_query = (cgr_good).substructure(atoms.intersection(cgr_good), as_query=True)
 
             fix = {}
             rules = []
