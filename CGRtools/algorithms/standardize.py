@@ -1360,11 +1360,11 @@ class StandardizeReaction:
         for bad, good in reactions:
             if str(bad) != str(good):
                 raise ValueError('bad and good reaction should be equal')
-
-            gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
-            bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
+            
             cgr_good, cgr_bad = ~good, ~bad
-
+            gc = (cgr_good).augmented_substructure((cgr_good).center_atoms, deep=1)
+            bc = (cgr_bad).augmented_substructure((cgr_bad).center_atoms, deep=1)
+            
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
             pr_g, pr_b = set(), set()
