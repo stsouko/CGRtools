@@ -1329,7 +1329,7 @@ class StandardizeReaction:
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
-                mapping = {key : value for key, value in fix.items()}
+                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
 
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
