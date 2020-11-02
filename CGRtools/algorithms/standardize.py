@@ -1354,7 +1354,7 @@ class StandardizeReaction:
     def load_remapping_rules(cls, reactions):
         """
         Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
-        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Reactants in pairs should be fully equal (equal molecules and equal atom orders).
         Products should be equal but with different atom numbers.
         """
         for bad, good in reactions:
@@ -1362,8 +1362,8 @@ class StandardizeReaction:
                 raise ValueError('bad and good reaction should be equal')
             
             cgr_good, cgr_bad = ~good, ~bad
-            gc = (cgr_good).augmented_substructure((cgr_good).center_atoms, deep=1)
-            bc = (cgr_bad).augmented_substructure((cgr_bad).center_atoms, deep=1)
+            gc = (cgr_good).augmented_substructure([x for l in good.centers_list for x in l], deep=1)
+            bc = (cgr_bad).augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
             
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
@@ -1382,10 +1382,7 @@ class StandardizeReaction:
             fix = {}
             rules = []
             for mb, mg in zip(bad.products, good.products):
-                fx = min((m for m in
-                         ({k: v for k, v in m.items() if k != v}
-                          for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
-                         if atoms.issuperset(m)), key=len)
+                fx = {k: v for k, v in zip(mb, mg) if k != v}
                 fix.update(fx)
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
