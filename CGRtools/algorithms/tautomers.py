@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import deque
 from typing import TYPE_CHECKING, List, Tuple, Iterator
 from ..containers.bonds import Bond
 
@@ -29,9 +30,20 @@ class Tautomers:
 
     def tautomerize(self) -> bool:
         """
-        Convert structure to canonic tautomer form. Return True if structure changed.
+        Convert structure to canonical tautomeric form. Return True if structure changed.
         """
-        # todo: implement
+        canon = min(self.enumerate_tautomers(), key=lambda x: x.huckel_pi_electrons_energy)
+        if canon != self:  # attach state of canonic tautomer to self
+            # atoms, radicals state, parsed_mapping and plane are unchanged
+            self._bonds = canon._bonds
+            self._charges = canon._charges  # for zwitter-ionic tautomers
+            self._hybridizations = canon._hybridizations
+            self._hydrogens = canon._hydrogens
+            self._atoms_stereo = canon._atoms_stereo
+            self._allenes_stereo = canon._allenes_stereo
+            self._cis_trans_stereo = canon._cis_trans_stereo
+            self._conformers = []  # flush 3d
+            self.flush_cache()
         return False
 
     def enumerate_tautomers(self) -> Iterator['MoleculeContainer']:
@@ -43,11 +55,11 @@ class Tautomers:
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
-        yield self
+        yield self.copy()
         seen = {self}
-        queue = [self]
+        queue = deque([self])
         while queue:
-            for mol in queue.pop(0)._enumerate_tautomers():
+            for mol in queue.popleft()._enumerate_tautomers():
                 if mol not in seen:
                     yield mol
                     seen.add(mol)
@@ -152,8 +164,6 @@ class Tautomers:
                         yield new_bonds
                     elif hydrogens[current]:  # ketone
                         yield new_bonds
-
-
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
