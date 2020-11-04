@@ -65,7 +65,6 @@ class Tautomers:
         radicals = self._radicals
         plane = self._plane
         bonds = self._bonds
-        neighbors = self._neighbors
         hybridizations = self._hybridizations
         hydrogens = self._hydrogens
 
@@ -76,7 +75,6 @@ class Tautomers:
             m_radicals = mol._radicals
             m_plane = mol._plane
             m_bonds = mol._bonds
-            m_neighbors = mol._neighbors
             m_hybridizations = mol._hybridizations
             m_hydrogens = mol._hydrogens
 
@@ -110,11 +108,9 @@ class Tautomers:
                 if n in seen:
                     mol._calc_hybridization(n)
                     mol._calc_implicit(n)
-                    m_neighbors[n] = sum(m_atoms[m].atomic_number != 1 for m in m_bonds[n])
                 else:
                     m_hybridizations[n] = h
                     m_hydrogens[n] = hydrogens[n]
-                    m_neighbors[n] = neighbors[n]
             mol.thiele()
             yield mol
 
@@ -183,7 +179,7 @@ class Tautomers:
         atoms = self._atoms
         charges = self._charges
         hydrogens = self._hydrogens
-        neighbors = self._neighbors
+        neighbors = self.neighbors
         radicals = self._radicals
         hybridizations = self._hybridizations
 
@@ -193,10 +189,10 @@ class Tautomers:
             if radicals[n] or charges[n]:
                 continue
             if a.atomic_number in {8, 16, 34}:
-                if neighbors[n] == 1:
+                if neighbors(n) == 1:
                     entries.append((n, bool(hydrogens[n])))
             elif a.atomic_number in {7, 15}:
-                if 0 < neighbors[n] < 3:
+                if 0 < neighbors(n) < 3:
                     if hybridizations[n] == 1:  # amine
                         if hydrogens[n]:
                             entries.append((n, True))
