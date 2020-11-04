@@ -27,7 +27,7 @@ from sys import prefix, exec_prefix
 from traceback import format_exc
 from typing import List, Optional
 from warnings import warn
-from ._CGRrw import CGRRead, common_isotopes
+from ._mdl import CGRRead, common_isotopes, parse_error
 from ..containers import MoleculeContainer
 
 
@@ -47,23 +47,27 @@ class INCHIRead(CGRRead):
     also possible to pass list of keys (without inchi_pseudo_key) for mapping space/tab separated list
     of INCHI and values: header=['key1', 'key2'] # order depended
     """
-    def __init__(self, file, header=None, **kwargs):
+    def __init__(self, file, header=None, ignore_stereo=False, **kwargs):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
-            self.__file = open(file)
+            self._file = open(file)
             self.__is_buffer = False
         elif isinstance(file, Path):
-            self.__file = file.open()
+            self._file = file.open()
             self.__is_buffer = False
         elif isinstance(file, (TextIOWrapper, StringIO)):
-            self.__file = file
+            self._file = file
             self.__is_buffer = True
         else:
             raise TypeError('invalid file. TextIOWrapper, StringIO subclasses possible')
         super().__init__(**kwargs)
+        self.__file = iter(self._file.readline, '')
 
         if header is True:
             self.__header = next(self.__file).split()[1:]
@@ -74,7 +78,22 @@ class INCHIRead(CGRRead):
         else:
             self.__header = None
 
-        self._data = (self.parse(line) for line in self.__file)
+        self.__ignore_stereo = ignore_stereo
+        self._data = self.__data()
+
+    def __data(self):
+        file = self._file
+        parse = self.parse
+        seekable = file.seekable()
+        pos = file.tell() if seekable else None
+        for n, line in enumerate(self.__file):
+            x = parse(line)
+            if x is None:
+                yield parse_error(n, pos, self._format_log())
+                if seekable:
+                    pos = file.tell()
+            else:
+                yield x
 
     @classmethod
     def create_parser(cls, *args, **kwargs):
@@ -83,6 +102,7 @@ class INCHIRead(CGRRead):
         """
         obj = object.__new__(cls)
         obj._INCHIRead__header = None
+        obj._INCHIRead__ignore_stereo = False
         super(INCHIRead, obj).__init__(*args, **kwargs)
         return obj.parse
 
@@ -93,7 +113,7 @@ class INCHIRead(CGRRead):
         :param force: force closing of externally opened file or buffer
         """
         if not self.__is_buffer or force:
-            self.__file.close()
+            self._file.close()
 
     def __enter__(self):
         return self
@@ -110,7 +130,7 @@ class INCHIRead(CGRRead):
         return list(iter(self))
 
     def __iter__(self):
-        return (x for x in self._data if x is not None)
+        return (x for x in self._data if not isinstance(x, parse_error))
 
     def __next__(self):
         return next(iter(self))
@@ -120,30 +140,39 @@ class INCHIRead(CGRRead):
         convert INCHI string into MoleculeContainer object. string should be start with INCHI and
         optionally continues with space/tab separated list of key:value [or key=value] data.
         """
+        self._flush_log()
         inchi, *data = inchi.split()
-        if self.__header is None:
+        if not inchi:
+            self._info('empty inchi string')
+            return
+        elif self.__header is None:
             meta = {}
             for x in data:
                 try:
                     k, v = split('[=:]', x, 1)
                     meta[k] = v
                 except ValueError:
-                    warning(f'invalid metadata entry: {x}')
+                    self._info(f'invalid metadata entry: {x}')
         else:
             meta = dict(zip(self.__header, data))
 
         try:
             record = self.__parse_inchi(inchi)
         except ValueError:
-            warning(f'string: {inchi}\nconsist errors:\n{format_exc()}')
+            self._info(f'string: {inchi}\nconsist errors:\n{format_exc()}')
             return
 
         record['meta'] = meta
         try:
-            container, mapping = self._convert_structure(record)
-            return container
+            container = self._convert_structure(record)
         except ValueError:
-            warning(f'record consist errors:\n{format_exc()}')
+            self._info(f'record consist errors:\n{format_exc()}')
+        else:
+            if self._store_log:
+                log = self._format_log()
+                if log:
+                    container.meta['CGRtoolsParserLog'] = log
+            return container
 
     @staticmethod
     def __parse_inchi(string):

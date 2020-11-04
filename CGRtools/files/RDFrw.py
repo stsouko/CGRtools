@@ -23,12 +23,12 @@ from itertools import chain
 from logging import warning
 from os.path import getsize
 from subprocess import check_output
-from sys import platform
 from time import strftime
 from traceback import format_exc
 from warnings import warn
-from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead
-from ..containers import ReactionContainer
+from ._mdl import parse_error
+from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, RXNRead, ERXNRead, EMDLWrite
+from ..containers import ReactionContainer, MoleculeContainer
 from ..containers.common import Graph
 
 
@@ -48,22 +48,26 @@ class RDFRead(MDLRead):
             order, records with errors are skipped
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         super().__init__(file, **kwargs)
+        self.__file = iter(self._file.readline, '')
         self._data = self.__reader()
 
-        if indexable and platform != 'win32' and not self._is_buffer:
-            self.__file = iter(self._file.readline, '')
+        if indexable:
             if next(self._data):
-                self._shifts = self._load_cache()
-                if self._shifts is None:
-                    self._shifts = [int(x.split(b':', 1)[0]) for x in
-                                    check_output(['grep', '-boE', r'^\$[RM]FMT', self._file.name]).split()]
-                    self._shifts.append(getsize(self._file.name))
-                    self._dump_cache(self._shifts)
+                self._load_cache()
         else:
-            self.__file = self._file
             next(self._data)
+
+    @staticmethod
+    def _get_shifts(file):
+        shifts = [int(x.split(b':', 1)[0]) for x in
+                  check_output(['grep', '-boE', r'^\$[RM]FMT', file]).split()]
+        shifts.append(getsize(file))
+        return shifts
 
     def seek(self, offset):
         """
@@ -76,18 +80,21 @@ class RDFRead(MDLRead):
                 new_pos = self._shifts[offset]
                 if current_pos != new_pos:
                     if current_pos == self._shifts[-1]:  # reached the end of the file
-                        self._data = self.__reader()
-                        self.__file = iter(self._file.readline, '')
                         self._file.seek(0)
+                        self.__file = iter(self._file.readline, '')
+                        self._data = self.__reader()
                         next(self._data)
                         if offset:  # move not to the beginning of the file
                             self._file.seek(new_pos)
+                            self._data.send(offset)
+                            self.__already_seeked = True
                     else:
                         if not self.__already_seeked:
-                            if self._shifts[0] < current_pos:  # in the middle of the file
-                                self._data.send(True)
+                            self._file.seek(new_pos)
+                            self._data.send(offset)
                             self.__already_seeked = True
-                        self._file.seek(new_pos)
+                        else:
+                            raise BlockingIOError('File already seeked. New seek possible only after reading any data')
             else:
                 raise IndexError('invalid offset')
         else:
@@ -110,18 +117,29 @@ class RDFRead(MDLRead):
         raise self._implement_error
 
     def __reader(self):
-        record = parser = mkey = None
+        record = parser = mkey = pos = None
         failed = False
+        file = self._file
+        seekable = file.seekable()
 
         if next(self.__file).startswith('$RXN'):  # parse RXN file
             is_reaction = True
             ir = 3
             meta = defaultdict(list)
+            if seekable:
+                pos = 0  # $RXN line starting position
+            count = 0
             yield False
         elif next(self.__file).startswith('$DATM'):  # skip header
             ir = 0
             is_reaction = meta = None
-            yield True
+            seek = yield True
+            if seek is not None:
+                yield
+                count = seek - 1
+                self.__already_seeked = False
+            else:
+                count = -1
         else:
             raise ValueError('invalid file')
 
@@ -134,10 +152,16 @@ class RDFRead(MDLRead):
                         record = parser.getvalue()
                         parser = None
                 except ValueError:
-                    failed = True
                     parser = None
-                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    seek = yield parse_error(count, pos, self._format_log())
+                    if seek is not None:
+                        yield
+                        count = seek - 1
+                        self.__already_seeked = False
+                    else:
+                        failed = True
+                    self._flush_log()
             elif line.startswith('$RFMT'):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
@@ -145,20 +169,30 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
-                        seek = yield container
+                            container = self._convert_structure(record)
                     except ValueError:
-                        warning(f'record consist errors:\n{format_exc()}')
-                        seek = yield None
+                        self._info(f'record consist errors:\n{format_exc()}')
+                        seek = yield parse_error(count, pos, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        seek = yield container
+                    self._flush_log()
 
                     record = None
-                    if seek:
+                    if seek is not None:
                         yield
+                        count = seek - 1
                         self.__already_seeked = False
                         continue
 
+                if seekable:
+                    pos = file.tell()  # $RXN line starting position
+                count += 1
                 is_reaction = True
                 ir = 4
                 failed = False
@@ -171,20 +205,30 @@ class RDFRead(MDLRead):
                         record['title'] = title
                     try:
                         if is_reaction:
-                            container, mapping = self._convert_reaction(record)
+                            container = self._convert_reaction(record)
                         else:
-                            container, mapping = self._convert_structure(record)
-                        seek = yield container
+                            container = self._convert_structure(record)
                     except ValueError:
-                        warning(f'record consist errors:\n{format_exc()}')
-                        seek = yield None
+                        self._info(f'record consist errors:\n{format_exc()}')
+                        seek = yield parse_error(count, pos, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        seek = yield container
+                    self._flush_log()
 
                     record = None
-                    if seek:
+                    if seek is not None:
                         yield
+                        count = seek - 1
                         self.__already_seeked = False
                         continue
 
+                if seekable:
+                    pos = file.tell()  # MOL block line starting position
+                count += 1
                 ir = 3
                 failed = is_reaction = False
                 mkey = None
@@ -193,7 +237,7 @@ class RDFRead(MDLRead):
                 if line.startswith('$DTYPE'):
                     mkey = line[7:].strip()
                     if not mkey:
-                        warning(f'invalid metadata entry: {line}')
+                        self._info(f'invalid metadata entry: {line}')
                 elif mkey:
                     data = line.lstrip("$DATUM").strip()
                     if data:
@@ -206,72 +250,125 @@ class RDFRead(MDLRead):
                 try:
                     if is_reaction:
                         if line.startswith('M  V30 COUNTS'):
-                            parser = ERXNRead(line, self._ignore)
+                            parser = ERXNRead(line, self._ignore, self._log_buffer)
                         else:
-                            parser = RXNRead(line, self._ignore)
+                            parser = RXNRead(line, self._ignore, self._log_buffer)
                     else:
                         if 'V2000' in line:
-                            parser = MOLRead(line)
+                            parser = MOLRead(line, self._log_buffer)
                         elif 'V3000' in line:
-                            parser = EMOLRead()
+                            parser = EMOLRead(self._log_buffer)
                         else:
                             raise ValueError('invalid MOL entry')
                 except ValueError:
                     failed = True
-                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    seek = yield parse_error(count, pos, self._format_log())
+                    if seek is not None:
+                        yield
+                        count = seek - 1
+                        self.__already_seeked = False
+                    self._flush_log()
         if record:
             record['meta'] = self._prepare_meta(meta)
             if title:
                 record['title'] = title
             try:
                 if is_reaction:
-                    container, mapping = self._convert_reaction(record)
+                    container = self._convert_reaction(record)
                 else:
-                    container, mapping = self._convert_structure(record)
-                yield container
+                    container = self._convert_structure(record)
             except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
-                yield None
+                self._info(f'record consist errors:\n{format_exc()}')
+                log = self._format_log()
+                self._flush_log()
+                yield parse_error(count, pos, log)
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                self._flush_log()
+                yield container
 
     __already_seeked = False
 
 
-class RDFWrite(MDLWrite):
+class _RDFWrite:
+    def __init__(self, file, *, append: bool = False, write3d: bool = False, mapping: bool = True):
+        """
+        :param append: append to existing file (True) or rewrite it (False). For buffered writer object append = False
+            will write RDF header and append = True will omit the header.
+        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
+        :param mapping: write atom mapping.
+        """
+        super().__init__(file, append=append, write3d=int(write3d), mapping=mapping)
+        if not append or not (self._is_buffer or self._file.tell() != 0):
+            self.write = self.__write
+
+    def __write(self, data):
+        """
+        write single molecule or reaction into file
+        """
+        del self.write
+        self._file.write(strftime('$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n'))
+        self.write(data)
+
+
+class RDFWrite(_RDFWrite, MDLWrite):
     """
     MDL RDF files writer. works similar to opened for writing file object. support `with` context manager.
     on initialization accept opened for writing in text mode file, string path to file,
     pathlib.Path object or another buffered writer object
     """
-    def __init__(self, file, *, write3d: bool = False):
-        """
-        :param write3d: write for Molecules first 3D coordinates instead 2D if exists.
-        """
-        super().__init__(file, write3d=int(write3d))
-
     def write(self, data):
-        """
-        write single molecule or reaction into file
-        """
-        self._file.write(strftime('$RDFILE 1\n$DATM    %m/%d/%y %H:%M\n'))
-        self.__write(data)
-        self.write = self.__write
-
-    def __write(self, data):
         if isinstance(data, Graph):
             m = self._convert_structure(data)
             self._file.write('$MFMT\n')
             self._file.write(m)
         elif isinstance(data, ReactionContainer):
-            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n'
-                             f'{len(data.reactants):3d}{len(data.products):3d}{len(data.reagents):3d}\n')
+            ag = f'{len(data.reagents):3d}' if data.reagents else ''
+            self._file.write(f'$RFMT\n$RXN\n{data.name}\n\n\n{len(data.reactants):3d}{len(data.products):3d}{ag}\n')
             for m in chain(data.reactants, data.products, data.reagents):
                 m = self._convert_structure(m)
                 self._file.write('$MOL\n')
                 self._file.write(m)
         else:
             raise TypeError('Graph or Reaction object expected')
+        for k, v in data.meta.items():
+            self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
+
+class ERDFWrite(_RDFWrite, EMDLWrite):
+    """
+    MDL V3000 RDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
+    def write(self, data):
+        if isinstance(data, MoleculeContainer):
+            m = self._convert_structure(data)
+            self._file.write(f'$MFMT\n{data.name}\n\n\n  0  0  0     0  0            999 V3000\n')
+            self._file.write(m)
+            self._file.write('M  END\n')
+        elif isinstance(data, ReactionContainer):
+            ag = f' {len(data.reagents)}' if data.reagents else ''
+            self._file.write(f'$RFMT\n$RXN V3000\n{data.name}\n\n\n'
+                             f'M  V30 COUNTS {len(data.reactants)} {len(data.products)}{ag}\nM  V30 BEGIN REACTANT\n')
+            for m in data.reactants:
+                self._file.write(self._convert_structure(m))
+            self._file.write('M  V30 END REACTANT\nM  V30 BEGIN PRODUCT\n')
+            for m in data.products:
+                self._file.write(self._convert_structure(m))
+            self._file.write('M  V30 END PRODUCT\n')
+            if data.reagents:
+                self._file.write('M  V30 BEGIN AGENT\n')
+                for m in data.reagents:
+                    self._file.write(self._convert_structure(m))
+                self._file.write('M  V30 END AGENT\n')
+            self._file.write('M  END\n')
+        else:
+            raise TypeError('Molecule or Reaction object expected')
         for k, v in data.meta.items():
             self._file.write(f'$DTYPE {k}\n$DATUM {v}\n')
 
@@ -320,4 +417,4 @@ class RDFwrite:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['RDFRead', 'RDFWrite', 'RDFread', 'RDFwrite']
+__all__ = ['RDFRead', 'RDFWrite', 'ERDFWrite', 'RDFread', 'RDFwrite']

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 #  This file is part of CGRtools.
 #
@@ -17,9 +17,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-"""
-CGRtools main module. Contains all common classes and functions.
-"""
 from .containers import *
 from .files import *
 from .preparer import *
@@ -28,8 +25,10 @@ from .utils import *
 
 
 smiles = SMILESRead.create_parser(ignore=True)
+xyz = XYZRead.create_parser()
 
-__all__ = ['smiles']
+
+__all__ = ['smiles', 'xyz']
 
 if 'INCHIRead' in locals():
     inchi = INCHIRead.create_parser()

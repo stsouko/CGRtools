@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from importlib.util import find_spec
 from io import StringIO, BytesIO, TextIOWrapper, BufferedIOBase, BufferedReader
 from itertools import count
@@ -24,9 +24,12 @@ from logging import warning
 from pathlib import Path
 from traceback import format_exc
 from warnings import warn
-from ._CGRrw import CGRRead
+from ._mdl import MDLStereo
 from ..containers import MoleculeContainer, ReactionContainer
 from ..exceptions import EmptyMolecule
+
+
+parse_error = namedtuple('MRVParseError', ('number', 'json', 'log'))
 
 
 def xml_dict(parent_element, stop_list=None):
@@ -69,7 +72,7 @@ def xml_dict(parent_element, stop_list=None):
     return out
 
 
-class MRVRead(CGRRead):
+class MRVRead(MDLStereo):
     """
     ChemAxon MRV files reader. works similar to opened file object. support `with` context manager.
     on initialization accept opened in binary mode file, string path to file,
@@ -79,6 +82,9 @@ class MRVRead(CGRRead):
         """
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         if isinstance(file, str):
             self.__file = open(file, 'rb')
@@ -118,13 +124,13 @@ class MRVRead(CGRRead):
         return list(iter(self))
 
     def __iter__(self):
-        return (x for x in self._data if x is not None)
+        return (x for x in self._data if not isinstance(x, parse_error))
 
     def __next__(self):
         return next(iter(self))
 
     def __reader(self):
-        for _, element in iterparse(self.__file, tag='{*}MChemicalStruct'):
+        for n, (_, element) in enumerate(iterparse(self.__file, tag='{*}MChemicalStruct')):
             parsed = xml_dict(element)
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
@@ -132,40 +138,51 @@ class MRVRead(CGRRead):
                 try:
                     record = self.__parse_molecule(parsed)
                 except (KeyError, ValueError):
-                    warning(f'record consist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'record consist errors:\n{format_exc()}')
+                    yield parse_error(n, parsed, self._format_log())
                 else:
                     if 'propertyList' in parsed and 'property' in parsed['propertyList']:
                         record['meta'] = self.__parse_property(parsed['propertyList']['property'])
                     else:
                         record['meta'] = {}
                     try:
-                        container, mapping = self._convert_structure(record)
-                        yield container
+                        container = self._convert_structure(record)
                     except ValueError:
-                        warning(f'record consist errors:\n{format_exc()}')
-                        yield None
+                        self._info(f'record consist errors:\n{format_exc()}')
+                        yield parse_error(n, parsed, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        yield container
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
                 parsed = parsed['reaction']
                 try:
                     record = self.__parse_reaction(parsed)
                 except (KeyError, ValueError):
-                    warning(f'record consist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'record consist errors:\n{format_exc()}')
+                    yield parse_error(n, parsed, self._format_log())
                 else:
                     if 'propertyList' in parsed and 'property' in parsed['propertyList']:
                         record['meta'] = self.__parse_property(parsed['propertyList']['property'])
                     else:
                         record['meta'] = {}
                     try:
-                        container, mapping = self._convert_reaction(record)
-                        yield container
+                        container = self._convert_reaction(record)
                     except ValueError:
-                        warning(f'record consist errors:\n{format_exc()}')
-                        yield None
+                        self._info(f'record consist errors:\n{format_exc()}')
+                        yield parse_error(n, parsed, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        yield container
             else:
-                warning('invalid MDocument')
-                yield None
+                self._info('invalid MDocument')
+                yield parse_error(n, parsed, self._format_log())
+            self._flush_log()
 
     def __parse_reaction(self, data):
         reaction = {'reactants': [], 'products': [], 'reagents': []}
@@ -183,11 +200,10 @@ class MRVRead(CGRRead):
                     except EmptyMolecule:
                         if not self._ignore:
                             raise
-                        warning('empty molecule ignored')
+                        self._info('empty molecule ignored')
         return reaction
 
-    @staticmethod
-    def __parse_property(data):
+    def __parse_property(self, data):
         meta = {}
         if isinstance(data, dict):
             key = data['@title']
@@ -195,7 +211,7 @@ class MRVRead(CGRRead):
             if key and val:
                 meta[key] = val
             else:
-                warning(f'invalid metadata entry: {data}')
+                self._info(f'invalid metadata entry: {data}')
         else:
             for x in data:
                 key = x['@title']
@@ -203,7 +219,7 @@ class MRVRead(CGRRead):
                 if key and val:
                     meta[key] = val
                 else:
-                    warning(f'invalid metadata entry: {x}')
+                    self._info(f'invalid metadata entry: {x}')
         return meta
 
     def __parse_molecule(self, data):
@@ -277,9 +293,9 @@ class MRVRead(CGRRead):
                         elif s == 'W':
                             stereo.append((atom_map[a1], atom_map[a2], 1))
                         else:
-                            warning('invalid or unsupported stereo')
+                            self._info('invalid or unsupported stereo')
                     else:
-                        warning('incorrect bondStereo tag')
+                        self._info('incorrect bondStereo tag')
                 bonds.append((atom_map[a1], atom_map[a2], order))
 
         mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo}

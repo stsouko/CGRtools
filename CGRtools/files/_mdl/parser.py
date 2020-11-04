@@ -16,36 +16,40 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from itertools import count
-from logging import warning
-from ..containers import ReactionContainer, MoleculeContainer, CGRContainer, QueryContainer
-from ..containers.bonds import Bond, DynamicBond
-from ..exceptions import MappingError, AtomNotFound
-from ..periodictable import Element, DynamicElement, QueryElement
+from ...containers import CGRContainer, MoleculeContainer, QueryContainer, ReactionContainer
+from ...containers.bonds import Bond, DynamicBond
+from ...exceptions import AtomNotFound, MappingError
+from ...periodictable import DynamicElement, Element, QueryElement
 
 
-common_isotopes = {'H': 1, 'He': 4, 'Li': 7, 'Be': 9, 'B': 11, 'C': 12, 'N': 14, 'O': 16, 'F': 19, 'Ne': 20, 'Na': 23,
-                   'Mg': 24, 'Al': 27, 'Si': 28, 'P': 31, 'S': 32, 'Cl': 35, 'Ar': 40, 'K': 39, 'Ca': 40, 'Sc': 45,
-                   'Ti': 48, 'V': 51, 'Cr': 52, 'Mn': 55, 'Fe': 56, 'Co': 59, 'Ni': 59, 'Cu': 64, 'Zn': 65, 'Ga': 70,
-                   'Ge': 73, 'As': 75, 'Se': 79, 'Br': 80, 'Kr': 84, 'Rb': 85, 'Sr': 88, 'Y': 89, 'Zr': 91, 'Nb': 93,
-                   'Mo': 96, 'Tc': 98, 'Ru': 101, 'Rh': 103, 'Pd': 106, 'Ag': 108, 'Cd': 112, 'In': 115, 'Sn': 119,
-                   'Sb': 122, 'Te': 128, 'I': 127, 'Xe': 131, 'Cs': 133, 'Ba': 137, 'La': 139, 'Ce': 140, 'Pr': 141,
-                   'Nd': 144, 'Pm': 145, 'Sm': 150, 'Eu': 152, 'Gd': 157, 'Tb': 159, 'Dy': 163, 'Ho': 165, 'Er': 167,
-                   'Tm': 169, 'Yb': 173, 'Lu': 175, 'Hf': 178, 'Ta': 181, 'W': 184, 'Re': 186, 'Os': 190, 'Ir': 192,
-                   'Pt': 195, 'Au': 197, 'Hg': 201, 'Tl': 204, 'Pb': 207, 'Bi': 209, 'Po': 209, 'At': 210, 'Rn': 222,
-                   'Fr': 223, 'Ra': 226, 'Ac': 227, 'Th': 232, 'Pa': 231, 'U': 238, 'Np': 237, 'Pu': 244, 'Am': 243,
-                   'Cm': 247, 'Bk': 247, 'Cf': 251, 'Es': 252, 'Fm': 257, 'Md': 258, 'No': 259, 'Lr': 260, 'Rf': 261,
-                   'Db': 270, 'Sg': 269, 'Bh': 270, 'Hs': 270, 'Mt': 278, 'Ds': 281, 'Rg': 281, 'Cn': 285, 'Nh': 278,
-                   'Fl': 289, 'Mc': 289, 'Lv': 293, 'Ts': 297, 'Og': 294}
-elements_set = set(common_isotopes)
-elements_list = list(common_isotopes)
+parse_error = namedtuple('ParseError', ('number', 'position', 'log'))
 
 
 class CGRRead:
-    def __init__(self, remap=True, ignore=False):
+    """
+    Override classes below then inheritance used.
+    """
+    CGRContainer = CGRContainer
+    MoleculeContainer = MoleculeContainer
+    QueryContainer = QueryContainer
+    ReactionContainer = ReactionContainer
+
+    def __init__(self, remap=True, ignore=False, store_log=False):
         self.__remap = remap
         self._ignore = ignore
+        self._store_log = store_log
+        self._log_buffer = []
+
+    def _info(self, msg):
+        self._log_buffer.append(msg)
+
+    def _flush_log(self):
+        self._log_buffer.clear()
+
+    def _format_log(self):
+        return '\n'.join(self._log_buffer)
 
     def _convert_reaction(self, reaction):
         if not (reaction['reactants'] or reaction['products'] or reaction['reagents']):
@@ -60,7 +64,7 @@ class CGRRead:
                         if m in used:
                             if not self._ignore:
                                 raise MappingError('mapping in molecules should be unique')
-                            warning(f'non-unique mapping in molecule: {m}')
+                            self._info(f'non-unique mapping in molecule: {m}')
                         else:
                             used.add(m)
                     tmp.append(m)
@@ -80,7 +84,7 @@ class CGRRead:
                         raise MappingError('mapping in reagents or products or reactants should be unique')
                     # force remap non unique atoms in molecules.
                     remap.append(next(length))
-                    warning(f'mapping changed: {m} to {remap[-1]}')
+                    self._info(f'mapping in {i} changed from {m} to {remap[-1]}')
                 else:
                     remap.append(m)
                     used.add(m)
@@ -91,7 +95,7 @@ class CGRRead:
                 e = f'reagents has map intersection with reactants or products: {tmp}'
                 if not self._ignore:
                     raise MappingError(e)
-                warning(e)
+                self._info(e)
                 maps['reagents'] = [x if x not in tmp else next(length) for x in maps['reagents']]
 
         # find breaks in map. e.g. 1,2,5,6. 3,4 - skipped
@@ -106,7 +110,6 @@ class CGRRead:
                         maps[i] = tmp = [x if x < j else x - 1 for x in tmp]
 
         rc = {'reactants': [], 'products': [], 'reagents': []}
-        rm = {'reactants': [], 'products': [], 'reagents': []}
         for i, tmp in maps.items():
             shift = 0
             for j in reaction[i]:
@@ -115,8 +118,7 @@ class CGRRead:
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
                 rc[i].append(g)
-                rm[i].append(remapped)
-        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc), rm
+        return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
 
     def _convert_structure(self, molecule):
         if self.__remap:
@@ -132,18 +134,17 @@ class CGRRead:
                     if not self._ignore:
                         raise MappingError('mapping in molecules should be unique')
                     remapped[n] = next(length)
-                    warning(f'mapping in molecule changed: {m} to {remapped[n]}')
+                    self._info(f'mapping in molecule changed from {m} to {remapped[n]}')
                 else:
                     remapped[n] = m
                     used.add(m)
 
         g = self.__prepare_structure(molecule, remapped)
         g.meta.update(molecule['meta'])
-        return g, remapped
+        return g
 
-    @staticmethod
-    def __convert_molecule(molecule, mapping):
-        g = object.__new__(MoleculeContainer)
+    def _convert_molecule(self, molecule, mapping):
+        g = object.__new__(self.MoleculeContainer)
         pm = {}
         atoms = {}
         plane = {}
@@ -174,11 +175,10 @@ class CGRRead:
             conformers = []
         g.__setstate__({'atoms': atoms, 'bonds': bonds, 'meta': {}, 'plane': plane, 'parsed_mapping': pm,
                         'charges': charges, 'radicals': radicals, 'name': '', 'conformers': conformers,
-                        'atoms_stereo': {}})
+                        'atoms_stereo': {}, 'allenes_stereo': {}, 'cis_trans_stereo': {}})
         return g
 
-    @staticmethod
-    def __convert_cgr(molecule, mapping):
+    def _convert_cgr(self, molecule, mapping):
         atoms = molecule['atoms']
         bonds = defaultdict(dict)
 
@@ -191,7 +191,7 @@ class CGRRead:
                 n, m = nm
                 bonds[n][m] = bonds[m][n] = DynamicBond(*value)
 
-        g = object.__new__(CGRContainer)
+        g = object.__new__(self.CGRContainer)
         pm = {}
         g_atoms = {}
         plane = {}
@@ -230,13 +230,12 @@ class CGRRead:
                         'p_radicals': p_radicals})
         return g
 
-    @staticmethod
-    def __convert_query(molecule, mapping):
+    def _convert_query(self, molecule, mapping):
         atoms = molecule['atoms']
         for n, _type, value in molecule['query']:
             atoms[n][_type] = value
 
-        g = QueryContainer()
+        g = self.QueryContainer()
         pm = g._parsed_mapping
         for n, atom in enumerate(atoms):
             n = g.add_atom(QueryElement.from_symbol(atom['element'])(atom['isotope']), mapping[n],
@@ -252,12 +251,15 @@ class CGRRead:
         if 'query' in molecule:
             if 'cgr' in molecule:
                 raise ValueError('QueryCGR parsing not supported')
-            g = self.__convert_query(molecule, mapping)
+            g = self._convert_query(molecule, mapping)
         elif 'cgr' in molecule:
-            g = self.__convert_cgr(molecule, mapping)
+            g = self._convert_cgr(molecule, mapping)
         else:
-            g = self.__convert_molecule(molecule, mapping)
+            g = self._convert_molecule(molecule, mapping)
 
         if 'title' in molecule:
             g.name = molecule['title']
         return g
+
+
+__all__ = ['CGRRead', 'parse_error']

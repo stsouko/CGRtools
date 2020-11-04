@@ -21,10 +21,11 @@ from collections import defaultdict
 from io import BytesIO
 from logging import warning
 from subprocess import check_output
-from sys import platform
 from traceback import format_exc
 from warnings import warn
-from ._MDLrw import MDLRead, MDLWrite, MOLRead, EMOLRead
+from ._mdl import parse_error
+from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, EMDLWrite
+from ..exceptions import EmptyMolecule
 
 
 class SDFRead(MDLRead):
@@ -43,21 +44,25 @@ class SDFRead(MDLRead):
             order, records with errors are skipped
         :param ignore: Skip some checks of data or try to fix some errors.
         :param remap: Remap atom numbers started from one.
+        :param store_log: Store parser log if exists messages to `.meta` by key `CGRtoolsParserLog`.
+        :param calc_cis_trans: Calculate cis/trans marks from 2d coordinates.
+        :param ignore_stereo: Ignore stereo data.
         """
         super().__init__(file, **kwargs)
+        self.__file = iter(self._file.readline, '')
         self._data = self.__reader()
+        next(self._data)
 
-        if indexable and platform != 'win32' and not self._is_buffer:
-            self.__file = iter(self._file.readline, '')
-            self._shifts = self._load_cache()
-            if self._shifts is None:
-                self._shifts = [0]
-                for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', self._file.name])):
-                    _pos, _line = x.split(b':', 1)
-                    self._shifts.append(int(_pos) + len(_line))
-                self._dump_cache(self._shifts)
-        else:
-            self.__file = self._file
+        if indexable:
+            self._load_cache()
+
+    @staticmethod
+    def _get_shifts(file):
+        shifts = [0]
+        for x in BytesIO(check_output(['grep', '-bE', r'\$\$\$\$', file])):
+            pos, line = x.split(b':', 1)
+            shifts.append(int(pos) + len(line))
+        return shifts
 
     def seek(self, offset):
         """
@@ -70,9 +75,19 @@ class SDFRead(MDLRead):
                 new_pos = self._shifts[offset]
                 if current_pos != new_pos:
                     if current_pos == self._shifts[-1]:  # reached the end of the file
-                        self._data = self.__reader()
+                        self._file.seek(new_pos)
                         self.__file = iter(self._file.readline, '')
-                    self._file.seek(new_pos)
+                        self._data = self.__reader()
+                        next(self._data)
+                        if offset:
+                            self._data.send(offset)
+                            self.__already_seeked = True
+                    elif not self.__already_seeked:
+                        self._file.seek(new_pos)
+                        self._data.send(offset)
+                        self.__already_seeked = True
+                    else:
+                        raise BlockingIOError('File already seeked. New seek possible only after reading any data')
             else:
                 raise IndexError('invalid offset')
         else:
@@ -92,6 +107,17 @@ class SDFRead(MDLRead):
         failkey = False
         mkey = parser = record = None
         meta = defaultdict(list)
+        file = self._file
+        seekable = file.seekable()
+        seek = yield  # init stop
+        if seek is not None:
+            yield
+            pos = file.tell()
+            count = seek
+            self.__already_seeked = False
+        else:
+            pos = 0 if seekable else None
+            count = 0
         for line in self.__file:
             if failkey and not line.startswith("$$$$"):
                 continue
@@ -101,24 +127,46 @@ class SDFRead(MDLRead):
                         record = parser.getvalue()
                         parser = None
                 except ValueError:
-                    failkey = True
                     parser = None
-                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    yield None
-
+                    self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    seek = yield parse_error(count, pos, self._format_log())
+                    if seek is not None:  # seeked to start of mol block
+                        yield
+                        count = seek
+                        pos = file.tell()
+                        im = 3
+                        mkey = None
+                        meta = defaultdict(list)
+                        self.__already_seeked = False
+                    else:
+                        failkey = True
+                    self._flush_log()
             elif line.startswith("$$$$"):
                 if record:
                     record['meta'] = self._prepare_meta(meta)
                     if title:
                         record['title'] = title
                     try:
-                        container, mapping = self._convert_structure(record)
-                        yield container
+                        container = self._convert_structure(record)
                     except ValueError:
-                        warning(f'record consist errors:\n{format_exc()}')
-                        yield None
+                        self._info(f'record consist errors:\n{format_exc()}')
+                        seek = yield parse_error(count, pos, self._format_log())
+                    else:
+                        if self._store_log:
+                            log = self._format_log()
+                            if log:
+                                container.meta['CGRtoolsParserLog'] = log
+                        seek = yield container
+                    if seek is not None:  # seeked position
+                        yield
+                        count = seek - 1
+                        self.__already_seeked = False
+                    self._flush_log()
                     record = None
 
+                if seekable:
+                    pos = file.tell()
+                count += 1
                 im = 3
                 failkey = False
                 mkey = None
@@ -127,7 +175,7 @@ class SDFRead(MDLRead):
                 if line.startswith('>  <'):
                     mkey = line.rstrip()[4:-1].strip()
                     if not mkey:
-                        warning(f'invalid metadata entry: {line}')
+                        self._info(f'invalid metadata entry: {line}')
                 elif mkey:
                     data = line.strip()
                     if data:
@@ -139,26 +187,53 @@ class SDFRead(MDLRead):
             elif not im:
                 try:
                     if 'V2000' in line:
-                        parser = MOLRead(line)
+                        try:
+                            parser = MOLRead(line, self._log_buffer)
+                        except EmptyMolecule:
+                            if self._ignore:
+                                parser = EMOLRead(self._log_buffer)
+                                self._info(f'line:\n{line}\nconsist errors:\nempty atoms list. try to parse as V3000')
+                            else:
+                                raise
                     elif 'V3000' in line:
-                        parser = EMOLRead()
+                        parser = EMOLRead(self._log_buffer)
                     else:
                         raise ValueError('invalid MOL entry')
                 except ValueError:
-                    failkey = True
-                    warning(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    yield None
+                    self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
+                    seek = yield parse_error(count, pos, self._format_log())
+                    if seek is not None:  # seeked to start of mol block
+                        yield
+                        count = seek
+                        pos = file.tell()
+                        im = 3
+                        mkey = None
+                        meta = defaultdict(list)
+                        self.__already_seeked = False
+                    else:
+                        failkey = True
+                    self._flush_log()
 
         if record:  # True for MOL file only.
             record['meta'] = self._prepare_meta(meta)
             if title:
                 record['title'] = title
             try:
-                container, mapping = self._convert_structure(record)
-                yield container
+                container = self._convert_structure(record)
             except ValueError:
-                warning(f'record consist errors:\n{format_exc()}')
-                yield None
+                self._info(f'record consist errors:\n{format_exc()}')
+                log = self._format_log()
+                self._flush_log()
+                yield parse_error(count, pos, log)
+            else:
+                if self._store_log:
+                    log = self._format_log()
+                    if log:
+                        container.meta['CGRtoolsParserLog'] = log
+                self._flush_log()
+                yield container
+
+    __already_seeked = False
 
 
 class SDFWrite(MDLWrite):
@@ -176,6 +251,29 @@ class SDFWrite(MDLWrite):
             self._file.write('$$$$\n'.join(mol))
         else:
             self._file.write(mol)
+
+        for k, v in data.meta.items():
+            self._file.write(f'>  <{k}>\n{v}\n')
+        self._file.write('$$$$\n')
+
+
+class ESDFWrite(EMDLWrite):
+    """
+    MDL V3000 SDF files writer. works similar to opened for writing file object. support `with` context manager.
+    on initialization accept opened for writing in text mode file, string path to file,
+    pathlib.Path object or another buffered writer object
+    """
+    def write(self, data):
+        """
+        write single molecule into file
+        """
+        mol = self._convert_structure(data)
+        self._file.write(f'{data.name}\n\n\n  0  0  0     0  0            999 V3000\n')
+        if isinstance(mol, list):
+            self._file.write(f'M  END\n$$$$\n{data.name}\n\n\n  0  0  0     0  0            999 V3000\n'.join(mol))
+        else:
+            self._file.write(mol)
+        self._file.write('M  END\n')
 
         for k, v in data.meta.items():
             self._file.write(f'>  <{k}>\n{v}\n')
@@ -226,4 +324,4 @@ class SDFwrite:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-__all__ = ['SDFRead', 'SDFWrite', 'SDFread', 'SDFwrite']
+__all__ = ['SDFRead', 'SDFWrite', 'ESDFWrite', 'SDFread', 'SDFwrite']

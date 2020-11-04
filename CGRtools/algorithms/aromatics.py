@@ -16,9 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import defaultdict
-from itertools import product
+from collections import defaultdict, deque
 from typing import List, Optional, Tuple
+from .._functions import lazy_product
 from ..exceptions import InvalidAromaticRing
 
 
@@ -64,9 +64,10 @@ class Aromatize:
         if not rings:
             return False
 
-        rings = self._sssr(rings)  # search rings again
-        if not rings:
+        n_sssr = sum(len(x) for x in rings.values()) // 2 - len(rings) + len(self._connected_components(rings))
+        if not n_sssr:
             return False
+        rings = self._sssr(rings, n_sssr)  # search rings again
 
         seen = set()
         for ring in rings:
@@ -79,6 +80,7 @@ class Aromatize:
             sh[n] = 4
 
         self.flush_cache()
+        self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
     def kekule(self) -> bool:
@@ -125,6 +127,7 @@ class Aromatize:
         charges = self._charges
         radicals = self._radicals
         bonds = self._bonds
+        hydrogens = self._hydrogens
 
         rings = defaultdict(set)  # aromatic skeleton
         pyroles = set()
@@ -145,7 +148,19 @@ class Aromatize:
             return rings, pyroles, set()
         elif not triple_bonded.isdisjoint(rings):
             raise InvalidAromaticRing('triple bonds connected to rings')
-        elif any(len(ms) not in (2, 3) for ms in rings.values()):
+
+        for r in self.sssr:
+            if set(r).issubset(rings):
+                n, *_, m = r
+                if n not in rings[m]:
+                    rings[m].add(n)
+                    rings[n].add(m)
+                for n, m in zip(r, r[1:]):
+                    if n not in rings[m]:
+                        rings[m].add(n)
+                        rings[n].add(m)
+
+        if any(len(ms) not in (2, 3) for ms in rings.values()):
             raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
 
         double_bonded &= rings.keys()
@@ -182,10 +197,19 @@ class Aromatize:
                         if ab != 2:
                             raise InvalidAromaticRing
                         double_bonded.add(n)
-                    elif ab == 3:  # pyrole or P-oxyde only possible
-                        double_bonded.add(n)
+                    elif ab == 3:
+                        if an == 7:  # pyrole only possible
+                            double_bonded.add(n)
+                        else:  # P(III) or P(V)H
+                            pyroles.add(n)
                     elif ab == 2:
-                        pyroles.add(n)
+                        ah = hydrogens[n]
+                        if not ah:
+                            pyroles.add(n)
+                        elif ah == 1:  # only pyrole
+                            double_bonded.add(n)
+                        else:
+                            raise InvalidAromaticRing
                     elif ab != 4 or an != 15:  # P(V) in ring
                         raise InvalidAromaticRing
                 elif ac == -1:  # pyrole only
@@ -197,8 +221,8 @@ class Aromatize:
                 elif radicals[n]:
                     if ab != 2:  # not cation-radical pyridine
                         raise InvalidAromaticRing
-                elif ab == 2:  # pyrole cation
-                    double_bonded.add(n)
+                elif ab == 2:  # pyrole cation or protonated pyridine
+                    pyroles.add(n)
                 elif ab != 3:  # not pyridine oxyde
                     raise InvalidAromaticRing
             elif an == 8:  # furan
@@ -222,12 +246,29 @@ class Aromatize:
                         raise InvalidAromaticRing('S, Se, Te hypervalent ring')
             elif an == 5:  # boron
                 if ac == 0:
-                    if ab == 3 and not radicals[n] or ab == 2:
+                    if ab == 2:
+                        if radicals[n]:  # C=1O[B]OC=1
+                            double_bonded.add(n)
+                        else:  # b1ccccc1 or C=1O[BH]OC=1
+                            pyroles.add(n)
+                    elif not radicals[n]:
                         double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing
-                elif ac in (-1, 1) and ab == 2 and not radicals[n]:
-                    double_bonded.add(n)
+                elif ac == 1:
+                    if ab == 2 and not radicals[n]:
+                        double_bonded.add(n)
+                    else:
+                        raise InvalidAromaticRing
+                elif ac == -1:
+                    if ab == 2:
+                        if not radicals[n]:  # C=1O[B-]OC=1 or [bH-]1ccccc1
+                            pyroles.add(n)
+                        # anion-radical is benzene like
+                    elif radicals[n]:  # C=1O[B-*](R)OC=1
+                        double_bonded.add(n)
+                    else:
+                        pyroles.add(n)
                 else:
                     raise InvalidAromaticRing
             else:
@@ -251,12 +292,20 @@ class Aromatize:
         components = []
         while atoms:
             start = atoms.pop()
-            component = {n: rings[n] for n in self.__component(rings, start)}
+            component = {start: rings[start]}
+            queue = deque([start])
+            while queue:
+                current = queue.popleft()
+                for n in rings[current]:
+                    if n not in component:
+                        queue.append(n)
+                        component[n] = rings[n]
+
             components.append(component)
             atoms.difference_update(component)
 
-        for keks in product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
-                              for c in components)):
+        for keks in lazy_product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
+                                   for c in components)):
             yield [x for x in keks for x in x]
 
     @staticmethod
@@ -269,9 +318,17 @@ class Aromatize:
         else:  # select not pyrole not condensed atom
             try:
                 start = next(n for n, ms in rings.items() if len(ms) == 2 and n not in pyroles)
-            except StopIteration:  # all pyroles
-                start = next(n for n, ms in rings.items() if len(ms) == 2)
-            stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
+            except StopIteration:  # all pyroles. select not condensed atom.
+                try:
+                    start = next(n for n, ms in rings.items() if len(ms) == 2)
+                except StopIteration:  # fullerene?
+                    start = next(iter(rings))
+                    double_bonded.add(start)
+                    stack = [[(next_atom, start, 2, 0)] for next_atom in rings[start]]
+                else:
+                    stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
+            else:
+                stack = [[(next_atom, start, 1, 0)] for next_atom in rings[start]]
 
         size = sum(len(x) for x in rings.values()) // 2
         path = []
@@ -291,7 +348,7 @@ class Aromatize:
                 if stack:
                     path = path[:stack[-1][-1][-1]]
                     hashed_path = {x for x, *_ in path}
-            elif atom != start:  # we finished. next step is final closure
+            elif atom != start:
                 for_stack = []
                 closures = []
                 loop = 0
@@ -386,17 +443,6 @@ class Aromatize:
 
         if nether_yielded:
             raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
-
-    @staticmethod
-    def __component(bonds, start):
-        seen = {start}
-        queue = [start]
-        while queue:
-            start = queue.pop(0)
-            yield start
-            for i in bonds[start] - seen:
-                queue.append(i)
-                seen.add(i)
 
 
 __all__ = ['Aromatize']

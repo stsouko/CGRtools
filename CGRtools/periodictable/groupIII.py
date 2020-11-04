@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -32,11 +32,11 @@ class Sc(Element, PeriodIV, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({45: 1.0})
+        return FrozenDict({45: 1.0, 44: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({45: 44.95591})
+        return FrozenDict({45: 44.95591, 44: 43.959403})
 
     @property
     def _common_valences(self):
@@ -60,11 +60,11 @@ class Y(Element, PeriodV, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({89: 1.0})
+        return FrozenDict({89: 1.0, 86: 0., 90: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({89: 88.905848})
+        return FrozenDict({89: 88.905848, 86: 85.914886, 90: 89.907152})
 
     @property
     def _common_valences(self):
@@ -247,12 +247,13 @@ class Sm(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({144: 0.0307, 147: 0.1499, 148: 0.1124, 149: 0.1382, 150: 0.0738, 152: 0.2675, 154: 0.2275})
+        return FrozenDict({144: 0.0307, 147: 0.1499, 148: 0.1124, 149: 0.1382, 150: 0.0738, 152: 0.2675, 154: 0.2275,
+                           145: 0., 153: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({144: 143.911995, 147: 146.914893, 148: 147.914818, 149: 148.91718, 150: 149.917271,
-                           152: 151.919728, 154: 153.922205})
+                           152: 151.919728, 154: 153.922205, 145: 144.913410, 153: 152.922097})
 
     @property
     def _common_valences(self):
@@ -287,11 +288,11 @@ class Eu(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({151: 0.4781, 153: 0.5219})
+        return FrozenDict({151: 0.4781, 153: 0.5219, 152: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({151: 150.919846, 153: 152.921226})
+        return FrozenDict({151: 150.919846, 153: 152.921226, 152: 151.921744})
 
     @property
     def _common_valences(self):
@@ -326,12 +327,13 @@ class Gd(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({152: 0.002, 154: 0.0218, 155: 0.148, 156: 0.2047, 157: 0.1565, 158: 0.2484, 160: 0.2186})
+        return FrozenDict({152: 0.002, 154: 0.0218, 155: 0.148, 156: 0.2047, 157: 0.1565, 158: 0.2484, 160: 0.2186,
+                           153: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({152: 151.919788, 154: 153.920862, 155: 154.922619, 156: 155.92212, 157: 156.923957,
-                           158: 157.924101, 160: 159.927051})
+                           158: 157.924101, 160: 159.927051, 153: 152.921750})
 
     @property
     def _common_valences(self):
@@ -355,11 +357,11 @@ class Tb(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({159: 1.0})
+        return FrozenDict({159: 1.0, 160: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({159: 158.925343})
+        return FrozenDict({159: 158.925343, 160: 159.927168})
 
     @property
     def _common_valences(self):
@@ -416,11 +418,11 @@ class Ho(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({165: 1.0})
+        return FrozenDict({165: 1.0, 166: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({165: 164.930319})
+        return FrozenDict({165: 164.930319, 166: 165.932284})
 
     @property
     def _common_valences(self):
@@ -484,11 +486,11 @@ class Tm(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({169: 1.0})
+        return FrozenDict({169: 1.0, 170: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({169: 168.934211})
+        return FrozenDict({169: 168.934211, 170: 169.935801})
 
     @property
     def _common_valences(self):
@@ -523,12 +525,13 @@ class Yb(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({168: 0.0013, 170: 0.0304, 171: 0.1428, 172: 0.2183, 173: 0.1613, 174: 0.3183, 176: 0.1276})
+        return FrozenDict({168: 0.0013, 170: 0.0304, 171: 0.1428, 172: 0.2183, 173: 0.1613, 174: 0.3183, 176: 0.1276,
+                           169: 0.})
 
     @property
     def isotopes_masses(self):
         return FrozenDict({168: 167.933894, 170: 169.934759, 171: 170.936322, 172: 171.936378, 173: 172.938207,
-                           174: 173.938858, 176: 175.942568})
+                           174: 173.938858, 176: 175.942568, 169: 168.935190})
 
     @property
     def _common_valences(self):
@@ -563,11 +566,11 @@ class Lu(Element, PeriodVI, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({175: 0.9741, 176: 0.0259})
+        return FrozenDict({175: 0.9741, 176: 0.0259, 177: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({175: 174.940768, 176: 175.942682})
+        return FrozenDict({175: 174.940768, 176: 175.942682, 177: 176.943758})
 
     @property
     def _common_valences(self):
@@ -591,11 +594,11 @@ class Ac(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({227: 1.0})
+        return FrozenDict({227: 1.0, 225: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({227: 227.027752})
+        return FrozenDict({227: 227.027752, 225: 225.023230})
 
     @property
     def _common_valences(self):
@@ -619,11 +622,11 @@ class Th(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({232: 1.0})
+        return FrozenDict({232: 1.0, 227: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({232: 232.03805})
+        return FrozenDict({232: 232.03805, 227: 227.027704})
 
     @property
     def _common_valences(self):
@@ -652,11 +655,11 @@ class Pa(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({231: 1.0})
+        return FrozenDict({231: 1.0, 233: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({231: 231.035879})
+        return FrozenDict({231: 231.035879, 233: 233.040247})
 
     @property
     def _common_valences(self):
@@ -741,11 +744,11 @@ class Pu(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({239: 1.0})
+        return FrozenDict({239: 1.0, 242: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({239: 239.052163})
+        return FrozenDict({239: 239.052163, 242: 242.058743})
 
     @property
     def _common_valences(self):
@@ -779,11 +782,11 @@ class Am(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({241: 1.0})
+        return FrozenDict({241: 1.0, 243: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({241: 241.056829})
+        return FrozenDict({241: 241.056829, 243: 243.061380})
 
     @property
     def _common_valences(self):
@@ -807,11 +810,11 @@ class Cm(Element, PeriodVII, GroupIII):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({244: 1.0})
+        return FrozenDict({244: 1.0, 243: 0., 248: 0.})
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({244: 244.062753})
+        return FrozenDict({244: 244.062753, 243: 243.061389, 248: 248.072349})
 
     @property
     def _common_valences(self):

@@ -21,7 +21,39 @@ from collections import Counter
 from itertools import groupby
 from logging import warning
 from operator import itemgetter
+from sys import version_info
 from typing import Dict
+
+
+if version_info[1] >= 8:
+    tuple_hash = hash
+else:
+    def tuple_hash(v):
+        """
+        Python 3.8 hash for tuples implemented on python.
+        Working only for nonnested tuples.
+        """
+        acc = 0x27D4EB2F165667C5
+        for el in v:
+            lane = hash(el)
+            if lane == -1:
+                return -1
+            elif lane < 0:
+                lane += 0x10000000000000000  # to unsigned
+
+            acc += lane * 0xC2B2AE3D27D4EB4F
+            acc %= 0x10000000000000000
+            acc = (acc << 31) % 0x10000000000000000 | (acc >> 33)
+            acc *= 0x9E3779B185EBCA87
+
+        acc += len(v) ^ 2870177450013471926  # 0xC2B2AE3D27D4EB4F ^ 3527539
+        acc %= 0x10000000000000000
+
+        if acc == 0xFFFFFFFFFFFFFFFF:
+            return 1546275796
+        elif acc > 0x7FFFFFFFFFFFFFFF:  # (1 << 63) - 1 = largest positive number
+            return acc - 0x10000000000000000
+        return acc
 
 
 class Morgan:
@@ -35,14 +67,11 @@ class Morgan:
         :return: dict of atom-order pairs
         """
         atoms = self._atoms
-        bonds = self._bonds
         if not atoms:  # for empty containers
             return {}
         elif len(atoms) == 1:  # optimize single atom containers
             return dict.fromkeys(atoms, 1)
-
-        params = {n: hash((a, *sorted(int(b) for b in bonds[n].values()))) for n, a in atoms.items()}
-        return self._morgan(params)
+        return self._morgan({n: hash(a) for n, a in atoms.items()})
 
     def _morgan(self, weights: Dict[int, int]) -> Dict[int, int]:
         atoms = self._atoms
@@ -53,7 +82,9 @@ class Morgan:
         stab = old_numb = 0
 
         for _ in range(tries):
-            weights = {n: hash((weights[n], *sorted(weights[m] for m in ms))) for n, ms in bonds.items()}
+            weights = {n: tuple_hash((weights[n],
+                                      *(x for x in sorted((weights[m], int(b)) for m, b in ms.items()) for x in x)))
+                       for n, ms in bonds.items()}
             old_numb, numb = numb, len(set(weights.values()))
             if numb == len(atoms):  # each atom now unique
                 break
