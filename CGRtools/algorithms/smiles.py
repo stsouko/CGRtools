@@ -58,7 +58,7 @@ class Smiles:
             !s - Disable stereo marks.
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
-            !r - Use aromatic bonds instead aromatic atoms.
+            t - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
             r - generate random-ordered smiles.
 
@@ -74,7 +74,7 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
-            if '!r' in format_spec:
+            if 't' in format_spec:
                 kwargs['aromatic'] = False
             if 'm' in format_spec:
                 kwargs['mapping'] = True
