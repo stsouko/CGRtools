@@ -21,6 +21,7 @@ from CachedMethods import cached_method
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count, product
+from random import random
 
 
 charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
@@ -59,6 +60,7 @@ class Smiles:
             !n - Disable neighbors marks in queries. Returns non-unique signature.
             !r - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
+            r - generate random-ordered smiles.
 
             Combining possible. Order independent. Another keys ignored.
         """
@@ -76,7 +78,12 @@ class Smiles:
                 kwargs['aromatic'] = False
             if 'm' in format_spec:
                 kwargs['mapping'] = True
-            return ''.join(self._smiles(self.atoms_order.get, **kwargs))
+            if 'r' in format_spec:
+                def w(x):
+                    return random()
+            else:
+                w = self.atoms_order.get
+            return ''.join(self._smiles(w, **kwargs))
         return str(self)
 
     def __eq__(self, other):
