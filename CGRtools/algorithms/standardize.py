@@ -1383,6 +1383,7 @@ class StandardizeReaction:
             rules = []
             for mb, mg in zip(bad.products, good.products):
                 fx = {k: v for k, v in zip(mb, mg) if k != v}
+                fx = {k:fx[k] for k in atoms.intersection(fx)}
                 fix.update(fx)
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
