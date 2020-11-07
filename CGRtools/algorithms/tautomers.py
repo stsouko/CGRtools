@@ -42,8 +42,9 @@ class Tautomers:
             self._atoms_stereo = canon._atoms_stereo
             self._allenes_stereo = canon._allenes_stereo
             self._cis_trans_stereo = canon._cis_trans_stereo
-            self._conformers = []  # flush 3d
+            self._conformers.clear()  # flush 3d
             self.flush_cache()
+            return True
         return False
 
     def enumerate_tautomers(self) -> Iterator['MoleculeContainer']:
@@ -55,34 +56,52 @@ class Tautomers:
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
-        yield self.copy()
-        seen = {self}
-        queue = deque([self])
+        copy = self.copy().thiele()
+        yield copy
+        seen = {self, copy}
+        queue = deque([copy])
         while queue:
-            for mol in queue.popleft()._enumerate_tautomers():
+            current = queue.popleft()
+            for mol in current._enumerate_zwitter_tautomers():
+                if mol not in seen:
+                    yield mol
+                    seen.add(mol)
+                    queue.append(mol)
+            for mol in current._enumerate_ring_chain_tautomers():
+                if mol not in seen:
+                    yield mol
+                    seen.add(mol)
+                    queue.append(mol)
+            for mol in current._enumerate_chain_tautomers():
+                mol.thiele()
                 if mol not in seen:
                     yield mol
                     seen.add(mol)
                     queue.append(mol)
 
-    def _enumerate_tautomers(self):
+    def _enumerate_zwitter_tautomers(self):
+        return ()
+
+    def _enumerate_ring_chain_tautomers(self):
+        return ()
+
+    def _enumerate_chain_tautomers(self):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
         plane = self._plane
         bonds = self._bonds
-        neighbors = self._neighbors
         hybridizations = self._hybridizations
         hydrogens = self._hydrogens
 
         for path in self.__enumerate_bonds():
             mol = self.__class__()
+            mol._charges.update(charges)
+            mol._radicals.update(radicals)
+            mol._plane.update(plane)
+
             m_atoms = mol._atoms
-            m_charges = mol._charges
-            m_radicals = mol._radicals
-            m_plane = mol._plane
             m_bonds = mol._bonds
-            m_neighbors = mol._neighbors
             m_hybridizations = mol._hybridizations
             m_hydrogens = mol._hydrogens
 
@@ -91,9 +110,6 @@ class Tautomers:
                 a = a.copy()
                 m_atoms[n] = a
                 a._attach_to_graph(mol, n)
-                m_charges[n] = charges[n]
-                m_radicals[n] = radicals[n]
-                m_plane[n] = plane[n]
                 m_bonds[n] = {}
                 adj[n] = set()
 
@@ -116,11 +132,9 @@ class Tautomers:
                 if n in seen:
                     mol._calc_hybridization(n)
                     mol._calc_implicit(n)
-                    m_neighbors[n] = sum(m_atoms[m].atomic_number != 1 for m in m_bonds[n])
                 else:
                     m_hybridizations[n] = h
                     m_hydrogens[n] = hydrogens[n]
-                    m_neighbors[n] = neighbors[n]
             yield mol
 
     def __enumerate_bonds(self):
@@ -135,7 +149,7 @@ class Tautomers:
             # stack is neighbors
             if hydrogen:  # enol
                 stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 1]
-            elif not hydrogen:  # ketone
+            else:  # ketone
                 stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 2]
 
             while stack:
@@ -174,24 +188,22 @@ class Tautomers:
         # reverse (has double bonded neighbor):
         # O S Se (only 1 neighbor)
         # N P(1 or 2 neighbors)
-
         atoms = self._atoms
         charges = self._charges
         hydrogens = self._hydrogens
-        neighbors = self._neighbors
+        neighbors = self.neighbors
         radicals = self._radicals
         hybridizations = self._hybridizations
 
         entries = []
-
         for n, a in atoms.items():
             if radicals[n] or charges[n]:
                 continue
-            if a.atomic_number in {8, 16, 34}:
-                if neighbors[n] == 1:
+            if a.atomic_number in (8, 16, 34):  # O S Se
+                if neighbors(n) == 1:
                     entries.append((n, bool(hydrogens[n])))
-            elif a.atomic_number in {7, 15}:
-                if 0 < neighbors[n] < 3:
+            elif a.atomic_number in (7, 15):
+                if 0 < neighbors(n) < 3:
                     if hybridizations[n] == 1:  # amine
                         if hydrogens[n]:
                             entries.append((n, True))
