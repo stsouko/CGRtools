@@ -47,7 +47,7 @@ class Tautomers:
             return True
         return False
 
-    def enumerate_tautomers(self) -> Iterator['MoleculeContainer']:
+    def enumerate_tautomers(self, *, treat_aromatic_rings=True) -> Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule. Supported hydrogen migration through delocalized chain.
 
@@ -56,7 +56,10 @@ class Tautomers:
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
-        copy = self.copy().thiele()
+        copy = self.copy()
+        if treat_aromatic_rings:
+            copy.kekule()
+            copy.thiele()  # prevent
         yield copy
         seen = {self, copy}
         queue = deque([copy])
@@ -140,44 +143,38 @@ class Tautomers:
     def __enumerate_bonds(self):
         bonds = self._bonds
         hydrogens = self._hydrogens
+        hyb = self._hybridizations
 
         # for each atom in entries
         for atom, hydrogen in self.__entries():
-            path = [atom]
-            new_bonds = []
-
+            path = []
+            seen = {atom}
             # stack is neighbors
             if hydrogen:  # enol
-                stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 1]
+                stack = [(atom, i, n.order + 1, 0, True) for i, n in bonds[atom].items() if n.order < 3]
             else:  # ketone
-                stack = [(i, n.order, 1) for i, n in bonds[atom].items() if n.order == 2]
+                stack = [(atom, i, n.order - 1, 0, False) for i, n in bonds[atom].items() if 1 < n.order < 4]
 
             while stack:
-                current, bond, depth = stack.pop()
+                last, current, bond, depth, order_up = stack.pop()
 
-                # branch processing
                 if len(path) > depth:
                     path = path[:depth]
-                    new_bonds = new_bonds[:depth - 1]
+                    seen.difference_update(x for _, x, _ in path[depth:])
 
-                # adding new bonds
-                if bond == 1:
-                    new_bonds.append((path[-1], current, 2))
-                else:
-                    new_bonds.append((path[-1], current, 1))
-                path.append(current)
+                path.append((last, current, bond))
 
                 # adding neighbors
                 depth += 1
-                nbg = [(x, y.order, depth) for x, y in bonds[current].items() if (y.order < 3) and (y.order != bond)]
-                stack.extend(nbg)
+                seen.add(current)
+                diff = -1 if order_up else 1
+                stack.extend((current, n, b, depth, not order_up) for n, b in
+                             ((n, b.order + diff) for n, b in bonds[current].items() if
+                              n not in seen and hyb[n] < 4) if 1 <= b <= 3)
 
                 # time to yield
-                if len(path) % 2:
-                    if hydrogen:  # enol
-                        yield new_bonds
-                    elif hydrogens[current]:  # ketone
-                        yield new_bonds
+                if len(path) % 2 == 0 and (hydrogen or hydrogens[current]):
+                    yield path
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
