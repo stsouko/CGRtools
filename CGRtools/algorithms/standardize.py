@@ -1362,8 +1362,8 @@ class StandardizeReaction:
                 raise ValueError('bad and good reaction should be equal')
             
             cgr_good, cgr_bad = ~good, ~bad
-            gc = (cgr_good).augmented_substructure([x for l in good.centers_list for x in l], deep=1)
-            bc = (cgr_bad).augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
+            gc = cgr_good.augmented_substructure([x for l in good.centers_list for x in l], deep=1)
+            bc = cgr_bad.augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
             
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
@@ -1376,15 +1376,14 @@ class StandardizeReaction:
             strange_atoms = pr_b.difference(pr_g)
             atoms.update(strange_atoms)
 
-            bad_query = (cgr_bad).substructure(atoms.intersection(cgr_bad), as_query=True)
-            good_query = (cgr_good).substructure(atoms.intersection(cgr_good), as_query=True)
+            bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
+            good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
             fix = {}
             rules = []
             for mb, mg in zip(bad.products, good.products):
-                fx = {k: v for k, v in zip(mb, mg) if k != v}
-                fx = {k:fx[k] for k in atoms.intersection(fx)}
-                fix.update(fx)
+                fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
+
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
 
