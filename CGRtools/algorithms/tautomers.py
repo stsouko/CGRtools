@@ -18,6 +18,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import deque
+from itertools import product
 from typing import TYPE_CHECKING, List, Tuple, Iterator
 from ..containers.bonds import Bond
 
@@ -76,6 +77,7 @@ class Tautomers:
                     seen.add(mol)
                     queue.append(mol)
             for mol in current._enumerate_chain_tautomers():
+                mol.kekule()
                 mol.thiele()
                 if mol not in seen:
                     yield mol
@@ -83,7 +85,16 @@ class Tautomers:
                     queue.append(mol)
 
     def _enumerate_zwitter_tautomers(self):
-        return ()
+        donors, acceptors = self.__h_donors_acceptors()
+        for d, a in product(donors, acceptors):
+            mol = self.copy()
+            charges = mol._charges
+            hydrogens = mol._hydrogens
+            hydrogens[d] -= 1
+            hydrogens[a] += 1
+            charges[d] -= 1
+            charges[a] += 1
+            yield mol
 
     def _enumerate_ring_chain_tautomers(self):
         return ()
@@ -204,13 +215,55 @@ class Tautomers:
                     if hybridizations[n] == 1:  # amine
                         if hydrogens[n]:
                             entries.append((n, True))
-                    elif hybridizations[n] == 2:  # imin
+                    elif hybridizations[n] == 2:  # imine
                         entries.append((n, False))
                         if hydrogens[n]:
                             entries.append((n, True))
                     elif hybridizations[n] == 3:  # nitrile
                         entries.append((n, False))
         return entries
+
+    def __h_donors_acceptors(self):
+        # Ar - Se S O [N+] [P+] H-donor
+        # [O-], [S-], [Se-], P, N - H-acceptor
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+        hydrogens = self._hydrogens
+        radicals = self._radicals
+        hybridizations = self._hybridizations
+
+        donors = []
+        acceptors = []
+        for n, a in atoms.items():
+            if radicals[n]:  # skip radicals
+                continue
+            an = a.atomic_number
+            if an in (8, 16, 34):
+                if not charges[n] and hydrogens[n] == 1 and hybridizations[next(m for m in bonds[n])] == 4:
+                    # Ar[S,Se,O][H]
+                    donors.append(n)
+                elif charges[n] == -1 and not any(charges[m] > 0 for m in bonds[n]):  # R[O,S,Se-]
+                    # exclude zwitterions: nitro etc
+                    acceptors.append(n)
+            elif an in (7, 15):
+                if not charges[n]:
+                    if hybridizations[n] == 1:
+                        ar = 0
+                        for m in bonds[n]:
+                            h = hybridizations[m]
+                            if h in (2, 3):  # pyrole? enamine or amide
+                                break
+                            elif h == 4:
+                                ar += 1
+                        else:
+                            if ar < 2:  # not Ar-N-Ar or pyrole
+                                acceptors.append(n)
+                    elif hybridizations[n] in (2, 4):  # imidazole, pyrroline, guanidine, pyridine
+                        acceptors.append(n)
+                elif charges[n] == 1 and hydrogens[n]:  # R[NH+] or =[N+H2?] - ammonia or imine-H+
+                    donors.append(n)
+        return donors, acceptors
 
 
 __all__ = ['Tautomers']
