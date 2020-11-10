@@ -240,27 +240,49 @@ class Tautomers:
                 continue
             an = a.atomic_number
             if an in (8, 16, 34):
-                if not charges[n] and hydrogens[n] == 1 and hybridizations[next(m for m in bonds[n])] == 4:
-                    # Ar[S,Se,O][H]
-                    donors.append(n)
+                if not charges[n] and hydrogens[n] == 1:
+                    m = next(m for m in bonds[n])
+                    hm = hybridizations[m]
+                    if hm == 4:  # Ar[S,Se,O][H]
+                        donors.append(n)
+                    elif hm == 2:
+                        man = atoms[m].atomic_number
+                        if man == 6:
+                            ...
+                        elif man in (8, 16, 17, 33, 34, 35, 52, 53):  # oxo-acids, except N, P, B
+                            donors.append(n)
                 elif charges[n] == -1 and not any(charges[m] > 0 for m in bonds[n]):  # R[O,S,Se-]
                     # exclude zwitterions: nitro etc
                     acceptors.append(n)
             elif an in (7, 15):
                 if not charges[n]:
-                    if hybridizations[n] == 1:
+                    hn = hybridizations[n]
+                    if hn == 1:
                         ar = 0
                         for m in bonds[n]:
-                            h = hybridizations[m]
-                            if h in (2, 3):  # pyrole? enamine or amide
+                            hm = hybridizations[m]
+                            if hm in (2, 3):  # pyrole? enamine or amide
                                 break
-                            elif h == 4:
+                            elif hm == 4:
                                 ar += 1
                         else:
                             if ar < 2:  # not Ar-N-Ar or pyrole
                                 acceptors.append(n)
-                    elif hybridizations[n] in (2, 4):  # imidazole, pyrroline, guanidine, pyridine
+                    elif hn == 4:  # pyridine
                         acceptors.append(n)
+                    elif hn == 2:
+                        # imidazole, pyrroline, guanidine, imine
+                        # any other cases ignored.
+                        # N=CO >> NC=O - declined
+                        # [Het]=N - declined
+                        # R-[O,S,Se]-C=N, R != H - accepted (1,3-oxazole, etc)
+                        m = next(m for m, b in bonds[n].items() if b.order == 2)
+                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # SP2 carbon
+                            for x in bonds[m]:
+                                if atoms[x].atomic_number in (8, 16, 34) and hydrogens[x]:
+                                    break
+                            else:
+                                acceptors.append(n)
                 elif charges[n] == 1 and hydrogens[n]:  # R[NH+] or =[N+H2?] - ammonia or imine-H+
                     donors.append(n)
         return donors, acceptors
