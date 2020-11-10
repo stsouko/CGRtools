@@ -299,8 +299,11 @@ class SMILESRead(CGRRead):
         order = {mapping[n]: [mapping[m] for m in ms] for n, ms in molecule['order'].items()}
 
         stereo = []
-        for n, s in molecule['stereo_atoms'].items():
-            n = mapping[n]
+        for i, s in molecule['stereo_atoms'].items():
+            n = mapping[i]
+            if not i and hydrogens[n]:  # first atom in smiles has reversed chiral mark
+                s = not s
+
             if n in st:
                 stereo.append((mol.add_atom_stereo, n, order[n], s))
             elif n in sa:

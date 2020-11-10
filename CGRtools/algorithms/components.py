@@ -194,9 +194,12 @@ class StructureComponents:
         """
         atoms = self._atoms
         bonds = self._bonds
+        charges = self._charges
+        radicals = self._radicals
+
         tetra = []
         for n, atom in atoms.items():
-            if atom.atomic_number == 6 and not self._charges[n]:
+            if atom.atomic_number == 6 and not charges[n] and not radicals[n]:
                 env = bonds[n]
                 if all(x.order == 1 for x in env.values()):
                     b_sum = sum(x.order for x in env.values())
