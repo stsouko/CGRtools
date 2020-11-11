@@ -17,8 +17,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from collections import deque
+from CachedMethods import cached_property
+from collections import deque, defaultdict
+from functools import reduce
 from itertools import product
+from operator import and_
 from typing import TYPE_CHECKING, List, Tuple, Iterator
 from ..containers.bonds import Bond
 
@@ -141,6 +144,18 @@ class Tautomers:
                 for m, bond in ms.items():
                     if m not in adjn:
                         m_bonds[n][m] = m_bonds[m][n] = bond.copy()
+
+            # allene in ring filter
+            if mol.rings_count:
+                flag = False
+                for n, *c, m in mol._cumulenes(heteroatoms=True):
+                    if c:
+                        common = set(mol.atoms_rings.get(n, ())).intersection(mol.atoms_rings.get(m, ()))
+                        if common and min(len(x) for x in common) < 9:
+                            flag = True
+                            break
+                if flag:
+                    continue
 
             for n, h in hybridizations.items():
                 if n in seen:

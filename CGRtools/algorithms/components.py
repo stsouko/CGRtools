@@ -131,6 +131,17 @@ class GraphComponents:
         bonds = self._bonds
         return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
 
+    @cached_property
+    def atoms_rings(self) -> Dict[int, Tuple[Tuple[int, ...]]]:
+        """
+        Dict of atoms rings which contains it.
+        """
+        rings = defaultdict(list)
+        for r in self.sssr:
+            for n in r:
+                rings[n].append(r)
+        return {n: tuple(rs) for n, rs in rings.items()}
+
     def _augmented_substructure(self, atoms, deep):
         atoms = set(atoms)
         bonds = self._bonds
