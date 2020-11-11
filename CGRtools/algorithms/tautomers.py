@@ -193,10 +193,11 @@ class Tautomers:
         # N -H[enol] (1 or 2 neighbor)
         # P -H[enol] (1 or 2 non-hydrogen bonds with order sum 1 or 2)
 
-        # reverse (has double bonded neighbor):
+        # reverse (has double bonded neighbor): excluded heminal heteroatoms [CC(=O)O]
         # O S Se (only 1 neighbor)
         # N P(1 or 2 neighbors)
         atoms = self._atoms
+        bonds = self._bonds
         charges = self._charges
         hydrogens = self._hydrogens
         neighbors = self.neighbors
@@ -209,16 +210,43 @@ class Tautomers:
                 continue
             if a.atomic_number in (8, 16, 34):  # O S Se
                 if neighbors(n) == 1:
-                    entries.append((n, bool(hydrogens[n])))
+                    if hydrogens[n]:
+                        entries.append((n, True))
+                    else:
+                        m = next(m for m in bonds[n])
+                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=O
+                            c = False
+                            h = False
+                            for x, b in bonds[m].items():
+                                if x != n and b.order == 1:  # skip first atom and any (8) bonds
+                                    if atoms[x].atomic_number == 6:
+                                        c = True
+                                    else:
+                                        h = True
+                            if c and h:  # skip C-C(X)=O, X != C
+                                continue
+                        entries.append((n, False))
             elif a.atomic_number in (7, 15):
                 if 0 < neighbors(n) < 3:
                     if hybridizations[n] == 1:  # amine
                         if hydrogens[n]:
                             entries.append((n, True))
                     elif hybridizations[n] == 2:  # imine
-                        entries.append((n, False))
                         if hydrogens[n]:
                             entries.append((n, True))
+                        m = next(m for m in bonds[n])
+                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=N-R
+                            c = False
+                            h = False
+                            for x, b in bonds[m].items():
+                                if x != n and b.order == 1:  # skip first atom and any (8) bonds
+                                    if atoms[x].atomic_number == 6:
+                                        c = True
+                                    else:
+                                        h = True
+                            if c and h:  # skip C-C(X)=N-R, X != C
+                                continue
+                        entries.append((n, False))
                     elif hybridizations[n] == 3:  # nitrile
                         entries.append((n, False))
         return entries
