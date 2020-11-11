@@ -1381,9 +1381,18 @@ class StandardizeReaction:
 
             fix = {}
             rules = []
+            a_order, seen = dict(), set()
             for mb, mg in zip(bad.products, good.products):
                 fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
+                a_order.update(mb.atoms_order)
 
+            for k, v in fix.items():
+                if k not in seen:
+                    if v in fix.keys() and k == fix[v]:
+                        if a_order[k] == a_order[v]:
+                            seen.update([k,v])
+            
+            fix = {k:v for k,v in fix.items() if k not in seen}
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
 
