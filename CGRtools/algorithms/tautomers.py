@@ -245,12 +245,15 @@ class Tautomers:
                     hm = hybridizations[m]
                     if hm == 4:  # Ar[S,Se,O][H]
                         donors.append(n)
-                    elif hm == 2:
+                    else:
                         man = atoms[m].atomic_number
-                        if man == 6:
-                            ...
-                        elif man in (8, 16, 17, 33, 34, 35, 52, 53):  # oxo-acids, except N, P, B
-                            donors.append(n)
+                        if man in (8, 15, 16, 17, 33, 34, 35, 52, 53):  # oxo-acids, except Nitro, Boronic
+                            if hm != 1:
+                                donors.append(n)
+                        elif man == 6 and hm == 2:
+                            x = next(x for x, b in bonds[m].items() if b.order == 2)
+                            if atoms[x].atomic_number in (8, 16, 34):  # carboxyl and S, Se analogs
+                                donors.append(n)
                 elif charges[n] == -1 and not any(charges[m] > 0 for m in bonds[n]):  # R[O,S,Se-]
                     # exclude zwitterions: nitro etc
                     acceptors.append(n)
