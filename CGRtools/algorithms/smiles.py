@@ -268,7 +268,7 @@ class MoleculeSmiles(Smiles):
 
         if kwargs.get('stereo', True):
             if n in self._atoms_stereo:
-                if ih and next(x for x in adjacency) == n:
+                if ih and next(x for x in adjacency) == n:  # first atom in smiles has reversed chiral mark
                     smi[3] = '@@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@'
                 else:
                     smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
