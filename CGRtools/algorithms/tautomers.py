@@ -54,7 +54,7 @@ class Tautomers:
         queue = [mol]
         while queue:
             for mol in queue.pop(0)._create_mol():
-                if mol not in seen:
+                if mol not in seen and not mol.check_valence():
                     yield mol
                     seen.add(mol)
                     queue.append(mol)
@@ -68,7 +68,7 @@ class Tautomers:
         hybridizations = self._hybridizations
         hydrogens = self._hydrogens
 
-        for path in self.__classic_case():
+        for path in self.__enumerate_bonds():
             mol = self.__class__()
             m_atoms = mol._atoms
             m_charges = mol._charges
@@ -114,14 +114,19 @@ class Tautomers:
             mol.thiele()
             yield mol
 
-    def __classic_case(self):
+    def __enumerate_bonds(self):
         bonds = self._bonds
         hydrogens = self._hydrogens
+
+        # entries for aromatic case
+        entries = []
 
         # for each atom in entries
         for entry, has_hydrogen in self.__entries():
             seen = [entry]
-            new_bonds = []
+            classic_case_bonds = []
+            chain2circle_bonds = []
+            aromatic_case_bonds = []
 
             # stack is neighbors
             stack = [(entry, n, b.order - 1, 1, True) for n, b in  # ketone case
@@ -129,6 +134,10 @@ class Tautomers:
             stack.extend((entry, n, b.order + 1, 0, False) for n, b in  # enol case
                          bonds[entry].items() if b.order <= 2 and has_hydrogen)
 
+            # entries for aromatic case
+            entries.append(entry)
+
+            # main loop
             while stack:
                 previous, current, bond, depth, flag = stack.pop()
 
@@ -136,15 +145,22 @@ class Tautomers:
                 if flag:
                     if len(seen) > depth:
                         seen = seen[:depth]
-                        new_bonds = new_bonds[:depth - 1]
+                        new_bonds = classic_case_bonds[:depth - 1]
                 else:
                     if len(seen) > depth + 1:
                         seen = seen[:depth + 1]
-                        new_bonds = new_bonds[:depth]
+                        new_bonds = classic_case_bonds[:depth]
 
                 # adding new bonds
-                new_bonds.append((previous, current, bond))
+                classic_case_bonds.append((previous, current, bond))
                 seen.append(current)
+
+                # chain2circle_case
+                if has_hydrogen and len(seen) >= 7 and bond == 1:
+                    chain2circle_bonds.append((entry, previous, 1))
+                    chain2circle_bonds.append((previous, current, bond))
+                    yield chain2circle_bonds
+                    chain2circle_bonds = []
 
                 # adding neighbors
                 depth += 1
@@ -156,15 +172,9 @@ class Tautomers:
                 # time to yield
                 if len(seen) % 2:
                     if has_hydrogen:  # enol
-                        yield new_bonds
+                        yield classic_case_bonds
                     elif hydrogens[current]:  # ketone
-                        yield new_bonds
-
-    def __chain2circle(self):
-        pass
-
-    def __aromatic_case(self):
-        pass
+                        yield classic_case_bonds
 
     def __entries(self) -> List[Tuple[int, bool]]:
         # possible: not radicals and not charged
