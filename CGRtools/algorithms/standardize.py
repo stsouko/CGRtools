@@ -1329,8 +1329,7 @@ class StandardizeReaction:
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
-                mapping = {key : mapping.get(value, value) for key, value in fix.items()}
-                mapping.update(fix)
+                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
 
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
@@ -1355,16 +1354,17 @@ class StandardizeReaction:
     def load_remapping_rules(cls, reactions):
         """
         Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
-        Reactants in pairs should be fully equal (equal molecules and equal atom numbers).
+        Reactants in pairs should be fully equal (equal molecules and equal atom orders).
         Products should be equal but with different atom numbers.
         """
         for bad, good in reactions:
             if str(bad) != str(good):
                 raise ValueError('bad and good reaction should be equal')
-
-            gc = (~good).augmented_substructure((~good).center_atoms, deep=1)
-            bc = (~bad).augmented_substructure((~bad).center_atoms, deep=1)
-
+            
+            cgr_good, cgr_bad = ~good, ~bad
+            gc = cgr_good.augmented_substructure([x for l in good.centers_list for x in l], deep=1)
+            bc = cgr_bad.augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
+            
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
             pr_g, pr_b = set(), set()
@@ -1376,17 +1376,14 @@ class StandardizeReaction:
             strange_atoms = pr_b.difference(pr_g)
             atoms.update(strange_atoms)
 
-            bad_query = (~bad).substructure(atoms, as_query=True)
-            good_query = (~good).substructure(atoms.intersection(pr_g), as_query=True)
+            bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
+            good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
             fix = {}
             rules = []
             for mb, mg in zip(bad.products, good.products):
-                fx = min((m for m in
-                         ({k: v for k, v in m.items() if k != v}
-                          for m in mb.get_mapping(mg, automorphism_filter=False, optimize=False))
-                         if atoms.issuperset(m)), key=len)
-                fix.update(fx)
+                fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
+
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
 
