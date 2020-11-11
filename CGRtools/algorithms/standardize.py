@@ -19,6 +19,8 @@
 #
 from CachedMethods import class_cached_property
 from collections import defaultdict
+from functools import reduce
+from operator import or_
 from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
@@ -1379,12 +1381,12 @@ class StandardizeReaction:
             bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
             good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
-            fix = {}
             rules = []
-            a_order, seen = dict(), set()
-            for mb, mg in zip(bad.products, good.products):
-                fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
-                a_order.update(mb.atoms_order)
+            seen = set()
+            bad_mols = reduce(or_,[p for p in bad.products])
+            good_mols = reduce(or_,[p for p in good.products])
+            fix = {k: v for k, v in zip(bad_mols, good_mols) if k != v and k in atoms}
+            a_order = bad_mols.atoms_order
 
             for k, v in fix.items():
                 if k not in seen:
