@@ -17,12 +17,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property
-from collections import deque, defaultdict
-from functools import reduce
+from collections import deque
 from itertools import product
-from operator import and_
-from typing import TYPE_CHECKING, List, Tuple, Iterator
+from typing import TYPE_CHECKING, Iterator
 from ..containers.bonds import Bond
 
 if TYPE_CHECKING:
@@ -100,6 +97,11 @@ class Tautomers:
             yield mol
 
     def _enumerate_ring_chain_tautomers(self):
+        """
+        [C:1]-[O,N,S,Se:1]-[H].[C:2]=[O,N,S,Se:2] >> [C:1]-[1]-[C:2]-[2]-[H] - exo 3-7
+        [C:1]-[O,N,S,Se:1]-[H].[C:2]#[N:2] >> [C:1]-[1]-[C:2]=[2]-[H] - exo 5-7
+        [C:1]-[O,N,S,Se:1]-[H].[C:2]=[N:2] >> [C:1]-[1]-[2]-[C:2]-[H] - endo 5-7
+        """
         return ()
 
     def _enumerate_chain_tautomers(self):
@@ -172,7 +174,8 @@ class Tautomers:
         hyb = self._hybridizations
 
         # for each atom in entries
-        for atom, hydrogen in self.__entries():
+        entries, forbidden = self.__entries()
+        for atom, hydrogen in entries:
             path = []
             seen = {atom}
             # stack is neighbors
@@ -185,8 +188,8 @@ class Tautomers:
                 last, current, bond, depth, order_up = stack.pop()
 
                 if len(path) > depth:
-                    path = path[:depth]
                     seen.difference_update(x for _, x, _ in path[depth:])
+                    path = path[:depth]
 
                 path.append((last, current, bond))
 
@@ -199,10 +202,15 @@ class Tautomers:
                               n not in seen and hyb[n] < 4) if 1 <= b <= 3)
 
                 # time to yield
-                if len(path) % 2 == 0 and (hydrogen or hydrogens[current]):
-                    yield path
+                if len(path) % 2 == 0:
+                    if hydrogen:
+                        if current in forbidden and path[0][0] != forbidden[current]:
+                            continue
+                        yield path
+                    elif hydrogens[current]:
+                        yield path
 
-    def __entries(self) -> List[Tuple[int, bool]]:
+    def __entries(self):
         # possible: not radicals and not charged
         # O S Se -H[enol] (only 1 neighbor)
         # N -H[enol] (1 or 2 neighbor)
@@ -220,6 +228,7 @@ class Tautomers:
         hybridizations = self._hybridizations
 
         entries = []
+        forbidden = {}
         for n, a in atoms.items():
             if radicals[n] or charges[n]:
                 continue
@@ -231,14 +240,15 @@ class Tautomers:
                         m = next(m for m in bonds[n])
                         if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=O
                             c = False
-                            h = False
+                            h = None
                             for x, b in bonds[m].items():
                                 if x != n and b.order == 1:  # skip first atom and any (8) bonds
                                     if atoms[x].atomic_number == 6:
                                         c = True
                                     else:
-                                        h = True
+                                        h = x
                             if c and h:  # skip C-C(X)=O, X != C
+                                forbidden[n] = h
                                 continue
                         entries.append((n, False))
             elif a.atomic_number in (7, 15):
@@ -252,19 +262,20 @@ class Tautomers:
                         m = next(m for m in bonds[n])
                         if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=N-R
                             c = False
-                            h = False
+                            h = None
                             for x, b in bonds[m].items():
                                 if x != n and b.order == 1:  # skip first atom and any (8) bonds
                                     if atoms[x].atomic_number == 6:
                                         c = True
                                     else:
-                                        h = True
+                                        h = x
                             if c and h:  # skip C-C(X)=N-R, X != C
+                                forbidden[n] = h
                                 continue
                         entries.append((n, False))
                     elif hybridizations[n] == 3:  # nitrile
                         entries.append((n, False))
-        return entries
+        return entries, forbidden
 
     def __h_donors_acceptors(self):
         # Ar - Se S O [N+] [P+] H-donor
@@ -332,6 +343,32 @@ class Tautomers:
                 elif charges[n] == 1 and hydrogens[n]:  # R[NH+] or =[N+H2?] - ammonia or imine-H+
                     donors.append(n)
         return donors, acceptors
+
+    def __paths(self, donors, acceptors, minimal=3, maximal=7):
+        """
+
+        """
+        bonds = self._bonds
+
+        for start in donors:
+            path = [start]
+            seen = {start}
+            stack = [(n, 1) for n in bonds[start]]
+
+            while stack:
+                current, depth = stack.pop()
+
+                if len(path) > depth:
+                    seen.difference_update(path[depth:])
+                    path = path[:depth]
+
+                path.append(current)
+                seen.add(current)
+                depth += 1
+                if depth >= minimal and current in acceptors:
+                    yield path.copy()
+                if depth < maximal:
+                    stack.extend((n, depth) for n in bonds[current] if n not in seen)
 
 
 __all__ = ['Tautomers']
