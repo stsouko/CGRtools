@@ -24,7 +24,7 @@ from logging import warning
 from pathlib import Path
 from re import split, compile, fullmatch
 from traceback import format_exc
-from typing import Union, List
+from typing import Union, List, Dict
 from warnings import warn
 from ._mdl import CGRRead, parse_error
 from ..containers import MoleculeContainer, CGRContainer, ReactionContainer
@@ -128,8 +128,8 @@ class SMILESRead(CGRRead):
         pos = file.tell() if seekable else None
         for n, line in enumerate(self.__file):
             x = parse(line)
-            if x is None:
-                yield parse_error(n, pos, self._format_log())
+            if isinstance(x, dict):
+                yield parse_error(n, pos, self._format_log(), x)
                 if seekable:
                     pos = file.tell()
             else:
@@ -175,13 +175,13 @@ class SMILESRead(CGRRead):
     def __next__(self):
         return next(iter(self))
 
-    def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
+    def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, Dict[str, str]]:
         """SMILES string parser."""
         self._flush_log()
         smi, *data = smiles.split()
         if not smi:
             self._info('empty smiles')
-            return
+            return {}
         elif self.__header is None:
             meta = {}
             for x in data:
@@ -199,7 +199,7 @@ class SMILESRead(CGRRead):
                 reactants, reagents, products = smi.split('>')
             except ValueError:
                 self._info('invalid SMIRKS')
-                return
+                return meta
 
             try:
                 if reactants:
@@ -209,7 +209,7 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['reactants'].append(self.__parse_tokens(x))
                 if products:
@@ -219,7 +219,7 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['products'].append(self.__parse_tokens(x))
                 if reagents:
@@ -229,17 +229,18 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['reagents'].append(self.__parse_tokens(x))
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
-                return
+                return meta
 
             try:
                 container = self._convert_reaction(record)
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
+                return meta
             else:
                 if self._store_log:
                     log = self._format_log()
@@ -251,13 +252,14 @@ class SMILESRead(CGRRead):
                 record = self.__parse_tokens(smi)
             except ValueError:
                 self._info(f'line: {smi}\nconsist errors:\n{format_exc()}')
-                return
+                return meta
 
             record['meta'] = meta
             try:
                 container = self._convert_structure(record)
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
+                return meta
             else:
                 if self._store_log:
                     log = self._format_log()
