@@ -86,8 +86,19 @@ class Tautomers:
 
     def _enumerate_zwitter_tautomers(self):
         donors, acceptors = self.__h_donors_acceptors()
+
+        sssr = self.sssr
+        rings_count = self.rings_count
+        atoms_rings = self.atoms_rings
+
         for d, a in product(donors, acceptors):
             mol = self.copy()
+
+            # store cached sssr in new molecules for speedup
+            mol.__dict__['rings_count'] = rings_count
+            mol.__dict__['atoms_rings'] = atoms_rings
+            mol.__dict__['sssr'] = sssr
+
             charges = mol._charges
             hydrogens = mol._hydrogens
             hydrogens[d] -= 1
@@ -113,11 +124,20 @@ class Tautomers:
         hybridizations = self._hybridizations
         hydrogens = self._hydrogens
 
+        sssr = self.sssr
+        rings_count = self.rings_count
+        atoms_rings = self.atoms_rings
+
         for path in self.__enumerate_bonds():
             mol = self.__class__()
             mol._charges.update(charges)
             mol._radicals.update(radicals)
             mol._plane.update(plane)
+
+            # store cached sssr in new molecules for speedup
+            mol.__dict__['rings_count'] = rings_count
+            mol.__dict__['atoms_rings'] = atoms_rings
+            mol.__dict__['sssr'] = sssr
 
             m_atoms = mol._atoms
             m_bonds = mol._bonds
@@ -129,35 +149,24 @@ class Tautomers:
                 a = a.copy()
                 m_atoms[n] = a
                 a._attach_to_graph(mol, n)
-                m_bonds[n] = {}
-                adj[n] = set()
+                adj[n] = {}
 
             seen = set()
             for n, m, bond in path:
-                if bond is not None:
-                    m_bonds[n][m] = m_bonds[m][n] = Bond(bond)
-                adj[n].add(m)
-                adj[m].add(n)
+                adj[n][m] = adj[m][n] = Bond(bond)
                 seen.add(n)
                 seen.add(m)
 
             for n, ms in bonds.items():
                 adjn = adj[n]
+                bn = m_bonds[n] = {}
                 for m, bond in ms.items():
-                    if m not in adjn:
-                        m_bonds[n][m] = m_bonds[m][n] = bond.copy()
-
-            # allene in ring filter
-            if mol.rings_count:
-                flag = False
-                for n, *c, m in mol._cumulenes(heteroatoms=True):
-                    if c:
-                        common = set(mol.atoms_rings.get(n, ())).intersection(mol.atoms_rings.get(m, ()))
-                        if common and min(len(x) for x in common) < 9:
-                            flag = True
-                            break
-                if flag:
-                    continue
+                    if m in m_bonds:  # bond partially exists. need back-connection.
+                        bn[m] = m_bonds[m][n]
+                    elif m in adjn:
+                        bn[m] = adjn[m]
+                    else:
+                        bn[m] = bond.copy()
 
             for n, h in hybridizations.items():
                 if n in seen:
@@ -169,6 +178,7 @@ class Tautomers:
             yield mol
 
     def __enumerate_bonds(self):
+        atoms = self._atoms
         bonds = self._bonds
         hydrogens = self._hydrogens
         hyb = self._hybridizations
@@ -208,6 +218,12 @@ class Tautomers:
                             continue
                         yield path
                     elif hydrogens[current]:
+                        # allene carbon formation in small rings forbidden
+                        if self.rings_count and hyb[current] == 2 and atoms[current].atomic_number == 6:
+                            n = next(x for x in bonds[current] if x != last)
+                            common = set(self.atoms_rings.get(last, ())).intersection(self.atoms_rings.get(n, ()))
+                            if common and min(len(x) for x in common) < 9:
+                                continue
                         yield path
 
     def __entries(self):
@@ -369,6 +385,25 @@ class Tautomers:
                     yield path.copy()
                 if depth < maximal:
                     stack.extend((n, depth) for n in bonds[current] if n not in seen)
+
+    def __rings(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        charges = self._charges
+        hydrogens = self._hydrogens
+        radicals = self._radicals
+        hybridizations = self._hybridizations
+
+        for r in self.sssr:
+            for i, n in enumerate(r):
+                lr = 1 - len(r)
+                if atoms[n].atomic_number in (7, 8, 16, 34):  # N O S Se
+                    # search for [C;R]-[X;R]-[C;R]-[X;!R]-[H]
+                    b = i - 1
+                    a = lr + i
+                    if atoms[b].atomic_number == 6:
+                        ...
+        return
 
 
 __all__ = ['Tautomers']
