@@ -150,6 +150,27 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
                 raise TypeError('Indices must be integers or slices')
         raise self._implement_error
 
+    def read_text(self, item):
+        """
+        Read record block as text
+        """
+        if self._shifts:
+            if not isinstance(item, int):
+                raise TypeError('int required')
+            _len = len(self._shifts) - 1
+            if item >= _len or item < -_len:
+                raise IndexError('List index out of range')
+            if item < 0:
+                item += _len
+            start = self._shifts[item]
+            end = self._shifts[item + 1]
+            current = self._file.tell()
+            self._file.seek(start)
+            data = self._file.read(end - start)
+            self._file.seek(current)
+            return data
+        raise self._implement_error
+
     def _prepare_meta(self, meta):
         new_meta = {}
         for k, v in meta.items():

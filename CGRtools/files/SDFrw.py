@@ -20,12 +20,16 @@ from bisect import bisect_left
 from collections import defaultdict
 from io import BytesIO
 from logging import warning
+from re import match, compile
 from subprocess import check_output
 from traceback import format_exc
 from warnings import warn
 from ._mdl import parse_error
 from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, EMDLWrite
 from ..exceptions import EmptyMolecule
+
+
+head = compile(r'>\s.*<(.*)>')
 
 
 class SDFRead(MDLRead):
@@ -172,8 +176,9 @@ class SDFRead(MDLRead):
                 mkey = None
                 meta = defaultdict(list)
             elif record:
-                if line.startswith('>  <'):
-                    mkey = line.rstrip()[4:-1].strip()
+                head_line = match(head, line)
+                if head_line:
+                    mkey = head_line.group(1).strip()
                     if not mkey:
                         self._info(f'invalid metadata entry: {line}')
                 elif mkey:
