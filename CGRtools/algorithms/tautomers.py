@@ -396,9 +396,11 @@ class Tautomers:
 
         for r in self.sssr:
             for i, n in enumerate(r):
+                if len(r) > 7:
+                    continue
                 lr = 1 - len(r)
-                if atoms[n].atomic_number in (7, 8, 16, 34):  # N O S Se
-                    # search for [C;R]-[X;R]-[C;R]-[X;!R]-[H]
+                if atoms[n].atomic_number in (7, 8, 16, 34) and len(bonds[n]) == 2:  # N O S Se
+                    # search for [C;R]-[n]-[C;R]-[X;!R]-[H]
                     b = i - 1
                     a = lr + i
                     if atoms[b].atomic_number == 6:
