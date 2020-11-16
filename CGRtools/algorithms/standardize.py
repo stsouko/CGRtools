@@ -1352,7 +1352,7 @@ class StandardizeReaction:
             return True
         return flag
     
-    def bfs(self,graph, graph_bon, start, end): # ????? ?????? ????? (???? ?? ????) ??? ???????????? ??????????
+    def bfs(self,graph, graph_bon, start, end): 
         go = [[start, [start]]]
         go2 = [[end, [end]]]
         while 0 < len(go):
@@ -1366,10 +1366,10 @@ class StandardizeReaction:
                             go2.append([next_node2, path2 + [next_node2]])
                             if len(set(path+[next_node]).intersection(set(path2+[next_node2]))) == 1:     
                                 c = list(set(path+[next_node]).intersection(set(path2+[next_node2])))
-                                if (path+[next_node]).index(c[0]) == (path2+[next_node2]).index(c[0]): #?????????? ?????????? ?? ?????? ?????
-                                    if len(graph[start]) == len(graph[end]): #?????????? ???-?? ???????
-                                        if graph_bon[start] == graph_bon[end]: #?????????? ???-?? ??????
-                                            return c #????? ????
+                                if (path+[next_node]).index(c[0]) == (path2+[next_node2]).index(c[0]): 
+                                    if len(graph[start]) == len(graph[end]): 
+                                        if graph_bon[start] == graph_bon[end]: 
+                                            return c 
                                 else:
                                     return []
                             else:
@@ -1419,12 +1419,12 @@ class StandardizeReaction:
 
             atoms_bad = [p.atoms_numbers for p in bad.products]
             
-            d = defaultdict(list) #?????? ??? ??????? ????? ??? bfs
+            d = defaultdict(list) 
             for n,p in enumerate(bad.products):
                 for k in atoms_bad[n]:
                     d[k].extend([i[0] for i in p.environment(k) if len(p) > 1]) 
             
-            d_bon  = dict() # ???-?? ?????? ??? ??????? ????? ??? bfs
+            d_bon  = dict() 
             for k,v in fix.items():
                  if v in fix.keys() and k == fix[v]:
                         n1_list,n2_list = [], []
@@ -1441,13 +1441,13 @@ class StandardizeReaction:
                 if k not in seen:
                     if v in fix.keys() and k == fix[v]:
                         for t in atoms_bad:
-                            if set([k, v]).issubset(set(t)):  # ?? ????? ????????
-                                if order_pro[k] == order_pro[v]: # ?????????? ????
+                            if set([k, v]).issubset(set(t)):  
+                                if order_pro[k] == order_pro[v]:
                                     seen.update([k,v])
-                                elif k in order_re and v in order_re: # ?????????? ???? ? ??????????
+                                elif k in order_re and v in order_re: 
                                     if order_re[k] == order_re[v]: 
                                         seen.update([k,v])
-                                elif len(bfs(d,d_bon, k,v)) == 1: #? ?????? ?????
+                                elif len(bfs(d,d_bon, k,v)) == 1: 
                                     seen.update([k,v])
             
             fix = {k:v for k,v in fix.items() if k not in seen}
