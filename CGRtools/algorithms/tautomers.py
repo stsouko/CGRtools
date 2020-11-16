@@ -46,75 +46,75 @@ class Tautomers:
         yield self
 
         # making aromatic molecule
-        mol = self.copy()
-        mol.thiele()
+        molecule = self.copy()
+        molecule.thiele()
 
         # generation of all tautomers
-        seen = {self, mol}
-        queue = [mol]
+        seen = {self, molecule}
+        queue = [molecule]
         while queue:
-            for mol in queue.pop(0)._create_mol():
-                if mol not in seen and not mol.check_valence():
-                    yield mol
-                    seen.add(mol)
-                    queue.append(mol)
+            for molecule in queue.pop(0)._create_molecule():
+                if molecule not in seen and not molecule.check_valence():
+                    yield molecule
+                    seen.add(molecule)
+                    queue.append(molecule)
 
-    def _create_mol(self):
-        atoms = self._atoms
-        charges = self._charges
-        radicals = self._radicals
-        plane = self._plane
-        bonds = self._bonds
-        hybridizations = self._hybridizations
-        hydrogens = self._hydrogens
+    def _create_molecule(self):
+        base_atoms = self._atoms
+        base_charges = self._charges
+        base_radicals = self._radicals
+        base_plane = self._plane
+        base_bonds = self._bonds
+        base_hybridizations = self._hybridizations
+        base_hydrogens = self._hydrogens
 
-        for path in self.__enumerate_bonds():
-            mol = self.__class__()
-            m_atoms = mol._atoms
-            m_charges = mol._charges
-            m_radicals = mol._radicals
-            m_plane = mol._plane
-            m_bonds = mol._bonds
-            m_hybridizations = mol._hybridizations
-            m_hydrogens = mol._hydrogens
+        for changed_bonds in self.__changed_bonds():
+            new_molecule = self.__class__()
+            new_atoms = new_molecule._atoms
+            new_charges = new_molecule._charges
+            new_radicals = new_molecule._radicals
+            new_plane = new_molecule._plane
+            new_bonds = new_molecule._bonds
+            new_hybridizations = new_molecule._hybridizations
+            new_hydrogens = new_molecule._hydrogens
 
             adj = {}
-            for n, a in atoms.items():
+            for n, a in base_atoms.items():
                 a = a.copy()
-                m_atoms[n] = a
-                a._attach_to_graph(mol, n)
-                m_charges[n] = charges[n]
-                m_radicals[n] = radicals[n]
-                m_plane[n] = plane[n]
-                m_bonds[n] = {}
+                new_atoms[n] = a
+                a._attach_to_graph(new_molecule, n)
+                new_charges[n] = base_charges[n]
+                new_radicals[n] = base_radicals[n]
+                new_plane[n] = base_plane[n]
+                new_bonds[n] = {}
                 adj[n] = set()
 
             seen = set()
-            for n, m, bond in path:
+            for n, m, bond in changed_bonds:
                 if bond is not None:
-                    m_bonds[n][m] = m_bonds[m][n] = Bond(bond)
+                    new_bonds[n][m] = new_bonds[m][n] = Bond(bond)
                 adj[n].add(m)
                 adj[m].add(n)
                 seen.add(n)
                 seen.add(m)
 
-            for n, ms in bonds.items():
+            for n, ms in base_bonds.items():
                 adjn = adj[n]
                 for m, bond in ms.items():
                     if m not in adjn:
-                        m_bonds[n][m] = m_bonds[m][n] = bond.copy()
+                        new_bonds[n][m] = new_bonds[m][n] = bond.copy()
 
-            for n, h in hybridizations.items():
+            for n, h in base_hybridizations.items():
                 if n in seen:
-                    mol._calc_hybridization(n)
-                    mol._calc_implicit(n)
+                    new_molecule._calc_hybridization(n)
+                    new_molecule._calc_implicit(n)
                 else:
-                    m_hybridizations[n] = h
-                    m_hydrogens[n] = hydrogens[n]
-            mol.thiele()
-            yield mol
+                    new_hybridizations[n] = h
+                    new_hydrogens[n] = base_hydrogens[n]
+            new_molecule.thiele()
+            yield new_molecule
 
-    def __enumerate_bonds(self):
+    def __changed_bonds(self):
         bonds = self._bonds
         hydrogens = self._hydrogens
 
