@@ -1352,7 +1352,7 @@ class StandardizeReaction:
             return True
         return flag
     
-    def bfs(self,graph, graph_bon, start, end): 
+    def bfs(self,graph, graph_bon, start, end): #search for a common atom for symmetric fragments
         go = [[start, [start]]]
         go2 = [[end, [end]]]
         while 0 < len(go):
@@ -1419,12 +1419,12 @@ class StandardizeReaction:
 
             atoms_bad = [p.atoms_numbers for p in bad.products]
             
-            d = defaultdict(list) 
+            d = defaultdict(list) #number of neighbours for each atom
             for n,p in enumerate(bad.products):
                 for k in atoms_bad[n]:
                     d[k].extend([i[0] for i in p.environment(k) if len(p) > 1]) 
             
-            d_bon  = dict() 
+            d_bon  = dict() #number of bonds for each atom
             for k,v in fix.items():
                  if v in fix.keys() and k == fix[v]:
                         n1_list,n2_list = [], []
@@ -1441,13 +1441,13 @@ class StandardizeReaction:
                 if k not in seen:
                     if v in fix.keys() and k == fix[v]:
                         for t in atoms_bad:
-                            if set([k, v]).issubset(set(t)):  
-                                if order_pro[k] == order_pro[v]:
+                            if set([k, v]).issubset(set(t)):  #from a single molecule
+                                if order_pro[k] == order_pro[v]: #same weight
                                     seen.update([k,v])
                                 elif k in order_re and v in order_re: 
-                                    if order_re[k] == order_re[v]: 
+                                    if order_re[k] == order_re[v]: #same weight in reactants
                                         seen.update([k,v])
-                                elif len(bfs(d,d_bon, k,v)) == 1: 
+                                elif len(bfs(d,d_bon, k,v)) == 1:  #one common atom
                                     seen.update([k,v])
             
             fix = {k:v for k,v in fix.items() if k not in seen}
