@@ -52,32 +52,129 @@ class SSSR:
         Number of rings required.
         """
         bonds = cls._skin_graph(bonds)
-        return cls.__rings_filter(cls.__c_set(*cls.__make_pid(bonds)), n_sssr, bonds)
+        edges = cls.__bfs(bonds)
+        pid1, pid2, dist = cls.__make_pid(edges)
+        return cls.__rings_filter(cls.__c_set(pid1, pid2, dist), n_sssr, bonds)
+
+    @staticmethod
+    def __bfs(bonds):
+        atoms = set(bonds)
+        terminated = {}
+        tail = atoms.pop()
+        next_stack = {x: [(tail, x)] for x in bonds[tail] & atoms}
+
+        while True:
+            next_front = set()
+            found_odd = set()
+            stack, next_stack = next_stack, {}
+            while stack:
+                kk = list(stack.keys())
+                tail = kk.pop(0)
+                broom = stack.pop(tail)
+                next_front.add(tail)
+                _neighbors = bonds[tail]
+                neighbors = _neighbors & atoms
+                if len(_neighbors) > 2:
+                    if tail not in terminated:
+                        terminated[tail] = broom
+                    else:
+                        for br in broom:
+                            if br not in terminated[tail]:
+                                terminated[tail].append(br)
+                    broom = [(broom[0][-1], )]
+                    for n in neighbors:
+                        if n in found_odd:
+                            continue
+                        next_broom = [(*path, n) for path in broom]
+                        if n in stack:  # odd rings
+                            found_odd.add(tail)
+                            if n in next_stack:
+                                next_stack[n].extend(next_broom)
+                            else:
+                                stack[n].extend(next_broom)  # not visited
+                                terminated[n] = stack[n]
+                        elif n in next_stack:  # even rings
+                            next_stack[n].extend(next_broom)
+                            if n not in terminated:
+                                terminated[n] = next_stack[n]
+                        else:
+                            next_stack[n] = next_broom
+
+                elif len(neighbors) == 1:
+                    n = neighbors.pop()
+                    if n in found_odd:
+                        continue
+                    next_broom = [(*path, n) for path in broom]
+                    if n in stack:  # odd rings
+                        found_odd.add(tail)
+                        if n in next_stack:
+                            next_stack[n].extend(next_broom)
+                        else:
+                            stack[n].extend(next_broom)  # not visited
+                            terminated[n] = stack[n]
+                    elif n in next_stack:  # even rings
+                        next_stack[n].extend(next_broom)
+                        if n not in terminated:
+                            terminated[n] = next_stack[n]
+                    else:
+                        next_stack[n] = next_broom
+                elif neighbors:
+                    broom = [(broom[0][-1], )]
+                    for n in neighbors:
+                        if n in found_odd:
+                            continue
+                        next_broom = [(*path, n) for path in broom]
+                        if n in stack:  # odd rings
+                            found_odd.add(tail)
+                            if n in next_stack:
+                                next_stack[n].extend(next_broom)
+                            else:
+                                stack[n].extend(next_broom)  # not visited
+                                terminated[n] = stack[n]
+                        elif n in next_stack:  # even rings
+                            next_stack[n].extend(next_broom)
+                            if n not in terminated:
+                                terminated[n] = next_stack[n]
+                        else:
+                            next_stack[n] = next_broom
+
+            atoms.difference_update(next_front)
+            if not atoms:
+                break
+            elif not next_stack:
+                tail = atoms.pop()
+                next_stack = {x: [(tail, x)] for x in bonds[tail] & atoms}
+        return terminated
 
     @staticmethod
     def __make_pid(bonds):
-        lb = len(bonds)
         pid1 = defaultdict(lambda: defaultdict(dict))
         pid2 = defaultdict(lambda: defaultdict(dict))
-        distances = defaultdict(lambda: defaultdict(lambda: lb))
-        for n, ms in bonds.items():
-            dn = distances[n]
-            pn = pid1[n]
-            for m in ms:
-                pn[m][(m, n)] = (n, m)
-                dn[m] = 1
+        distances = defaultdict(lambda: defaultdict(lambda: 1e9))
+        chains = sorted([y for x in bonds.values() for y in x], key=len)
+        for c in chains:
+            di = len(c) - 1
+            n, m = c[0], c[-1]
+            nn, mm = c[1], c[-2]
+            if n in distances and m in distances[n] and distances[n][m] != di:
+                pid2[n][m][(nn, mm)] = c
+                pid2[m][n][(mm, nn)] = c[::-1]
+            else:
+                pid1[n][m][(nn, mm)] = c
+                pid1[m][n][(mm, nn)] = c[::-1]
+                distances[n][m] = distances[m][n] = di
 
-        for k in bonds:
+        for k in pid1:
             new_distances = defaultdict(dict)
             dk = distances[k]
             ndk = new_distances[k]
-            for i in bonds:
+            for i in pid1:
                 if i == k:
                     continue
                 di = distances[i]
                 ndi = new_distances[i]
                 ndk[i] = ndi[k] = di[k]
-                for j in bonds:
+                for j in pid1:
                     if j == k or j == i:
                         continue
                     ij = di[j]
@@ -85,20 +182,20 @@ class SSSR:
                     if ij - ikj == 1:  # A new shortest path == previous shortest path - 1
                         pid2[i][j] = pid1[i][j]
                         pid1[i][j] = {(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                      product(pid1[i][k].items(), pid1[k][j].items())}
+                                      zip(pid1[i][k].items(), pid1[k][j].items())}
                         ndi[j] = ikj
                     elif ij > ikj:  # A new shortest path
                         pid2[i][j] = {}
                         pid1[i][j] = {(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                      product(pid1[i][k].items(), pid1[k][j].items())}
+                                      zip(pid1[i][k].items(), pid1[k][j].items())}
                         ndi[j] = ikj
                     elif ij == ikj:  # Another shortest path
                         pid1[i][j].update({(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                           product(pid1[i][k].items(), pid1[k][j].items())})
+                                           zip(pid1[i][k].items(), pid1[k][j].items())})
                         ndi[j] = ij
                     elif ikj - ij == 1:  # Shortest+1 path
                         pid2[i][j].update({(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                           product(pid1[i][k].items(), pid1[k][j].items())})
+                                           zip(pid1[i][k].items(), pid1[k][j].items())})
                         ndi[j] = ij
                     else:
                         ndi[j] = ij
