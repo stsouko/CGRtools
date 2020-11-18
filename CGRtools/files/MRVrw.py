@@ -29,7 +29,7 @@ from ..containers import MoleculeContainer, ReactionContainer
 from ..exceptions import EmptyMolecule
 
 
-parse_error = namedtuple('MRVParseError', ('number', 'json', 'log'))
+parse_error = namedtuple('MRVParseError', ('number', 'json', 'log', 'meta'))
 
 
 def xml_dict(parent_element, stop_list=None):
@@ -135,21 +135,23 @@ class MRVRead(MDLStereo):
             element.clear()
             if 'molecule' in parsed and isinstance(parsed['molecule'], dict):
                 parsed = parsed['molecule']
+                if 'propertyList' in parsed and 'property' in parsed['propertyList']:
+                    meta = self.__parse_property(parsed['propertyList']['property'])
+                else:
+                    meta = {}
+
                 try:
                     record = self.__parse_molecule(parsed)
                 except (KeyError, ValueError):
                     self._info(f'record consist errors:\n{format_exc()}')
-                    yield parse_error(n, parsed, self._format_log())
+                    yield parse_error(n, parsed, self._format_log(), meta)
                 else:
-                    if 'propertyList' in parsed and 'property' in parsed['propertyList']:
-                        record['meta'] = self.__parse_property(parsed['propertyList']['property'])
-                    else:
-                        record['meta'] = {}
+                    record['meta'] = meta
                     try:
                         container = self._convert_structure(record)
                     except ValueError:
                         self._info(f'record consist errors:\n{format_exc()}')
-                        yield parse_error(n, parsed, self._format_log())
+                        yield parse_error(n, parsed, self._format_log(), meta)
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -158,21 +160,23 @@ class MRVRead(MDLStereo):
                         yield container
             elif 'reaction' in parsed and isinstance(parsed['reaction'], dict):
                 parsed = parsed['reaction']
+                if 'propertyList' in parsed and 'property' in parsed['propertyList']:
+                    meta = self.__parse_property(parsed['propertyList']['property'])
+                else:
+                    meta = {}
+
                 try:
                     record = self.__parse_reaction(parsed)
                 except (KeyError, ValueError):
                     self._info(f'record consist errors:\n{format_exc()}')
-                    yield parse_error(n, parsed, self._format_log())
+                    yield parse_error(n, parsed, self._format_log(), meta)
                 else:
-                    if 'propertyList' in parsed and 'property' in parsed['propertyList']:
-                        record['meta'] = self.__parse_property(parsed['propertyList']['property'])
-                    else:
-                        record['meta'] = {}
+                    record['meta'] = meta
                     try:
                         container = self._convert_reaction(record)
                     except ValueError:
                         self._info(f'record consist errors:\n{format_exc()}')
-                        yield parse_error(n, parsed, self._format_log())
+                        yield parse_error(n, parsed, self._format_log(), meta)
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -181,7 +185,7 @@ class MRVRead(MDLStereo):
                         yield container
             else:
                 self._info('invalid MDocument')
-                yield parse_error(n, parsed, self._format_log())
+                yield parse_error(n, parsed, self._format_log(), {})
             self._flush_log()
 
     def __parse_reaction(self, data):

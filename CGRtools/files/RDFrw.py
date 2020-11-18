@@ -154,7 +154,7 @@ class RDFRead(MDLRead):
                 except ValueError:
                     parser = None
                     self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    seek = yield parse_error(count, pos, self._format_log())
+                    seek = yield parse_error(count, pos, self._format_log(), {})
                     if seek is not None:
                         yield
                         count = seek - 1
@@ -174,7 +174,7 @@ class RDFRead(MDLRead):
                             container = self._convert_structure(record)
                     except ValueError:
                         self._info(f'record consist errors:\n{format_exc()}')
-                        seek = yield parse_error(count, pos, self._format_log())
+                        seek = yield parse_error(count, pos, self._format_log(), record['meta'])
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -210,7 +210,7 @@ class RDFRead(MDLRead):
                             container = self._convert_structure(record)
                     except ValueError:
                         self._info(f'record consist errors:\n{format_exc()}')
-                        seek = yield parse_error(count, pos, self._format_log())
+                        seek = yield parse_error(count, pos, self._format_log(), record['meta'])
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -263,7 +263,7 @@ class RDFRead(MDLRead):
                 except ValueError:
                     failed = True
                     self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    seek = yield parse_error(count, pos, self._format_log())
+                    seek = yield parse_error(count, pos, self._format_log(), {})
                     if seek is not None:
                         yield
                         count = seek - 1
@@ -282,7 +282,7 @@ class RDFRead(MDLRead):
                 self._info(f'record consist errors:\n{format_exc()}')
                 log = self._format_log()
                 self._flush_log()
-                yield parse_error(count, pos, log)
+                yield parse_error(count, pos, log, record['meta'])
             else:
                 if self._store_log:
                     log = self._format_log()
