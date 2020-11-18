@@ -220,7 +220,7 @@ class Tautomers:
                     elif hydrogens[current]:
                         # allene carbon formation in small rings forbidden
                         if self.rings_count and hyb[current] == 2 and atoms[current].atomic_number == 6:
-                            n = next(x for x in bonds[current] if x != last)
+                            n = next(x for x, b in bonds[current].items() if x != last and b.order != 8)
                             common = set(self.atoms_rings.get(last, ())).intersection(self.atoms_rings.get(n, ()))
                             if common and min(len(x) for x in common) < 9:
                                 continue
@@ -250,10 +250,13 @@ class Tautomers:
                 continue
             if a.atomic_number in (8, 16, 34):  # O S Se
                 if neighbors(n) == 1:
+                    m = next(m for m, b in bonds[n].items() if b.order != 8)
                     if hydrogens[n]:
+                        # skip R=N-[OH]
+                        if atoms[m].atomic_number == 7 and hybridizations[m] == 2 and not (charges[m] or radicals[m]):
+                            continue
                         entries.append((n, True))
                     else:
-                        m = next(m for m in bonds[n])
                         if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=O
                             c = False
                             h = None
@@ -275,12 +278,12 @@ class Tautomers:
                     elif hybridizations[n] == 2:  # imine
                         if hydrogens[n]:
                             entries.append((n, True))
-                        m = next(m for m in bonds[n])
+                        m = next(m for m, b in bonds[n].items() if b.order == 2)
                         if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=N-R
                             c = False
                             h = None
                             for x, b in bonds[m].items():
-                                if x != n and b.order == 1:  # skip first atom and any (8) bonds
+                                if x != n and b.order != 8:  # skip first atom and any (8) bonds
                                     if atoms[x].atomic_number == 6:
                                         c = True
                                     else:
@@ -311,7 +314,7 @@ class Tautomers:
             an = a.atomic_number
             if an in (8, 16, 34):
                 if not charges[n] and hydrogens[n] == 1:
-                    m = next(m for m in bonds[n])
+                    m = next(m for m, b in bonds[n].items() if b.order != 8)
                     hm = hybridizations[m]
                     if hm == 4:  # Ar[S,Se,O][H]
                         donors.append(n)
@@ -324,7 +327,8 @@ class Tautomers:
                             x = next(x for x, b in bonds[m].items() if b.order == 2)
                             if atoms[x].atomic_number in (8, 16, 34):  # carboxyl and S, Se analogs
                                 donors.append(n)
-                elif charges[n] == -1 and not any(charges[m] > 0 for m in bonds[n]):  # R[O,S,Se-]
+                elif charges[n] == -1 and not any(charges[m] > 0 for m, b in bonds[n].items()
+                                                  if b.order != 8):  # R[O,S,Se-]
                     # exclude zwitterions: nitro etc
                     acceptors.append(n)
             elif an in (7, 15):
@@ -332,7 +336,9 @@ class Tautomers:
                     hn = hybridizations[n]
                     if hn == 1:
                         ar = 0
-                        for m in bonds[n]:
+                        for m, b in bonds[n].items():
+                            if b.order == 8:
+                                continue
                             hm = hybridizations[m]
                             if hm in (2, 3):  # pyrole? enamine or amide
                                 break
@@ -351,8 +357,8 @@ class Tautomers:
                         # R-[O,S,Se]-C=N, R != H - accepted (1,3-oxazole, etc)
                         m = next(m for m, b in bonds[n].items() if b.order == 2)
                         if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # SP2 carbon
-                            for x in bonds[m]:
-                                if atoms[x].atomic_number in (8, 16, 34) and hydrogens[x]:
+                            for x, b in bonds[m].items():
+                                if b.order != 8 and atoms[x].atomic_number in (8, 16, 34) and hydrogens[x]:
                                     break
                             else:
                                 acceptors.append(n)
@@ -361,9 +367,6 @@ class Tautomers:
         return donors, acceptors
 
     def __paths(self, donors, acceptors, minimal=3, maximal=7):
-        """
-
-        """
         bonds = self._bonds
 
         for start in donors:
@@ -392,19 +395,30 @@ class Tautomers:
         charges = self._charges
         hydrogens = self._hydrogens
         radicals = self._radicals
+        neighbors = self.neighbors
         hybridizations = self._hybridizations
 
         for r in self.sssr:
+            if len(r) > 7 or any(bonds[n][m].order == 8 for n, m in zip(r, r[1:])):
+                continue
+            lr = 1 - len(r)
+
             for i, n in enumerate(r):
-                if len(r) > 7:
-                    continue
-                lr = 1 - len(r)
-                if atoms[n].atomic_number in (7, 8, 16, 34) and len(bonds[n]) == 2:  # N O S Se
-                    # search for [C;R]-[n]-[C;R]-[X;!R]-[H]
+                if atoms[n].atomic_number in (7, 8, 16, 34) and neighbors(n) == 2:  # N O S Se
+                    # search for [C,N;R]-[N,O,S,Se:R]-[C;R]-,=[O,N;H!R] >> [C,N]-[N,O,S,Se;H].[C]=,#[O,N]
+                    # or [C,N;R]-[N,O,S,Se:R]-[N;R]-[C;H!R] >> [C,N]-[N,O,S,Se;H].[N]=[C]
                     b = i - 1
                     a = lr + i
-                    if atoms[b].atomic_number == 6:
-                        ...
+                    if charges[b] or charges[a] or radicals[b] or radicals[a]:
+                        break
+                    if atoms[b].atomic_number == 7:
+                        if hybridizations[b] == 2:  # C=N-[N,O,S,Se:R]
+                            if atoms[a].atomic_number in (6, 7):
+                                ...
+                        elif hybridizations[b] == 1:  # C-N-[n:R]
+                            ...
+            else:  # found
+                ...
         return
 
 
