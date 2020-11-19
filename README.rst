@@ -15,6 +15,8 @@ Basic operations:
    - Perform MCS search.
    - 2d depiction.
 
+Full documentation can be found [here](<https://cgrtools.readthedocs.io/>)
+
 INSTALL
 =======
 
