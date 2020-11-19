@@ -432,7 +432,7 @@ class SMILESRead(CGRRead):
                     token = None
                 token_type = 0
                 tokens.append((0, s))
-            elif s in 'cnops':  # aromatic ring atom
+            elif s in 'cnopsb':  # aromatic ring atom
                 if token:
                     tokens.append((token_type, token))
                     token = None
