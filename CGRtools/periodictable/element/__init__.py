@@ -26,8 +26,8 @@ from .dynamic import DynamicElement
 from .dynamic_query import *
 
 
-AnyAtom = Union[Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement]
+AnyAtom = Union[Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, DynamicAnyElement, ListElement]
 
 
 __all__ = ['Core', 'Element', 'DynamicElement', 'QueryElement', 'DynamicQueryElement',
-           'AnyElement', 'DynamicAnyElement', 'AnyAtom']
+           'AnyElement', 'DynamicAnyElement', 'AnyAtom', 'ListElement']

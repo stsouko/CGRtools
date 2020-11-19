@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Tuple, Dict, Type
+from typing import Tuple, Dict, Type, List
 from .core import Core
 from .element import Element
 from ...exceptions import IsNotConnectedAtom
@@ -160,7 +160,7 @@ class QueryElement(Query):
             self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-class AnyElement(Query):  # except Hydrogen!
+class AnyElement(Query):
     __slots__ = ()
 
     def __init__(self, *args, **kwargs):
@@ -228,4 +228,63 @@ class AnyElement(Query):  # except Hydrogen!
             self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
 
 
-__all__ = ['QueryElement', 'AnyElement']
+class ListElement(AnyElement):
+    __slots__ = ('_elements', '_numbers')
+
+    def __init__(self, elements: List[str], *args, **kwargs):
+        """
+        Elements list
+        """
+        super().__init__()
+        self._elements = tuple(elements)
+        self._numbers = tuple(x.atomic_number.fget(None) for x in Element.__subclasses__() if x.__name__ in elements)
+
+    @property
+    def atomic_symbol(self) -> str:
+        return ','.join(self._elements)
+
+    def __eq__(self, other):
+        """
+        Compare attached to molecules elements and query elements
+        """
+        if isinstance(other, Element):
+            if other.atomic_number in self._numbers:
+                if self.charge != other.charge or self.is_radical != other.is_radical:
+                    return False
+                if self.neighbors and other.neighbors not in self.neighbors:
+                    return False
+                if self.hybridization and other.hybridization not in self.hybridization:
+                    return False
+                return True
+        elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
+                and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+            if isinstance(other, ListElement):
+                return self._numbers == other._numbers
+            if isinstance(other, AnyElement):
+                return True
+            return other.atomic_number in self._numbers
+        return False
+
+    def __hash__(self):
+        """
+        13bit = 4bit | 1bit | 4bit | 4bit
+        """
+        return 127 << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
+            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['elements'] = self._elements
+        return state
+
+    def __setstate__(self, state):
+        self._elements = state['elements']
+        self._numbers = tuple(x.atomic_number.fget(None) for x in Element.__subclasses__()
+                              if x.__name__ in state['elements'])
+        super().__setstate__(state)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}([{",".join(self._elements)}])'
+
+
+__all__ = ['QueryElement', 'AnyElement', 'ListElement']

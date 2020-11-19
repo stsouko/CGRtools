@@ -17,10 +17,16 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import class_cached_property
 from collections import deque
-from itertools import product
+from functools import reduce
+from itertools import product, chain
+from operator import and_
 from typing import TYPE_CHECKING, Iterator
+from ..containers import query  # cyclic imports resolve
 from ..containers.bonds import Bond
+from ..periodictable import ListElement
+
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
@@ -58,6 +64,7 @@ class Tautomers:
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
         copy = self.copy()
+        copy.clean_stereo()
         if treat_aromatic_rings:
             copy.kekule()
             copy.thiele()  # prevent
@@ -66,19 +73,9 @@ class Tautomers:
         queue = deque([copy])
         while queue:
             current = queue.popleft()
-            for mol in current._enumerate_zwitter_tautomers():
-                if mol not in seen:
-                    yield mol
-                    seen.add(mol)
-                    queue.append(mol)
-            for mol in current._enumerate_ring_chain_tautomers():
-                if mol not in seen:
-                    yield mol
-                    seen.add(mol)
-                    queue.append(mol)
-            for mol in current._enumerate_chain_tautomers():
-                mol.kekule()
-                mol.thiele()
+            for mol in chain(current._enumerate_zwitter_tautomers(),
+                             current._enumerate_chain_tautomers(),
+                             current._enumerate_ring_chain_tautomers()):
                 if mol not in seen:
                     yield mol
                     seen.add(mol)
@@ -98,6 +95,7 @@ class Tautomers:
             mol.__dict__['rings_count'] = rings_count
             mol.__dict__['atoms_rings'] = atoms_rings
             mol.__dict__['sssr'] = sssr
+            mol.__dict__['__cached_args_method_neighbors'] = self.__dict__['__cached_args_method_neighbors'].copy()
 
             charges = mol._charges
             hydrogens = mol._hydrogens
@@ -108,12 +106,20 @@ class Tautomers:
             yield mol
 
     def _enumerate_ring_chain_tautomers(self):
-        """
-        [C:1]-[O,N,S,Se:1]-[H].[C:2]=[O,N,S,Se:2] >> [C:1]-[1]-[C:2]-[2]-[H] - exo 3-7
-        [C:1]-[O,N,S,Se:1]-[H].[C:2]#[N:2] >> [C:1]-[1]-[C:2]=[2]-[H] - exo 5-7
-        [C:1]-[O,N,S,Se:1]-[H].[C:2]=[N:2] >> [C:1]-[1]-[2]-[C:2]-[H] - endo 5-7
-        """
-        return ()
+        for n, dnr, acc in self.__rings():
+            mol = self.copy()
+            bonds = mol._bonds
+            hydrogens = mol._hydrogens
+            hybridizations = mol._hybridizations
+
+            del bonds[n][acc], bonds[acc][n]
+            b = bonds[n][dnr]
+            b._Bond__order = b._Bond__order + 1
+            hydrogens[dnr] -= 1
+            hydrogens[acc] += 1
+            hybridizations[dnr] += 1
+            hybridizations[n] += 1
+            yield mol
 
     def _enumerate_chain_tautomers(self):
         atoms = self._atoms
@@ -128,21 +134,32 @@ class Tautomers:
         rings_count = self.rings_count
         atoms_rings = self.atoms_rings
 
-        for path in self.__enumerate_bonds():
+        for path, hydrogen in self.__enumerate_bonds():
             mol = self.__class__()
             mol._charges.update(charges)
             mol._radicals.update(radicals)
             mol._plane.update(plane)
 
-            # store cached sssr in new molecules for speedup
-            mol.__dict__['rings_count'] = rings_count
-            mol.__dict__['atoms_rings'] = atoms_rings
-            mol.__dict__['sssr'] = sssr
-
             m_atoms = mol._atoms
             m_bonds = mol._bonds
+
             m_hybridizations = mol._hybridizations
             m_hydrogens = mol._hydrogens
+            m_hybridizations.update(hybridizations)
+            m_hydrogens.update(hydrogens)
+
+            n = path[0][0]
+            m = path[-1][1]
+            if hydrogen:
+                m_hydrogens[n] -= 1
+                m_hydrogens[m] += 1
+                m_hybridizations[n] += 1
+                m_hybridizations[m] -= 1
+            else:
+                m_hydrogens[n] += 1
+                m_hydrogens[m] -= 1
+                m_hybridizations[n] -= 1
+                m_hybridizations[m] += 1
 
             adj = {}
             for n, a in atoms.items():
@@ -151,11 +168,8 @@ class Tautomers:
                 a._attach_to_graph(mol, n)
                 adj[n] = {}
 
-            seen = set()
             for n, m, bond in path:
                 adj[n][m] = adj[m][n] = Bond(bond)
-                seen.add(n)
-                seen.add(m)
 
             for n, ms in bonds.items():
                 adjn = adj[n]
@@ -168,13 +182,13 @@ class Tautomers:
                     else:
                         bn[m] = bond.copy()
 
-            for n, h in hybridizations.items():
-                if n in seen:
-                    mol._calc_hybridization(n)
-                    mol._calc_implicit(n)
-                else:
-                    m_hybridizations[n] = h
-                    m_hydrogens[n] = hydrogens[n]
+            mol.kekule()
+            mol.thiele()
+            # store cached sssr in new molecules for speedup
+            mol.__dict__['rings_count'] = rings_count
+            mol.__dict__['atoms_rings'] = atoms_rings
+            mol.__dict__['sssr'] = sssr
+            mol.__dict__['__cached_args_method_neighbors'] = self.__dict__['__cached_args_method_neighbors'].copy()
             yield mol
 
     def __enumerate_bonds(self):
@@ -216,7 +230,7 @@ class Tautomers:
                     if hydrogen:
                         if current in forbidden and path[0][0] != forbidden[current]:
                             continue
-                        yield path
+                        yield path, True
                     elif hydrogens[current]:
                         # allene carbon formation in small rings forbidden
                         if self.rings_count and hyb[current] == 2 and atoms[current].atomic_number == 6:
@@ -224,147 +238,281 @@ class Tautomers:
                             common = set(self.atoms_rings.get(last, ())).intersection(self.atoms_rings.get(n, ()))
                             if common and min(len(x) for x in common) < 9:
                                 continue
-                        yield path
+                        yield path, False
 
     def __entries(self):
-        # possible: not radicals and not charged
-        # O S Se -H[enol] (only 1 neighbor)
-        # N -H[enol] (1 or 2 neighbor)
-        # P -H[enol] (1 or 2 non-hydrogen bonds with order sum 1 or 2)
-
-        # reverse (has double bonded neighbor): excluded heminal heteroatoms [CC(=O)O]
-        # O S Se (only 1 neighbor)
-        # N P(1 or 2 neighbors)
         atoms = self._atoms
         bonds = self._bonds
-        charges = self._charges
-        hydrogens = self._hydrogens
-        neighbors = self.neighbors
-        radicals = self._radicals
-        hybridizations = self._hybridizations
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
 
         entries = []
         forbidden = {}
-        for n, a in atoms.items():
-            if radicals[n] or charges[n]:
-                continue
-            if a.atomic_number in (8, 16, 34):  # O S Se
-                if neighbors(n) == 1:
-                    m = next(m for m, b in bonds[n].items() if b.order != 8)
-                    if hydrogens[n]:
-                        # skip R=N-[OH]
-                        if atoms[m].atomic_number == 7 and hybridizations[m] == 2 and not (charges[m] or radicals[m]):
-                            continue
+        seen = set()
+        for q, bl, wl, dnr, acc in self.__keto_enol_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    n = mapping[1]
+                    if n in seen:
+                        continue
+                    seen.add(n)
+                    if bl:
+                        seen.update(mapping[x] for x in bl)
+                    if wl:
+                        forbidden[n] = mapping[wl]
+                    if dnr:
                         entries.append((n, True))
-                    else:
-                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=O
-                            c = False
-                            h = None
-                            for x, b in bonds[m].items():
-                                if x != n and b.order == 1:  # skip first atom and any (8) bonds
-                                    if atoms[x].atomic_number == 6:
-                                        c = True
-                                    else:
-                                        h = x
-                            if c and h:  # skip C-C(X)=O, X != C
-                                forbidden[n] = h
-                                continue
-                        entries.append((n, False))
-            elif a.atomic_number in (7, 15):
-                if 0 < neighbors(n) < 3:
-                    if hybridizations[n] == 1:  # amine
-                        if hydrogens[n]:
-                            entries.append((n, True))
-                    elif hybridizations[n] == 2:  # imine
-                        if hydrogens[n]:
-                            entries.append((n, True))
-                        m = next(m for m, b in bonds[n].items() if b.order == 2)
-                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # not R=C=N-R
-                            c = False
-                            h = None
-                            for x, b in bonds[m].items():
-                                if x != n and b.order != 8:  # skip first atom and any (8) bonds
-                                    if atoms[x].atomic_number == 6:
-                                        c = True
-                                    else:
-                                        h = x
-                            if c and h:  # skip C-C(X)=N-R, X != C
-                                forbidden[n] = h
-                                continue
-                        entries.append((n, False))
-                    elif hybridizations[n] == 3:  # nitrile
+                    if acc:
                         entries.append((n, False))
         return entries, forbidden
 
     def __h_donors_acceptors(self):
-        # Ar - Se S O [N+] [P+] H-donor
-        # [O-], [S-], [Se-], P, N - H-acceptor
         atoms = self._atoms
         bonds = self._bonds
-        charges = self._charges
-        hydrogens = self._hydrogens
-        radicals = self._radicals
-        hybridizations = self._hybridizations
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
 
         donors = []
         acceptors = []
-        for n, a in atoms.items():
-            if radicals[n]:  # skip radicals
-                continue
-            an = a.atomic_number
-            if an in (8, 16, 34):
-                if not charges[n] and hydrogens[n] == 1:
-                    m = next(m for m, b in bonds[n].items() if b.order != 8)
-                    hm = hybridizations[m]
-                    if hm == 4:  # Ar[S,Se,O][H]
+
+        seen = set()
+        for q, dnr, acc in self.__h_donor_acceptor_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    n = mapping[1]
+                    if n in seen:
+                        continue
+                    seen.add(n)
+                    if dnr:
                         donors.append(n)
-                    else:
-                        man = atoms[m].atomic_number
-                        if man in (8, 15, 16, 17, 33, 34, 35, 52, 53):  # oxo-acids, except Nitro, Boronic
-                            if hm != 1:
-                                donors.append(n)
-                        elif man == 6 and hm == 2:
-                            x = next(x for x, b in bonds[m].items() if b.order == 2)
-                            if atoms[x].atomic_number in (8, 16, 34):  # carboxyl and S, Se analogs
-                                donors.append(n)
-                elif charges[n] == -1 and not any(charges[m] > 0 for m, b in bonds[n].items()
-                                                  if b.order != 8):  # R[O,S,Se-]
-                    # exclude zwitterions: nitro etc
-                    acceptors.append(n)
-            elif an in (7, 15):
-                if not charges[n]:
-                    hn = hybridizations[n]
-                    if hn == 1:
-                        ar = 0
-                        for m, b in bonds[n].items():
-                            if b.order == 8:
-                                continue
-                            hm = hybridizations[m]
-                            if hm in (2, 3):  # pyrole? enamine or amide
-                                break
-                            elif hm == 4:
-                                ar += 1
-                        else:
-                            if ar < 2:  # not Ar-N-Ar or pyrole
-                                acceptors.append(n)
-                    elif hn == 4:  # pyridine
+                    if acc:
                         acceptors.append(n)
-                    elif hn == 2:
-                        # imidazole, pyrroline, guanidine, imine
-                        # any other cases ignored.
-                        # N=CO >> NC=O - declined
-                        # [Het]=N - declined
-                        # R-[O,S,Se]-C=N, R != H - accepted (1,3-oxazole, etc)
-                        m = next(m for m, b in bonds[n].items() if b.order == 2)
-                        if atoms[m].atomic_number == 6 and hybridizations[m] == 2:  # SP2 carbon
-                            for x, b in bonds[m].items():
-                                if b.order != 8 and atoms[x].atomic_number in (8, 16, 34) and hydrogens[x]:
-                                    break
-                            else:
-                                acceptors.append(n)
-                elif charges[n] == 1 and hydrogens[n]:  # R[NH+] or =[N+H2?] - ammonia or imine-H+
-                    donors.append(n)
         return donors, acceptors
+
+    def __rings(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        atoms_order = self.atoms_order
+        atoms_rings = self.atoms_rings
+        connected_components = [set(x) for x in self.connected_components]
+        acceptable = {r for r in self.sssr if all(bonds[n][m].order != 8 for n, m in zip(r, r[1:]))}
+
+        entries = []
+        seen = set()
+        for q, in_ring, dnr, acc, size in self.__ring_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    n = mapping[1]
+                    if n in seen:
+                        continue
+                    seen.add(n)
+                    if n not in atoms_rings:
+                        continue
+                    in_ring = [mapping[x] for x in in_ring]
+                    if any(x not in atoms_rings for x in in_ring):
+                        continue
+                    ring = reduce(and_, (set(atoms_rings[x]) for x in in_ring), set(atoms_rings[n])) & acceptable
+                    if not ring:
+                        continue
+                    seen.update(in_ring)
+                    if min(len(x) for x in ring) < size:
+                        continue
+                    entries.append((n, mapping[dnr], mapping[acc]))
+
+        return entries
+
+    @class_cached_property
+    def __keto_enol_rules(self):
+        rules = []  # query, black list [except first], allowed, H-donor, H-acceptor
+
+        # C(=[O,S,Se])[O,S,Se][H,R] skip
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=(1, 2), hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, None, 3, False, False))
+
+        # C(=[O,S,Se])[O,S,Se-] skip
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1, hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, None, 3, False, False))
+
+        # C(=[O,S,Se])N[H,R] skip
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
+        q.add_atom('C')
+        q.add_atom('N', hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, None, 3, False, False))
+
+        # C(=N)N[H,R] skip
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2)
+        q.add_atom('C')
+        q.add_atom('N', hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, None, 3, False, False))
+
+        # C(=N)[O,S,Se][H,R] skip
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2)
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=(1, 2), hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, None, 3, False, False))
+
+        # A=N-OH skip
+        q = query.QueryContainer()
+        q.add_atom('O', neighbors=1)
+        q.add_atom('N', neighbors=2, hybridization=2)
+        q.add_bond(1, 2, 1)
+        rules.append((q, (2,), None, False, False))
+
+        # [O,S,Se,N]=[PH]= skip
+        q = query.QueryContainer()
+        q.add_atom('P', neighbors=2, hybridization=3)
+        q.add_atom(ListElement(['O', 'S', 'Se', 'N']))
+        q.add_bond(1, 2, 2)
+        rules.append((q, None, None, False, False))
+
+        # A=[O,S,Se]
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1, hybridization=2)
+        rules.append((q, None, None, False, True))
+
+        # A-[O,S,Se]H
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), hybridization=1, neighbors=1)
+        rules.append((q, None, None, True, False))
+
+        # A#N
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=3)
+        rules.append((q, None, None, False, True))
+
+        # A=NH
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2, neighbors=1)
+        rules.append((q, None, None, True, True))
+
+        # A=N
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2, neighbors=2)
+        rules.append((q, None, None, False, True))
+
+        # A-NH
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=1, neighbors=(1, 2))
+        rules.append((q, None, None, True, False))
+
+        return rules
+
+    @class_cached_property
+    def __h_donor_acceptor_rules(self):
+        rules = []  # query, H-donor, H-acceptor
+
+        # [H][O,S,Se]-Ar
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
+        q.add_atom('A', hybridization=4)
+        q.add_bond(1, 2, 1)
+        rules.append((q, True, False))
+
+        # [H][O,S,Se]-[C,N,P,S,Cl,Se,Br,I]=O
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
+        q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
+        q.add_atom('O')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 2)
+        rules.append((q, True, False))
+
+        # [H][N+]
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1, neighbors=(1, 2, 3), hybridization=1)
+        rules.append((q, True, False))
+
+        # [H][N+]=
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1, neighbors=(1, 2), hybridization=2)
+        rules.append((q, True, False))
+
+        # [O,S,Se-]-[N+] skip
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
+        q.add_atom('N', charge=1)
+        q.add_bond(1, 2, 1)
+        rules.append((q, False, False))
+
+        # [O,S,Se-]-
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
+        rules.append((q, False, True))
+
+        # [O,S,N,Se]-N= skip
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2)
+        q.add_atom(ListElement(['N', 'O', 'S', 'Se']))
+        q.add_bond(1, 2, 1)
+        rules.append((q, False, False))
+
+        # N=,# or NR1-3
+        q = query.QueryContainer()
+        q.add_atom('N')
+        rules.append((q, False, True))
+
+        return rules
+
+    @class_cached_property
+    def __ring_rules(self):
+        rules = []  # query, in ring [except first], H-donor, H-acceptor, size
+
+        # -CC(OH)[N,O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('O', neighbors=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, (2, 3), 4, 3, 4))
+
+        # -CC(NH[H,R])[N,O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, (2, 3), 4, 3, 4))
+
+        # -CC(=NH)[N,O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 2)
+        rules.append((q, (2, 3), 4, 3, 5))
+
+        return rules
 
     def __paths(self, donors, acceptors, minimal=3, maximal=7):
         bonds = self._bonds
@@ -388,38 +536,6 @@ class Tautomers:
                     yield path.copy()
                 if depth < maximal:
                     stack.extend((n, depth) for n in bonds[current] if n not in seen)
-
-    def __rings(self):
-        atoms = self._atoms
-        bonds = self._bonds
-        charges = self._charges
-        hydrogens = self._hydrogens
-        radicals = self._radicals
-        neighbors = self.neighbors
-        hybridizations = self._hybridizations
-
-        for r in self.sssr:
-            if len(r) > 7 or any(bonds[n][m].order == 8 for n, m in zip(r, r[1:])):
-                continue
-            lr = 1 - len(r)
-
-            for i, n in enumerate(r):
-                if atoms[n].atomic_number in (7, 8, 16, 34) and neighbors(n) == 2:  # N O S Se
-                    # search for [C,N;R]-[N,O,S,Se:R]-[C;R]-,=[O,N;H!R] >> [C,N]-[N,O,S,Se;H].[C]=,#[O,N]
-                    # or [C,N;R]-[N,O,S,Se:R]-[N;R]-[C;H!R] >> [C,N]-[N,O,S,Se;H].[N]=[C]
-                    b = i - 1
-                    a = lr + i
-                    if charges[b] or charges[a] or radicals[b] or radicals[a]:
-                        break
-                    if atoms[b].atomic_number == 7:
-                        if hybridizations[b] == 2:  # C=N-[N,O,S,Se:R]
-                            if atoms[a].atomic_number in (6, 7):
-                                ...
-                        elif hybridizations[b] == 1:  # C-N-[n:R]
-                            ...
-            else:  # found
-                ...
-        return
 
 
 __all__ = ['Tautomers']

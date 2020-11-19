@@ -40,6 +40,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                         DepictMolecule, Calculate2DMolecule, Tautomers, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
+    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -457,11 +458,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         raise TypeError('MoleculeContainer expected')
 
     @cached_property
-    def molecular_charge(self):
+    def molecular_charge(self) -> int:
         """
         Total charge of molecule
         """
         return sum(self._charges.values())
+
+    @cached_property
+    def is_radical(self) -> bool:
+        """
+        True if at least one atom is radical
+        """
+        return any(self._radicals.values())
 
     def __int__(self):
         """

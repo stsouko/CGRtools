@@ -27,7 +27,6 @@ from ..exceptions import ValenceError
 
 class Standardize:
     __slots__ = ()
-    __class_cache__ = {}
 
     def canonicalize(self) -> bool:
         """
