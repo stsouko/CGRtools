@@ -63,13 +63,19 @@ class Tautomers:
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
         """
+        yield self.copy()
+        atoms_stereo = self._atoms_stereo
+        allenes_stereo = self._allenes_stereo
+        cis_trans_stereo = self._cis_trans_stereo
+        has_stereo = bool(atoms_stereo or allenes_stereo or cis_trans_stereo)
+        bonds = self._bonds
+
         copy = self.copy()
         copy.clean_stereo()
         if treat_aromatic_rings:
             copy.kekule()
             copy.thiele()  # prevent
-        yield copy
-        seen = {self, copy}
+        seen = {copy}
         queue = deque([copy])
         while queue:
             current = queue.popleft()
@@ -77,9 +83,16 @@ class Tautomers:
                              current._enumerate_chain_tautomers(),
                              current._enumerate_ring_chain_tautomers()):
                 if mol not in seen:
-                    yield mol
                     seen.add(mol)
                     queue.append(mol)
+                    if has_stereo:
+                        mol = mol.copy()
+                        mb = mol._bonds
+                        mol._atoms_stereo.update((n, s) for n, s in atoms_stereo.items() if mb[n] == bonds[n])
+                        mol._allenes_stereo.update(allenes_stereo)
+                        mol._cis_trans_stereo.update(cis_trans_stereo)
+                        mol._fix_stereo()
+                    yield mol
 
     def _enumerate_zwitter_tautomers(self):
         donors, acceptors = self.__h_donors_acceptors()
