@@ -432,7 +432,7 @@ class SMILESRead(CGRRead):
                     token = None
                 token_type = 0
                 tokens.append((0, s))
-            elif s in 'cnops':  # aromatic ring atom
+            elif s in 'cnopsb':  # aromatic ring atom
                 if token:
                     tokens.append((token_type, token))
                     token = None
@@ -685,9 +685,13 @@ class SMILESRead(CGRRead):
                     if not previous:
                         bt = 1
                         b = 4 if atoms_types[last_num] == token_type == 8 else 1
+                        order[last_num].append(atom_num)
+                        order[atom_num].append(last_num)
                     else:
                         bt, b = previous
-
+                        if bt != 4:
+                            order[last_num].append(atom_num)
+                            order[atom_num].append(last_num)
                     if bt == 1:
                         bonds.append((atom_num, last_num, b))
                     elif bt == 9:
@@ -697,8 +701,6 @@ class SMILESRead(CGRRead):
                     elif bt == 10:
                         bonds.append((atom_num, last_num, 8))
                         cgr.append(((atom_num, last_num), 'bond', b))
-                    order[last_num].append(atom_num)
-                    order[atom_num].append(last_num)
 
                 if token_type == 11:
                     cgr.extend((atom_num, *x) for x in token.pop('cgr'))

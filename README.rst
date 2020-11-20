@@ -15,6 +15,8 @@ Basic operations:
    - Perform MCS search.
    - 2d depiction.
 
+Full documentation can be found `here <https://cgrtools.readthedocs.io>`_
+
 INSTALL
 =======
 
@@ -34,7 +36,7 @@ Linux Debian based
 
 Mac
 ---
-* Install python3.8 and git using [brew](<https://brew.sh>)::
+* Install python3.8 and git using `brew <https://brew.sh>`_::
 
     brew install git
     brew install python3
@@ -50,7 +52,7 @@ Mac
     
 Windows
 -------
-* Install python3.8 and git using [Chocolatey](<https://chocolatey.org/>)::
+* Install python3.8 and git using `Chocolatey <https://chocolatey.org/>`_::
 
     choco install git
     choco install python3
@@ -105,22 +107,22 @@ On Linux additionally do repairing of package::
 COPYRIGHT
 =========
 
-* 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer
-* 2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> features and API discussion
-* 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
+* 2014-2020 Ramil Nugmanov nougmanoff@protonmail.com main developer
+* 2014-2019 Timur Madzhidov tmadzhidov@gmail.com features and API discussion
+* 2014-2019 Alexandre Varnek varnek@unistra.fr base idea of CGR approach
 
 CONTRIBUTORS
 ============
 
-* Dinar Batyrshin <batyrshin-dinar@mail.ru>
-* Timur Gimadiev <timur.gimadiev@gmail.com>
-* Adelia Fatykhova <adelik21979@gmail.com>
-* Tagir Akhmetshin <tagirshin@gmail.com>
-* Ravil Mukhametgaleev <sonic-mc@mail.ru>
+* Dinar Batyrshin batyrshin-dinar@mail.ru
+* Timur Gimadiev timur.gimadiev@gmail.com
+* Adelia Fatykhova adelik21979@gmail.com
+* Tagir Akhmetshin tagirshin@gmail.com
+* Ravil Mukhametgaleev sonic-mc@mail.ru
 
 CITE THIS
 =========
 
 CGRtools: Python Library for Molecule, Reaction, and Condensed Graph of Reaction Processing.
 Journal of Chemical Information and Modeling 2019 59 (6), 2516-2521.
-DOI: 10.1021/acs.jcim.9b00102 
+DOI: 10.1021/acs.jcim.9b00102
