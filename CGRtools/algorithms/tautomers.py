@@ -121,6 +121,25 @@ class Tautomers:
             hybridizations[n] += 1
             yield mol
 
+        donors, acceptors = self.__chains()
+        for d, (a, c) in product(donors, acceptors):
+            path = self.__path(d, a)
+            if not path:
+                continue
+            mol = self.copy()
+            bonds = mol._bonds
+            hydrogens = mol._hydrogens
+            hybridizations = mol._hybridizations
+
+            b = bonds[a][c]
+            b._Bond__order = b._Bond__order - 1
+            bonds[d][a] = bonds[a][d] = Bond(1)
+            hydrogens[c] += 1
+            hydrogens[d] -= 1
+            hybridizations[a] -= 1
+            hybridizations[c] -= 1
+            yield mol
+
     def _enumerate_chain_tautomers(self):
         atoms = self._atoms
         charges = self._charges
@@ -301,7 +320,7 @@ class Tautomers:
 
         entries = []
         seen = set()
-        for q, in_ring, dnr, acc, size in self.__ring_rules:
+        for q, in_ring, dnr, acc in self.__ring_rules:
             components, closures = q._compiled_query
             for candidate in connected_components:
                 for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
@@ -318,11 +337,37 @@ class Tautomers:
                     if not ring:
                         continue
                     seen.update(in_ring)
-                    if min(len(x) for x in ring) < size:
-                        continue
                     entries.append((n, mapping[dnr], mapping[acc]))
 
         return entries
+
+    def __chains(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
+
+        donors = []
+        acceptors = []
+        seen = set()
+        for q, dnr in self.__chain_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    n = mapping[1]
+                    if n in seen:
+                        continue
+                    seen.add(n)
+                    if dnr:
+                        donors.append(n)
+                    else:
+                        m = mapping[2]
+                        if m in seen:
+                            continue
+                        seen.add(m)
+                        acceptors.append((n, m))
+
+        return donors, acceptors
 
     @class_cached_property
     def __keto_enol_rules(self):
@@ -477,31 +522,113 @@ class Tautomers:
 
     @class_cached_property
     def __ring_rules(self):
-        rules = []  # query, in ring [except first], H-donor, H-acceptor, size
+        rules = []  # query, in ring [except first], H-donor, H-acceptor
 
-        # -CC(OH)[N,O,S]-
+        # -CC(OH)[NH,O,S]-
         q = query.QueryContainer()
-        q.add_atom('C')  # entry
+        q.add_atom('C', neighbors=3)  # entry
         q.add_atom('C')
         q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
         q.add_atom('O', neighbors=1)
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        rules.append((q, (2, 3), 4, 3, 4))
+        rules.append((q, (2, 3), 4, 3))
 
-        # -CC(NH[H,R])[N,O,S]-
+        # -CC(OH)N(C)-
+        q = query.QueryContainer()
+        q.add_atom('C', neighbors=3)  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('O', neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(3, 5, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(C)(OH)[NH,O,S]-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
         q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
-        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_atom('O', neighbors=1)
+        q.add_atom('C')
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        rules.append((q, (2, 3), 4, 3, 4))
+        q.add_bond(1, 5, 1)
+        rules.append((q, (2, 3), 4, 3))
 
-        # -CC(=NH)[N,O,S]-
+        # -CC(C)(OH)N(C)-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('O', neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_atom('C')
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(3, 5, 1)
+        q.add_bond(1, 6, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(NH2)[NH,O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(NH2)N(C)-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('N', neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(3, 5, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(NC)[NH,O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(4, 5, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(NC)N(C)-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(3, 5, 1)
+        q.add_bond(4, 6, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(=NH)[NH,O,S]-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
@@ -510,32 +637,176 @@ class Tautomers:
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 2)
-        rules.append((q, (2, 3), 4, 3, 5))
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(=NH)N(C)-
+        q = query.QueryContainer()
+        q.add_atom('C')  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('N', neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 2)
+        q.add_bond(3, 5, 1)
+        rules.append((q, (2, 3), 4, 3))
 
         return rules
 
-    def __paths(self, donors, acceptors, minimal=3, maximal=7):
+    @class_cached_property
+    def __chain_rules(self):
+        rules = []  # query, is donor
+
+        # C-C(=[O,S])[O,S,NH]H
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # entry
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S']), neighbors=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        rules.append((q, True))
+
+        # C-C(=[O,S])N(C)H
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S']), neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 5, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        rules.append((q, True))
+
+        # C-C(=N)NH2
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=1)
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        rules.append((q, True))
+
+        # C-C(=N)N(C)H
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        q.add_bond(1, 5, 1)
+        rules.append((q, True))
+
+        # C=N-OH
+        q = query.QueryContainer()
+        q.add_atom('O', neighbors=1)
+        q.add_atom('N')
+        q.add_atom('C', hybridization=2)
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 2)
+        rules.append((q, True))
+
+        # C[O,S,NH]H
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 1)
+        rules.append((q, True))
+
+        # C-N(C)H
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_atom('C', hybridization=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        rules.append((q, True))
+
+        # C-C(C)=[O,S,NH]
+        q = query.QueryContainer()
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, False))
+
+        # C-C=[O,S,NH]
+        q = query.QueryContainer()
+        q.add_atom('C', neighbors=2)
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
+        q.add_atom('C')
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 1)
+        rules.append((q, False))
+
+        # C-C(C)=NC
+        q = query.QueryContainer()
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        q.add_bond(2, 5, 1)
+        rules.append((q, False))
+
+        # C-C=NC
+        q = query.QueryContainer()
+        q.add_atom('C', neighbors=2)
+        q.add_atom('N')
+        q.add_atom('C')
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 1)
+        q.add_bond(2, 4, 1)
+        rules.append((q, False))
+
+        # C-C#N
+        q = query.QueryContainer()
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom('C')
+        q.add_bond(1, 2, 3)
+        q.add_bond(1, 3, 1)
+        rules.append((q, False))
+
+        return rules
+
+    def __path(self, donor, acceptor, minimal=4, maximal=7):
         bonds = self._bonds
 
-        for start in donors:
-            path = [start]
-            seen = {start}
-            stack = [(n, 1) for n in bonds[start]]
+        path = [donor]
+        seen = {donor}
+        stack = [(n, 1) for n in bonds[donor]]
 
-            while stack:
-                current, depth = stack.pop()
+        while stack:
+            current, depth = stack.pop()
 
-                if len(path) > depth:
-                    seen.difference_update(path[depth:])
-                    path = path[:depth]
+            if len(path) > depth:
+                seen.difference_update(path[depth:])
+                path = path[:depth]
 
-                path.append(current)
-                seen.add(current)
-                depth += 1
-                if depth >= minimal and current in acceptors:
-                    yield path.copy()
-                if depth < maximal:
-                    stack.extend((n, depth) for n in bonds[current] if n not in seen)
+            path.append(current)
+            seen.add(current)
+            depth += 1
+            if depth >= minimal and current == acceptor:
+                return path
+            if depth < maximal:
+                stack.extend((n, depth) for n in bonds[current] if n not in seen)
 
 
 __all__ = ['Tautomers']
