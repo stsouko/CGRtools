@@ -119,6 +119,11 @@ class Tautomers:
             yield mol
 
     def _enumerate_ring_chain_tautomers(self):
+        bonds = self._bonds
+        rings_count = self.rings_count
+        atoms_rings = self.atoms_rings
+        hyb = self._hybridizations
+
         for n, dnr, acc in self.__rings():
             mol = self.copy()
             bonds = mol._bonds
@@ -139,6 +144,15 @@ class Tautomers:
             path = self.__path(d, a)
             if not path:
                 continue
+            if len(path) == 4:  # skip 4-rings with sp2 and sp atoms
+                if bonds[path[1]][path[2]] != 1:
+                    continue
+            elif rings_count:  # skip 3 atoms in one aryl ring
+                aryl = [x for x in path[1:-1] if hyb[x] == 4]
+                if len(aryl) > 2:
+                    if reduce(and_, (set(atoms_rings[x]) for x in aryl)):
+                        continue
+
             mol = self.copy()
             bonds = mol._bonds
             hydrogens = mol._hydrogens
@@ -481,6 +495,27 @@ class Tautomers:
     def __h_donor_acceptor_rules(self):
         rules = []  # query, H-donor, H-acceptor
 
+        # [O,S,Se-]-[N+] skip
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
+        q.add_atom('N', charge=1)
+        q.add_bond(1, 2, 1)
+        rules.append((q, False, False))
+
+        # [O,S,N,Se]-N= skip
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=2)
+        q.add_atom(ListElement(['N', 'O', 'S', 'Se']))
+        q.add_bond(1, 2, 1)
+        rules.append((q, False, False))
+
+        # [NH]-A= skip
+        q = query.QueryContainer()
+        q.add_atom('N', hybridization=1, neighbors=(1, 2))
+        q.add_atom('A', hybridization=(2, 3))
+        q.add_bond(1, 2, 1)
+        rules.append((q, False, False))
+
         # [H][O,S,Se]-Ar
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
@@ -502,29 +537,20 @@ class Tautomers:
         q.add_atom('N', charge=1, neighbors=(1, 2, 3), hybridization=1)
         rules.append((q, True, False))
 
+        # [H][n+]
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1, neighbors=2, hybridization=4)
+        rules.append((q, True, False))
+
         # [H][N+]=
         q = query.QueryContainer()
         q.add_atom('N', charge=1, neighbors=(1, 2), hybridization=2)
         rules.append((q, True, False))
 
-        # [O,S,Se-]-[N+] skip
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
-        q.add_atom('N', charge=1)
-        q.add_bond(1, 2, 1)
-        rules.append((q, False, False))
-
         # [O,S,Se-]-
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
         rules.append((q, False, True))
-
-        # [O,S,N,Se]-N= skip
-        q = query.QueryContainer()
-        q.add_atom('N', hybridization=2)
-        q.add_atom(ListElement(['N', 'O', 'S', 'Se']))
-        q.add_bond(1, 2, 1)
-        rules.append((q, False, False))
 
         # N=,# or NR1-3
         q = query.QueryContainer()
@@ -537,35 +563,33 @@ class Tautomers:
     def __ring_rules(self):
         rules = []  # query, in ring [except first], H-donor, H-acceptor
 
-        # -CC(OH)[NH,O,S]-
+        # -CC(OH)[O,S]-
         q = query.QueryContainer()
         q.add_atom('C', neighbors=3)  # entry
         q.add_atom('C')
-        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom(ListElement(['O', 'S']), hybridization=1, neighbors=2)
         q.add_atom('O', neighbors=1)
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(OH)N(C)-
+        # -CC(OH)N(R)-
         q = query.QueryContainer()
         q.add_atom('C', neighbors=3)  # entry
         q.add_atom('C')
         q.add_atom('N', neighbors=3)
         q.add_atom('O', neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        q.add_bond(3, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(C)(OH)[NH,O,S]-
+        # -CC(C)(OH)[O,S]-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
-        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom(ListElement(['O', 'S']), hybridization=1, neighbors=2)
         q.add_atom('O', neighbors=1)
         q.add_atom('C')
         q.add_bond(1, 2, 1)
@@ -574,95 +598,87 @@ class Tautomers:
         q.add_bond(1, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(C)(OH)N(C)-
+        # -CC(C)(OH)N(R)-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
         q.add_atom('N', neighbors=3)
         q.add_atom('O', neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
         q.add_atom('C')
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        q.add_bond(3, 5, 1)
-        q.add_bond(1, 6, 1)
+        q.add_bond(1, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(NH2)[NH,O,S]-
+        # -CC(NH)[O,S]-
+        q = query.QueryContainer()
+        q.add_atom('C', neighbors=3)  # entry
+        q.add_atom('C')
+        q.add_atom(ListElement(['O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(NH)N(R)-
+        q = query.QueryContainer()
+        q.add_atom('C', neighbors=3)  # entry
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3)
+        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, (2, 3), 4, 3))
+
+        # -CC(C)(NH)[O,S]-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
-        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
-        q.add_atom('N', neighbors=1)
+        q.add_atom(ListElement(['O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_atom('C')
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
+        q.add_bond(1, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(NH2)N(C)-
+        # -CC(C)(NH)N(R)-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
         q.add_atom('N', neighbors=3)
-        q.add_atom('N', neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
+        q.add_atom('N', neighbors=(1, 2), hybridization=1)
+        q.add_atom('C')
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        q.add_bond(3, 5, 1)
+        q.add_bond(1, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(NC)[NH,O,S]-
+        # -CC(=NH)[O,S]-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
-        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
-        q.add_atom('N', neighbors=2)
-        q.add_atom('C', hybridization=(1, 4))
-        q.add_bond(1, 2, 1)
-        q.add_bond(1, 3, 1)
-        q.add_bond(1, 4, 1)
-        q.add_bond(4, 5, 1)
-        rules.append((q, (2, 3), 4, 3))
-
-        # -CC(NC)N(C)-
-        q = query.QueryContainer()
-        q.add_atom('C')  # entry
-        q.add_atom('C')
-        q.add_atom('N', neighbors=3)
-        q.add_atom('N', neighbors=2)
-        q.add_atom('C', hybridization=(1, 4))
-        q.add_atom('C', hybridization=(1, 4))
-        q.add_bond(1, 2, 1)
-        q.add_bond(1, 3, 1)
-        q.add_bond(1, 4, 1)
-        q.add_bond(3, 5, 1)
-        q.add_bond(4, 6, 1)
-        rules.append((q, (2, 3), 4, 3))
-
-        # -CC(=NH)[NH,O,S]-
-        q = query.QueryContainer()
-        q.add_atom('C')  # entry
-        q.add_atom('C')
-        q.add_atom(ListElement(['N', 'O', 'S']), hybridization=1, neighbors=2)
+        q.add_atom(ListElement(['O', 'S']), hybridization=1, neighbors=2)
         q.add_atom('N', neighbors=1)
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 2)
         rules.append((q, (2, 3), 4, 3))
 
-        # -CC(=NH)N(C)-
+        # -CC(=NH)N-
         q = query.QueryContainer()
         q.add_atom('C')  # entry
         q.add_atom('C')
-        q.add_atom('N', neighbors=3)
+        q.add_atom('N', hybridization=1)
         q.add_atom('N', neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 2)
-        q.add_bond(3, 5, 1)
         rules.append((q, (2, 3), 4, 3))
 
         return rules
@@ -671,71 +687,21 @@ class Tautomers:
     def __chain_rules(self):
         rules = []  # query, is donor
 
-        # C-C(=[O,S])[O,S,NH]H
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # entry
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom(ListElement(['O', 'S']), neighbors=1)
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        rules.append((q, True))
-
-        # C-C(=[O,S])N(C)H
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom(ListElement(['O', 'S']), neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
-        q.add_bond(1, 2, 1)
-        q.add_bond(1, 5, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        rules.append((q, True))
-
-        # C-C(=N)NH2
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=1)
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        rules.append((q, True))
-
-        # C-C(=N)N(C)H
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_atom('C', hybridization=(1, 4))
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        q.add_bond(1, 5, 1)
-        rules.append((q, True))
-
-        # C=N-OH
+        # N-OH  imines azoles etc
         q = query.QueryContainer()
         q.add_atom('O', neighbors=1)
         q.add_atom('N')
-        q.add_atom('C', hybridization=2)
         q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
         rules.append((q, True))
 
-        # C[O,S,NH]H
+        # C[O,S]H
         q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
-        q.add_atom('C', hybridization=(1, 4))
+        q.add_atom(ListElement(['O', 'S']), neighbors=1)
+        q.add_atom('C', hybridization=(1, 2, 4))
         q.add_bond(1, 2, 1)
         rules.append((q, True))
 
-        # C-N(C)H
+        # C-[NH]-C  2nd amines
         q = query.QueryContainer()
         q.add_atom('N', neighbors=2)
         q.add_atom('C', hybridization=(1, 4))
@@ -764,28 +730,24 @@ class Tautomers:
         q.add_bond(1, 3, 1)
         rules.append((q, False))
 
-        # C-C(C)=NC
+        # C-C(C)=NR
         q = query.QueryContainer()
         q.add_atom('C')
-        q.add_atom('N')
+        q.add_atom('N', neighbors=2)
         q.add_atom('C')
         q.add_atom('C')
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 2)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        q.add_bond(2, 5, 1)
         rules.append((q, False))
 
-        # C-C=NC
+        # C-C=NR
         q = query.QueryContainer()
         q.add_atom('C', neighbors=2)
-        q.add_atom('N')
+        q.add_atom('N', neighbors=2)
         q.add_atom('C')
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 2)
         q.add_bond(1, 3, 1)
-        q.add_bond(2, 4, 1)
         rules.append((q, False))
 
         # C-C#N
