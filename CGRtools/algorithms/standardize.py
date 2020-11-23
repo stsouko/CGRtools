@@ -19,8 +19,6 @@
 #
 from CachedMethods import class_cached_property
 from collections import defaultdict
-from functools import reduce
-from operator import or_
 from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
