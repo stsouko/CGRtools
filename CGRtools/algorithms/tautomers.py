@@ -35,11 +35,14 @@ if TYPE_CHECKING:
 class Tautomers:
     __slots__ = ()
 
-    def tautomerize(self) -> bool:
+    def tautomerize(self, *, prepare_molecules=True) -> bool:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
+
+        :param prepare_molecules: Standardize structures before. Aromatization and implicit hydrogens required.
         """
-        canon = min(self.enumerate_tautomers(), key=lambda x: x.huckel_pi_electrons_energy)
+        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules),
+                    key=lambda x: x.huckel_pi_electrons_energy)
         if canon != self:  # attach state of canonic tautomer to self
             # atoms, radicals state, parsed_mapping and plane are unchanged
             self._bonds = canon._bonds
@@ -54,7 +57,7 @@ class Tautomers:
             return True
         return False
 
-    def enumerate_tautomers(self, *, treat_aromatic_rings=True) -> Iterator['MoleculeContainer']:
+    def enumerate_tautomers(self, *, prepare_molecules=True) -> Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule. Supported hydrogen migration through delocalized chain.
 
@@ -62,6 +65,8 @@ class Tautomers:
         O=C-C=C-C[H] <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <-> [H]O-C=C-C=C
         O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
+
+        :param prepare_molecules: Standardize structures before. Aromatization and implicit hydrogens required.
         """
         yield self.copy()
         atoms_stereo = self._atoms_stereo
@@ -72,8 +77,9 @@ class Tautomers:
 
         copy = self.copy()
         copy.clean_stereo()
-        if treat_aromatic_rings:
+        if prepare_molecules:
             copy.kekule()
+            copy.implicify_hydrogens()
             copy.thiele()  # prevent
         seen = {copy}
         queue = deque([copy])
