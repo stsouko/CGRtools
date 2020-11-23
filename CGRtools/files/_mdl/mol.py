@@ -110,7 +110,8 @@ class MOLRead:
                 self.__stereo.append((a1, a2, -1))
             elif s != '  0':
                 self.__log_buffer.append('unsupported or invalid stereo')
-            self.__bonds.append((a1, a2, int(line[6:9])))
+            b = int(line[6:9])  # added ad-hoc for bond type 9
+            self.__bonds.append((a1, a2, b if b != 9 else 8))
         elif line.startswith('M  END'):
             cgr = []
             for a in self.__atoms:
@@ -118,14 +119,16 @@ class MOLRead:
                     a['is_radical'] = True
             for x in self.__cgr.values():
                 try:
-                    atoms = x['atoms']
                     _type = x['type']
-                    value = x['value']
                     if _type in query_keys:
+                        atoms = x['atoms']
+                        value = x['value']
                         if len(atoms) != 1 or atoms[0] == -1 or not value:
                             raise ValueError(f'CGR Query spec invalid {x}')
                         self.__query.append((atoms[0], query_keys[_type], [int(x) for x in value.split(',')]))
                     elif _type == 'dynatom':
+                        atoms = x['atoms']
+                        value = x['value']
                         if len(atoms) != 1 or atoms[0] == -1 or not value:
                             raise ValueError(f'CGR spec invalid {x}')
                         if value == 'r1':  # only dynatom = r1 acceptable. this means change of radical state
@@ -135,6 +138,8 @@ class MOLRead:
                         else:
                             raise ValueError('unknown dynatom')
                     elif _type == 'dynbond':
+                        atoms = x['atoms']
+                        value = x['value']
                         if len(atoms) != 2 or -1 in atoms or not value:
                             raise ValueError(f'CGR spec invalid {x}')
                         bond, p_bond = x['value'].split('>')
