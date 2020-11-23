@@ -62,7 +62,7 @@ dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 dyn_radical_dict = {'*': (True,), '*>^': (True, ('radical', None)), '^>*': (False, ('radical', None))}
 
-atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnops][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
+atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
 dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Z][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?([*^](>[*^])?)?')
 delimiter = compile(r'[=:]')
 
@@ -482,7 +482,7 @@ class SMILESRead(CGRRead):
                         try:
                             out.append((10, dynamic_bonds[token]))
                         except KeyError:
-                            raise IncorrectSmiles('invalid dynamic bond token')
+                            raise IncorrectSmiles(f'invalid dynamic bond token {{{token}}}')
                     else:  # dynamic atom token
                         out.append((11, cls.__dynatom_parse(token)))
                 elif '*' in token:  # CGR atom radical mark
@@ -498,7 +498,7 @@ class SMILESRead(CGRRead):
         # [isotope]Element[element][@[@]][H[n]][+-charge][:mapping]
         match = fullmatch(atom_re, token)
         if match is None:
-            raise IncorrectSmiles('atom token invalid')
+            raise IncorrectSmiles(f'atom token invalid {{{token}}}')
         isotope, element, stereo, hydrogen, charge, mapping = match.groups()
 
         if isotope:
@@ -531,7 +531,7 @@ class SMILESRead(CGRRead):
         else:
             mapping = 0
 
-        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se'):
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b'):
             _type = 8
             element = element.capitalize()
         else:
@@ -544,7 +544,7 @@ class SMILESRead(CGRRead):
         # [isotope]Element[element][+-charge[>+-charge]][*^[>*^]]
         match = fullmatch(dyn_atom_re, token)
         if match is None:
-            raise IncorrectSmiles('atom token invalid')
+            raise IncorrectSmiles(f'atom token invalid {{{token}}}')
         isotope, element, charge, _, is_radical, _ = match.groups()
 
         if isotope:

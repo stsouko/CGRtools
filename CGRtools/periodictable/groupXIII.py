@@ -69,14 +69,11 @@ class Al(Element, PeriodIII, GroupXIII):
 
     @property
     def _common_valences(self):
-        return 0, 3
+        return 0,  # 3 omitted. added to exceptions
 
     @property
     def _valences_exceptions(self):
-        return ((3, False, 0, ()),
-                (-1, False, 0, ((1, 'H'), (1, 'H'), (1, 'H'), (1, 'H'))),
-                (-1, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))),
-                (-1, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),
+        return ((3, False, 0, ()), (2, False, 1, ()), (1, False, 2, ()), (0, False, 3, ()), (-1, False, 4, ()),
                 (-3, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))))
 
     @property

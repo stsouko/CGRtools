@@ -196,12 +196,15 @@ class Standardize:
                 explicit_sum = 0
                 explicit_dict = defaultdict(int)
                 for m, bond in bonds[n].items():
-                    if m not in hi:
+                    if m not in hi and bond.order != 8:
                         explicit_sum += bond.order
                         explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
-
+                try:
+                    rules = atom.valence_rules(charge, is_radical, explicit_sum)
+                except ValenceError:
+                    break
                 if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
-                       for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
+                       for s, d, h in rules):
                     to_remove.update(hi)
                     break
         for n in to_remove:
@@ -243,6 +246,7 @@ class Standardize:
         charges = self._charges
         radicals = self._radicals
         bonds = self._bonds
+        hydrogens = self._hydrogens
         errors = set(atoms)
         for n, atom in atoms.items():
             charge = charges[n]
@@ -262,8 +266,9 @@ class Standardize:
                 except ValenceError:
                     pass
                 else:
+                    hs = hydrogens[n]
                     for s, d, h in rules:
-                        if s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                        if h == hs and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
                             errors.discard(n)
                             break
         return list(errors)
