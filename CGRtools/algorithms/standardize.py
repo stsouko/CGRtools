@@ -1352,31 +1352,6 @@ class StandardizeReaction:
             return True
         return flag
     
-    def bfs(self,graph, graph_bon, start, end): #search for a common atom for symmetric fragments
-        go = [[start, [start]]]
-        go2 = [[end, [end]]]
-        while 0 < len(go):
-            (node, path) = go.pop(0)
-            (node2, path2) = go2.pop(0)
-            for next_node in graph[node]:
-                for next_node2 in graph[node2]:
-                    if next_node != end  and  next_node2 != start:
-                        if next_node not in path and next_node2 not in path2:
-                            go.append([next_node, path + [next_node]])
-                            go2.append([next_node2, path2 + [next_node2]])
-                            if len(set(path+[next_node]).intersection(set(path2+[next_node2]))) == 1:     
-                                c = list(set(path+[next_node]).intersection(set(path2+[next_node2])))
-                                if (path+[next_node]).index(c[0]) == (path2+[next_node2]).index(c[0]): 
-                                    if len(graph[start]) == len(graph[end]): 
-                                        if graph_bon[start] == graph_bon[end]: 
-                                            return c 
-                                else:
-                                    return []
-                            else:
-                                continue
-            if len(set(path).intersection(set(path2))) == 0:
-                return []
-                break
     @classmethod
     def load_remapping_rules(cls, reactions):
         """
@@ -1407,50 +1382,10 @@ class StandardizeReaction:
             good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
             rules = []
-            seen = set()
+            fix = {}
+            for mb, mg in zip(bad.products, good.products): 
+                fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
             
-            bad_mols = reduce(or_,[p for p in bad.products])
-            good_mols = reduce(or_,[p for p in good.products])
-            fix = {k: v for k, v in zip(bad_mols, good_mols) if k != v and k in atoms}
-            order_pro = bad_mols.atoms_order
-            
-            bad_reactants =  reduce(or_,[p for p in bad.reactants])
-            order_re = bad_reactants.atoms_order
-
-            atoms_bad = [p.atoms_numbers for p in bad.products]
-            
-            d = defaultdict(list) #number of neighbours for each atom
-            for n,p in enumerate(bad.products):
-                for k in atoms_bad[n]:
-                    d[k].extend([i[0] for i in p.environment(k) if len(p) > 1]) 
-            
-            d_bon  = dict() #number of bonds for each atom
-            for k,v in fix.items():
-                 if v in fix.keys() and k == fix[v]:
-                        n1_list,n2_list = [], []
-                        for p in r_new.products:
-                            if set([k,v]).issubset(set(p.atoms_numbers)):
-                                for n1 in d[k]:
-                                    n1_list.append(p.bond(k,n1).order)
-                                for n2 in d[v]:
-                                    n2_list.append(p.bond(v,n2).order)
-                            d_bon[k] = sum(n1_list)
-                            d_bon[v] = sum(n2_list)
-
-            for k, v in fix.items():
-                if k not in seen:
-                    if v in fix.keys() and k == fix[v]:
-                        for t in atoms_bad:
-                            if set([k, v]).issubset(set(t)):  #from a single molecule
-                                if order_pro[k] == order_pro[v]: #same weight
-                                    seen.update([k,v])
-                                elif k in order_re and v in order_re: 
-                                    if order_re[k] == order_re[v]: #same weight in reactants
-                                        seen.update([k,v])
-                                elif len(bfs(d,d_bon, k,v)) == 1:  #one common atom
-                                    seen.update([k,v])
-            
-            fix = {k:v for k,v in fix.items() if k not in seen}
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
 
