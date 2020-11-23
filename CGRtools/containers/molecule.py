@@ -30,15 +30,17 @@ from ..algorithms.huckel import Huckel
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.tautomers import Tautomers
 from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, Huckel, X3domMolecule):
+                        DepictMolecule, Calculate2DMolecule, Tautomers, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
+    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -456,11 +458,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         raise TypeError('MoleculeContainer expected')
 
     @cached_property
-    def molecular_charge(self):
+    def molecular_charge(self) -> int:
         """
         Total charge of molecule
         """
         return sum(self._charges.values())
+
+    @cached_property
+    def is_radical(self) -> bool:
+        """
+        True if at least one atom is radical
+        """
+        return any(self._radicals.values())
 
     def __int__(self):
         """
