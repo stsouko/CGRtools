@@ -153,12 +153,16 @@ class Tautomers:
             if len(path) == 4:  # skip 4-rings with sp2 and sp atoms
                 if bonds[path[1]][path[2]] != 1:
                     continue
-            elif rings_count:  # skip 3 atoms in one aryl ring
+            elif rings_count:
+                # skip 3 atoms in one aryl ring
                 aryl = [x for x in path[1:-1] if hyb[x] == 4]
                 if len(aryl) > 2:
                     for n, m, k in zip(aryl, aryl[1:], aryl[2:]):
                         if set(atoms_rings[n]) & set(atoms_rings[m]) & set(atoms_rings[k]):
                             continue
+                # skip small rings with double bond
+                if any(min(len(r) for r in atoms_rings[x]) < 7 for x in path[1:-1] if hyb[x] == 2 and x in atoms_rings):
+                    continue
 
             mol = self.copy()
             bonds = mol._bonds
