@@ -60,7 +60,7 @@ class Smiles:
             !n - Disable neighbors marks in queries. Returns non-unique signature.
             t - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
-            r - generate random-ordered smiles.
+            r - Generate random-ordered smiles.
 
             Combining possible. Order independent. Another keys ignored.
         """
