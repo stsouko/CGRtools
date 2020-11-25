@@ -17,10 +17,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import class_cached_property
+from CachedMethods import class_cached_property, cached_property
 from collections import deque
 from functools import reduce
-from itertools import product, chain
+from itertools import product
 from operator import and_
 from typing import TYPE_CHECKING, Iterator
 from ..containers import query  # cyclic imports resolve
@@ -81,13 +81,32 @@ class Tautomers:
             copy.kekule()
             copy.implicify_hydrogens()
             copy.thiele()  # prevent
+
+        entries = {}
+        for n, h in copy._Tautomers__keto_enols[0]:
+            if n in entries:
+                del entries[n]
+            else:
+                entries[n] = h
+
         seen = {copy}
         queue = deque([copy])
         while queue:
             current = queue.popleft()
-            for mol in chain(current._enumerate_zwitter_tautomers(),
-                             current._enumerate_chain_tautomers(),
-                             current._enumerate_ring_chain_tautomers()):
+
+            for mol in current._enumerate_zwitter_tautomers():
+                if mol not in seen:
+                    seen.add(mol)
+                    queue.append(mol)
+                    if has_stereo:
+                        mol = mol.copy()
+                        mol._atoms_stereo.update(atoms_stereo)
+                        mol._allenes_stereo.update(allenes_stereo)
+                        mol._cis_trans_stereo.update(cis_trans_stereo)
+                        mol._fix_stereo()
+                    yield mol
+
+            for mol, da in current._enumerate_ring_chain_tautomers():
                 if mol not in seen:
                     seen.add(mol)
                     queue.append(mol)
@@ -98,10 +117,44 @@ class Tautomers:
                         mol._allenes_stereo.update(allenes_stereo)
                         mol._cis_trans_stereo.update(cis_trans_stereo)
                         mol._fix_stereo()
+                    if da:
+                        d, a = da
+                        if mol._hydrogens[d]:  # imine
+                            del entries[d]
+                        else:
+                            entries[d] = False
+                        entries[a] = True
+                    yield mol
+
+            cur_entries = {}
+            for mol in current._enumerate_keto_enol_tautomers():
+                if mol not in seen:
+                    seen.add(mol)
+                    # prevent carbonyl migration
+                    m_entries = mol._Tautomers__keto_enols[0]
+                    if current is not copy:
+                        if not cur_entries:
+                            for n, h in current._Tautomers__keto_enols[0]:
+                                if n in cur_entries:
+                                    del cur_entries[n]
+                                else:
+                                    cur_entries[n] = h
+                        if sum(h or -1 for n, h in m_entries if n in cur_entries and cur_entries[n] != h):
+                            changes = [h or -1 for n, h in m_entries if n in entries and entries[n] != h]
+                            if changes and not sum(changes):
+                                continue
+
+                    queue.append(mol)
+                    if has_stereo:
+                        mol = mol.copy()
+                        mol._atoms_stereo.update(atoms_stereo)
+                        mol._allenes_stereo.update(allenes_stereo)
+                        mol._cis_trans_stereo.update(cis_trans_stereo)
+                        mol._fix_stereo()
                     yield mol
 
     def _enumerate_zwitter_tautomers(self):
-        donors, acceptors = self.__h_donors_acceptors()
+        donors, acceptors = self.__h_donors_acceptors
 
         sssr = self.sssr
         rings_count = self.rings_count
@@ -130,7 +183,7 @@ class Tautomers:
         atoms_rings = self.atoms_rings
         hyb = self._hybridizations
 
-        for n, dnr, acc in self.__rings():
+        for n, dnr, acc in self.__rings:
             mol = self.copy()
             bonds = mol._bonds
             hydrogens = mol._hydrogens
@@ -143,9 +196,9 @@ class Tautomers:
             hydrogens[acc] += 1
             hybridizations[dnr] += 1
             hybridizations[n] += 1
-            yield mol
+            yield mol, (dnr, acc)
 
-        donors, acceptors = self.__chains()
+        donors, acceptors = self.__chains
         for d, (a, c) in product(donors, acceptors):
             path = self.__path(d, a)
             if not path:
@@ -176,9 +229,9 @@ class Tautomers:
             hydrogens[d] -= 1
             hybridizations[a] -= 1
             hybridizations[c] -= 1
-            yield mol
+            yield mol, None
 
-    def _enumerate_chain_tautomers(self):
+    def _enumerate_keto_enol_tautomers(self):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
@@ -191,7 +244,7 @@ class Tautomers:
         rings_count = self.rings_count
         atoms_rings = self.atoms_rings
 
-        for path, hydrogen in self.__enumerate_bonds():
+        for path, hydrogen in self.__enumerate_keto_enol_tautomers():
             mol = self.__class__()
             mol._charges.update(charges)
             mol._radicals.update(radicals)
@@ -248,14 +301,14 @@ class Tautomers:
             mol.__dict__['__cached_args_method_neighbors'] = self.__dict__['__cached_args_method_neighbors'].copy()
             yield mol
 
-    def __enumerate_bonds(self):
+    def __enumerate_keto_enol_tautomers(self):
         atoms = self._atoms
         bonds = self._bonds
         hydrogens = self._hydrogens
         hyb = self._hybridizations
 
         # for each atom in entries
-        entries, forbidden = self.__entries()
+        entries, forbidden = self.__keto_enols
         for atom, hydrogen in entries:
             path = []
             seen = {atom}
@@ -297,7 +350,8 @@ class Tautomers:
                                 continue
                         yield path, False
 
-    def __entries(self):
+    @cached_property
+    def __keto_enols(self):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -324,6 +378,7 @@ class Tautomers:
                         entries.append((n, False))
         return entries, forbidden
 
+    @cached_property
     def __h_donors_acceptors(self):
         atoms = self._atoms
         bonds = self._bonds
@@ -348,6 +403,7 @@ class Tautomers:
                         acceptors.append(n)
         return donors, acceptors
 
+    @cached_property
     def __rings(self):
         atoms = self._atoms
         bonds = self._bonds
@@ -379,6 +435,7 @@ class Tautomers:
 
         return entries
 
+    @cached_property
     def __chains(self):
         atoms = self._atoms
         bonds = self._bonds
@@ -427,7 +484,7 @@ class Tautomers:
         q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1, hybridization=1)
         q.add_bond(1, 2, 2)
         q.add_bond(2, 3, 1)
-        rules.append((q, None, 3, False, False))
+        rules.append((q, None, None, False, False))
 
         # C(=[O,S,Se])N[H,R] skip
         q = query.QueryContainer()
