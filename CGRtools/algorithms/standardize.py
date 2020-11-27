@@ -27,6 +27,7 @@ from ..exceptions import ValenceError
 
 class Standardize:
     __slots__ = ()
+    __class_cache__ = {}
 
     def canonicalize(self) -> bool:
         """
@@ -145,7 +146,7 @@ class Standardize:
             for n, ms in hg.items():
                 if len(bonds[n]) == len(ms):  # H~A or A~H~A etc case
                     m = ms.pop()
-                    if m in hg:  # H~H case
+                    if m in hg: # H~H case
                         hg[m].discard(n)
 
         seen = set()
@@ -1399,6 +1400,7 @@ class StandardizeReaction:
 
         for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
             cgr = ~self
+            cgr_c = set(cgr.center_atoms)
             del  self.__dict__['__cached_method_compose']
 
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
@@ -1411,14 +1413,20 @@ class StandardizeReaction:
                     m.remap(mapping)
 
                 check = ~self
-                if any(valid.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
-                    seen.update(mapping)
-                    break
-
-                # restore old mapping
-                for m in self.products:
-                    m.remap(reverse)
-                del self.__dict__['__cached_method_compose']
+                check_c = set(check.center_atoms)
+                delta = check_c - cgr_c
+                
+                for m in good_query.get_mapping(check, automorphism_filter=False):
+                    if valid.issubset(m) and delta.issubset(m.values()):
+                        seen.update(mapping)
+                        break      
+                else:
+                    # restore old mapping
+                    for m in self.products:
+                        m.remap(reverse)
+                    del self.__dict__['__cached_method_compose']
+                    continue
+                break
 
         if seen:
             self.flush_cache()
