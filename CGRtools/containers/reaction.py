@@ -236,9 +236,17 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         return '>'.join(sig)
 
     def __format__(self, format_spec):
+        """
+        :param format_spec: see specification of nested containers.
+            !c - Keep nested containers order
+        """
         sig = []
-        for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
+        if '!c' in format_spec:
+            for ml in (self.__reactants, self.__reagents, self.__products):
+                sig.append('.'.join(format(x, format_spec) for x in ml))
+        else:
+            for ml in (self.__reactants, self.__reagents, self.__products):
+                sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
         return '>'.join(sig)
 
     def flush_cache(self):

@@ -27,7 +27,6 @@ from ..exceptions import ValenceError
 
 class Standardize:
     __slots__ = ()
-    __class_cache__ = {}
 
     def canonicalize(self) -> bool:
         """
@@ -146,7 +145,7 @@ class Standardize:
             for n, ms in hg.items():
                 if len(bonds[n]) == len(ms):  # H~A or A~H~A etc case
                     m = ms.pop()
-                    if m in hg: # H~H case
+                    if m in hg:  # H~H case
                         hg[m].discard(n)
 
         seen = set()
