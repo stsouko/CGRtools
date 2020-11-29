@@ -28,21 +28,44 @@ class Aromatize:
     def thiele(self) -> bool:
         """
         Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
-        Also marks atoms as aromatic. For pyroles, furans, thiophene, phospholes bonds kepts in Kekule form.
+        Also marks atoms as aromatic.
         """
         atoms = self._atoms
         bonds = self._bonds
         sh = self._hybridizations
+        charges = self._charges
 
         rings = defaultdict(set)  # aromatic? skeleton. include quinones
+        tetracycles = []
+        pyroles = set()
         for ring in self.sssr:
-            if all(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring):
-                n, *_, m = ring
-                rings[n].add(m)
-                rings[m].add(n)
-                for n, m in zip(ring, ring[1:]):
+            lr = len(ring)
+            if not 3 < lr < 8:  # skip 3-membered and big rings
+                continue
+            sp2 = sum(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring)
+            if sp2 == lr:  # benzene like
+                if lr == 4:  # two bonds condensed aromatic rings
+                    tetracycles.append(ring)
+                else:
+                    n, *_, m = ring
                     rings[n].add(m)
                     rings[m].add(n)
+                    for n, m in zip(ring, ring[1:]):
+                        rings[n].add(m)
+                        rings[m].add(n)
+            elif 4 < lr == sp2 + 1:  # pyroles, furanes, etc
+                try:
+                    n = next(n for n in ring if sh[n] != 2)
+                except StopIteration:  # exotic, just skip
+                    continue
+                if atoms[n].atomic_number in (5, 7, 8, 15, 16, 34) and not charges[n]:
+                    pyroles.add(n)
+                    n, *_, m = ring
+                    rings[n].add(m)
+                    rings[m].add(n)
+                    for n, m in zip(ring, ring[1:]):
+                        rings[n].add(m)
+                        rings[m].add(n)
         if not rings:
             return False
 
@@ -51,16 +74,24 @@ class Aromatize:
             for n in double_bonded:
                 for m in rings.pop(n):
                     rings[m].discard(n)
+
+            for n in [n for n, ms in rings.items() if not ms]:  # imide leads to isolated atoms
+                del rings[n]
+            if not rings:
+                return False
             while True:
                 try:
                     n = next(n for n, ms in rings.items() if len(ms) == 1)
                 except StopIteration:
                     break
                 m = rings.pop(n).pop()
-                pm = rings.pop(m)
-                pm.discard(n)
-                for x in pm:
-                    rings[x].discard(m)
+                if n in pyroles:
+                    rings[m].discard(n)
+                else:
+                    pm = rings.pop(m)
+                    pm.discard(n)
+                    for x in pm:
+                        rings[x].discard(m)
         if not rings:
             return False
 
@@ -72,12 +103,22 @@ class Aromatize:
         seen = set()
         for ring in rings:
             seen.update(ring)
+        for n in seen:
+            sh[n] = 4
+
+        # reset bonds to single
+        for ring in tetracycles:
+            if all(n in seen for n in ring):
+                n, *_, m = ring
+                bonds[n][m]._Bond__order = 1
+                for n, m in zip(ring, ring[1:]):
+                    bonds[n][m]._Bond__order = 1
+
+        for ring in rings:
             n, *_, m = ring
             bonds[n][m]._Bond__order = 4
             for n, m in zip(ring, ring[1:]):
                 bonds[n][m]._Bond__order = 4
-        for n in seen:
-            sh[n] = 4
 
         self.flush_cache()
         self._fix_stereo()  # check if any stereo centers vanished.
