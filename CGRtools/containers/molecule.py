@@ -247,8 +247,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 atom._attach_to_graph(sub, n)
 
             sh = self._hybridizations
+            shg = self._hydrogens
             sub._neighbors = {n: (len(sb[n]),) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
+            sub._hydrogens = {n: () if shg[n] is None else (shg[n],) for n in atoms}
+
+            rs = self.atoms_rings_sizes.copy()
+            sub._rings_sizes = {n: rs.get(n, ()) for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             sub._atoms = ca = {}

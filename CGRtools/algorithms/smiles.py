@@ -58,6 +58,8 @@ class Smiles:
             !s - Disable stereo marks.
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
+            !g - Disable hydrogens marks in queries. Returns non-unique signature.
+            !c - Disable rings marks in queries. Returns non-unique signature.
             t - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
             r - Generate random-ordered smiles.
@@ -78,6 +80,10 @@ class Smiles:
                 kwargs['aromatic'] = False
             if 'm' in format_spec:
                 kwargs['mapping'] = True
+            if '!g' in format_spec:
+                kwargs['hydrogens'] = False
+            if '!c' in format_spec:
+                kwargs['rings'] = False
             if 'r' in format_spec:
                 def w(x):
                     return random()
@@ -397,6 +403,8 @@ class QuerySmiles(Smiles):
         charge = self._charges[n]
         hybridization = self._hybridizations[n]
         neighbors = self._neighbors[n]
+        hydrogens = self._hydrogens[n]
+        rings = self._rings_sizes[n]
 
         if atom.isotope:
             smi = ['[', str(atom.isotope), atom.atomic_symbol]
@@ -406,21 +414,27 @@ class QuerySmiles(Smiles):
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
             smi.append('@' if self._translate_tetrahedron_sign(n, kwargs['adjacency'][n]) else '@@')
 
-        if kwargs.get('hybridization', True) and hybridization:
-            smi.append(';')
-            smi.append(''.join(hybridization_str[x] for x in hybridization))
-            if kwargs.get('neighbors', True) and neighbors:
-                smi.append(''.join(str(x) for x in neighbors))
-            smi.append(';')
-        elif kwargs.get('neighbors', True) and neighbors:
-            smi.append(';')
+        if kwargs.get('neighbors', True) and neighbors:
+            smi.append(';D')
             smi.append(''.join(str(x) for x in neighbors))
-            smi.append(';')
+
+        if kwargs.get('hydrogens', True) and hydrogens:
+            smi.append(';H')
+            smi.append(''.join(str(x) for x in hydrogens))
+
+        if kwargs.get('rings', True) and rings:
+            smi.append(';r')
+            smi.append(''.join(str(x) for x in rings))
+
+        if kwargs.get('hybridization', True) and hybridization:
+            smi.append(';Z')
+            smi.append(''.join(hybridization_str[x] for x in hybridization))
+
+        if self._radicals[n]:
+            smi.append(';*')
 
         if charge:
             smi.append(charge_str[charge])
-        if self._radicals[n]:
-            smi.append('*')
 
         smi.append(']')
         return ''.join(smi)

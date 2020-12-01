@@ -18,6 +18,7 @@
 #
 from typing import Type
 from .core import Core
+from ...algorithms.morgan import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 
@@ -137,11 +138,8 @@ class DynamicElement(Dynamic):
             self.p_charge == other.p_charge and self.p_is_radical == other.p_is_radical
 
     def __hash__(self):
-        """
-        26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
-        """
-        return (self.isotope or 0) << 17 | self.atomic_number << 10 | self.charge + 4 << 6 | \
-            self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.p_charge,
+                           self.is_radical, self.p_is_radical))
 
 
 __all__ = ['DynamicElement', 'Dynamic']

@@ -35,7 +35,10 @@ else:
         """
         acc = 0x27D4EB2F165667C5
         for el in v:
-            lane = hash(el)
+            if isinstance(el, tuple):
+                lane = tuple_hash(el)
+            else:
+                lane = hash(el)
             if lane == -1:
                 return -1
             elif lane < 0:
@@ -105,4 +108,4 @@ class Morgan:
                                                 start=1) for n, _ in g}
 
 
-__all__ = ['Morgan']
+__all__ = ['Morgan', 'tuple_hash']
