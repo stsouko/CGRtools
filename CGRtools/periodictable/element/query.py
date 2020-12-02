@@ -67,7 +67,7 @@ class Query(Core):
         Atom rings sizes.
         """
         try:
-            return self._graph()._rings_sizes[self._map] or self._graph().atoms_rings_sizes[self._map]
+            return self._graph()._rings_sizes[self._map]
         except AttributeError:
             raise IsNotConnectedAtom
         except KeyError:
