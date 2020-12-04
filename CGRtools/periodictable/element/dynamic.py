@@ -18,7 +18,7 @@
 #
 from typing import Type
 from .core import Core
-from ...algorithms.morgan import tuple_hash
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 

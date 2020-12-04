@@ -21,7 +21,7 @@ from CachedMethods import class_cached_property
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Set, List, Type
 from .core import Core
-from ...algorithms.morgan import tuple_hash
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom, ValenceError
 
 

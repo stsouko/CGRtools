@@ -16,9 +16,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_property
 from collections import defaultdict, deque
 from typing import List, Optional, Tuple
 from .._functions import lazy_product
+from ..containers import query  # cyclic imports resolve
 from ..exceptions import InvalidAromaticRing
 
 
@@ -44,6 +46,7 @@ class Aromatize:
         pyroles = set()
         acceptors = set()
         donors = []
+        freaks = []
         for ring in self.sssr:
             lr = len(ring)
             if not 3 < lr < 8:  # skip 3-membered and big rings
@@ -78,6 +81,9 @@ class Aromatize:
                     for n, m in zip(ring, ring[1:]):
                         rings[n].add(m)
                         rings[m].add(n)
+            # like N1C=Cn2cccc12
+            elif lr == 5 and sum(atoms[x].atomic_number == 7 and not charges[x] for x in ring) > 1:
+                freaks.append(ring)
         if not rings:
             return False
         double_bonded = {n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())}
@@ -166,6 +172,18 @@ class Aromatize:
                 bonds[n][m]._Bond__order = 4
 
         self.flush_cache()
+        for ring in freaks:  # aromatize rule based
+            rs = set(ring)
+            for q in self.__freaks:
+                components, closures = q._compiled_query
+                if any(q._get_mapping(components[0], closures, atoms, bonds, rs, self.atoms_order)):
+                    n, *_, m = ring
+                    bonds[n][m]._Bond__order = 4
+                    for n, m in zip(ring, ring[1:]):
+                        bonds[n][m]._Bond__order = 4
+                    for n in ring:
+                        sh[n] = 4
+
         self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
@@ -529,6 +547,38 @@ class Aromatize:
 
         if nether_yielded:
             raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
+
+    @cached_property
+    def __freaks(self):
+        rules = []
+
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 2)
+        q.add_bond(3, 4, 1)
+        q.add_bond(4, 5, 4)
+        q.add_bond(1, 5, 1)
+        rules.append(q)
+
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 4)
+        q.add_bond(3, 4, 1)
+        q.add_bond(4, 5, 4)
+        q.add_bond(1, 5, 1)
+        rules.append(q)
+
+        return rules
 
 
 __all__ = ['Aromatize']

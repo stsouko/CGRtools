@@ -19,7 +19,7 @@
 from typing import Tuple, Dict, Type, List
 from .core import Core
 from .element import Element
-from ...algorithms.morgan import tuple_hash
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 
