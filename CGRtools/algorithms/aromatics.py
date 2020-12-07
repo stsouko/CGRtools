@@ -226,6 +226,33 @@ class Aromatize:
             return False
         return True
 
+    def __fix_oxides(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
+
+        seen = set()
+        for q, af, bf in self.__oxyde_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    match = set(mapping.values())
+                    if not match.isdisjoint(seen):  # skip intersected groups
+                        continue
+                    seen.update(match)
+
+                    for n, fix in af.items():
+                        n = mapping[n]
+                        for key, value in fix.items():
+                            getattr(self, key)[n] = value
+                    for n, m, b in bf:
+                        n = mapping[n]
+                        m = mapping[m]
+                        bonds[n][m]._Bond__order = b
+        if seen:
+            self.flush_cache()
+
     def __prepare_rings(self):
         atoms = self._atoms
         charges = self._charges
@@ -391,6 +418,7 @@ class Aromatize:
             self._calc_implicit(n)
 
     def __kekule_full(self):
+        self.__fix_oxides()  # fix pyridine n-oxyde
         rings, pyroles, double_bonded = self.__prepare_rings()
         atoms = set(rings)
         components = []
@@ -577,6 +605,40 @@ class Aromatize:
         q.add_bond(4, 5, 4)
         q.add_bond(1, 5, 1)
         rules.append(q)
+
+        return rules
+
+    @cached_property
+    def __oxyde_rules(self):
+        rules = []
+
+        # Aromatic N-Oxide
+        #
+        #  : N :  >>  : [N+] :
+        #    \\           \
+        #     O           [O-]
+        #
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, hybridization=4)
+        q.add_atom('O', neighbors=1)
+        q.add_bond(1, 2, 2)
+        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        # Aromatic N-Nitride?
+        #
+        #  : N :  >>  : [N+] :
+        #    \\           \
+        #     N           [N-]
+        #
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, hybridization=4)
+        q.add_atom('N', neighbors=(1, 2), hybridization=2)
+        q.add_bond(1, 2, 2)
+        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((q, atom_fix, bonds_fix))
 
         return rules
 

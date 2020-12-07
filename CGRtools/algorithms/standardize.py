@@ -33,11 +33,11 @@ class Standardize:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         """
-        s = self.standardize(fix_stereo=False)
         k = self.kekule()
+        s = self.standardize(fix_stereo=False)
         h = self.implicify_hydrogens(fix_stereo=False)
         t = self.thiele()
-        return s or k or h or t
+        return k or s or h or t
 
     def standardize(self, *, fix_stereo=True, logging=False) -> bool:
         """
@@ -558,6 +558,20 @@ class Standardize:
         bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        #
+        #      RNH      RN
+        #      /        //
+        # C = C  >> C - C
+        #      \         \
+        #       A         A
+        #
+        atoms = ({'atom': 'C', 'neighbors': 3}, {'atom': 'N', 'hybridization': 1, 'neighbors': (1, 2)},
+                 {'atom': 'C', 'hybridization': 2}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Nitrone
         #
         #      O          [O-]
@@ -966,30 +980,6 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-        # Aromatic N-Oxide
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     O           [O-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-        # Aromatic N-Nitride?
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     N           [N-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'N', 'hybridization': 2})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Nitroso
