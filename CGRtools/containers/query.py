@@ -71,7 +71,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._rings_sizes[_map] = rings_sizes
         return _map
 
-    def add_bond(self, n, m, bond: Union[QueryBond, Bond, int]):
+    def add_bond(self, n, m, bond: Union[QueryBond, Bond, int, Tuple[int, ...]]):
         if isinstance(bond, Bond):
             bond = QueryBond.from_bond(bond)
         elif not isinstance(bond, QueryBond):
