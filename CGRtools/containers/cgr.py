@@ -174,92 +174,56 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
         :param meta: if True metadata will be copied to substructure
         :param as_query: return Query object based on graph substructure
         """
-        sub, atoms = super().substructure(atoms, query.QueryCGRContainer if as_query else self.__class__, **kwargs)
-        sa = self._atoms
+        sub, atoms = super().substructure(atoms, graph_type=query.QueryCGRContainer if as_query else self.__class__,
+                                          atom_type=DynamicQueryElement if as_query else DynamicElement,
+                                          bond_type=DynamicBond, **kwargs)
         spc = self._p_charges
         spr = self._p_radicals
-
         sub._p_charges = {n: spc[n] for n in atoms}
         sub._p_radicals = {n: spr[n] for n in atoms}
 
         if as_query:
-            sub._atoms = ca = {}
-            for n in atoms:
-                atom = sa[n]
-                atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                ca[n] = atom
-                atom._attach_to_graph(sub, n)
-
-            sb = self._bonds
             sh = self._hybridizations
             sph = self._p_hybridizations
-            sub._neighbors = {n: (sum(x.order is not None for x in sb[n].values()),) for n in atoms}
+            ngb = self.neighbors
+
             sub._hybridizations = {n: (sh[n],) for n in atoms}
-            sub._p_neighbors = {n: (sum(x.p_order is not None for x in sb[n].values()),) for n in atoms}
             sub._p_hybridizations = {n: (sph[n],) for n in atoms}
+
+            sub._neighbors = cn = {}
+            sub._p_neighbors = cpn = {}
+            for n in atoms:
+                sn, pn = ngb(n)
+                cn[n] = (sn,)
+                cpn[n] = (pn,)
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
-            sub._atoms = ca = {}
-            for n in atoms:
-                atom = sa[n].copy()
-                ca[n] = atom
-                atom._attach_to_graph(sub, n)
-
             # recalculate query marks
-                # recalculate query marks
             sub._hybridizations = {}
             sub._p_hybridizations = {}
             for n in sub._atoms:
                 sub._calc_hybridization(n)
         return sub
 
-    def union(self, other, **kwargs):
+    def union(self, other, **kwargs) -> 'CGRContainer':
         if isinstance(other, CGRContainer):
-            u, other = super().union(other, **kwargs)
+            u, other = super().union(other, atom_type=DynamicElement, bond_type=DynamicBond, **kwargs)
             u._conformers.clear()
-
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
             u._hybridizations.update(other._hybridizations)
             u._p_hybridizations.update(other._p_hybridizations)
-
-            ub = u._bonds
-            for n in other._bonds:
-                ub[n] = {}
-            seen = set()
-            for n, m_bond in other._bonds.items():
-                seen.add(n)
-                for m, bond in m_bond.items():
-                    if m not in seen:
-                        ub[n][m] = ub[m][n] = bond.copy()
-
-            ua = u._atoms
-            for n, atom in other._atoms.items():
-                atom = atom.copy()
-                ua[n] = atom
-                atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, molecule.MoleculeContainer):
-            u, other = super().union(other, **kwargs)
+            u, other = super().union(other, atom_type=DynamicElement, bond_type=DynamicBond, **kwargs)
+            u._conformers.clear()
             u._p_charges.update(other._charges)
             u._p_radicals.update(other._radicals)
             u._hybridizations.update(other._hybridizations)
             u._p_hybridizations.update(other._hybridizations)
-
-            ub = u._bonds
-            for n, m_bond in other._bonds.items():
-                ub[n] = {m: DynamicBond(b.order, b.order) for m, b in m_bond.items()}
-
-            ua = u._atoms
-            for n, atom in other._atoms.items():
-                atom = DynamicElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                ua[n] = atom
-                atom._attach_to_graph(u, n)
             return u
-        elif isinstance(other, Graph):  # Query or CGRQuery
-            return other.union(self, **kwargs)
         else:
-            raise TypeError('Graph expected')
+            raise TypeError('CGRContainer or MoleculeContainer expected')
 
     def compose(self, other: Union['molecule.MoleculeContainer', 'CGRContainer']) -> 'CGRContainer':
         """

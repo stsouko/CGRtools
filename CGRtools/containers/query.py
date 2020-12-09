@@ -17,8 +17,8 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from typing import List, Tuple, Union, Dict
-from . import cgr, molecule  # cyclic imports resolve
-from .bonds import Bond
+from . import molecule  # cyclic imports resolve
+from .bonds import Bond, QueryBond
 from .common import Graph
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
@@ -71,9 +71,11 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._rings_sizes[_map] = rings_sizes
         return _map
 
-    def add_bond(self, n, m, bond: Union[Bond, int]):
-        if not isinstance(bond, Bond):
-            bond = Bond(bond)
+    def add_bond(self, n, m, bond: Union[QueryBond, Bond, int]):
+        if isinstance(bond, Bond):
+            bond = QueryBond.from_bond(bond)
+        elif not isinstance(bond, QueryBond):
+            bond = QueryBond(bond)
 
         sct = self._stereo_cis_trans_paths  # save
         sa = self._stereo_allenes_paths
@@ -207,7 +209,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
         """
-        sub, atoms = super().substructure(atoms, self.__class__, **kwargs)
+        sub, atoms = super().substructure(atoms, graph_type=self.__class__, atom_type=QueryElement,
+                                          bond_type=QueryBond, **kwargs)
         sa = self._atoms
         sb = self._bonds
         sn = self._neighbors
@@ -229,68 +232,21 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         sub._cis_trans_stereo = {nm: s for nm, s in self._cis_trans_stereo.items() if
                                  not_skin.issuperset(self._stereo_cis_trans_paths[nm]) and not_skin.issuperset(
                                          x for x in self._stereo_cis_trans[nm] if x)}
-
-        sub._atoms = ca = {}
-        for n in atoms:
-            atom = sa[n].copy()
-            ca[n] = atom
-            atom._attach_to_graph(sub, n)
         return sub
 
     def union(self, other, **kwargs) -> 'QueryContainer':
-        if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
-            u, other = super().union(other, **kwargs)
-            if isinstance(other, QueryContainer):
-                u._neighbors.update(other._neighbors)
-                u._hybridizations.update(other._hybridizations)
-                u._hydrogens.update(other._hydrogens)
-                u._rings_sizes.update(other._rings_sizes)
-
-                ua = u._atoms
-                for n, atom in other._atoms.items():
-                    atom = atom.copy()
-                    ua[n] = atom
-                    atom._attach_to_graph(u, n)
-            else:
-                un = u._neighbors
-                uh = u._hybridizations
-                uhg = u._hydrogens
-                urs = u._rings_sizes
-
-                oh = other._hybridizations
-                ohg = other._hydrogens
-                ors = other.atoms_rings_sizes.copy()
-                for n, m_bond in other._bonds.items():
-                    un[n] = (len(m_bond),)
-                    uh[n] = (oh[n],)
-                    uhg[n] = () if ohg[n] is None else (ohg[n],)
-                    urs[n] = ors.get(n, ())
-
-                ua = u._atoms
-                for n, atom in other._atoms.items():
-                    atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                    ua[n] = atom
-                    atom._attach_to_graph(u, n)
-
-            ub = u._bonds
-            for n, m_bond in other._bonds.items():
-                ub[n] = ubn = {}
-                for m, bond in m_bond.items():
-                    if m in ub:  # bond partially exists. need back-connection.
-                        ubn[m] = ub[m][n]
-                    else:
-                        ubn[m] = bond.copy()
-
+        if isinstance(other, QueryContainer):
+            u, other = super().union(other, atom_type=QueryElement, bond_type=QueryBond, **kwargs)
+            u._neighbors.update(other._neighbors)
+            u._hybridizations.update(other._hybridizations)
+            u._hydrogens.update(other._hydrogens)
+            u._rings_sizes.update(other._rings_sizes)
             u._atoms_stereo.update(other._atoms_stereo)
             u._allenes_stereo.update(other._allenes_stereo)
             u._cis_trans_stereo.update(other._cis_trans_stereo)
             return u
-        elif isinstance(other, cgr.CGRContainer):
-            raise TypeError('QueryContainer and CGRContainer unite impossible')
-        elif isinstance(other, Graph):
-            return other.union(self, **kwargs)
         else:
-            raise TypeError('Graph expected')
+            raise TypeError('QueryContainer expected')
 
     def get_mapping(self, other: Union['QueryContainer', 'molecule.MoleculeContainer'], **kwargs):
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
@@ -383,19 +339,28 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                     if m in bonds:
                         bn[m] = bonds[m][n]
                     else:
-                        bn[m] = Bond(bond.order)
+                        bn[m] = QueryBond(bond.order)
 
             state['plane'] = {n: a.xy for n, a in state['node'].items()}
-            state['atoms_stereo'] = {}
-            state['allenes_stereo'] = {}
-            state['cis_trans_stereo'] = {}
-        elif 'allenes_stereo' not in state:  # <4.0.22
+        if 'allenes_stereo' not in state:  # <4.0.22
             state['atoms_stereo'] = {}  # flush existing stereo if exists.
             state['allenes_stereo'] = {}
             state['cis_trans_stereo'] = {}
         if 'hydrogens' not in state:  # <4.1.1
             state['hydrogens'] = {n: () for n in state['atoms']}
             state['rings_sizes'] = {n: () for n in state['atoms']}
+        if isinstance(next((x for x in state['bonds'].values() for x in x.values()), None), Bond):  # <4.1.3
+            bonds = {}
+            for n, m_bond in state['bonds'].items():
+                bonds[n] = bn = {}
+                for m, bond in m_bond.items():
+                    if m in bonds:
+                        bn[m] = bonds[m][n]
+                    else:
+                        b = object.__new__(QueryBond)
+                        b._QueryBond__order = bond._Bond__order
+                        bn[m] = b
+            state['bonds'] = bonds
 
         super().__setstate__(state)
         self._atoms_stereo = state['atoms_stereo']

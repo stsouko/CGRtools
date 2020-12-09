@@ -20,7 +20,6 @@
 from CachedMethods import cached_property
 from collections import defaultdict
 from typing import Tuple
-from ...exceptions import ValenceError
 
 
 class StructureComponents:
@@ -32,8 +31,8 @@ class StructureComponents:
         Aromatic rings atoms numbers
         """
         bonds = self._bonds
-        return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]].order == 4
-                     and all(bonds[n][m].order == 4 for n, m in zip(ring, ring[1:])))
+        return tuple(ring for ring in self.sssr if bonds[ring[0]][ring[-1]] == 4
+                     and all(bonds[n][m] == 4 for n, m in zip(ring, ring[1:])))
 
     @cached_property
     def cumulenes(self) -> Tuple[Tuple[int, ...], ...]:
@@ -79,10 +78,9 @@ class StructureComponents:
         for n, atom in atoms.items():
             if atom.atomic_number == 6 and not charges[n] and not radicals[n]:
                 env = bonds[n]
-                if all(x.order == 1 for x in env.values()):
-                    b_sum = sum(x.order for x in env.values())
-                    if b_sum > 4:
-                        raise ValenceError(f'carbon atom: {n} has invalid valence = {b_sum}')
+                if all(x == 1 for x in env.values()):
+                    if sum(int(x) for x in env.values()) > 4:
+                        continue
                     tetra.append(n)
         return tetra
 
@@ -97,14 +95,14 @@ class StructureComponents:
                 if atom.atomic_number in atoms_numbers:
                     adj_n = adj[n].add
                     for m, bond in bonds[n].items():
-                        if bond.order == 2 and atoms[m].atomic_number in atoms_numbers:
+                        if bond == 2 and atoms[m].atomic_number in atoms_numbers:
                             adj_n(m)
         else:
             for n, atom in atoms.items():
                 if atom.atomic_number == 6:
                     adj_n = adj[n].add
                     for m, bond in bonds[n].items():
-                        if bond.order == 2 and atoms[m].atomic_number == 6:
+                        if bond == 2 and atoms[m].atomic_number == 6:
                             adj_n(m)
         if not adj:
             return ()

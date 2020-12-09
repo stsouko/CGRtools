@@ -25,7 +25,7 @@ from random import random
 
 
 charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
-order_str = {1: '', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
+order_str = {1: '-', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
 organic_set = {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
 dyn_order_str = {(None, 1): '[.>-]', (None, 2): '[.>=]', (None, 3): '[.>#]', (None, 4): '[.>:]', (None, 8): '[.>~]',
@@ -440,7 +440,7 @@ class QuerySmiles(Smiles):
         return ''.join(smi)
 
     def _format_bond(self, n, m, **kwargs):
-        return order_str[self._bonds[n][m].order]
+        return ','.join(order_str[x] for x in self._bonds[n][m].order)
 
 
 class QueryCGRSmiles(Smiles):

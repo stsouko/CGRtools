@@ -19,7 +19,7 @@
 from abc import ABC, abstractmethod
 from CachedMethods import cached_property, cached_args_method
 from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
-from .bonds import Bond, DynamicBond
+from .bonds import Bond, DynamicBond, QueryBond
 from ..algorithms.components import GraphComponents
 from ..algorithms.isomorphism import Isomorphism
 from ..algorithms.mcs import MCS
@@ -41,7 +41,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         self._charges: Dict[int, int] = {}
         self._radicals: Dict[int, bool] = {}
         self._plane: Dict[int, Tuple[float, float]] = {}
-        self._bonds: Dict[int, Dict[int, Union[Bond, DynamicBond]]] = {}
+        self._bonds: Dict[int, Dict[int, Union[Bond, DynamicBond, QueryBond]]] = {}
         self._parsed_mapping: Dict[int, int] = {}
         self.__meta = {}
         self.__name = ''
@@ -243,7 +243,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
         if copy:
             h = self.__class__()
-            h._Graph__meta.update(self.__meta)
+            h.meta.update(self.__meta)
             h._Graph__name = self.__name
             hb = h._bonds
             ha = h._atoms
@@ -259,6 +259,15 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
                 atom = atom.copy()
                 ha[m] = atom
                 atom._attach_to_graph(h, m)
+
+            # deep copy of bonds
+            for n, m_bond in self._bonds.items():
+                hb[n] = hbn = {}
+                for m, bond in m_bond.items():
+                    if m in hb:  # bond partially exists. need back-connection.
+                        hbn[m] = hb[m][n]
+                    else:
+                        hbn[m] = bond.copy()
         else:
             hb = {}
             ha = {}
@@ -278,8 +287,9 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
             self._radicals = hr
             self._plane = hp
 
-        for n, m_bond in self._bonds.items():
-            hb[mg(n, n)] = {mg(m, m): b for m, b in m_bond.items()}
+            for n, m_bond in self._bonds.items():
+                hb[mg(n, n)] = {mg(m, m): b for m, b in m_bond.items()}
+            self._bonds = hb
 
         for n, m in self._parsed_mapping.items():
             hm[mg(n, n)] = m
@@ -287,7 +297,6 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         if copy:
             return h
 
-        self._bonds = hb
         self._parsed_mapping = hm
         self.__dict__.clear()
         return self
@@ -329,14 +338,17 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         return copy
 
     @abstractmethod
-    def substructure(self, atoms: Iterable[int], sub: Type['Graph'], *, meta: bool = False):
+    def substructure(self, atoms: Iterable[int], *, meta: bool = False, graph_type: Type['Graph'] = None,
+                     atom_type: Type[AnyAtom] = None,
+                     bond_type: Type[Union[Bond, DynamicBond, QueryBond]] = None):
         if not atoms:
             raise ValueError('empty atoms list not allowed')
         if set(atoms) - self._atoms.keys():
             raise ValueError('invalid atom numbers')
         atoms = tuple(n for n in self._atoms if n in atoms)  # save original order
-        sub = object.__new__(sub)
+        sub = object.__new__(graph_type)
 
+        sa = self._atoms
         sc = self._charges
         sr = self._radicals
         sp = self._plane
@@ -354,6 +366,13 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         sub._plane = {n: sp[n] for n in atoms}
         sub._parsed_mapping = {n: m for n, m in self._parsed_mapping.items() if n in atoms}
 
+        sub._atoms = ca = {}
+        for n in atoms:
+            atom = sa[n]
+            atom = atom_type.from_atomic_number(atom.atomic_number)(atom.isotope)
+            ca[n] = atom
+            atom._attach_to_graph(sub, n)
+
         sub._bonds = cb = {}
         for n in atoms:
             cb[n] = cbn = {}
@@ -361,7 +380,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
                 if m in cb:  # bond partially exists. need back-connection.
                     cbn[m] = cb[m][n]
                 elif m in atoms:
-                    cbn[m] = bond.copy()
+                    cbn[m] = bond_type.from_bond(bond)
         return sub, atoms
 
     def __and__(self, other):
@@ -406,7 +425,8 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         """
         return [self.substructure(a, **kwargs) for a in self._augmented_substructure(atoms, deep)]
 
-    def union(self, other: 'Graph', *, remap=False) -> 'Graph':
+    def union(self, other: 'Graph', *, remap=False,
+              atom_type: Type[AnyAtom] = None, bond_type: Type[Union[Bond, DynamicBond, QueryBond]] = None):
         """
         Merge Graphs into one.
 
@@ -423,6 +443,21 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         u._radicals.update(other._radicals)
         u._plane.update(other._plane)
         u._parsed_mapping.update(other._parsed_mapping)
+
+        ua = u._atoms
+        for n, atom in other._atoms.items():
+            atom = atom_type.from_atomic_number(atom.atomic_number)(atom.isotope)
+            ua[n] = atom
+            atom._attach_to_graph(u, n)
+
+        ub = u._bonds
+        for n, m_bond in other._bonds.items():
+            ub[n] = ubn = {}
+            for m, bond in m_bond.items():
+                if m in ub:  # bond partially exists. need back-connection.
+                    ubn[m] = ub[m][n]
+                else:
+                    ubn[m] = bond_type.from_bond(bond)
         return u, other
 
     def __or__(self, other):

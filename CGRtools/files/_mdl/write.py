@@ -187,7 +187,9 @@ class MDLWrite(_MDLWrite):
             wedge[m].add(n)
         for n, m, b in g.bonds():
             if m not in wedge[n]:
-                out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n')
+                if len(b.order) > 1:
+                    raise ValueError('supported only simple QueryBond')
+                out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order[0]}  0  0  0  0\n')
         props = []
 
         for n, m in g._neighbors.items():

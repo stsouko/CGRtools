@@ -252,7 +252,7 @@ class Stereo:
         :param env: neighbors order
         """
         s = self._atoms_stereo[n]
-        return self._translate_tetrahedron_sign_reversed(n , env, s)
+        return self._translate_tetrahedron_sign_reversed(n, env, s)
 
     def _translate_tetrahedron_sign_reversed(self, n, env, s):
         order = self._stereo_tetrahedrons[n]

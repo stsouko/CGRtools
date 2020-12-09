@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from typing import Optional
+from .._functions import tuple_hash
 
 
 class Bond:
@@ -32,6 +33,8 @@ class Bond:
     def __eq__(self, other):
         if isinstance(other, Bond):
             return self.__order == other.order
+        elif isinstance(other, int):
+            return self.__order == other
         return False
 
     def __repr__(self):
@@ -51,6 +54,14 @@ class Bond:
         copy = object.__new__(self.__class__)
         copy._Bond__order = self.__order
         return copy
+
+    @classmethod
+    def from_bond(cls, bond):
+        if isinstance(bond, cls):
+            copy = object.__new__(cls)
+            copy._Bond__order = bond._Bond__order
+            return copy
+        raise TypeError('Bond expected')
 
 
 class DynamicBond:
@@ -83,7 +94,7 @@ class DynamicBond:
         return hash(self)
 
     def __hash__(self):
-        return (self.__order or 0) * 10 + (self.__p_order or 0)
+        return tuple_hash((self.__order or 0, self.__p_order or 0))
 
     @property
     def order(self) -> Optional[int]:
@@ -98,3 +109,79 @@ class DynamicBond:
         copy._DynamicBond__order = self.__order
         copy._DynamicBond__p_order = self.__p_order
         return copy
+
+    @classmethod
+    def from_bond(cls, bond):
+        if isinstance(bond, Bond):
+            copy = object.__new__(cls)
+            copy._DynamicBond__order = copy._DynamicBond__p_order = bond._Bond__order
+            return copy
+        elif isinstance(bond, cls):
+            copy = object.__new__(cls)
+            copy._DynamicBond__order = bond._DynamicBond__order
+            copy._DynamicBond__p_order = bond._DynamicBond__p_order
+            return copy
+        raise TypeError('DynamicBond expected')
+
+
+class QueryBond:
+    __slots__ = ('__order',)
+
+    def __init__(self, order):
+        if isinstance(order, (list, tuple, set)):
+            if not all(isinstance(x, int) for x in order):
+                raise TypeError('invalid order value')
+            if any(x not in (1, 4, 2, 3, 8) for x in order):
+                raise ValueError('order should be from [1, 2, 3, 4, 8]')
+            order = tuple(sorted(set(order)))
+        elif isinstance(order, int):
+            if order not in (1, 4, 2, 3, 8):
+                raise ValueError('order should be from [1, 2, 3, 4, 8]')
+            order = (order,)
+        else:
+            raise TypeError('invalid order value')
+        self.__order = order
+
+    def __eq__(self, other):
+        if isinstance(other, Bond):
+            return other.order in self.__order
+        elif isinstance(other, QueryBond):
+            return self.__order == other.order
+        elif isinstance(other, int):
+            return other in self.__order
+        return False
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.__order})'
+
+    def __int__(self):
+        if len(self.__order) == 1:
+            return self.__order[0]
+        return tuple_hash(self.__order)
+
+    def __hash__(self):
+        return tuple_hash(self.__order)
+
+    @property
+    def order(self) -> int:
+        return self.__order
+
+    def copy(self) -> 'QueryBond':
+        copy = object.__new__(self.__class__)
+        copy._QueryBond__order = self.__order
+        return copy
+
+    @classmethod
+    def from_bond(cls, bond):
+        if isinstance(bond, Bond):
+            copy = object.__new__(cls)
+            copy._QueryBond__order = (bond._Bond__order,)
+            return copy
+        elif isinstance(bond, cls):
+            copy = object.__new__(cls)
+            copy._QueryBond__order = bond._QueryBond__order
+            return copy
+        raise TypeError('QueryBond or Bond expected')
+
+
+__all__ = ['Bond', 'DynamicBond', 'QueryBond']
