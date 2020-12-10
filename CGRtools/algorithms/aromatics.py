@@ -16,51 +16,133 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_property
 from collections import defaultdict, deque
 from typing import List, Optional, Tuple
 from .._functions import lazy_product
+from ..containers import query  # cyclic imports resolve
 from ..exceptions import InvalidAromaticRing
 
 
 class Aromatize:
     __slots__ = ()
 
-    def thiele(self) -> bool:
+    def thiele(self, *, fix_tautomers=True) -> bool:
         """
         Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
-        Also marks atoms as aromatic. For pyroles, furans, thiophene, phospholes bonds kepts in Kekule form.
+        Also marks atoms as aromatic.
+
+        :param fix_tautomers: try to fix condensed rings with pyroles.
+            N1C=CC2=NC=CC2=C1>>N1C=CC2=CN=CC=C12
         """
         atoms = self._atoms
         bonds = self._bonds
         sh = self._hybridizations
+        charges = self._charges
+        hydrogens = self._hydrogens
 
         rings = defaultdict(set)  # aromatic? skeleton. include quinones
+        tetracycles = []
+        pyroles = set()
+        acceptors = set()
+        donors = []
+        freaks = []
         for ring in self.sssr:
-            if all(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring):
-                n, *_, m = ring
-                rings[n].add(m)
-                rings[m].add(n)
-                for n, m in zip(ring, ring[1:]):
+            lr = len(ring)
+            if not 3 < lr < 8:  # skip 3-membered and big rings
+                continue
+            sp2 = sum(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring)
+            if sp2 == lr:  # benzene like
+                if lr == 4:  # two bonds condensed aromatic rings
+                    tetracycles.append(ring)
+                else:
+                    if fix_tautomers and lr % 2:  # find potential pyroles
+                        n = next((n for n in ring if atoms[n].atomic_number == 7 and not charges[n]), None)
+                        if n:
+                            acceptors.add(n)
+                    n, *_, m = ring
                     rings[n].add(m)
                     rings[m].add(n)
+                    for n, m in zip(ring, ring[1:]):
+                        rings[n].add(m)
+                        rings[m].add(n)
+            elif 4 < lr == sp2 + 1:  # pyroles, furanes, etc
+                try:
+                    n = next(n for n in ring if sh[n] == 1)
+                except StopIteration:  # exotic, just skip
+                    continue
+                if atoms[n].atomic_number in (5, 7, 8, 15, 16, 34) and not charges[n]:
+                    if fix_tautomers and lr == 6 and atoms[n].atomic_number == 7 and len(bonds[n]) == 2:
+                        donors.append(n)
+                    pyroles.add(n)
+                    n, *_, m = ring
+                    rings[n].add(m)
+                    rings[m].add(n)
+                    for n, m in zip(ring, ring[1:]):
+                        rings[n].add(m)
+                        rings[m].add(n)
+            # like N1C=Cn2cccc12
+            elif lr == 5 and sum(atoms[x].atomic_number == 7 and not charges[x] for x in ring) > 1:
+                freaks.append(ring)
         if not rings:
             return False
+        double_bonded = {n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())}
 
-        double_bonded = [n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())]
+        # fix_tautomers
+        if fix_tautomers and acceptors and donors:
+            for start in donors:
+                stack = [(start, n, 0, 2) for n in rings[start] if n not in double_bonded]
+                path = []
+                seen = {start}
+                while stack:
+                    last, current, depth, order = stack.pop()
+                    if len(path) > depth:
+                        seen.difference_update(x for _, x, _ in path[depth:])
+                        path = path[:depth]
+                    path.append((last, current, order))
+                    if current in acceptors:  # we found
+                        if order == 1:
+                            acceptors.discard(current)
+                            pyroles.discard(start)
+                            pyroles.add(current)
+                            hydrogens[current] = 1
+                            hydrogens[start] = 0
+                            break
+                        else:
+                            continue
+
+                    depth += 1
+                    seen.add(current)
+                    new_order = 1 if order == 2 else 2
+                    stack.extend((current, n, depth, new_order) for n in rings[current] if
+                                 n not in seen and n not in double_bonded and bonds[current][n].order == order)
+                for n, m, o in path:
+                    bonds[n][m]._Bond__order = o
+                if not acceptors:
+                    break
+
         if double_bonded:  # delete quinones
             for n in double_bonded:
                 for m in rings.pop(n):
                     rings[m].discard(n)
+
+            for n in [n for n, ms in rings.items() if not ms]:  # imide leads to isolated atoms
+                del rings[n]
+            if not rings:
+                return False
             while True:
                 try:
                     n = next(n for n, ms in rings.items() if len(ms) == 1)
                 except StopIteration:
                     break
                 m = rings.pop(n).pop()
-                pm = rings.pop(m)
-                pm.discard(n)
-                for x in pm:
-                    rings[x].discard(m)
+                if n in pyroles:
+                    rings[m].discard(n)
+                else:
+                    pm = rings.pop(m)
+                    pm.discard(n)
+                    for x in pm:
+                        rings[x].discard(m)
         if not rings:
             return False
 
@@ -72,14 +154,36 @@ class Aromatize:
         seen = set()
         for ring in rings:
             seen.update(ring)
+        for n in seen:
+            sh[n] = 4
+
+        # reset bonds to single
+        for ring in tetracycles:
+            if seen.issuperset(ring):
+                n, *_, m = ring
+                bonds[n][m]._Bond__order = 1
+                for n, m in zip(ring, ring[1:]):
+                    bonds[n][m]._Bond__order = 1
+
+        for ring in rings:
             n, *_, m = ring
             bonds[n][m]._Bond__order = 4
             for n, m in zip(ring, ring[1:]):
                 bonds[n][m]._Bond__order = 4
-        for n in seen:
-            sh[n] = 4
 
         self.flush_cache()
+        for ring in freaks:  # aromatize rule based
+            rs = set(ring)
+            for q in self.__freaks:
+                components, closures = q._compiled_query
+                if any(q._get_mapping(components[0], closures, atoms, bonds, rs, self.atoms_order)):
+                    n, *_, m = ring
+                    bonds[n][m]._Bond__order = 4
+                    for n, m in zip(ring, ring[1:]):
+                        bonds[n][m]._Bond__order = 4
+                    for n in ring:
+                        sh[n] = 4
+
         self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
@@ -121,6 +225,33 @@ class Aromatize:
         except InvalidAromaticRing:
             return False
         return True
+
+    def __fix_oxides(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
+
+        seen = set()
+        for q, af, bf in self.__oxyde_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
+                    match = set(mapping.values())
+                    if not match.isdisjoint(seen):  # skip intersected groups
+                        continue
+                    seen.update(match)
+
+                    for n, fix in af.items():
+                        n = mapping[n]
+                        for key, value in fix.items():
+                            getattr(self, key)[n] = value
+                    for n, m, b in bf:
+                        n = mapping[n]
+                        m = mapping[m]
+                        bonds[n][m]._Bond__order = b
+        if seen:
+            self.flush_cache()
 
     def __prepare_rings(self):
         atoms = self._atoms
@@ -287,6 +418,7 @@ class Aromatize:
             self._calc_implicit(n)
 
     def __kekule_full(self):
+        self.__fix_oxides()  # fix pyridine n-oxyde
         rings, pyroles, double_bonded = self.__prepare_rings()
         atoms = set(rings)
         components = []
@@ -443,6 +575,72 @@ class Aromatize:
 
         if nether_yielded:
             raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
+
+    @cached_property
+    def __freaks(self):
+        rules = []
+
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 2)
+        q.add_bond(3, 4, 1)
+        q.add_bond(4, 5, 4)
+        q.add_bond(1, 5, 1)
+        rules.append(q)
+
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_atom('A')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 4)
+        q.add_bond(3, 4, 1)
+        q.add_bond(4, 5, 4)
+        q.add_bond(1, 5, 1)
+        rules.append(q)
+
+        return rules
+
+    @cached_property
+    def __oxyde_rules(self):
+        rules = []
+
+        # Aromatic N-Oxide
+        #
+        #  : N :  >>  : [N+] :
+        #    \\           \
+        #     O           [O-]
+        #
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, hybridization=4)
+        q.add_atom('O', neighbors=1)
+        q.add_bond(1, 2, 2)
+        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        # Aromatic N-Nitride?
+        #
+        #  : N :  >>  : [N+] :
+        #    \\           \
+        #     N           [N-]
+        #
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, hybridization=4)
+        q.add_atom('N', neighbors=(1, 2), hybridization=2)
+        q.add_bond(1, 2, 2)
+        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        return rules
 
 
 __all__ = ['Aromatize']

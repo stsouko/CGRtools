@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from typing import List, Union, Tuple, Dict
-from . import cgr, molecule, query  # cyclic imports resolve
+from . import cgr  # cyclic imports resolve
 from .bonds import Bond, DynamicBond
 from .common import Graph
 from ..algorithms.calculate2d import Calculate2DCGR
@@ -155,8 +155,8 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
         """
-        sub, atoms = super().substructure(atoms, self.__class__, **kwargs)
-        sa = self._atoms
+        sub, atoms = super().substructure(atoms, graph_type=self.__class__,
+                                          atom_type=DynamicQueryElement, bond_type=DynamicBond, **kwargs)
         spc = self._p_charges
         spr = self._p_radicals
         sn = self._neighbors
@@ -170,99 +170,20 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
         sub._hybridizations = {n: sh[n] for n in atoms}
         sub._p_neighbors = {n: spn[n] for n in atoms}
         sub._p_hybridizations = {n: sph[n] for n in atoms}
-
-        sub._atoms = ca = {}
-        for n in atoms:
-            atom = sa[n].copy()
-            ca[n] = atom
-            atom._attach_to_graph(sub, n)
         return sub
 
     def union(self, other, **kwargs) -> 'QueryCGRContainer':
-        if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):
-            u, other = super().union(other, **kwargs)
+        if isinstance(other, QueryCGRContainer):
+            u, other = super().union(other, atom_type=DynamicQueryElement, bond_type=DynamicBond, **kwargs)
             u._p_charges.update(other._p_charges)
             u._p_radicals.update(other._p_radicals)
-
-            if isinstance(other, QueryCGRContainer):
-                u._neighbors.update(other._neighbors)
-                u._hybridizations.update(other._hybridizations)
-                u._p_neighbors.update(other._p_neighbors)
-                u._p_hybridizations.update(other._p_hybridizations)
-
-                ua = u._atoms
-                for n, atom in other._atoms.items():
-                    atom = atom.copy()
-                    ua[n] = atom
-                    atom._attach_to_graph(u, n)
-            else:  # CGRContainer
-                un = u._neighbors
-                uh = u._hybridizations
-                upn = u._p_neighbors
-                uph = u._p_hybridizations
-                oh = other._hybridizations
-                oph = other._p_hybridizations
-                for n, m_bond in other._bonds.items():
-                    un[n] = (sum(b.order is not None for b in m_bond.values()),)
-                    upn[n] = (sum(b.p_order is not None for b in m_bond.values()),)
-                    uh[n] = (oh[n],)
-                    uph[n] = (oph[n],)
-
-                ua = u._atoms
-                for n, atom in other._atoms.items():
-                    atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                    ua[n] = atom
-                    atom._attach_to_graph(u, n)
-
-            ub = u._bonds
-            for n in other._bonds:
-                ub[n] = {}
-            seen = set()
-            for n, m_bond in other._bonds.items():
-                seen.add(n)
-                for m, bond in m_bond.items():
-                    if m not in seen:
-                        ub[n][m] = ub[m][n] = bond.copy()
-            return u
-        elif isinstance(other, (query.QueryContainer, molecule.MoleculeContainer)):
-            u, other = super().union(other, **kwargs)
-            u._p_charges.update(other._charges)
-            u._p_radicals.update(other._radicals)
-
-            if isinstance(other, query.QueryContainer):
-                u._neighbors.update(other._neighbors)
-                u._hybridizations.update(other._hybridizations)
-                u._p_neighbors.update(other._neighbors)
-                u._p_hybridizations.update(other._hybridizations)
-            else:  # MoleculeContainer
-                un = u._neighbors
-                uh = u._hybridizations
-                upn = u._p_neighbors
-                uph = u._p_hybridizations
-                oh = other._hybridizations
-                for n, m_bond in other._bonds.items():
-                    un[n] = upn[n] = (len(m_bond),)
-                    uh[n] = uph[n] = (oh[n],)
-
-            ua = u._atoms
-            for n, atom in other._atoms.items():
-                atom = DynamicQueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                ua[n] = atom
-                atom._attach_to_graph(u, n)
-
-            ub = u._bonds
-            for n in other._bonds:
-                ub[n] = {}
-            seen = set()
-            for n, m_bond in other._bonds.items():
-                seen.add(n)
-                for m, bond in m_bond.items():
-                    if m not in seen:
-                        ub[n][m] = ub[m][n] = bc = object.__new__(DynamicBond)
-                        bc._DynamicBond__order = bc._DynamicBond__p_order = bond.order
+            u._neighbors.update(other._neighbors)
+            u._hybridizations.update(other._hybridizations)
+            u._p_neighbors.update(other._p_neighbors)
+            u._p_hybridizations.update(other._p_hybridizations)
             return u
         else:
-            raise TypeError('Graph expected')
+            raise TypeError('QueryCGRContainer expected')
 
     def get_mapping(self, other: Union['QueryCGRContainer', 'cgr.CGRContainer'], **kwargs):
         if isinstance(other, (QueryCGRContainer, cgr.CGRContainer)):

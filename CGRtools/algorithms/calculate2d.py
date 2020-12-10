@@ -294,7 +294,6 @@ class Calculate2D:
                 continue
             for m, b in m_bond.items():
                 if n not in dd[m]:
-                    b = b.order
                     if b == 8 or len(m_bond) > 4:
                         dd[n][m] = dd[m][n] = True
                     else:
@@ -303,8 +302,7 @@ class Calculate2D:
             # for angle = 180'
             if len(m_bond) == 2:
                 (a1, bond1), (a2, bond2) = m_bond.items()
-                order1, order2 = bond1.order, bond2.order
-                if order1 == order2 == 2 or order1 == 3 or order2 == 3:
+                if bond1 == bond2 == 2 or bond1 == 3 or bond2 == 3:
                     straights.append((mapping[a1], mapping[a2]))
 
         for n, m_bond in dd.items():
@@ -483,8 +481,7 @@ class Calculate2DMolecule(Calculate2D):
     __slots__ = ()
 
     def _is_angle(self, bond1, bond2):
-        order1, order2 = bond1.order, bond2.order
-        return not (order1 == order2 == 2 or order1 == 3 or order2 == 3 or order1 == 8 or order2 == 8)
+        return not (bond1 == bond2 == 2 or bond1 == 3 or bond2 == 3 or bond1 == 8 or bond2 == 8)
 
 
 class Calculate2DCGR(Calculate2D):

@@ -23,6 +23,7 @@ from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..exceptions import ValenceError
+from ..periodictable import ListElement
 
 
 class Standardize:
@@ -33,11 +34,11 @@ class Standardize:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         """
-        s = self.standardize(fix_stereo=False)
         k = self.kekule()
+        s = self.standardize(fix_stereo=False)
         h = self.implicify_hydrogens(fix_stereo=False)
         t = self.thiele()
-        return s or k or h or t
+        return k or s or h or t
 
     def standardize(self, *, fix_stereo=True, logging=False) -> bool:
         """
@@ -968,30 +969,6 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Aromatic N-Oxide
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     O           [O-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-        # Aromatic N-Nitride?
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     N           [N-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'N', 'hybridization': 2})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
         # Nitroso
         #
         # - [N+] - [O-]  >>  - N = O
@@ -1027,11 +1004,12 @@ class Standardize:
 
         # Amide
         #
-        #       OH        O
+        #      [O,S]H    [O,S]
         #      /         //
         # N = C  >> NH - C
         #
-        atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'hybridization': 2})
+        atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': ListElement(['O', 'S']), 'neighbors': 1},
+                 {'atom': 'N', 'hybridization': 2})
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
         bonds_fix = ((1, 2, 2), (1, 3, 1))
@@ -1216,6 +1194,50 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # amide S
+        #
+        #      A1,3                 A1,3
+        #      |                    |
+        #  N = S - [OH]  >>  [NH] - S = O
+        #
+        atoms = ({'atom': 'S', 'neighbors': (3, 5), 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # amide S(VI)
+        #
+        #     [OH]                O
+        #      |                 //
+        #  N = S = N  >>  [NH] - S - [NH]
+        #      |                 \\
+        #     [OH]                O
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 2))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}, 4: {'hybridization': 2}, 5: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1), (1, 4, 2), (1, 5, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # amide S(VI)
+        #
+        #     [OH]                O
+        #      |                 //
+        #  N = S = A  >>  [NH] - S = A
+        #      |                 |
+        #      A                 A
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2), (1, 5, 1))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Silicate Selenite
         #
         #           O             O
@@ -1246,6 +1268,26 @@ class Standardize:
         bonds = ((1, 2, 2), )
         atom_fix = {1: {'charge': -1, 'hybridization': 3, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 3}}
         bonds_fix = ((1, 2, 3),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        # C # C - [O,NH,S]H  >> C=C=[O,NH,S]
+        #
+        atoms = ({'atom': ListElement(['O', 'S', 'N']), 'neighbors': 1}, {'atom': 'C', 'neighbors': 2},
+                 {'atom': 'C', 'neighbors': (1, 2)})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (2, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        # C # C - [NH]R  >> C=C=[NH]R
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'C', 'neighbors': 2},
+                 {'atom': 'C', 'neighbors': (1, 2)})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (2, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Ozone
