@@ -80,15 +80,14 @@ class Tautomers:
             copy.implicify_hydrogens()
             copy.thiele()  # prevent
 
-        ketones = set()
-        seen = {copy}
+        seen = {copy: None}
         queue = deque([copy])
         while queue:
             current = queue.popleft()
 
             for mol in current._enumerate_zwitter_tautomers():
                 if mol not in seen:
-                    seen.add(mol)
+                    seen[mol] = current
                     queue.append(mol)
                     if has_stereo:
                         mol = mol.copy()
@@ -98,9 +97,9 @@ class Tautomers:
                         mol._fix_stereo()
                     yield mol
 
-            for mol, ket in current._enumerate_ring_chain_tautomers():
+            for mol in current._enumerate_ring_chain_tautomers():
                 if mol not in seen:
-                    seen.add(mol)
+                    seen[mol] = current
                     queue.append(mol)
                     if has_stereo:
                         mol = mol.copy()
@@ -109,44 +108,25 @@ class Tautomers:
                         mol._allenes_stereo.update(allenes_stereo)
                         mol._cis_trans_stereo.update(cis_trans_stereo)
                         mol._fix_stereo()
-                    if ket:
-                        ketones.add(ket)  # now ketone
                     yield mol
 
-            cur_entries = {}
             for mol, ket in current._enumerate_keto_enol_tautomers():
                 if mol not in seen:
-                    seen.add(mol)
-
+                    seen[mol] = current
                     # prevent carbonyl migration
-                    if current is not copy:
-                        ...
-                        # m_entries = []
-                        # for n, m, ket in mol._keto_enols:
-                        #     if ket:
-                        #         m_entries.append((m, True))
-                        #     else:
-                        #         m_entries.append((n, False))
-                        # if not cur_entries:
-                        #     for n, m, ket in current._keto_enols:
-                        #         if ket:
-                        #             cur_entries[m] = True
-                        #         else:
-                        #             cur_entries[n] = False
-                        # if sum(h or -1 for n, h in m_entries if n in cur_entries and cur_entries[n] != h):
-                        #     changes = [h or -1 for n, h in m_entries if n in entries and entries[n] != h]
-                        #     if changes and not sum(changes):
-                        #         continue
-                    elif ket:  # collect ketones
-                        ketones.add(ket)
+                    if current is not copy and not ket:  # enol to ket potentially migrate ketone.
+                        # search alpha hydroxy ketone inversion
+                        before = seen[current]._sugar_groups
+                        if any((k, e) in before for e, k in mol._sugar_groups):
+                            continue
 
                     if has_stereo:
-                        copy = mol.copy()
-                        copy._atoms_stereo.update(atoms_stereo)
-                        copy._allenes_stereo.update(allenes_stereo)
-                        copy._cis_trans_stereo.update(cis_trans_stereo)
-                        copy._fix_stereo()
-                        yield copy
+                        ster = mol.copy()
+                        ster._atoms_stereo.update(atoms_stereo)
+                        ster._allenes_stereo.update(allenes_stereo)
+                        ster._cis_trans_stereo.update(cis_trans_stereo)
+                        ster._fix_stereo()
+                        yield ster
                     else:
                         yield mol
                     if len(mol.aromatic_rings) > len(current.aromatic_rings):
@@ -218,7 +198,6 @@ class Tautomers:
                         m_hydrogens[k] += 1
                         m_hybridizations[m] += 1
                         m_hybridizations[n] += 1
-                        yield mol, m
                     else:
                         m_bonds[n][m]._Bond__order = 1
                         m_bonds[n][k] = m_bonds[k][n] = Bond(1)
@@ -226,7 +205,7 @@ class Tautomers:
                         m_hydrogens[m] += 1
                         m_hybridizations[n] -= 1
                         m_hybridizations[m] -= 1
-                        yield mol, None
+                    yield mol
 
     def _enumerate_keto_enol_tautomers(self):
         atoms = self._atoms
@@ -276,7 +255,23 @@ class Tautomers:
                     mol.__dict__['rings_count'] = rings_count
                     mol.__dict__['atoms_rings'] = atoms_rings
                     mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
-                    yield mol, ket and a
+                    yield mol, ket
+
+    @cached_property
+    def _sugar_groups(self):
+        atoms = self._atoms
+        bonds = self._bonds
+        atoms_order = self.atoms_order
+        connected_components = [set(x) for x in self.connected_components]
+
+        ek = []
+        for q in self.__sugar_group_rules:
+            components, closures = q._compiled_query
+            for candidate in connected_components:
+                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate, atoms_order):
+                    e, k = mapping[1], mapping[2]
+                    ek.append((e, k))
+        return ek
 
     @class_cached_property
     def __keto_enol_rules(self):
@@ -795,6 +790,22 @@ class Tautomers:
         q.add_bond(5, 7, (1, 4))
         q.add_bond(6, 7, 1)
         q.add_bond(1, 8, 1)
+        rules.append(q)
+
+        return rules
+
+    @class_cached_property
+    def __sugar_group_rules(self):
+        rules = []
+
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
+        q.add_atom(ListElement(['O', 'N']))  # ketone
+        q.add_atom('C', hybridization=1)
+        q.add_atom('C', hybridization=2)
+        q.add_bond(1, 3, 1)
+        q.add_bond(3, 4, 1)
+        q.add_bond(2, 4, 2)
         rules.append(q)
 
         return rules
