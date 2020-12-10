@@ -279,29 +279,76 @@ class Tautomers:
                     yield mol, ket and a
 
     @class_cached_property
-    def __enol_rules(self):
-        rules = []
+    def __keto_enol_rules(self):
+        rules = []  # query, is ketone, bond fix
 
-        # C=C-[O,S,N]H
+        # first atom is acceptor of proton
+        # second is donor
+        # [C;X4,H]-[CH]=[O,S,N]
         q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2))
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
+        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
         q.add_atom('C', neighbors=2)
-        q.add_atom('C', hybridization=2)
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
-        rules.append(q)
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, True, (1, 3, 1), (2, 3, 2)))
 
-        # C=C(C)-[O,S,N]H
+        # [C;X4,H]-[CH]=N[C;a,X4]
         q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2))
-        q.add_atom('C')
-        q.add_atom('C', hybridization=2)
-        q.add_atom('C')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
-        q.add_bond(2, 4, 1)
-        rules.append(q)
+        q.add_atom('N')  # acceptor
+        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
+        q.add_atom('C', neighbors=2)
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append((q, True, (1, 3, 1), (2, 3, 2)))
 
+        # [C;X4,H]-C(C)=[O,S,N;H]
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
+        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(3, 4, 1)
+        rules.append((q, True, (1, 3, 1), (2, 3, 2)))
+
+        # [C;X4,H]-C(C)=N[C;a,X4]
+        q = query.QueryContainer()
+        q.add_atom('N')  # acceptor
+        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom('C', hybridization=(1, 4))
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(3, 4, 1)
+        q.add_bond(1, 5, 1)
+        rules.append((q, True, (1, 3, 1), (2, 3, 2)))
+
+        # C=[CH]-[O,S,N;H]
+        q = query.QueryContainer()
+        q.add_atom('C')  # acceptor
+        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2))  # donor
+        q.add_atom('C', neighbors=2)
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        rules.append((q, False, (1, 3, 1), (2, 3, 2)))
+
+        # C=C(C)-[O,S,N;H]
+        q = query.QueryContainer()
+        q.add_atom('C')  # acceptor
+        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2))  # donor
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_bond(1, 3, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(4, 3, 1)
+        rules.append((q, False, (1, 3, 1), (2, 3, 2)))
+
+        # azo-Ar
         # C=N-[NH]-R >> C-N=N-R
         q = query.QueryContainer()
         q.add_atom('N', hydrogens=(1, 2))
@@ -309,7 +356,7 @@ class Tautomers:
         q.add_atom('C', hybridization=2)
         q.add_bond(1, 2, 1)
         q.add_bond(2, 3, 2)
-        rules.append(q)
+        # rules.append(q)
 
         # C=C([O,S,N]H)-[O,S,N]
         q = query.QueryContainer()
@@ -320,57 +367,7 @@ class Tautomers:
         q.add_bond(1, 2, 1)
         q.add_bond(2, 3, 1)
         q.add_bond(2, 4, 2)
-        rules.append(q)
-
-        return rules
-
-    @class_cached_property
-    def __ketone_rules(self):
-        rules = []
-
-        # C-C=[O,S,NH]
-        q = query.QueryContainer()
-        q.add_atom('C', neighbors=2)
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
-        q.add_atom('C')
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        rules.append(q)
-
-        # C-C=N-C
-        q = query.QueryContainer()
-        q.add_atom('C', neighbors=2)
-        q.add_atom('N')
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        q.add_bond(2, 4, 1)
-        rules.append(q)
-
-        # C-C(C)=[O,S,NH]
-        q = query.QueryContainer()
-        q.add_atom('C')
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        q.add_bond(1, 4, 1)
-        rules.append(q)
-
-        # C-C(C)=N-C
-        q = query.QueryContainer()
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        q.add_bond(1, 4, 1)
-        q.add_bond(2, 5, 1)
-        rules.append(q)
+        # rules.append(q)
 
         # [NH:R6]-[C:R6](=[O,S,NH])[C:R6]. alpha-pyridone
         q = query.QueryContainer()
@@ -381,40 +378,7 @@ class Tautomers:
         q.add_bond(1, 2, 2)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)
-        rules.append(q)
-
-        # C-N=N-R
-        q = query.QueryContainer()
-        q.add_atom('N')
-        q.add_atom('N')
-        q.add_atom('C', hybridization=(1, 2))
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        rules.append(q)
-
-        return rules
-
-    @class_cached_property
-    def __keto_enol_rules(self):
-        rules = []  # query, is ketone, bond fix
-
-        # first atom is acceptor of proton
-        # second is donor
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
-        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
-        q.add_atom('C', neighbors=2)
-        q.add_bond(1, 3, 2)
-        q.add_bond(2, 3, 1)
-        rules.append((q, True, (1, 3, 1), (2, 3, 2)))
-
-        q = query.QueryContainer()
-        q.add_atom('C')  # acceptor
-        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2))  # donor
-        q.add_atom('C', neighbors=2)
-        q.add_bond(1, 3, 2)
-        q.add_bond(2, 3, 1)
-        rules.append((q, False, (1, 3, 1), (2, 3, 2)))
+        # rules.append(q)
 
         return rules
 
