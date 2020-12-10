@@ -1487,16 +1487,21 @@ class StandardizeReaction:
                 raise ValueError('bad and good reaction should be equal')
             
             cgr_good, cgr_bad = ~good, ~bad
-            gc = cgr_good.augmented_substructure([x for l in good.centers_list for x in l], deep=1)
-            bc = cgr_bad.augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
+            gc = cgr_good.augmented_substructure(cgr_good.center_atoms, deep=1)
+            bc = cgr_bad.augmented_substructure(cgr_bad.center_atoms, deep=1)
             
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
-            pr_g, pr_b = set(), set()
+            pr_g, pr_b, re_g, re_b = set(), set(), set(), set()
             for pr in good.products:
                 pr_g.update(pr)
             for pr in bad.products:
                 pr_b.update(pr) 
+            for pr in good.reactants:
+                re_g.update(pr)
+            for pr in bad.reactants:
+                re_b.update(pr)
+            atoms.update((re_b.difference(pr_b)).intersection(pr_g))
 
             strange_atoms = pr_b.difference(pr_g)
             atoms.update(strange_atoms)
