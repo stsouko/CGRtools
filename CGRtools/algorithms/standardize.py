@@ -1441,6 +1441,7 @@ class StandardizeReaction:
 
         for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
             cgr = ~self
+            cgr_c = set(cgr.center_atoms)
             del  self.__dict__['__cached_method_compose']
 
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
@@ -1453,20 +1454,26 @@ class StandardizeReaction:
                     m.remap(mapping)
 
                 check = ~self
-                if any(valid.issubset(m) for m in good_query.get_mapping(check, automorphism_filter=False)):
-                    seen.update(mapping)
-                    break
-
-                # restore old mapping
-                for m in self.products:
-                    m.remap(reverse)
-                del self.__dict__['__cached_method_compose']
+                check_c = set(check.center_atoms)
+                delta = check_c - cgr_c
+                
+                for m in good_query.get_mapping(check, automorphism_filter=False):
+                    if valid.issubset(m) and delta.issubset(m.values()):
+                        seen.update(mapping)
+                        break      
+                else:
+                    # restore old mapping
+                    for m in self.products:
+                        m.remap(reverse)
+                    del self.__dict__['__cached_method_compose']
+                    continue
+                break
 
         if seen:
             self.flush_cache()
             return True
         return flag
-
+    
     @classmethod
     def load_remapping_rules(cls, reactions):
         """
@@ -1479,16 +1486,21 @@ class StandardizeReaction:
                 raise ValueError('bad and good reaction should be equal')
             
             cgr_good, cgr_bad = ~good, ~bad
-            gc = cgr_good.augmented_substructure([x for l in good.centers_list for x in l], deep=1)
-            bc = cgr_bad.augmented_substructure([x for l in bad.centers_list for x in l], deep=1)
+            gc = cgr_good.augmented_substructure(cgr_good.center_atoms, deep=1)
+            bc = cgr_bad.augmented_substructure(cgr_bad.center_atoms, deep=1)
             
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
-            pr_g, pr_b = set(), set()
+            pr_g, pr_b, re_g, re_b = set(), set(), set(), set()
             for pr in good.products:
                 pr_g.update(pr)
             for pr in bad.products:
                 pr_b.update(pr) 
+            for pr in good.reactants:
+                re_g.update(pr)
+            for pr in bad.reactants:
+                re_b.update(pr)
+            atoms.update((re_b.difference(pr_b)).intersection(pr_g))
 
             strange_atoms = pr_b.difference(pr_g)
             atoms.update(strange_atoms)
@@ -1496,11 +1508,11 @@ class StandardizeReaction:
             bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
             good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
-            fix = {}
             rules = []
-            for mb, mg in zip(bad.products, good.products):
+            fix = {}
+            for mb, mg in zip(bad.products, good.products): 
                 fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
-
+            
             valid = set(fix).difference(strange_atoms)
             rules.append((bad_query, good_query, fix, valid))
 
