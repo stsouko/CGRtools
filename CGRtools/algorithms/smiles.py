@@ -60,6 +60,7 @@ class Smiles:
             !n - Disable neighbors marks in queries. Returns non-unique signature.
             !g - Disable hydrogens marks in queries. Returns non-unique signature.
             !c - Disable rings marks in queries. Returns non-unique signature.
+            !w - Disable heteroatoms marks in queries. Returns non-unique signature.
             t - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
             r - Generate random-ordered smiles.
@@ -84,6 +85,8 @@ class Smiles:
                 kwargs['hydrogens'] = False
             if '!c' in format_spec:
                 kwargs['rings'] = False
+            if '!w' in format_spec:
+                kwargs['heteroatoms'] = False
             if 'r' in format_spec:
                 def w(x):
                     return random()
@@ -405,6 +408,7 @@ class QuerySmiles(Smiles):
         neighbors = self._neighbors[n]
         hydrogens = self._hydrogens[n]
         rings = self._rings_sizes[n]
+        heteroatoms = self._heteroatoms[n]
 
         if atom.isotope:
             smi = ['[', str(atom.isotope), atom.atomic_symbol]
@@ -429,6 +433,10 @@ class QuerySmiles(Smiles):
         if kwargs.get('hybridization', True) and hybridization:
             smi.append(';Z')
             smi.append(''.join(hybridization_str[x] for x in hybridization))
+
+        if kwargs.get('heteroatoms', True) and heteroatoms:
+            smi.append(';W')
+            smi.append(''.join(str(x) for x in heteroatoms))
 
         if self._radicals[n]:
             smi.append(';*')

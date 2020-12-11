@@ -77,6 +77,13 @@ class Element(Core):
             raise IsNotConnectedAtom
 
     @property
+    def heteroatoms(self) -> int:
+        try:
+            return self._graph().heteroatoms(self._map)
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
     def neighbors(self) -> int:
         try:
             return self._graph().neighbors(self._map)

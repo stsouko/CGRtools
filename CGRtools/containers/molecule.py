@@ -157,6 +157,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """number of neighbors atoms excluding any-bonded"""
         return sum(b.order != 8 for b in self._bonds[n].values())
 
+    @cached_args_method
+    def heteroatoms(self, n: int) -> int:
+        """
+        Number of neighbored heteroatoms (not carbon or hydrogen)
+        """
+        atoms = self._atoms
+        return sum(atoms[m].atomic_number not in (1, 6) for m in self._bonds[n])
+
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get

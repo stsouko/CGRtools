@@ -52,6 +52,22 @@ class Query(Core):
             raise IsNotConnectedAtom
 
     @property
+    def heteroatoms(self) -> Tuple[int, ...]:
+        try:
+            return self._graph()._heteroatoms[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @heteroatoms.setter
+    def heteroatoms(self, heteroatoms):
+        try:
+            g = self._graph()
+            g._heteroatoms[self._map] = g._validate_neighbors(heteroatoms)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
     def in_ring(self) -> bool:
         """
         Atom in any ring.
@@ -189,11 +205,14 @@ class QueryElement(Query):
                     return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
                 return True
         elif isinstance(other, QueryElement) and self.atomic_number == other.atomic_number and \
                 self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical \
                 and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
-                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens:
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
             # equal query element has equal query marks
             return True
         return False
@@ -261,10 +280,13 @@ class AnyElement(Query):
                     return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
                 return True
         elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
                 and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
-                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens:
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
             return True
         return False
 
@@ -303,10 +325,13 @@ class ListElement(AnyElement):
                     return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
                 return True
         elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
                 and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
-                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens:
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
             if isinstance(other, ListElement):
                 return self._numbers == other._numbers
             if isinstance(other, AnyElement):

@@ -30,7 +30,7 @@ from ..periodictable import Element, QueryElement, AnyElement
 
 class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DMolecule):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_cis_trans_stereo', '_allenes_stereo',
-                 '_hydrogens', '_rings_sizes')
+                 '_hydrogens', '_rings_sizes', '_heteroatoms')
 
     def __init__(self):
         self._neighbors: Dict[int, Tuple[int, ...]] = {}
@@ -40,6 +40,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._cis_trans_stereo: Dict[Tuple[int, int], bool] = {}
         self._hydrogens: Dict[int, Tuple[int, ...]] = {}
         self._rings_sizes: Dict[int, Tuple[int, ...]] = {}
+        self._heteroatoms: Dict[int, Tuple[int, ...]] = {}
 
         super().__init__()
 
@@ -48,11 +49,13 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                  hybridization: Union[int, List[int], Tuple[int, ...], None] = None,
                  hydrogens: Union[int, List[int], Tuple[int, ...], None] = None,
                  rings_sizes: Union[int, List[int], Tuple[int, ...], None] = None,
+                 heteroatoms: Union[int, List[int], Tuple[int, ...], None] = None,
                  **kwargs):
         neighbors = self._validate_neighbors(neighbors)
         hybridization = self._validate_hybridization(hybridization)
         hydrogens = self._validate_neighbors(hydrogens)
         rings_sizes = self._validate_rings(rings_sizes)
+        heteroatoms = self._validate_neighbors(heteroatoms)
 
         if not isinstance(atom, (QueryElement, AnyElement)):
             if isinstance(atom, Element):
@@ -69,6 +72,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._hybridizations[_map] = hybridization
         self._hydrogens[_map] = hydrogens
         self._rings_sizes[_map] = rings_sizes
+        self._heteroatoms[_map] = heteroatoms
         return _map
 
     def add_bond(self, n, m, bond: Union[QueryBond, Bond, int, Tuple[int, ...]]):
@@ -106,6 +110,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         del self._hybridizations[n]
         del self._hydrogens[n]
         del self._rings_sizes[n]
+        del self._heteroatoms[n]
 
         sas = self._atoms_stereo
         if n in sas:
@@ -147,6 +152,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         sn = self._neighbors
         shg = self._hydrogens
         srs = self._rings_sizes
+        sha = self._heteroatoms
 
         if copy:
             hn = h._neighbors
@@ -156,6 +162,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
             hcs = h._cis_trans_stereo
             hhg = h._hydrogens
             hrs = h._rings_sizes
+            hha = h._heteroatoms
         else:
             hn = {}
             hh = {}
@@ -164,6 +171,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
             hcs = {}
             hhg = {}
             hrs = {}
+            hha = {}
 
         for n, hyb in self._hybridizations.items():
             m = mg(n, n)
@@ -171,6 +179,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
             hh[m] = hyb
             hhg[m] = shg[n]
             hrs[m] = srs[n]
+            hha[m] = sha[n]
 
         for n, stereo in self._atoms_stereo.items():
             has[mg(n, n)] = stereo
@@ -186,6 +195,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._hybridizations = hh
         self._hydrogens = hhg
         self._rings_sizes = hrs
+        self._heteroatoms = hha
         self._atoms_stereo = has
         self._allenes_stereo = hal
         self._cis_trans_stereo = hcs
@@ -196,6 +206,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         copy._neighbors = self._neighbors.copy()
         copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
+        copy._heteroatoms = self._heteroatoms.copy()
         copy._rings_sizes = self._rings_sizes.copy()
         copy._atoms_stereo = self._atoms_stereo.copy()
         copy._allenes_stereo = self._allenes_stereo.copy()
@@ -217,11 +228,13 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         sh = self._hybridizations
         shg = self._hydrogens
         srs = self._rings_sizes
+        sha = self._heteroatoms
 
         sub._neighbors = {n: sn[n] for n in atoms}
         sub._hybridizations = {n: sh[n] for n in atoms}
         sub._hydrogens = {n: shg[n] for n in atoms}
         sub._rings_sizes = {n: srs[n] for n in atoms}
+        sub._heteroatoms = {n: sha[n] for n in atoms}
 
         lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
         not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
@@ -244,6 +257,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
             u._atoms_stereo.update(other._atoms_stereo)
             u._allenes_stereo.update(other._allenes_stereo)
             u._cis_trans_stereo.update(other._cis_trans_stereo)
+            u._heteroatoms.update(other._heteroatoms)
             return u
         else:
             raise TypeError('QueryContainer expected')
@@ -322,7 +336,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         return {'atoms_stereo': self._atoms_stereo, 'allenes_stereo': self._allenes_stereo,
                 'cis_trans_stereo': self._cis_trans_stereo, 'neighbors': self._neighbors,
                 'hybridizations': self._hybridizations, 'hydrogens': self._hydrogens,
-                'rings_sizes': self._rings_sizes, **super().__getstate__()}
+                'rings_sizes': self._rings_sizes, 'heteroatoms': self._heteroatoms, **super().__getstate__()}
 
     def __setstate__(self, state):
         if 'node' in state:  # 3.1 compatibility.
@@ -361,6 +375,8 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                         b._QueryBond__order = bond._Bond__order
                         bn[m] = b
             state['bonds'] = bonds
+        if 'heteroatoms' not in state:  # <4.1.4
+            state['heteroatoms'] = {n: () for n in state['atoms']}
 
         super().__setstate__(state)
         self._atoms_stereo = state['atoms_stereo']
@@ -370,6 +386,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         self._hybridizations = state['hybridizations']
         self._hydrogens = state['hydrogens']
         self._rings_sizes = state['rings_sizes']
+        self._heteroatoms = state['heteroatoms']
 
 
 __all__ = ['QueryContainer']
