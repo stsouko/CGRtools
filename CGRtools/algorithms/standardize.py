@@ -28,7 +28,6 @@ from ..periodictable import ListElement
 
 class Standardize:
     __slots__ = ()
-    __class_cache__ = {}
 
     def canonicalize(self) -> bool:
         """
