@@ -372,7 +372,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
                         bn[m] = bonds[m][n]
                     else:
                         b = object.__new__(QueryBond)
-                        b._QueryBond__order = bond._Bond__order
+                        b._QueryBond__order = (bond._Bond__order,)
                         bn[m] = b
             state['bonds'] = bonds
         if 'heteroatoms' not in state:  # <4.1.4
