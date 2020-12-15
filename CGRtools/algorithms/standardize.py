@@ -19,6 +19,7 @@
 #
 from CachedMethods import class_cached_property
 from collections import defaultdict
+from itertools import count
 from typing import List
 from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
@@ -1439,15 +1440,17 @@ class StandardizeReaction:
         else:
             flag = False
 
-        for bad_query, good_query, fix, valid in  self.__remapping_compiled_rules:
+        for bad_query, good_query, fix, valid in self.__remapping_compiled_rules:
             cgr = ~self
+            first_free = max(cgr) + 1
+            free_number = count(first_free)
             cgr_c = set(cgr.center_atoms)
-            del  self.__dict__['__cached_method_compose']
+            del self.__dict__['__cached_method_compose']
 
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
-                mapping = {mapping[n]: mapping[m] for n, m in fix.items()}
+                mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
 
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
@@ -1466,6 +1469,7 @@ class StandardizeReaction:
                     for m in self.products:
                         m.remap(reverse)
                     del self.__dict__['__cached_method_compose']
+                    free_number = count(first_free)
                     continue
                 break
 
@@ -1473,7 +1477,7 @@ class StandardizeReaction:
             self.flush_cache()
             return True
         return flag
-    
+
     @classmethod
     def load_remapping_rules(cls, reactions):
         """
@@ -1484,11 +1488,11 @@ class StandardizeReaction:
         for bad, good in reactions:
             if str(bad) != str(good):
                 raise ValueError('bad and good reaction should be equal')
-            
+
             cgr_good, cgr_bad = ~good, ~bad
             gc = cgr_good.augmented_substructure(cgr_good.center_atoms, deep=1)
             bc = cgr_bad.augmented_substructure(cgr_bad.center_atoms, deep=1)
-            
+
             atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
 
             pr_g, pr_b, re_g, re_b = set(), set(), set(), set()
