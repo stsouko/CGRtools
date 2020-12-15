@@ -467,10 +467,10 @@ class Tautomers:
         q.add_bond(2, 4, 1)
         rules.append((q, False, (1, 3, 1), (2, 3, 2)))
 
-        # [N:1]=[C:3]-[N;H:2][C,H]
+        # [N:1]=[C:3]-[N;H:2]
         q = query.QueryContainer()
         q.add_atom('N')  # acceptor
-        q.add_atom('N', hydrogens=1, heteroatoms=0)  # donor
+        q.add_atom('N', hydrogens=(1, 2))  # donor
         q.add_atom('C')
         q.add_bond(1, 3, 2)
         q.add_bond(2, 3, 1)
