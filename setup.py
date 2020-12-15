@@ -43,7 +43,7 @@ class _sdist(sdist):
 
 setup(
     name='CGRtools',
-    version='4.1.4',
+    version='4.1.5',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.containers',
               'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',
               'CGRtools.utils', 'CGRtools.attributes'],
