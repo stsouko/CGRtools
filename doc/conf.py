@@ -4,8 +4,7 @@ from sys import path
 parent = abspath('..')
 if parent not in path:
     path.insert(0, parent)
-from CGRtools.files._CGRrw import elements_set
-from CGRtools.periodictable import C, DynamicC, QueryC, DynamicQueryC
+from CGRtools.periodictable import C, DynamicC, QueryC, DynamicQueryC, ListElement, AnyElement, DynamicAnyElement
 
 author = 'Dr. Ramil Nugmanov'
 copyright = '2014-2020, Dr. Ramil Nugmanov <nougmanoff@protonmail.com>'

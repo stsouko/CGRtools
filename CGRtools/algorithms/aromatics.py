@@ -18,13 +18,25 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict, deque
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING, TypeVar, Type
 from .._functions import lazy_product
 from ..containers import query  # cyclic imports resolve
 from ..exceptions import InvalidAromaticRing
 
 
-class Aromatize:
+if TYPE_CHECKING:
+    from CGRtools import MoleculeContainer
+else:
+    MoleculeContainer = object
+
+T = TypeVar('T')
+
+
+def typehint(baseclass: Type[T]) -> Type[T]:
+    return object
+
+
+class Aromatize(typehint(MoleculeContainer)):
     __slots__ = ()
 
     def thiele(self, *, fix_tautomers=True) -> bool:

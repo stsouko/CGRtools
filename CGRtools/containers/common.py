@@ -34,9 +34,6 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
                  '__dict__', '__weakref__')
 
     def __init__(self):
-        """
-        Empty data object initialization or conversion from another object type
-        """
         self._atoms: Dict[int, AnyAtom] = {}
         self._charges: Dict[int, int] = {}
         self._radicals: Dict[int, bool] = {}

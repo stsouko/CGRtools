@@ -20,7 +20,7 @@
 from CachedMethods import class_cached_property, cached_property
 from collections import deque
 from itertools import product, chain, repeat
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterator, Type, TypeVar
 from ..containers import query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..periodictable import ListElement
@@ -28,9 +28,17 @@ from ..periodictable import ListElement
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
+else:
+    MoleculeContainer = object
+
+T = TypeVar('T')
 
 
-class Tautomers:
+def typehint(baseclass: Type[T]) -> Type[T]:
+    return object
+
+
+class Tautomers(typehint(MoleculeContainer)):
     __slots__ = ()
 
     def tautomerize(self, *, prepare_molecules=True) -> bool:
