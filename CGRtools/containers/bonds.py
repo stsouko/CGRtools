@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Optional
+from typing import Optional, Tuple
 from .._functions import tuple_hash
 
 
@@ -163,7 +163,7 @@ class QueryBond:
         return tuple_hash(self.__order)
 
     @property
-    def order(self) -> int:
+    def order(self) -> Tuple[int, ...]:
         return self.__order
 
     def copy(self) -> 'QueryBond':

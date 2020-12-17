@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Tuple, Dict, Type
+from typing import Tuple, Dict, Type, Union
 from .core import Core
 from .dynamic import Dynamic, DynamicElement
 from ..._functions import tuple_hash
@@ -105,7 +105,7 @@ class DynamicQueryElement(DynamicQuery):
         return self.__class__.__name__[12:]
 
     @classmethod
-    def from_symbol(cls, symbol: str) -> Type['DynamicQueryElement']:
+    def from_symbol(cls, symbol: str) -> Type[Union['DynamicQueryElement', 'DynamicAnyElement']]:
         """
         get Element class by its symbol
         """
@@ -118,7 +118,7 @@ class DynamicQueryElement(DynamicQuery):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number: int) -> Type['DynamicQueryElement']:
+    def from_atomic_number(cls, number: int) -> Type[Union['DynamicQueryElement', 'DynamicAnyElement']]:
         """
         get Element class by its number
         """

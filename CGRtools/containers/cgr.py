@@ -71,8 +71,7 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
             p_order = bond.p_order
         elif isinstance(bond, Bond):
             order = p_order = bond.order
-            bond = object.__new__(DynamicBond)
-            bond._DynamicBond__order = bond._DynamicBond__p_order = order
+            bond = DynamicBond.from_bond(bond)
         else:
             order = p_order = bond
             bond = DynamicBond(order, order)

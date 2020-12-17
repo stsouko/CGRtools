@@ -18,7 +18,7 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict, deque
-from typing import List, Optional, Tuple, TYPE_CHECKING, TypeVar, Type
+from typing import List, Optional, Tuple, TYPE_CHECKING, Union
 from .._functions import lazy_product
 from ..containers import query  # cyclic imports resolve
 from ..exceptions import InvalidAromaticRing
@@ -26,20 +26,12 @@ from ..exceptions import InvalidAromaticRing
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
-else:
-    MoleculeContainer = object
-
-T = TypeVar('T')
 
 
-def typehint(baseclass: Type[T]) -> Type[T]:
-    return object
-
-
-class Aromatize(typehint(MoleculeContainer)):
+class Aromatize:
     __slots__ = ()
 
-    def thiele(self, *, fix_tautomers=True) -> bool:
+    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True) -> bool:
         """
         Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
         Also marks atoms as aromatic.
@@ -199,7 +191,7 @@ class Aromatize(typehint(MoleculeContainer)):
         self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
-    def kekule(self) -> bool:
+    def kekule(self: Union['Aromatize', 'MoleculeContainer']) -> bool:
         """
         Convert structure to kekule form. Return True if found any aromatic ring. Set implicit hydrogen count and
         hybridization marks on atoms.
@@ -214,7 +206,7 @@ class Aromatize(typehint(MoleculeContainer)):
             return True
         return False
 
-    def enumerate_kekule(self):
+    def enumerate_kekule(self: Union['Aromatize', 'MoleculeContainer']):
         """
         Enumerate all possible kekule forms of molecule.
         """
@@ -238,7 +230,7 @@ class Aromatize(typehint(MoleculeContainer)):
             return False
         return True
 
-    def __fix_oxides(self):
+    def __fix_oxides(self: 'MoleculeContainer'):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -265,7 +257,7 @@ class Aromatize(typehint(MoleculeContainer)):
         if seen:
             self.flush_cache()
 
-    def __prepare_rings(self):
+    def __prepare_rings(self: 'MoleculeContainer'):
         atoms = self._atoms
         charges = self._charges
         radicals = self._radicals
@@ -418,7 +410,7 @@ class Aromatize(typehint(MoleculeContainer)):
                 raise InvalidAromaticRing(f'only B, C, N, P, O, S, Se, Te possible, not: {atoms[n].atomic_symbol}')
         return rings, pyroles, double_bonded
 
-    def __kekule_patch(self, patch):
+    def __kekule_patch(self: 'MoleculeContainer', patch):
         bonds = self._bonds
         atoms = set()
         for n, m, b in patch:

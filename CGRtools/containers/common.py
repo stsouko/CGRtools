@@ -154,8 +154,6 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     def name(self, name):
         if not isinstance(name, str):
             raise TypeError('name should be string up to 80 symbols')
-        if len(name) > 80:
-            raise ValueError('name should be string up to 80 symbols')
         self.__name = name
 
     @abstractmethod

@@ -97,8 +97,8 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         reaction._ReactionContainer__reactants = tuple(r.split())
         reaction._ReactionContainer__products = tuple(p.split())
         reaction._ReactionContainer__reagents = ()
-        reaction._ReactionContainer__meta = cgr._Graph__meta.copy()
-        reaction._ReactionContainer__name = cgr._Graph__name
+        reaction._ReactionContainer__meta = cgr.meta.copy()
+        reaction._ReactionContainer__name = cgr.name
         reaction._arrow = None
         reaction._signs = None
         return reaction
@@ -165,8 +165,6 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
     def name(self, name: str):
         if not isinstance(name, str):
             raise TypeError('name should be string up to 80 symbols')
-        if len(name) > 80:
-            raise ValueError('name should be string up to 80 symbols')
         self.__name = name
 
     def copy(self) -> 'ReactionContainer':

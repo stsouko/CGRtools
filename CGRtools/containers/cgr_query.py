@@ -77,12 +77,10 @@ class QueryCGRContainer(Graph, QueryCGRSmiles, DepictQueryCGR, Calculate2DCGR):
         return _map
 
     def add_bond(self, n, m, bond: Union[DynamicBond, Bond, int]):
-        if not isinstance(bond, DynamicBond):
-            if isinstance(bond, Bond):
-                bond = object.__new__(DynamicBond)
-                bond._DynamicBond__order = bond._DynamicBond__p_order = bond.order
-            else:
-                bond = DynamicBond(bond, bond)
+        if isinstance(bond, Bond):
+            bond = DynamicBond.from_bond(bond)
+        elif not isinstance(bond, DynamicBond):
+            bond = DynamicBond(bond, bond)
         super().add_bond(n, m, bond)
 
     def delete_atom(self, n):

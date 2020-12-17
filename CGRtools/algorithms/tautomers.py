@@ -20,7 +20,7 @@
 from CachedMethods import class_cached_property, cached_property
 from collections import deque
 from itertools import product, chain, repeat
-from typing import TYPE_CHECKING, Iterator, Type, TypeVar
+from typing import TYPE_CHECKING, Iterator, Union
 from ..containers import query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..periodictable import ListElement
@@ -28,20 +28,12 @@ from ..periodictable import ListElement
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
-else:
-    MoleculeContainer = object
-
-T = TypeVar('T')
 
 
-def typehint(baseclass: Type[T]) -> Type[T]:
-    return object
-
-
-class Tautomers(typehint(MoleculeContainer)):
+class Tautomers:
     __slots__ = ()
 
-    def tautomerize(self, *, prepare_molecules=True) -> bool:
+    def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True) -> bool:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
 
@@ -67,7 +59,8 @@ class Tautomers(typehint(MoleculeContainer)):
             return True
         return False
 
-    def enumerate_tautomers(self, *, prepare_molecules=True, full=True) -> Iterator['MoleculeContainer']:
+    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True) -> \
+            Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule. Supported hydrogen migration through delocalized chain.
 
@@ -149,7 +142,7 @@ class Tautomers(typehint(MoleculeContainer)):
                         break
                     queue.append(mol)
 
-    def _enumerate_zwitter_tautomers(self, full=True):
+    def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -198,7 +191,7 @@ class Tautomers(typehint(MoleculeContainer)):
             mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
             yield mol
 
-    def _enumerate_ring_chain_tautomers(self, full=True):
+    def _enumerate_ring_chain_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -231,7 +224,7 @@ class Tautomers(typehint(MoleculeContainer)):
                         m_hybridizations[m] -= 1
                     yield mol
 
-    def _enumerate_keto_enol_tautomers(self, full=True):
+    def _enumerate_keto_enol_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -292,7 +285,7 @@ class Tautomers(typehint(MoleculeContainer)):
                     yield mol, ket
 
     @cached_property
-    def _sugar_groups(self):
+    def _sugar_groups(self: Union['MoleculeContainer', 'Tautomers']):
         atoms = self._atoms
         bonds = self._bonds
         atoms_order = self.atoms_order
@@ -659,7 +652,7 @@ class Tautomers(typehint(MoleculeContainer)):
 
         # :N:
         q = query.QueryContainer()
-        q.add_atom('N', hybridization=4, hydrogens=0)
+        q.add_atom('N', hybridization=4, hydrogens=0, neighbors=2)
         rules.append(q)
 
         return rules

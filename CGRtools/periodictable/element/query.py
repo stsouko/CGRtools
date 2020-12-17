@@ -16,7 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Tuple, Dict, Type, List
+from typing import Tuple, Dict, Type, List, Union
 from .core import Core
 from .element import Element
 from ..._functions import tuple_hash
@@ -123,7 +123,7 @@ class QueryElement(Query):
         return self.__class__.__name__[5:]
 
     @classmethod
-    def from_symbol(cls, symbol: str) -> Type['QueryElement']:
+    def from_symbol(cls, symbol: str) -> Type[Union['QueryElement', 'AnyElement']]:
         """
         get Element class by its symbol
         """
@@ -136,7 +136,7 @@ class QueryElement(Query):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number: int) -> Type['QueryElement']:
+    def from_atomic_number(cls, number: int) -> Type[Union['QueryElement', 'AnyElement']]:
         """
         get Element class by its number
         """

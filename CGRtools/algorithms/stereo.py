@@ -19,8 +19,13 @@
 from CachedMethods import cached_property
 from collections import defaultdict, deque
 from logging import info
-from typing import Dict, Optional, Set, Tuple, Union
+from typing import Dict, Optional, Set, Tuple, Union, TYPE_CHECKING
 from ..exceptions import AtomNotFound, IsChiral, NotChiral
+
+
+if TYPE_CHECKING:
+    from CGRtools import MoleculeContainer, QueryContainer
+    Container = Union[MoleculeContainer, QueryContainer]
 
 
 def _pyramid_sign(n, u, v, w):
@@ -126,7 +131,7 @@ def _allene_sign(n, u, v, w):
 class Stereo:
     __slots__ = ()
 
-    def clean_stereo(self):
+    def clean_stereo(self: 'Container'):
         """
         Remove stereo data
         """
@@ -135,7 +140,7 @@ class Stereo:
         self._cis_trans_stereo.clear()
         self.flush_cache()
 
-    def get_mapping(self, other, **kwargs):
+    def get_mapping(self: 'Container', other: 'Container', **kwargs):
         atoms_stereo = self._atoms_stereo
         allenes_stereo = self._allenes_stereo
         cis_trans_stereo = self._cis_trans_stereo
@@ -189,7 +194,7 @@ class Stereo:
             yield from super().get_mapping(other, **kwargs)
 
     @cached_property
-    def _wedge_map(self):
+    def _wedge_map(self: 'Container'):
         plane = self._plane
         atoms_stereo = self._atoms_stereo
         allenes_centers = self._stereo_allenes_centers
@@ -244,7 +249,7 @@ class Stereo:
                 wedge.append((n, order[0], -v))
         return tuple(wedge)
 
-    def _translate_tetrahedron_sign(self, n, env):
+    def _translate_tetrahedron_sign(self: 'Container', n, env):
         """
         Get sign of chiral tetrahedron atom for specified neighbors order
 
@@ -254,7 +259,7 @@ class Stereo:
         s = self._atoms_stereo[n]
         return self._translate_tetrahedron_sign_reversed(n, env, s)
 
-    def _translate_tetrahedron_sign_reversed(self, n, env, s):
+    def _translate_tetrahedron_sign_reversed(self: 'Container', n, env, s):
         order = self._stereo_tetrahedrons[n]
         if len(order) == 3:
             if len(env) == 4:  # hydrogen atom passed to env
@@ -274,7 +279,7 @@ class Stereo:
             return not s
         return s
 
-    def _translate_cis_trans_sign(self, n, m, nn, nm):
+    def _translate_cis_trans_sign(self: 'Container', n, m, nn, nm):
         """
         Get sign for specified opposite neighbors
 
@@ -291,7 +296,7 @@ class Stereo:
             nn, nm = nm, nn
         return self._translate_cis_trans_sign_reversed(n, m, nn, nm, s)
 
-    def _translate_cis_trans_sign_reversed(self, n, m, nn, nm, s):
+    def _translate_cis_trans_sign_reversed(self: 'Container', n, m, nn, nm, s):
         atoms = self._atoms
         n0, n1, n2, n3 = self._stereo_cis_trans[(n, m)]
         if nn == n0:  # same start
@@ -333,7 +338,7 @@ class Stereo:
             return not s
         return s
 
-    def _translate_allene_sign(self, c, nn, nm):
+    def _translate_allene_sign(self: 'Container', c, nn, nm):
         """
         get sign for specified opposite neighbors
 
@@ -344,7 +349,7 @@ class Stereo:
         s = self._allenes_stereo[c]
         return self._translate_allene_sign_reversed(c, nn, nm, s)
 
-    def _translate_allene_sign_reversed(self, c, nn, nm, s):
+    def _translate_allene_sign_reversed(self: 'Container', c, nn, nm, s):
         atoms = self._atoms
 
         n0, n1, n2, n3 = self._stereo_allenes[c]
@@ -388,7 +393,7 @@ class Stereo:
         return s
 
     @cached_property
-    def _stereo_cumulenes(self) -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
+    def _stereo_cumulenes(self: 'Container') -> Dict[Tuple[int, ...], Tuple[int, int, Optional[int], Optional[int]]]:
         """
         Cumulenes which contains at least one non-hydrogen neighbor on both ends
         """
@@ -416,7 +421,7 @@ class Stereo:
         return cumulenes
 
     @cached_property
-    def _stereo_tetrahedrons(self) -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
+    def _stereo_tetrahedrons(self: 'Container') -> Dict[int, Union[Tuple[int, int, int], Tuple[int, int, int, int]]]:
         """
         Tetrahedrons which contains at least 3 non-hydrogen neighbors
         """
@@ -488,7 +493,7 @@ class Stereo:
 class MoleculeStereo(Stereo):
     __slots__ = ()
 
-    def add_wedge(self, n: int, m: int, mark: bool, *, clean_cache=True):
+    def add_wedge(self: 'MoleculeContainer', n: int, m: int, mark: bool, *, clean_cache=True):
         """
         Add stereo data by wedge notation of bonds. Use it for tetrahedrons of allenes.
 
@@ -552,7 +557,7 @@ class MoleculeStereo(Stereo):
                 # only tetrahedrons and allenes supported
                 raise NotChiral
 
-    def calculate_cis_trans_from_2d(self, *, clean_cache=True):
+    def calculate_cis_trans_from_2d(self: 'MoleculeContainer', *, clean_cache=True):
         """
         Calculate cis-trans stereo bonds from given 2d coordinates. Unusable for SMILES and INCHI.
         """
@@ -576,7 +581,7 @@ class MoleculeStereo(Stereo):
         if flag and clean_cache:
             self.flush_cache()
 
-    def add_atom_stereo(self, n: int, env: Tuple[int, ...], mark: bool, *, clean_cache=True):
+    def add_atom_stereo(self: 'MoleculeContainer', n: int, env: Tuple[int, ...], mark: bool, *, clean_cache=True):
         """
         Add stereo data for specified neighbors bypass. Use it for tetrahedrons of allenes.
 
@@ -604,7 +609,8 @@ class MoleculeStereo(Stereo):
         else:  # only tetrahedrons supported
             raise NotChiral
 
-    def add_cis_trans_stereo(self, n: int, m: int, n1: int, n2: int, mark: bool, *, clean_cache=True):
+    def add_cis_trans_stereo(self: 'MoleculeContainer', n: int, m: int, n1: int, n2: int, mark: bool, *,
+                             clean_cache=True):
         """
         Add stereo data to cis-trans double bonds (not allenes).
 
@@ -637,7 +643,7 @@ class MoleculeStereo(Stereo):
         else:
             raise NotChiral
 
-    def _fix_stereo(self):
+    def _fix_stereo(self: 'MoleculeContainer'):
         if self._atoms_stereo:  # filter tetrahedrons
             stereo_tetrahedrons = self._stereo_tetrahedrons
             atoms_stereo = {k: v for k, v in self._atoms_stereo.items() if k in stereo_tetrahedrons}
@@ -709,7 +715,7 @@ class MoleculeStereo(Stereo):
         return self.__chiral_centers[2]
 
     @cached_property
-    def _stereo_axises(self) -> Tuple[Tuple[Tuple[int, ...], ...], Tuple[Tuple[int, ...], ...]]:
+    def _stereo_axises(self: 'MoleculeContainer') -> Tuple[Tuple[Tuple[int, ...], ...], Tuple[Tuple[int, ...], ...]]:
         """
         Get all stereogenic axises in rings with attached cumulenes. Stereogenic axises has only stereogenic atoms.
         """
@@ -814,7 +820,7 @@ class MoleculeStereo(Stereo):
         return tuple(out), tuple(env)
 
     @cached_property
-    def __stereo_axises(self):
+    def __stereo_axises(self: 'MoleculeContainer'):
         bonds = self._bonds
         tetrahedrons = self._stereo_tetrahedrons
         cumulenes = self._stereo_cumulenes
@@ -847,7 +853,7 @@ class MoleculeStereo(Stereo):
         return axises
 
     @cached_property
-    def __chiral_centers(self):
+    def __chiral_centers(self: 'MoleculeContainer'):
         atoms_stereo = self._atoms_stereo
         cis_trans_stereo = self._cis_trans_stereo
         allenes_stereo = self._allenes_stereo

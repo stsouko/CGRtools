@@ -20,17 +20,21 @@
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from itertools import count
-from typing import List
+from typing import List, TYPE_CHECKING, Union
 from ..containers import molecule, query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..exceptions import ValenceError
 from ..periodictable import ListElement
 
 
+if TYPE_CHECKING:
+    from CGRtools import MoleculeContainer, ReactionContainer
+
+
 class Standardize:
     __slots__ = ()
 
-    def canonicalize(self) -> bool:
+    def canonicalize(self: 'MoleculeContainer') -> bool:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         """
@@ -40,7 +44,7 @@ class Standardize:
         t = self.thiele()
         return k or s or h or t
 
-    def standardize(self, *, fix_stereo=True, logging=False) -> bool:
+    def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> bool:
         """
         Standardize functional groups. Return True if any non-canonical group found.
 
@@ -76,7 +80,7 @@ class Standardize:
             return log
         return False
 
-    def neutralize(self, *, fix_stereo=True) -> bool:
+    def neutralize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True) -> bool:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
         """
@@ -129,7 +133,7 @@ class Standardize:
             return True
         return False
 
-    def remove_hydrogen_bonds(self, *, keep_to_terminal=True, fix_stereo=True) -> int:
+    def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
         """Remove hydrogen bonds marked with 8 (any) bond
 
         :param keep_to_terminal: Keep any bonds to terminal hydrogens
@@ -151,21 +155,21 @@ class Standardize:
                         hg[m].discard(n)
 
         seen = set()
-        count = 0
+        c = 0
         for n, ms in hg.items():
             seen.add(n)
             for m in ms:
                 if m in seen:
                     continue
-                count += 1
+                c += 1
                 del bonds[n][m], bonds[m][n]
-        if count:
+        if c:
             self.flush_cache()
             if fix_stereo:
                 self._fix_stereo()
-        return count
+        return c
 
-    def implicify_hydrogens(self, *, fix_stereo=True) -> int:
+    def implicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True) -> int:
         """
         Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
@@ -215,7 +219,7 @@ class Standardize:
             self._fix_stereo()
         return len(to_remove)
 
-    def explicify_hydrogens(self, *, fix_stereo=True) -> int:
+    def explicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True) -> int:
         """
         Add explicit hydrogens to atoms.
 
@@ -237,7 +241,7 @@ class Standardize:
             self._fix_stereo()
         return len(to_add)
 
-    def check_valence(self) -> List[int]:
+    def check_valence(self: 'MoleculeContainer') -> List[int]:
         """
         Check valences of all atoms.
 
@@ -275,7 +279,7 @@ class Standardize:
                             break
         return list(errors)
 
-    def clean_isotopes(self) -> bool:
+    def clean_isotopes(self: 'MoleculeContainer') -> bool:
         """
         Clean isotope marks from molecule.
         Return True if any isotope found.
@@ -290,7 +294,7 @@ class Standardize:
             return True
         return False
 
-    def __standardize(self):
+    def __standardize(self: Union['MoleculeContainer', 'Standardize']):
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
@@ -328,12 +332,12 @@ class Standardize:
             hs.update(seen)
         return hs, log
 
-    def __patch_path(self, path):
+    def __patch_path(self: 'MoleculeContainer', path):
         bonds = self._bonds
         for n, m, b in path:
             bonds[n][m]._Bond__order = b
 
-    def __find_delocalize_path(self, start, finish, constrains):
+    def __find_delocalize_path(self: 'MoleculeContainer', start, finish, constrains):
         bonds = self._bonds
         stack = [(start, n, 0, b.order + 1) for n, b in bonds[start].items() if n in constrains and b.order < 3]
         path = []
@@ -358,7 +362,7 @@ class Standardize:
                          ((n, b.order + diff) for n, b in bonds[current].items() if n not in seen and n in constrains)
                          if 1 <= b <= 3)
 
-    def __entries(self):
+    def __entries(self: 'MoleculeContainer'):
         charges = self._charges
         radicals = self._radicals
         atoms = self._atoms
@@ -1340,7 +1344,7 @@ class StandardizeReaction:
     __slots__ = ()
     __class_cache__ = {}
 
-    def canonicalize(self, fix_mapping: bool = True) -> bool:
+    def canonicalize(self: 'ReactionContainer', fix_mapping: bool = True) -> bool:
         """
         Convert molecules to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         Works only for Molecules.
@@ -1362,7 +1366,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def standardize(self, fix_mapping: bool = True) -> bool:
+    def standardize(self: 'ReactionContainer', fix_mapping: bool = True) -> bool:
         """
         Standardize functional groups. Works only for Molecules.
         Return True if in any molecule found not canonical group.
@@ -1383,7 +1387,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def neutralize(self) -> bool:
+    def neutralize(self: 'ReactionContainer') -> bool:
         """
         Transform biradical or dipole resonance structures into neutral form.
         Works only for Molecules.
@@ -1399,7 +1403,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def fix_mapping(self) -> bool:
+    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction']) -> bool:
         """
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
@@ -1526,7 +1530,7 @@ class StandardizeReaction:
     def __remapping_compiled_rules(self):
         return ()
 
-    def implicify_hydrogens(self) -> int:
+    def implicify_hydrogens(self: 'ReactionContainer') -> int:
         """
         Remove explicit hydrogens if possible
 
@@ -1541,7 +1545,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def explicify_hydrogens(self) -> int:
+    def explicify_hydrogens(self: 'ReactionContainer') -> int:
         """
         Add explicit hydrogens to atoms
 
@@ -1556,7 +1560,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def thiele(self) -> bool:
+    def thiele(self: 'ReactionContainer') -> bool:
         """
         Convert structures to aromatic form. Works only for Molecules.
         Return True if in any molecule found kekule ring
@@ -1571,7 +1575,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def kekule(self) -> bool:
+    def kekule(self: 'ReactionContainer') -> bool:
         """
         Convert structures to kekule form. Works only for Molecules.
         Return True if in any molecule found aromatic ring
@@ -1586,7 +1590,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def clean_isotopes(self) -> bool:
+    def clean_isotopes(self: 'ReactionContainer') -> bool:
         """
         Clean isotope marks for all molecules in reaction.
         Returns True if in any molecule found isotope.
@@ -1602,7 +1606,7 @@ class StandardizeReaction:
             self.flush_cache()
         return flag
 
-    def clean_stereo(self):
+    def clean_stereo(self: 'ReactionContainer'):
         """
         Remove stereo data
         """
@@ -1612,7 +1616,7 @@ class StandardizeReaction:
             m.clean_stereo()
         self.flush_cache()
 
-    def clean2d(self, **kwargs):
+    def clean2d(self: 'ReactionContainer', **kwargs):
         """
         Recalculate 2d coordinates
         """
@@ -1620,7 +1624,7 @@ class StandardizeReaction:
             m.clean2d(**kwargs)
         self.fix_positions()
 
-    def fix_positions(self):
+    def fix_positions(self: Union['ReactionContainer', 'StandardizeReaction']):
         """
         Fix coordinates of molecules in reaction
         """
@@ -1661,8 +1665,8 @@ class StandardizeReaction:
         self.flush_cache()
 
     @staticmethod
-    def __fix_reagent_positions(molecule, shift_x):
-        plane = molecule._plane
+    def __fix_reagent_positions(mol, shift_x):
+        plane = mol._plane
         shift_y = .5
 
         values = plane.values()
