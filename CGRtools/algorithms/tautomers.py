@@ -33,18 +33,18 @@ if TYPE_CHECKING:
 class Tautomers:
     __slots__ = ()
 
-    def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True) -> bool:
+    def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True,
+                    zwitter=True, ring_chain=True, keto_enol=True) -> bool:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
-
-        :param prepare_molecules: Standardize structures before. Aromatization and implicit hydrogens required.
         """
         def key(m):
             r = sum(len(r) for r in m.sssr)  # more bigger rings is good
             a = len(m.aromatic_rings)  # more aromatics is good
             return m.huckel_pi_electrons_energy - r - a
 
-        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False), key=key)
+        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False,
+                                             zwitter=zwitter, ring_chain=ring_chain, keto_enol=keto_enol), key=key)
         if canon != self:  # attach state of canonic tautomer to self
             # atoms, radicals state, parsed_mapping and plane are unchanged
             self._bonds = canon._bonds
@@ -59,18 +59,17 @@ class Tautomers:
             return True
         return False
 
-    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True) -> \
+    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True,
+                            zwitter=True, ring_chain=True, keto_enol=True) -> \
             Iterator['MoleculeContainer']:
         """
-        Enumerate all possible tautomeric forms of molecule. Supported hydrogen migration through delocalized chain.
-
-        O=C-C[H] <-> [H]O-C=C
-        O=C-C=C-C[H] <-> [H]O-C=C-C=C
-        O=C-C[H]-C=C <-> [H]O-C=C-C=C
-        O=C-C[H]-C=C <X> O=C-C=C-C[H]  not directly possible
+        Enumerate all possible tautomeric forms of molecule.
 
         :param prepare_molecules: Standardize structures before. Aromatization and implicit hydrogens required.
         :param full: Do full enumeration.
+        :param zwitter: Enable acid-base tautomerization
+        :param ring_chain: Enable ring-chain tautomerization
+        :param keto_enol: Enable keto-enol tautomerization
         """
         yield self.copy()
         atoms_stereo = self._atoms_stereo
@@ -91,56 +90,59 @@ class Tautomers:
         while queue:
             current = queue.popleft()
 
-            for mol in current._enumerate_zwitter_tautomers(full):
-                if mol not in seen:
-                    seen[mol] = current
-                    queue.append(mol)
-                    if has_stereo:
-                        mol = mol.copy()
-                        mol._atoms_stereo.update(atoms_stereo)
-                        mol._allenes_stereo.update(allenes_stereo)
-                        mol._cis_trans_stereo.update(cis_trans_stereo)
-                        mol._fix_stereo()
-                    yield mol
-
-            for mol in current._enumerate_ring_chain_tautomers(full):
-                if mol not in seen:
-                    seen[mol] = current
-                    queue.append(mol)
-                    if has_stereo:
-                        mol = mol.copy()
-                        mb = mol._bonds
-                        mol._atoms_stereo.update((n, s) for n, s in atoms_stereo.items() if mb[n] == bonds[n])
-                        mol._allenes_stereo.update(allenes_stereo)
-                        mol._cis_trans_stereo.update(cis_trans_stereo)
-                        mol._fix_stereo()
-                    yield mol
-
-            for mol, ket in current._enumerate_keto_enol_tautomers(full):
-                if mol not in seen:
-                    seen[mol] = current
-                    # prevent carbonyl migration
-                    if current is not copy and not ket:  # enol to ket potentially migrate ketone.
-                        # search alpha hydroxy ketone inversion
-                        before = seen[current]._sugar_groups
-                        if any((k, e) in before for e, k in mol._sugar_groups):
-                            continue
-
-                    if has_stereo:
-                        ster = mol.copy()
-                        ster._atoms_stereo.update(atoms_stereo)
-                        ster._allenes_stereo.update(allenes_stereo)
-                        ster._cis_trans_stereo.update(cis_trans_stereo)
-                        ster._fix_stereo()
-                        yield ster
-                    else:
-                        yield mol
-                    if len(mol.aromatic_rings) > len(current.aromatic_rings):
-                        # found new aromatic ring. flush queue and start from it.
-                        queue.clear()
+            if zwitter:
+                for mol in current._enumerate_zwitter_tautomers(full):
+                    if mol not in seen:
+                        seen[mol] = current
                         queue.append(mol)
-                        break
-                    queue.append(mol)
+                        if has_stereo:
+                            mol = mol.copy()
+                            mol._atoms_stereo.update(atoms_stereo)
+                            mol._allenes_stereo.update(allenes_stereo)
+                            mol._cis_trans_stereo.update(cis_trans_stereo)
+                            mol._fix_stereo()
+                    yield mol
+
+            if ring_chain:
+                for mol in current._enumerate_ring_chain_tautomers(full):
+                    if mol not in seen:
+                        seen[mol] = current
+                        queue.append(mol)
+                        if has_stereo:
+                            mol = mol.copy()
+                            mb = mol._bonds
+                            mol._atoms_stereo.update((n, s) for n, s in atoms_stereo.items() if mb[n] == bonds[n])
+                            mol._allenes_stereo.update(allenes_stereo)
+                            mol._cis_trans_stereo.update(cis_trans_stereo)
+                            mol._fix_stereo()
+                        yield mol
+
+            if keto_enol:
+                for mol, ket in current._enumerate_keto_enol_tautomers(full):
+                    if mol not in seen:
+                        seen[mol] = current
+                        # prevent carbonyl migration
+                        if current is not copy and not ket:  # enol to ket potentially migrate ketone.
+                            # search alpha hydroxy ketone inversion
+                            before = seen[current]._sugar_groups
+                            if any((k, e) in before for e, k in mol._sugar_groups):
+                                continue
+
+                        if has_stereo:
+                            ster = mol.copy()
+                            ster._atoms_stereo.update(atoms_stereo)
+                            ster._allenes_stereo.update(allenes_stereo)
+                            ster._cis_trans_stereo.update(cis_trans_stereo)
+                            ster._fix_stereo()
+                            yield ster
+                        else:
+                            yield mol
+                        if len(mol.aromatic_rings) > len(current.aromatic_rings):
+                            # found new aromatic ring. flush queue and start from it.
+                            queue.clear()
+                            queue.append(mol)
+                            break
+                        queue.append(mol)
 
     def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         atoms = self._atoms
@@ -610,6 +612,22 @@ class Tautomers:
         q.add_bond(1, 2, 1)
         rules.append(q)
 
+        # [O-]-[N+](=O)[O-]
+        q = query.QueryContainer()
+        q.add_atom('O', charge=-1)
+        q.add_atom('N', charge=1)
+        q.add_atom('O', charge=-1)
+        q.add_atom('O')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        rules.append(q)
+
+        # ions
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'F', 'Cl', 'Br', 'I']), charge=-1, neighbors=1)
+        rules.append(q)
+
         return rules
 
     @class_cached_property
@@ -623,7 +641,7 @@ class Tautomers:
         q.add_bond(1, 2, 2)
         rules.append(q)
 
-        # H2NC
+        # [N;H2][C;X4,a]
         q = query.QueryContainer()
         q.add_atom('N', neighbors=1)
         q.add_atom('C', hybridization=1, heteroatoms=1)
@@ -639,7 +657,7 @@ class Tautomers:
         q.add_bond(1, 3, 1)
         rules.append(q)
 
-        # HN(C)C
+        # CN(C)C
         q = query.QueryContainer()
         q.add_atom('N')
         q.add_atom('C', hybridization=1, heteroatoms=1)
