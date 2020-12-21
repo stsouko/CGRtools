@@ -937,27 +937,26 @@ class DepictQuery(Depict):
         triple_space = config['triple_space']
         dash3, dash4 = config['aromatic_dashes']
         for n, m, bond in self.bonds():
-            order = bond.order
             nx, ny = plane[n]
             mx, my = plane[m]
             ny, my = -ny, -my
-            if order == 1:
+            if bond == 1:
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
-            elif order == 4:
+            elif bond == 4:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}" '
                            f'stroke-dasharray="{dash3:.2f} {dash4:.2f}"/>')
-            elif order == 2:
+            elif bond == 2:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}"/>')
-            elif order == 3:
+            elif bond == 3:
                 dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}"/>')
-            else:
+            else:  # other query bonds
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
                            f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
         return svg

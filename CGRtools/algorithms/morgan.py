@@ -21,39 +21,8 @@ from collections import Counter
 from itertools import groupby
 from logging import warning
 from operator import itemgetter
-from sys import version_info
 from typing import Dict
-
-
-if version_info[1] >= 8:
-    tuple_hash = hash
-else:
-    def tuple_hash(v):
-        """
-        Python 3.8 hash for tuples implemented on python.
-        Working only for nonnested tuples.
-        """
-        acc = 0x27D4EB2F165667C5
-        for el in v:
-            lane = hash(el)
-            if lane == -1:
-                return -1
-            elif lane < 0:
-                lane += 0x10000000000000000  # to unsigned
-
-            acc += lane * 0xC2B2AE3D27D4EB4F
-            acc %= 0x10000000000000000
-            acc = (acc << 31) % 0x10000000000000000 | (acc >> 33)
-            acc *= 0x9E3779B185EBCA87
-
-        acc += len(v) ^ 2870177450013471926  # 0xC2B2AE3D27D4EB4F ^ 3527539
-        acc %= 0x10000000000000000
-
-        if acc == 0xFFFFFFFFFFFFFFFF:
-            return 1546275796
-        elif acc > 0x7FFFFFFFFFFFFFFF:  # (1 << 63) - 1 = largest positive number
-            return acc - 0x10000000000000000
-        return acc
+from .._functions import tuple_hash
 
 
 class Morgan:

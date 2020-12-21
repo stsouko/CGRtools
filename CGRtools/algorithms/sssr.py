@@ -269,8 +269,8 @@ class SSSR:
                 # 4--5--6
                 #
                 # modified NX.dfs_labeled_edges
-                # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.traver\
-                # sal.depth_first_search.dfs_labeled_edges.html
+                # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.\
+                # traversal.depth_first_search.dfs_labeled_edges.html
                 depth_limit = len(neighbors) - 1
                 for start, nbrs in neighbors.items():
                     if not nbrs:

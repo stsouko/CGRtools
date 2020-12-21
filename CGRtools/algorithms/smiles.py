@@ -21,10 +21,11 @@ from CachedMethods import cached_method
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count, product
+from random import random
 
 
 charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
-order_str = {1: '', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
+order_str = {1: '-', 2: '=', 3: '#', 4: ':', 8: '~', None: '.'}
 organic_set = {'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B'}
 hybridization_str = {4: 'a', 3: 't', 2: 'd', 1: 's', None: 'n'}
 dyn_order_str = {(None, 1): '[.>-]', (None, 2): '[.>=]', (None, 3): '[.>#]', (None, 4): '[.>:]', (None, 8): '[.>~]',
@@ -57,8 +58,12 @@ class Smiles:
             !s - Disable stereo marks.
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
-            !r - Use aromatic bonds instead aromatic atoms.
+            !g - Disable hydrogens marks in queries. Returns non-unique signature.
+            !c - Disable rings marks in queries. Returns non-unique signature.
+            !w - Disable heteroatoms marks in queries. Returns non-unique signature.
+            t - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
+            r - Generate random-ordered smiles.
 
             Combining possible. Order independent. Another keys ignored.
         """
@@ -72,11 +77,22 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
-            if '!r' in format_spec:
+            if 't' in format_spec:
                 kwargs['aromatic'] = False
             if 'm' in format_spec:
                 kwargs['mapping'] = True
-            return ''.join(self._smiles(self.atoms_order.get, **kwargs))
+            if '!g' in format_spec:
+                kwargs['hydrogens'] = False
+            if '!c' in format_spec:
+                kwargs['rings'] = False
+            if '!w' in format_spec:
+                kwargs['heteroatoms'] = False
+            if 'r' in format_spec:
+                def w(x):
+                    return random()
+            else:
+                w = self.atoms_order.get
+            return ''.join(self._smiles(w, **kwargs))
         return str(self)
 
     def __eq__(self, other):
@@ -261,7 +277,7 @@ class MoleculeSmiles(Smiles):
 
         if kwargs.get('stereo', True):
             if n in self._atoms_stereo:
-                if ih and next(x for x in adjacency) == n:
+                if ih and next(x for x in adjacency) == n:  # first atom in smiles has reversed chiral mark
                     smi[3] = '@@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@'
                 else:
                     smi[3] = '@' if self._translate_tetrahedron_sign(n, adjacency[n]) else '@@'
@@ -390,6 +406,9 @@ class QuerySmiles(Smiles):
         charge = self._charges[n]
         hybridization = self._hybridizations[n]
         neighbors = self._neighbors[n]
+        hydrogens = self._hydrogens[n]
+        rings = self._rings_sizes[n]
+        heteroatoms = self._heteroatoms[n]
 
         if atom.isotope:
             smi = ['[', str(atom.isotope), atom.atomic_symbol]
@@ -399,27 +418,37 @@ class QuerySmiles(Smiles):
         if kwargs.get('stereo', True) and n in self._atoms_stereo:  # carbon only
             smi.append('@' if self._translate_tetrahedron_sign(n, kwargs['adjacency'][n]) else '@@')
 
-        if kwargs.get('hybridization', True) and hybridization:
-            smi.append(';')
-            smi.append(''.join(hybridization_str[x] for x in hybridization))
-            if kwargs.get('neighbors', True) and neighbors:
-                smi.append(''.join(str(x) for x in neighbors))
-            smi.append(';')
-        elif kwargs.get('neighbors', True) and neighbors:
-            smi.append(';')
+        if kwargs.get('neighbors', True) and neighbors:
+            smi.append(';D')
             smi.append(''.join(str(x) for x in neighbors))
-            smi.append(';')
+
+        if kwargs.get('hydrogens', True) and hydrogens:
+            smi.append(';H')
+            smi.append(''.join(str(x) for x in hydrogens))
+
+        if kwargs.get('rings', True) and rings:
+            smi.append(';r')
+            smi.append(''.join(str(x) for x in rings))
+
+        if kwargs.get('hybridization', True) and hybridization:
+            smi.append(';Z')
+            smi.append(''.join(hybridization_str[x] for x in hybridization))
+
+        if kwargs.get('heteroatoms', True) and heteroatoms:
+            smi.append(';W')
+            smi.append(''.join(str(x) for x in heteroatoms))
+
+        if self._radicals[n]:
+            smi.append(';*')
 
         if charge:
             smi.append(charge_str[charge])
-        if self._radicals[n]:
-            smi.append('*')
 
         smi.append(']')
         return ''.join(smi)
 
     def _format_bond(self, n, m, **kwargs):
-        return order_str[self._bonds[n][m].order]
+        return ','.join(order_str[x] for x in self._bonds[n][m].order)
 
 
 class QueryCGRSmiles(Smiles):

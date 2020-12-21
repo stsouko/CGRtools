@@ -16,9 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Tuple, Dict, Type
+from typing import Tuple, Dict, Type, Union
 from .core import Core
 from .dynamic import Dynamic, DynamicElement
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 
@@ -95,14 +96,6 @@ class DynamicQuery(Dynamic):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    _hybridization_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4,
-                             ((1, 2),): 5, ((1, 3),): 6, ((1, 4),): 7, ((2, 3),): 8, ((2, 4),): 9, ((3, 4),): 10,
-                             ((2, 1),): 11, ((3, 1),): 12, ((4, 1),): 13, ((3, 2),): 14,
-                             ((4, 2),): 15, ((4, 3),): 16, }  # 31 is any other combination
-    _neighbors_bitmap = {(): 0, ((1, 1),): 1, ((2, 2),): 2, ((3, 3),): 3, ((4, 4),): 4, ((5, 5),): 5, ((6, 6),): 6,
-                         ((1, 2),): 7, ((2, 3),): 8, ((3, 4),): 9, ((4, 5),): 10, ((5, 6),): 11, ((2, 1),): 12,
-                         ((3, 2),): 13, ((4, 3),): 14, ((5, 4),): 15, ((6, 5),): 16}  # 31 is any other combination
-
 
 class DynamicQueryElement(DynamicQuery):
     __slots__ = ()
@@ -112,7 +105,7 @@ class DynamicQueryElement(DynamicQuery):
         return self.__class__.__name__[12:]
 
     @classmethod
-    def from_symbol(cls, symbol: str) -> Type['DynamicQueryElement']:
+    def from_symbol(cls, symbol: str) -> Type[Union['DynamicQueryElement', 'DynamicAnyElement']]:
         """
         get Element class by its symbol
         """
@@ -125,7 +118,7 @@ class DynamicQueryElement(DynamicQuery):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number: int) -> Type['DynamicQueryElement']:
+    def from_atomic_number(cls, number: int) -> Type[Union['DynamicQueryElement', 'DynamicAnyElement']]:
         """
         get Element class by its number
         """
@@ -160,13 +153,9 @@ class DynamicQueryElement(DynamicQuery):
         return False
 
     def __hash__(self):
-        """
-        36bit = 9bit | 7bit | 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
-        """
-        return (self.isotope or 0) << 27 | self.atomic_number << 20 | self.charge + 4 << 16 | self.p_charge << 12 | \
-            self.is_radical << 11 | self.p_is_radical << 10 | \
-            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.p_charge,
+                           self.is_radical, self.p_is_radical, self.hybridization, self.p_hybridization,
+                           self.neighbors, self.p_neighbors))
 
 
 class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
@@ -214,13 +203,8 @@ class DynamicAnyElement(DynamicQuery):  # except Hydrogen!
         return False
 
     def __hash__(self):
-        """
-        20bit = 4bit | 4bit | 1bit | 1bit | 5bit | 5bit
-        """
-        return self.charge + 4 << 16 | self.p_charge << 12 | \
-            self.is_radical << 11 | self.p_is_radical << 10 | \
-            self._hybridization_bitmap.get(tuple(zip(self.hybridization, self.p_hybridization)), 31) << 5 | \
-            self._neighbors_bitmap.get(tuple(zip(self.neighbors, self.p_neighbors)), 31)
+        return tuple_hash((self.charge, self.p_charge, self.is_radical, self.p_is_radical,
+                           self.hybridization, self.p_hybridization, self.neighbors, self.p_neighbors))
 
 
 __all__ = ['DynamicQueryElement', 'DynamicAnyElement']

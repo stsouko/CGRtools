@@ -439,7 +439,7 @@ class XYZRead(XYZ):
                         except ValueError:
                             failkey = True
                             self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                             self._flush_log()
                             break
                     elif x.startswith('radical='):
@@ -448,7 +448,7 @@ class XYZRead(XYZ):
                         except ValueError:
                             failkey = True
                             self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                             self._flush_log()
                             break
                 else:
@@ -460,7 +460,7 @@ class XYZRead(XYZ):
                 except ValueError:
                     failkey = True
                     self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                    yield parse_error(count, pos, self._format_log())
+                    yield parse_error(count, pos, self._format_log(), {})
                     self._flush_log()
                 else:
                     if len(xyz) == size:
@@ -468,7 +468,7 @@ class XYZRead(XYZ):
                             container = self._convert_structure(xyz, charge, radical)
                         except ValueError:
                             self._info(f'record consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                         else:
                             if self._store_log:
                                 log = self._format_log()
@@ -479,7 +479,7 @@ class XYZRead(XYZ):
                         failkey = True  # trigger end of XYZ
         if not failkey:  # cut XYZ
             self._info('Last structure not finished')
-            yield parse_error(count, pos, self._format_log())
+            yield parse_error(count, pos, self._format_log(), {})
             self._flush_log()
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):

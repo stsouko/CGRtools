@@ -176,6 +176,18 @@ class Core(ABC):
         except AttributeError:
             raise IsNotConnectedAtom
 
+    @property
+    def ring_sizes(self) -> Tuple[int, ...]:
+        """
+        Atom rings sizes.
+        """
+        try:
+            return self._graph().atoms_rings_sizes[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+        except KeyError:
+            return ()
+
     def copy(self) -> 'Core':
         """
         Detached from graph copy of element

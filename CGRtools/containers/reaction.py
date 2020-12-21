@@ -97,8 +97,8 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         reaction._ReactionContainer__reactants = tuple(r.split())
         reaction._ReactionContainer__products = tuple(p.split())
         reaction._ReactionContainer__reagents = ()
-        reaction._ReactionContainer__meta = cgr._Graph__meta.copy()
-        reaction._ReactionContainer__name = cgr._Graph__name
+        reaction._ReactionContainer__meta = cgr.meta.copy()
+        reaction._ReactionContainer__name = cgr.name
         reaction._arrow = None
         reaction._signs = None
         return reaction
@@ -165,8 +165,6 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
     def name(self, name: str):
         if not isinstance(name, str):
             raise TypeError('name should be string up to 80 symbols')
-        if len(name) > 80:
-            raise ValueError('name should be string up to 80 symbols')
         self.__name = name
 
     def copy(self) -> 'ReactionContainer':
@@ -236,9 +234,17 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         return '>'.join(sig)
 
     def __format__(self, format_spec):
+        """
+        :param format_spec: see specification of nested containers.
+            !c - Keep nested containers order
+        """
         sig = []
-        for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
+        if '!c' in format_spec:
+            for ml in (self.__reactants, self.__reagents, self.__products):
+                sig.append('.'.join(format(x, format_spec) for x in ml))
+        else:
+            for ml in (self.__reactants, self.__reagents, self.__products):
+                sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
         return '>'.join(sig)
 
     def flush_cache(self):

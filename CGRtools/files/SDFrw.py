@@ -20,12 +20,16 @@ from bisect import bisect_left
 from collections import defaultdict
 from io import BytesIO
 from logging import warning
+from re import match, compile
 from subprocess import check_output
 from traceback import format_exc
 from warnings import warn
 from ._mdl import parse_error
 from ._mdl import MDLRead, MDLWrite, MOLRead, EMOLRead, EMDLWrite
 from ..exceptions import EmptyMolecule
+
+
+head = compile(r'>\s.*<(.*)>')
 
 
 class SDFRead(MDLRead):
@@ -129,7 +133,7 @@ class SDFRead(MDLRead):
                 except ValueError:
                     parser = None
                     self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    seek = yield parse_error(count, pos, self._format_log())
+                    seek = yield parse_error(count, pos, self._format_log(), {})
                     if seek is not None:  # seeked to start of mol block
                         yield
                         count = seek
@@ -150,7 +154,7 @@ class SDFRead(MDLRead):
                         container = self._convert_structure(record)
                     except ValueError:
                         self._info(f'record consist errors:\n{format_exc()}')
-                        seek = yield parse_error(count, pos, self._format_log())
+                        seek = yield parse_error(count, pos, self._format_log(), record['meta'])
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -172,8 +176,9 @@ class SDFRead(MDLRead):
                 mkey = None
                 meta = defaultdict(list)
             elif record:
-                if line.startswith('>  <'):
-                    mkey = line.rstrip()[4:-1].strip()
+                head_line = match(head, line)
+                if head_line:
+                    mkey = head_line.group(1).strip()
                     if not mkey:
                         self._info(f'invalid metadata entry: {line}')
                 elif mkey:
@@ -201,7 +206,7 @@ class SDFRead(MDLRead):
                         raise ValueError('invalid MOL entry')
                 except ValueError:
                     self._info(f'line:\n{line}\nconsist errors:\n{format_exc()}')
-                    seek = yield parse_error(count, pos, self._format_log())
+                    seek = yield parse_error(count, pos, self._format_log(), {})
                     if seek is not None:  # seeked to start of mol block
                         yield
                         count = seek
@@ -224,7 +229,7 @@ class SDFRead(MDLRead):
                 self._info(f'record consist errors:\n{format_exc()}')
                 log = self._format_log()
                 self._flush_log()
-                yield parse_error(count, pos, log)
+                yield parse_error(count, pos, log, record['meta'])
             else:
                 if self._store_log:
                     log = self._format_log()

@@ -24,7 +24,7 @@ from ...exceptions import AtomNotFound, MappingError
 from ...periodictable import DynamicElement, Element, QueryElement
 
 
-parse_error = namedtuple('ParseError', ('number', 'position', 'log'))
+parse_error = namedtuple('ParseError', ('number', 'position', 'log', 'meta'))
 
 
 class CGRRead:

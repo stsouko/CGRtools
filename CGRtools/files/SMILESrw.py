@@ -24,7 +24,7 @@ from logging import warning
 from pathlib import Path
 from re import split, compile, fullmatch
 from traceback import format_exc
-from typing import Union, List
+from typing import Union, List, Dict
 from warnings import warn
 from ._mdl import CGRRead, parse_error
 from ..containers import MoleculeContainer, CGRContainer, ReactionContainer
@@ -62,7 +62,7 @@ dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 dyn_radical_dict = {'*': (True,), '*>^': (True, ('radical', None)), '^>*': (False, ('radical', None))}
 
-atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnops][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
+atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
 dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Z][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?([*^](>[*^])?)?')
 delimiter = compile(r'[=:]')
 
@@ -128,8 +128,8 @@ class SMILESRead(CGRRead):
         pos = file.tell() if seekable else None
         for n, line in enumerate(self.__file):
             x = parse(line)
-            if x is None:
-                yield parse_error(n, pos, self._format_log())
+            if isinstance(x, dict):
+                yield parse_error(n, pos, self._format_log(), x)
                 if seekable:
                     pos = file.tell()
             else:
@@ -175,13 +175,13 @@ class SMILESRead(CGRRead):
     def __next__(self):
         return next(iter(self))
 
-    def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, None]:
+    def parse(self, smiles: str) -> Union[MoleculeContainer, CGRContainer, ReactionContainer, Dict[str, str]]:
         """SMILES string parser."""
         self._flush_log()
         smi, *data = smiles.split()
         if not smi:
             self._info('empty smiles')
-            return
+            return {}
         elif self.__header is None:
             meta = {}
             for x in data:
@@ -199,7 +199,7 @@ class SMILESRead(CGRRead):
                 reactants, reagents, products = smi.split('>')
             except ValueError:
                 self._info('invalid SMIRKS')
-                return
+                return meta
 
             try:
                 if reactants:
@@ -209,7 +209,7 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['reactants'].append(self.__parse_tokens(x))
                 if products:
@@ -219,7 +219,7 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['products'].append(self.__parse_tokens(x))
                 if reagents:
@@ -229,17 +229,18 @@ class SMILESRead(CGRRead):
                                 self._info('two dots in line ignored')
                             else:
                                 self._info('two dots in line')
-                                return
+                                return meta
                         else:
                             record['reagents'].append(self.__parse_tokens(x))
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
-                return
+                return meta
 
             try:
                 container = self._convert_reaction(record)
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
+                return meta
             else:
                 if self._store_log:
                     log = self._format_log()
@@ -251,13 +252,14 @@ class SMILESRead(CGRRead):
                 record = self.__parse_tokens(smi)
             except ValueError:
                 self._info(f'line: {smi}\nconsist errors:\n{format_exc()}')
-                return
+                return meta
 
             record['meta'] = meta
             try:
                 container = self._convert_structure(record)
             except ValueError:
                 self._info(f'record consist errors:\n{format_exc()}')
+                return meta
             else:
                 if self._store_log:
                     log = self._format_log()
@@ -299,8 +301,11 @@ class SMILESRead(CGRRead):
         order = {mapping[n]: [mapping[m] for m in ms] for n, ms in molecule['order'].items()}
 
         stereo = []
-        for n, s in molecule['stereo_atoms'].items():
-            n = mapping[n]
+        for i, s in molecule['stereo_atoms'].items():
+            n = mapping[i]
+            if not i and hydrogens[n]:  # first atom in smiles has reversed chiral mark
+                s = not s
+
             if n in st:
                 stereo.append((mol.add_atom_stereo, n, order[n], s))
             elif n in sa:
@@ -427,7 +432,7 @@ class SMILESRead(CGRRead):
                     token = None
                 token_type = 0
                 tokens.append((0, s))
-            elif s in 'cnops':  # aromatic ring atom
+            elif s in 'cnopsb':  # aromatic ring atom
                 if token:
                     tokens.append((token_type, token))
                     token = None
@@ -477,7 +482,7 @@ class SMILESRead(CGRRead):
                         try:
                             out.append((10, dynamic_bonds[token]))
                         except KeyError:
-                            raise IncorrectSmiles('invalid dynamic bond token')
+                            raise IncorrectSmiles(f'invalid dynamic bond token {{{token}}}')
                     else:  # dynamic atom token
                         out.append((11, cls.__dynatom_parse(token)))
                 elif '*' in token:  # CGR atom radical mark
@@ -493,7 +498,7 @@ class SMILESRead(CGRRead):
         # [isotope]Element[element][@[@]][H[n]][+-charge][:mapping]
         match = fullmatch(atom_re, token)
         if match is None:
-            raise IncorrectSmiles('atom token invalid')
+            raise IncorrectSmiles(f'atom token invalid {{{token}}}')
         isotope, element, stereo, hydrogen, charge, mapping = match.groups()
 
         if isotope:
@@ -526,7 +531,7 @@ class SMILESRead(CGRRead):
         else:
             mapping = 0
 
-        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se'):
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b'):
             _type = 8
             element = element.capitalize()
         else:
@@ -539,7 +544,7 @@ class SMILESRead(CGRRead):
         # [isotope]Element[element][+-charge[>+-charge]][*^[>*^]]
         match = fullmatch(dyn_atom_re, token)
         if match is None:
-            raise IncorrectSmiles('atom token invalid')
+            raise IncorrectSmiles(f'atom token invalid {{{token}}}')
         isotope, element, charge, _, is_radical, _ = match.groups()
 
         if isotope:
@@ -680,9 +685,13 @@ class SMILESRead(CGRRead):
                     if not previous:
                         bt = 1
                         b = 4 if atoms_types[last_num] == token_type == 8 else 1
+                        order[last_num].append(atom_num)
+                        order[atom_num].append(last_num)
                     else:
                         bt, b = previous
-
+                        if bt != 4:
+                            order[last_num].append(atom_num)
+                            order[atom_num].append(last_num)
                     if bt == 1:
                         bonds.append((atom_num, last_num, b))
                     elif bt == 9:
@@ -692,8 +701,6 @@ class SMILESRead(CGRRead):
                     elif bt == 10:
                         bonds.append((atom_num, last_num, 8))
                         cgr.append(((atom_num, last_num), 'bond', b))
-                    order[last_num].append(atom_num)
-                    order[atom_num].append(last_num)
 
                 if token_type == 11:
                     cgr.extend((atom_num, *x) for x in token.pop('cgr'))

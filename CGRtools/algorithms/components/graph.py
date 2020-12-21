@@ -1,0 +1,159 @@
+# -*- coding: utf-8 -*-
+#
+#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020 Ravil Mukhametgaleev <sonic-mc@mail.ru>
+#  This file is part of CGRtools.
+#
+#  CGRtools is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  GNU Lesser General Public License for more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with this program; if not, see <https://www.gnu.org/licenses/>.
+#
+from CachedMethods import cached_property, FrozenDict
+from collections import defaultdict, deque
+from typing import List, Tuple, Dict, Set, Any, Union
+
+
+class GraphComponents:
+    __slots__ = ()
+
+    @cached_property
+    def connected_components(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Isolated components of single graph. E.g. salts as ion pair.
+        """
+        if not self._atoms:
+            return ()
+        return tuple(tuple(x) for x in self._connected_components(self._bonds))
+
+    @staticmethod
+    def _connected_components(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> List[Set[int]]:
+        atoms = set(bonds)
+        components = []
+        while atoms:
+            start = atoms.pop()
+            seen = {start}
+            queue = deque([start])
+            while queue:
+                current = queue.popleft()
+                for i in bonds[current]:
+                    if i not in seen:
+                        queue.append(i)
+                        seen.add(i)
+            components.append(seen)
+            atoms.difference_update(seen)
+        return components
+
+    @property
+    def connected_components_count(self) -> int:
+        """
+        Number of components in graph
+        """
+        return len(self.connected_components)
+
+    @cached_property
+    def skin_atoms(self) -> Tuple[int, ...]:
+        """
+        Atoms of rings and rings linkers [without terminal atoms]
+        """
+        return tuple(self._skin_graph(self._bonds))
+
+    @cached_property
+    def skin_graph(self):
+        """
+        Graph without terminal atoms. Only rings and linkers
+        """
+        return FrozenDict((n, frozenset(ms)) for n, ms in self._skin_graph(self._bonds).items())
+
+    @staticmethod
+    def _skin_graph(bonds: Dict[int, Union[Set[int], Dict[int, Any]]]) -> Dict[int, Set[int]]:
+        """
+        Graph without terminal nodes. Only rings and linkers
+        """
+        bonds = {n: set(ms) for n, ms in bonds.items() if ms}
+        while True:  # skip not-cycle chains
+            try:
+                n = next(n for n, ms in bonds.items() if len(ms) <= 1)
+            except StopIteration:
+                break
+            for m in bonds.pop(n):
+                bonds[m].discard(n)
+        return bonds
+
+    @cached_property
+    def connected_rings(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        Rings groups with common atoms. E.g. naphthalene has two connected rings. Rings not atom ordered like sssr.
+        """
+        rings = self.sssr
+        if len(rings) <= 1:
+            return rings
+
+        rings = [set(r) for r in rings]
+        out = []
+        for i in range(len(rings)):
+            r = rings[i]
+            for x in rings[i + 1:]:
+                if not r.isdisjoint(x):
+                    x.update(r)
+                    break
+            else:  # isolated ring[s] found
+                out.append(tuple(r))
+        return tuple(out)
+
+    @cached_property
+    def ring_atoms(self):
+        """
+        Atoms in rings
+        """
+        return {x for x in self.sssr for x in x}
+
+    @cached_property
+    def rings_count(self):
+        """
+        SSSR rings count.
+        """
+        bonds = self._bonds
+        return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
+
+    @cached_property
+    def atoms_rings(self) -> Dict[int, Tuple[Tuple[int, ...]]]:
+        """
+        Dict of atoms rings which contains it.
+        """
+        rings = defaultdict(list)
+        for r in self.sssr:
+            for n in r:
+                rings[n].append(r)
+        return {n: tuple(rs) for n, rs in rings.items()}
+
+    @cached_property
+    def atoms_rings_sizes(self) -> Dict[int, Tuple[int, ...]]:
+        """
+        Sizes of rings containing atom.
+        """
+        return {n: tuple(len(r) for r in rs) for n, rs in self.atoms_rings.items()}
+
+    def _augmented_substructure(self, atoms, deep):
+        atoms = set(atoms)
+        bonds = self._bonds
+        if atoms - self._atoms.keys():
+            raise ValueError('invalid atom numbers')
+        nodes = [atoms]
+        for i in range(deep):
+            n = {y for x in nodes[-1] for y in bonds[x]} | nodes[-1]
+            if n in nodes:
+                break
+            nodes.append(n)
+        return nodes
+
+
+__all__ = ['GraphComponents']
