@@ -18,11 +18,15 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from itertools import chain, combinations, product
+from itertools import chain, combinations
 from logging import warning
 from operator import itemgetter
-from typing import Any, Dict, Set, Tuple, Union
+from typing import Any, Dict, Set, Tuple, Union, TYPE_CHECKING, Type, List
 from ..exceptions import ImplementationError
+
+
+if TYPE_CHECKING:
+    from CGRtools.containers.common import Graph
 
 
 class SSSR:
@@ -35,7 +39,7 @@ class SSSR:
     __slots__ = ()
 
     @cached_property
-    def sssr(self) -> Tuple[Tuple[int, ...], ...]:
+    def sssr(self: 'Graph') -> Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings.
 
@@ -46,112 +50,83 @@ class SSSR:
         return ()
 
     @classmethod
-    def _sssr(cls, bonds: Dict[int, Union[Set[int], Dict[int, Any]]], n_sssr: int) -> Tuple[Tuple[int, ...], ...]:
+    def _sssr(cls: Type[Union['Graph', 'SSSR']], bonds: Dict[int, Union[Set[int], Dict[int, Any]]], n_sssr: int) -> \
+            Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings of any adjacency matrix.
         Number of rings required.
         """
         bonds = cls._skin_graph(bonds)
-        edges = cls.__bfs(bonds)
-        pid1, pid2, dist = cls.__make_pid(edges)
+        paths = cls.__bfs(bonds)
+        pid1, pid2, dist = cls.__make_pid(paths)
         return cls.__rings_filter(cls.__c_set(pid1, pid2, dist), n_sssr, bonds)
 
     @staticmethod
     def __bfs(bonds):
         atoms = set(bonds)
-        terminated = {}
+        terminated = []
         tail = atoms.pop()
-        next_stack = {x: [(tail, x)] for x in bonds[tail] & atoms}
+        next_stack = {x: [tail, x] for x in bonds[tail]}
 
         while True:
             next_front = set()
             found_odd = set()
             stack, next_stack = next_stack, {}
-            while stack:
-                kk = list(stack.keys())
-                tail = kk.pop(0)
-                broom = stack.pop(tail)
+            for tail, path in stack.items():
+                neighbors = bonds[tail] & atoms
                 next_front.add(tail)
-                _neighbors = bonds[tail]
-                neighbors = _neighbors & atoms
-                if len(_neighbors) > 2:
-                    if tail not in terminated:
-                        terminated[tail] = broom
-                    else:
-                        for br in broom:
-                            if br not in terminated[tail]:
-                                terminated[tail].append(br)
-                    broom = [(broom[0][-1], )]
-                    for n in neighbors:
-                        if n in found_odd:
-                            continue
-                        next_broom = [(*path, n) for path in broom]
-                        if n in stack:  # odd rings
-                            found_odd.add(tail)
-                            if n in next_stack:
-                                next_stack[n].extend(next_broom)
-                            else:
-                                stack[n].extend(next_broom)  # not visited
-                                terminated[n] = stack[n]
-                        elif n in next_stack:  # even rings
-                            next_stack[n].extend(next_broom)
-                            if n not in terminated:
-                                terminated[n] = next_stack[n]
-                        else:
-                            next_stack[n] = next_broom
 
-                elif len(neighbors) == 1:
+                if len(neighbors) == 1:
                     n = neighbors.pop()
                     if n in found_odd:
-                        continue
-                    next_broom = [(*path, n) for path in broom]
-                    if n in stack:  # odd rings
-                        found_odd.add(tail)
-                        if n in next_stack:
-                            next_stack[n].extend(next_broom)
-                        else:
-                            stack[n].extend(next_broom)  # not visited
-                            terminated[n] = stack[n]
-                    elif n in next_stack:  # even rings
-                        next_stack[n].extend(next_broom)
-                        if n not in terminated:
-                            terminated[n] = next_stack[n]
+                        if len(path) != 1:
+                            terminated.append(tuple(path))  # save second ring closure
+                        next_stack[n] = [n]  # maybe we have another path?
                     else:
-                        next_stack[n] = next_broom
-                elif neighbors:
-                    broom = [(broom[0][-1], )]
-                    for n in neighbors:
-                        if n in found_odd:
-                            continue
-                        next_broom = [(*path, n) for path in broom]
+                        path.append(n)
                         if n in stack:  # odd rings
                             found_odd.add(tail)
-                            if n in next_stack:
-                                next_stack[n].extend(next_broom)
-                            else:
-                                stack[n].extend(next_broom)  # not visited
-                                terminated[n] = stack[n]
+                            terminated.append(tuple(path))  # found ring closure. save path.
                         elif n in next_stack:  # even rings
-                            next_stack[n].extend(next_broom)
-                            if n not in terminated:
-                                terminated[n] = next_stack[n]
+                            terminated.append(tuple(path))
+                            if len(next_stack[n]) != 1:  # prevent bicycle case
+                                terminated.append(tuple(next_stack[n]))
+                                next_stack[n] = [n]
                         else:
-                            next_stack[n] = next_broom
+                            next_stack[n] = path  # grow must go on
+                elif neighbors:
+                    if len(path) != 1:
+                        terminated.append(tuple(path))  # save path.
+                    for n in neighbors:
+                        if n in found_odd:
+                            next_stack[n] = [n]
+                        else:
+                            path = [tail, n]
+                            if n in stack:  # odd rings
+                                found_odd.add(tail)
+                                terminated.append(tuple(path))
+                            elif n in next_stack:  # even rings
+                                terminated.append(tuple(path))
+                                if len(next_stack[n]) != 1:  # prevent bicycle case
+                                    terminated.append(tuple(next_stack[n]))
+                                    next_stack[n] = [n]
+                            else:
+                                next_stack[n] = path
 
             atoms.difference_update(next_front)
             if not atoms:
                 break
             elif not next_stack:
                 tail = atoms.pop()
-                next_stack = {x: [(tail, x)] for x in bonds[tail] & atoms}
+                next_stack = {x: [tail, x] for x in bonds[tail] & atoms}
         return terminated
 
     @staticmethod
-    def __make_pid(bonds):
+    def __make_pid(paths: List[List[int]]):
         pid1 = defaultdict(lambda: defaultdict(dict))
         pid2 = defaultdict(lambda: defaultdict(dict))
         distances = defaultdict(lambda: defaultdict(lambda: 1e9))
-        chains = sorted([y for x in bonds.values() for y in x], key=len)
+        chains = sorted(paths, key=len)
         for c in chains:
             di = len(c) - 1
             n, m = c[0], c[-1]
