@@ -18,11 +18,15 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from itertools import chain, combinations, product
+from itertools import chain, combinations
 from logging import warning
 from operator import itemgetter
-from typing import Any, Dict, Set, Tuple, Union
+from typing import Any, Dict, Set, Tuple, Union, TYPE_CHECKING, Type, List
 from ..exceptions import ImplementationError
+
+
+if TYPE_CHECKING:
+    from CGRtools.containers.common import Graph
 
 
 class SSSR:
@@ -35,7 +39,7 @@ class SSSR:
     __slots__ = ()
 
     @cached_property
-    def sssr(self) -> Tuple[Tuple[int, ...], ...]:
+    def sssr(self: 'Graph') -> Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings.
 
@@ -46,38 +50,106 @@ class SSSR:
         return ()
 
     @classmethod
-    def _sssr(cls, bonds: Dict[int, Union[Set[int], Dict[int, Any]]], n_sssr: int) -> Tuple[Tuple[int, ...], ...]:
+    def _sssr(cls: Type[Union['Graph', 'SSSR']], bonds: Dict[int, Union[Set[int], Dict[int, Any]]], n_sssr: int) -> \
+            Tuple[Tuple[int, ...], ...]:
         """
         Smallest Set of Smallest Rings of any adjacency matrix.
         Number of rings required.
         """
         bonds = cls._skin_graph(bonds)
-        return cls.__rings_filter(cls.__c_set(*cls.__make_pid(bonds)), n_sssr, bonds)
+        paths = cls.__bfs(bonds)
+        pid1, pid2, dist = cls.__make_pid(paths)
+        return cls.__rings_filter(cls.__c_set(pid1, pid2, dist), n_sssr, bonds)
 
     @staticmethod
-    def __make_pid(bonds):
-        lb = len(bonds)
+    def __bfs(bonds):
+        atoms = set(bonds)
+        terminated = []
+        tail = atoms.pop()
+        next_stack = {x: [tail, x] for x in bonds[tail]}
+
+        while True:
+            next_front = set()
+            found_odd = set()
+            stack, next_stack = next_stack, {}
+            for tail, path in stack.items():
+                neighbors = bonds[tail] & atoms
+                next_front.add(tail)
+
+                if len(neighbors) == 1:
+                    n = neighbors.pop()
+                    if n in found_odd:
+                        if len(path) != 1:
+                            terminated.append(tuple(path))  # save second ring closure
+                        next_stack[n] = [n]  # maybe we have another path?
+                    else:
+                        path.append(n)
+                        if n in stack:  # odd rings
+                            found_odd.add(tail)
+                            terminated.append(tuple(path))  # found ring closure. save path.
+                        elif n in next_stack:  # even rings
+                            terminated.append(tuple(path))
+                            if len(next_stack[n]) != 1:  # prevent bicycle case
+                                terminated.append(tuple(next_stack[n]))
+                                next_stack[n] = [n]
+                        else:
+                            next_stack[n] = path  # grow must go on
+                elif neighbors:
+                    if len(path) != 1:
+                        terminated.append(tuple(path))  # save path.
+                    for n in neighbors:
+                        if n in found_odd:
+                            next_stack[n] = [n]
+                        else:
+                            path = [tail, n]
+                            if n in stack:  # odd rings
+                                found_odd.add(tail)
+                                terminated.append(tuple(path))
+                            elif n in next_stack:  # even rings
+                                terminated.append(tuple(path))
+                                if len(next_stack[n]) != 1:  # prevent bicycle case
+                                    terminated.append(tuple(next_stack[n]))
+                                    next_stack[n] = [n]
+                            else:
+                                next_stack[n] = path
+
+            atoms.difference_update(next_front)
+            if not atoms:
+                break
+            elif not next_stack:
+                tail = atoms.pop()
+                next_stack = {x: [tail, x] for x in bonds[tail] & atoms}
+        return terminated
+
+    @staticmethod
+    def __make_pid(paths: List[List[int]]):
         pid1 = defaultdict(lambda: defaultdict(dict))
         pid2 = defaultdict(lambda: defaultdict(dict))
-        distances = defaultdict(lambda: defaultdict(lambda: lb))
-        for n, ms in bonds.items():
-            dn = distances[n]
-            pn = pid1[n]
-            for m in ms:
-                pn[m][(m, n)] = (n, m)
-                dn[m] = 1
+        distances = defaultdict(lambda: defaultdict(lambda: 1e9))
+        chains = sorted(paths, key=len)
+        for c in chains:
+            di = len(c) - 1
+            n, m = c[0], c[-1]
+            nn, mm = c[1], c[-2]
+            if n in distances and m in distances[n] and distances[n][m] != di:
+                pid2[n][m][(nn, mm)] = c
+                pid2[m][n][(mm, nn)] = c[::-1]
+            else:
+                pid1[n][m][(nn, mm)] = c
+                pid1[m][n][(mm, nn)] = c[::-1]
+                distances[n][m] = distances[m][n] = di
 
-        for k in bonds:
+        for k in pid1:
             new_distances = defaultdict(dict)
             dk = distances[k]
             ndk = new_distances[k]
-            for i in bonds:
+            for i in pid1:
                 if i == k:
                     continue
                 di = distances[i]
                 ndi = new_distances[i]
                 ndk[i] = ndi[k] = di[k]
-                for j in bonds:
+                for j in pid1:
                     if j == k or j == i:
                         continue
                     ij = di[j]
@@ -85,20 +157,20 @@ class SSSR:
                     if ij - ikj == 1:  # A new shortest path == previous shortest path - 1
                         pid2[i][j] = pid1[i][j]
                         pid1[i][j] = {(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                      product(pid1[i][k].items(), pid1[k][j].items())}
+                                      zip(pid1[i][k].items(), pid1[k][j].items())}
                         ndi[j] = ikj
                     elif ij > ikj:  # A new shortest path
                         pid2[i][j] = {}
                         pid1[i][j] = {(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                      product(pid1[i][k].items(), pid1[k][j].items())}
+                                      zip(pid1[i][k].items(), pid1[k][j].items())}
                         ndi[j] = ikj
                     elif ij == ikj:  # Another shortest path
                         pid1[i][j].update({(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                           product(pid1[i][k].items(), pid1[k][j].items())})
+                                           zip(pid1[i][k].items(), pid1[k][j].items())})
                         ndi[j] = ij
                     elif ikj - ij == 1:  # Shortest+1 path
                         pid2[i][j].update({(ni, mj): ip[:-1] + jp for ((ni, _), ip), ((_, mj), jp) in
-                                           product(pid1[i][k].items(), pid1[k][j].items())})
+                                           zip(pid1[i][k].items(), pid1[k][j].items())})
                         ndi[j] = ij
                     else:
                         ndi[j] = ij
