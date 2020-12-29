@@ -87,8 +87,7 @@ General part
 
 * Install CGRtools library DEV version for features that are not well tested::
 
-    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
-
+    pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools
 
 **If you still have questions, please open issue within github.**
 
@@ -98,11 +97,6 @@ PACKAGING
 For wheel generation just type next command in source root::
 
     python setup.py bdist_wheel
-
-On Linux additionally do repairing of package::
-
-    pip install auditwheel
-    auditwheel repair dist/CGRtools-<version>-<python_version>-linux_x86_64.whl
 
 COPYRIGHT
 =========
