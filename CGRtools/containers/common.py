@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -257,8 +257,10 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
             # deep copy of bonds
             for n, m_bond in self._bonds.items():
+                n = mg(n, n)
                 hb[n] = hbn = {}
                 for m, bond in m_bond.items():
+                    m = mg(m, m)
                     if m in hb:  # bond partially exists. need back-connection.
                         hbn[m] = hb[m][n]
                     else:
