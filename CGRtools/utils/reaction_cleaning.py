@@ -18,52 +18,44 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from ..containers import ReactionContainer
+from ..exceptions import MappingError
 
 
-def remove_reagents(reaction, keep_reagents=False, cleaning=True, filter_rc=None):
+def remove_reagents(reaction, keep_reagents=False):
     """
     Preprocess reaction according to mapping, using the following idea: molecules(each separated graph) will be
     placed to reagents if it is not changed in the reaction (no bonds, charges reorders)
     """
     if not isinstance(reaction, ReactionContainer):
         raise TypeError('Reaction container only supported')
-    if cleaning:
-        try:  # just pass if any error in standardization for now
-            reaction.clean_isotopes()
-            reaction.clean_stereo()
-            reaction.canonicalize()
-        except:  # temporary fix
-            pass
-    try:  # check if CGR can be build, else return None instead of reaction
+    try:  # check if CGR can be build, else raise error
         cgr = ~reaction
     except ValueError:
-        return None
+        raise ValueError('Problem with CGR construction')
     if cgr.center_atoms:
-        active = set()
-        for n, i in enumerate(cgr.split()):
-            active.update(i.center_atoms)
+        active = set(cgr.center_atoms)
         reactants = []
         products = []
         reagents = set()
         for i in reaction.reactants:
-            if set(i).intersection(active):
+            if not active.isdisjoint(i):
                 reactants.append(i)
             else:
                 reagents.add(i)
         for i in reaction.products:
-            if set(i).intersection(active):
+            if not active.isdisjoint(i):
                 products.append(i)
             else:
                 reagents.add(i)
         if keep_reagents:
-            reaction = ReactionContainer(reactants=reactants, reagents=reagents,
+            reaction = ReactionContainer(reactants=reactants, reagents=reaction.reagents+tuple(reagents),
                                          products=products, meta=reaction.meta)
+            return reaction
         else:
             reaction = ReactionContainer(reactants=reactants,
                                          products=products, meta=reaction.meta)
-        if not filter_rc:
             return reaction
-        elif filter_rc and len(reaction.centers_list) > filter_rc:
-            return reaction
-    return None
+    raise MappingError("Reaction center is absent according to mapping")
 
+
+__all__ = ['remove_reagents']
