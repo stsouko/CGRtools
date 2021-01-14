@@ -18,10 +18,9 @@
 #
 from importlib.util import find_spec
 from .functional_groups import functional_groups
-from .reaction_cleaning import remove_reagents
 
 
-__all__ = ['functional_groups', 'remove_reagents']
+__all__ = ['functional_groups']
 
 
 if find_spec('rdkit'):
