@@ -212,28 +212,28 @@ class ReactionComponents:
         Preprocess reaction according to mapping, using the following idea: molecules(each separated graph) will be
         placed to reagents if it is not changed in the reaction (no bonds, charges reorders)
         """
-        cgr = ~self.reaction
+        cgr = ~self
         if cgr.center_atoms:
             active = set(cgr.center_atoms)
             reactants = []
             products = []
             reagents = set()
-            for i in self.reaction.reactants:
+            for i in self.reactants:
                 if not active.isdisjoint(i):
                     reactants.append(i)
                 else:
                     reagents.add(i)
-            for i in self.reaction.products:
+            for i in self.products:
                 if not active.isdisjoint(i):
                     products.append(i)
                 else:
                     reagents.add(i)
             if keep_reagents:
-                reagents = self.reaction.reagents + tuple(reagents)
+                reagents = self.reagents + tuple(reagents)
             else:
                 reagents = ()
             return ReactionContainer(reactants=reactants, reagents=reagents,
-                                     products=products, meta=self.reaction.meta)
+                                     products=products, meta=self.meta)
         raise MappingError("Reaction center is absent according to mapping")
 
 
