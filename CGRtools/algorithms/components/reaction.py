@@ -22,6 +22,7 @@ from collections import ChainMap
 from itertools import chain, product
 from typing import Tuple, Iterator, TYPE_CHECKING
 from ...containers import molecule  # cyclic imports resolve
+from ...exceptions import MappingError
 
 
 if TYPE_CHECKING:
@@ -206,6 +207,40 @@ class ReactionComponents:
             cp = self.copy()
             cp.meta.clear()
             yield cp
+
+    def remove_reagents(self, keep_reagents=False):
+        """
+        Preprocess reaction according to mapping, using the following idea: molecules(each separated graph) will be
+        placed to reagents if it is not changed in the reaction (no bonds, charges reorders)
+        """
+        cgr = ~self
+        if cgr.center_atoms:
+            active = set(cgr.center_atoms)
+            reactants = []
+            products = []
+            reagents = set(self.reagents)
+            for i in self.reactants:
+                if not active.isdisjoint(i):
+                    reactants.append(i)
+                else:
+                    reagents.add(i)
+            for i in self.products:
+                if not active.isdisjoint(i):
+                    products.append(i)
+                else:
+                    reagents.add(i)
+            if keep_reagents:
+                tmp = []
+                for m in self.reagents:
+                    if m in reagents:
+                        tmp.append(m)
+                        reagents.discard(m)
+                tmp.extend(reagents)
+                reagents = tmp
+            else:
+                reagents = ()
+            return self.__class__(reactants, products, reagents, self.meta)
+        raise MappingError("Reaction center is absent according to mapping")
 
 
 __all__ = ['ReactionComponents']
