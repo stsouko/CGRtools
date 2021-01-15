@@ -19,20 +19,9 @@
 #
 from distutils.command.sdist import sdist
 from distutils.util import get_platform
+from importlib.util import find_spec
 from pathlib import Path
 from setuptools import setup
-from wheel.bdist_wheel import bdist_wheel
-
-
-class _bdist_wheel(bdist_wheel):
-    def finalize_options(self):
-        super().finalize_options()
-        self.root_is_pure = False
-        platform = get_platform()
-        if platform == 'win-amd64':
-            self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll']))
-        elif platform == 'linux-x86_64':
-            self.distribution.data_files.append(('lib', ['INCHI/libinchi.so']))
 
 
 class _sdist(sdist):
@@ -41,9 +30,28 @@ class _sdist(sdist):
         self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'INCHI/libinchi.dll']))
 
 
+cmd_class = {'sdist': _sdist}
+
+
+if find_spec('wheel'):
+    from wheel.bdist_wheel import bdist_wheel
+
+    class _bdist_wheel(bdist_wheel):
+        def finalize_options(self):
+            super().finalize_options()
+            self.root_is_pure = False
+            platform = get_platform()
+            if platform == 'win-amd64':
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll']))
+            elif platform == 'linux-x86_64':
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.so']))
+
+    cmd_class['bdist_wheel'] = _bdist_wheel
+
+
 setup(
     name='CGRtools',
-    version='4.1.6',
+    version='4.1.7',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.containers',
               'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',
               'CGRtools.utils', 'CGRtools.attributes'],
@@ -52,7 +60,7 @@ setup(
     author='Dr. Ramil Nugmanov',
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.0',
-    cmdclass={'bdist_wheel': _bdist_wheel, 'sdist': _sdist},
+    cmdclass=cmd_class,
     install_requires=['CachedMethods>=0.1.4,<0.2'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['numpy>=1.18'], 'clean2djit': ['numpy>=1.18', 'numba>=0.50']},
     data_files=[],
