@@ -24,6 +24,7 @@ from typing import Tuple, Iterator, TYPE_CHECKING
 from ...containers import molecule  # cyclic imports resolve
 from ...exceptions import MappingError
 
+
 if TYPE_CHECKING:
     from CGRtools import ReactionContainer
 
