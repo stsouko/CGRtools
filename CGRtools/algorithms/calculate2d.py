@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019, 2020 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -22,6 +22,8 @@ from importlib.util import find_spec
 from itertools import combinations
 from math import sqrt, pi, atan2, cos, sin
 from random import uniform
+from ..containers import molecule
+
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, zeros, uint16, zeros_like, empty
@@ -475,6 +477,58 @@ class Calculate2D:
                 for i, n in enumerate(component):
                     plane[n] = tuple(xy[i])
         self.__dict__.pop('__cached_method__repr_svg_', None)
+
+    def _fix_plane_mean(self, shift_x, shift_y=0, component=None):
+        plane = self._plane
+        if component is None:
+            component = plane
+
+        left_atom = min(component, key=lambda x: plane[x][0])
+        right_atom = max(component, key=lambda x: plane[x][0])
+
+        min_x = plane[left_atom][0] - shift_x
+        if len(self._atoms[left_atom].atomic_symbol) == 2:
+            min_x -= .2
+
+        max_x = plane[right_atom][0] - min_x
+        min_y = min(plane[x][1] for x in component)
+        max_y = max(plane[x][1] for x in component)
+        mean_y = (max_y + min_y) / 2 - shift_y
+        for n in component:
+            x, y = plane[n]
+            plane[n] = (x - min_x, y - mean_y)
+
+        if isinstance(self, molecule.MoleculeContainer):
+            if -.18 <= plane[right_atom][1] <= .18:
+                factor = self._hydrogens[right_atom]
+                if factor == 1:
+                    max_x += .15
+                elif factor:
+                    max_x += .25
+        return max_x
+
+    def _fix_plane_min(self, shift_x, shift_y=0, component=None):
+        plane = self._plane
+        if component is None:
+            component = plane
+
+        right_atom = max(component, key=lambda x: plane[x][0])
+        min_x = min(plane[x][0] for x in component) - shift_x
+        max_x = plane[right_atom][0] - min_x
+        min_y = min(plane[x][1] for x in component) - shift_y
+
+        for n in component:
+            x, y = plane[n]
+            plane[n] = (x - min_x, y - min_y)
+
+        if isinstance(self, molecule.MoleculeContainer):
+            if shift_y - .18 <= plane[right_atom][1] <= shift_y + .18:
+                factor = self._hydrogens[right_atom]
+                if factor == 1:
+                    max_x += .15
+                elif factor:
+                    max_x += .25
+        return max_x
 
 
 class Calculate2DMolecule(Calculate2D):
