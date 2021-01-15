@@ -21,7 +21,7 @@ from CachedMethods import cached_property
 from collections import ChainMap
 from itertools import chain, product
 from typing import Tuple, Iterator, TYPE_CHECKING
-from ...containers import molecule, ReactionContainer   # cyclic imports resolve
+from ...containers import molecule  # cyclic imports resolve
 from ...exceptions import MappingError
 
 if TYPE_CHECKING:
@@ -217,7 +217,7 @@ class ReactionComponents:
             active = set(cgr.center_atoms)
             reactants = []
             products = []
-            reagents = set()
+            reagents = set(self.reagents)
             for i in self.reactants:
                 if not active.isdisjoint(i):
                     reactants.append(i)
@@ -229,11 +229,16 @@ class ReactionComponents:
                 else:
                     reagents.add(i)
             if keep_reagents:
-                reagents = self.reagents + tuple(reagents)
+                tmp = []
+                for m in self.reagents:
+                    if m in reagents:
+                        tmp.append(m)
+                        reagents.discard(m)
+                tmp.extend(reagents)
+                reagents = tmp
             else:
                 reagents = ()
-            return ReactionContainer(reactants=reactants, reagents=reagents,
-                                     products=products, meta=self.meta)
+            return self.__class__(reactants, products, reagents, self.meta)
         raise MappingError("Reaction center is absent according to mapping")
 
 
