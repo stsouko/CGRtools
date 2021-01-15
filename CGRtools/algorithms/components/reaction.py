@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2020 Ravil Mukhametgaleev <sonic-mc@mail.ru>
+#  Copyright 2021 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -113,7 +114,7 @@ class ReactionComponents:
             out.append(tuple(fe))
         return tuple(out)
 
-    def enumerate_centers(self) -> Iterator['ReactionContainer']:
+    def enumerate_centers(self: 'ReactionContainer') -> Iterator['ReactionContainer']:
         """
         Get all possible single stage reactions from multistage.
         Note multicomponent molecules (salts etc) can be treated incorrectly.
@@ -208,7 +209,7 @@ class ReactionComponents:
             cp.meta.clear()
             yield cp
 
-    def remove_reagents(self, keep_reagents=False):
+    def remove_reagents(self: 'ReactionContainer', *, keep_reagents: bool = False):
         """
         Preprocess reaction according to mapping, using the following idea: molecules(each separated graph) will be
         placed to reagents if it is not changed in the reaction (no bonds, charges reorders)
@@ -236,10 +237,14 @@ class ReactionComponents:
                         tmp.append(m)
                         reagents.discard(m)
                 tmp.extend(reagents)
-                reagents = tmp
+                reagents = tuple(tmp)
             else:
                 reagents = ()
-            return self.__class__(reactants, products, reagents, self.meta)
+            self._ReactionContainer__reactants = tuple(reactants)
+            self._ReactionContainer__products = tuple(products)
+            self._ReactionContainer__reagents = reagents
+            self.flush_cache()
+            self.fix_positions()
         raise MappingError("Reaction center is absent according to mapping")
 
 
