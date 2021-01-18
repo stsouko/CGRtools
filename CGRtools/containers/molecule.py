@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -258,6 +258,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._hybridizations = {n: (sh[n],) for n in atoms}
             sub._hydrogens = {n: () if shg[n] is None else (shg[n],) for n in atoms}
             sub._rings_sizes = {n: rs.get(n, ()) for n in atoms}
+            sub._heteroatoms = {n: () for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
 
