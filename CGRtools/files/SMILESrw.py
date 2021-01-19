@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Artem Mukanov <nostro32@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -254,7 +254,7 @@ class SMILESRead(CGRRead):
                 self._info(f'line: {smi}\nconsist errors:\n{format_exc()}')
                 return meta
 
-            record['meta'] = meta
+            record['meta'].update(meta)
             try:
                 container = self._convert_structure(record)
             except ValueError:
@@ -728,7 +728,7 @@ class SMILESRead(CGRRead):
 
         stereo_bonds = {n: ms for n, ms in stereo_bonds.items() if len(ms) == 1 or len(ms) == set(ms.values())}
         mol = {'atoms': atoms, 'bonds': bonds, 'order': order,
-               'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens}
+               'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens, 'meta': {}}
         if cgr or any(x == 11 for x in atoms_types):
             mol['cgr'] = cgr
         return mol

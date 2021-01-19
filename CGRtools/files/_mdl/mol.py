@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -57,7 +57,7 @@ class MOLRead:
 
     def getvalue(self):
         if self.__mend:
-            mol = {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo}
+            mol = {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': {}}
             if self.__cgr:
                 mol['cgr'] = self.__cgr
             if self.__query:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -83,7 +83,8 @@ class RXNRead:
         if self.__rend:
             return {'reactants': self.__molecules[:self.__reactants_count],
                     'products': self.__molecules[self.__reactants_count:self.__products_count],
-                    'reagents': self.__molecules[self.__products_count:self.__reagents_count]}
+                    'reagents': self.__molecules[self.__products_count:self.__reagents_count],
+                    'meta': {}}
         raise ValueError('reaction not complete')
 
     __parser = None

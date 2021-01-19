@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -90,7 +90,7 @@ class ERXNRead:
 
     def getvalue(self):
         if self.__rend:
-            return {'reactants': self.__reactants, 'products': self.__products, 'reagents': self.__reagents}
+            return {'reactants': self.__reactants, 'products': self.__products, 'reagents': self.__reagents, 'meta': {}}
         raise ValueError('reaction not complete')
 
     __parser_group = __parser = None

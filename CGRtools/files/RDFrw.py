@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Dinar Batyrshin <batyrshin-dinar@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -164,7 +164,7 @@ class RDFRead(MDLRead):
                     self._flush_log()
             elif line.startswith('$RFMT'):
                 if record:
-                    record['meta'] = self._prepare_meta(meta)
+                    record['meta'].update(self._prepare_meta(meta))
                     if title:
                         record['title'] = title
                     try:
@@ -200,7 +200,7 @@ class RDFRead(MDLRead):
                 meta = defaultdict(list)
             elif line.startswith('$MFMT'):
                 if record:
-                    record['meta'] = self._prepare_meta(meta)
+                    record['meta'].update(self._prepare_meta(meta))
                     if title:
                         record['title'] = title
                     try:
@@ -270,7 +270,7 @@ class RDFRead(MDLRead):
                         self.__already_seeked = False
                     self._flush_log()
         if record:
-            record['meta'] = self._prepare_meta(meta)
+            record['meta'].update(self._prepare_meta(meta))
             if title:
                 record['title'] = title
             try:

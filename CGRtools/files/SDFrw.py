@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -147,7 +147,7 @@ class SDFRead(MDLRead):
                     self._flush_log()
             elif line.startswith("$$$$"):
                 if record:
-                    record['meta'] = self._prepare_meta(meta)
+                    record['meta'].update(self._prepare_meta(meta))
                     if title:
                         record['title'] = title
                     try:
@@ -220,7 +220,7 @@ class SDFRead(MDLRead):
                     self._flush_log()
 
         if record:  # True for MOL file only.
-            record['meta'] = self._prepare_meta(meta)
+            record['meta'].update(self._prepare_meta(meta))
             if title:
                 record['title'] = title
             try:

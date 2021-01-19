@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -26,6 +26,7 @@ class EMOLRead:
         self.__bonds = []
         self.__atom_map = {}
         self.__stereo = []
+        self.__meta = {}
         if log_buffer is None:
             log_buffer = []
         self.__log_buffer = log_buffer
@@ -33,7 +34,7 @@ class EMOLRead:
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo}
+        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': self.__meta}
 
     def __call__(self, line, lineu=None):
         if lineu is None:
@@ -73,12 +74,17 @@ class EMOLRead:
                     raise ValueError('invalid CTAB')
 
             else:  # M  V30 COUNTS line expected
-                a, b, *_ = line[13:].split()
+                a, b, *meta = line[13:].split()
                 atom_count = int(a)
                 if not atom_count:
                     raise EmptyMolecule
                 self.__bonds_count = int(b)
                 self.__atoms_count = atom_count
+                for kv in meta:
+                    if '=' in kv:
+                        k, v = kv.split('=', 1)
+                        if k and v:
+                            self.__meta[k] = v
 
         elif self.__in_mol is not None:
             raise SyntaxError('invalid usage')

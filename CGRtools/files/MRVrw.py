@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -146,7 +146,7 @@ class MRVRead(MDLStereo):
                     self._info(f'record consist errors:\n{format_exc()}')
                     yield parse_error(n, parsed, self._format_log(), meta)
                 else:
-                    record['meta'] = meta
+                    record['meta'].update(meta)
                     try:
                         container = self._convert_structure(record)
                     except ValueError:
@@ -302,7 +302,7 @@ class MRVRead(MDLStereo):
                         self._info('incorrect bondStereo tag')
                 bonds.append((atom_map[a1], atom_map[a2], order))
 
-        mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo}
+        mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo, 'meta': {}}
         if '@title' in data:
             mol['title'] = data['@title']
         return mol

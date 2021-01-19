@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -117,6 +117,7 @@ class CGRRead:
                 remapped = {x: y for x, y in enumerate(tmp[shift: atom_len + shift])}
                 shift += atom_len
                 g = self.__prepare_structure(j, remapped)
+                g.meta.update(j['meta'])
                 rc[i].append(g)
         return ReactionContainer(meta=reaction['meta'], name=reaction.get('title'), **rc)
 
