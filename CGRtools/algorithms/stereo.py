@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -714,6 +714,10 @@ class MoleculeStereo(Stereo):
     def _chiral_allenes(self) -> Set[int]:
         return self.__chiral_centers[2]
 
+    @property
+    def _chiral_morgan(self) -> Dict[int, int]:
+        return self.__chiral_centers[3]
+
     @cached_property
     def _stereo_axises(self: 'MoleculeContainer') -> Tuple[Tuple[Tuple[int, ...], ...], Tuple[Tuple[int, ...], ...]]:
         """
@@ -974,7 +978,7 @@ class MoleculeStereo(Stereo):
                 morgan = self._morgan({**morgan, **morgan_update})
                 morgan_update = {}
             else:
-                return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}
+                return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}, morgan
 
 
 class QueryStereo(Stereo):  # todo: implement add_wedge

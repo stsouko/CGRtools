@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -47,7 +47,7 @@ class Smiles:
 
     @cached_method
     def __str__(self):
-        return ''.join(self._smiles(self.atoms_order.get))
+        return ''.join(self._smiles(self._smiles_order))
 
     def __format__(self, format_spec):
         """
@@ -58,12 +58,13 @@ class Smiles:
             !s - Disable stereo marks.
             !h - Disable hybridization marks in queries. Returns non-unique signature.
             !n - Disable neighbors marks in queries. Returns non-unique signature.
-            !g - Disable hydrogens marks in queries. Returns non-unique signature.
-            !c - Disable rings marks in queries. Returns non-unique signature.
-            !w - Disable heteroatoms marks in queries. Returns non-unique signature.
-            t - Use aromatic bonds instead aromatic atoms.
+            !H - Disable hydrogens marks in queries. Returns non-unique signature.
+            !R - Disable rings marks in queries. Returns non-unique signature.
+            !t - Disable heteroatoms marks in queries. Returns non-unique signature.
+            A - Use aromatic bonds instead aromatic atoms.
             m - Set atom mapping.
             r - Generate random-ordered smiles.
+            o - Old canonic ordering algorithm.
 
             Combining possible. Order independent. Another keys ignored.
         """
@@ -77,21 +78,26 @@ class Smiles:
                 kwargs['hybridization'] = False
             if '!n' in format_spec:
                 kwargs['neighbors'] = False
-            if 't' in format_spec:
+            if 'A' in format_spec:
                 kwargs['aromatic'] = False
             if 'm' in format_spec:
                 kwargs['mapping'] = True
-            if '!g' in format_spec:
+            if '!H' in format_spec:
                 kwargs['hydrogens'] = False
-            if '!c' in format_spec:
+            if '!R' in format_spec:
                 kwargs['rings'] = False
-            if '!w' in format_spec:
+            if '!t' in format_spec:
                 kwargs['heteroatoms'] = False
             if 'r' in format_spec:
+                kwargs['random'] = True
+
                 def w(x):
                     return random()
-            else:
+            elif 'o' in format_spec:
+                kwargs['old_order'] = True
                 w = self.atoms_order.get
+            else:
+                w = self._smiles_order
             return ''.join(self._smiles(w, **kwargs))
         return str(self)
 
@@ -122,26 +128,37 @@ class Smiles:
 
         groups = defaultdict(int)
         for n in atoms_set:
-            groups[weights(n)] += 1
+            groups[weights(n)] -= 1
 
-        def mod_weights_start(x):
-            # precedence of:
-            lb = len(bonds[x])
-            if lb:
-                return (groups[weights(x)],  # rare groups
+        if kwargs.get('random', False):
+            mod_weights_start = mod_weights = weights
+        elif kwargs.get('old_order', False):
+            def mod_weights_start(x):
+                lb = len(bonds[x])
+                if lb:
+                    return (-groups[weights(x)],  # rare groups
+                            -lb,  # more neighbors
+                            lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                            weights(x))  # smallest weight
+                else:
+                    return -groups[weights(x)], weights(x)  # rare groups > smallest weight
+
+            def mod_weights(x):
+                lb = len(bonds[x])
+                return (-groups[weights(x)],  # rare groups
                         -lb,  # more neighbors
                         lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
+                        weights(x),  # smallest weight
+                        seen[x])  # BFS nearest to starting
+        else:
+            def mod_weights_start(x):
+                return (groups[weights(x)],  # common groups
                         weights(x))  # smallest weight
-            else:
-                return groups[weights(x)], weights(x)  # rare groups > smallest weight
 
-        def mod_weights(x):
-            lb = len(bonds[x])
-            return (groups[weights(x)],  # rare groups
-                    -lb,  # more neighbors
-                    lb / len({weights(x) for x in bonds[x]}),  # more unique neighbors
-                    weights(x),  # smallest weight
-                    seen[x])  # BFS nearest to starting
+            def mod_weights(x):
+                return (groups[weights(x)],  # common groups
+                        weights(x),  # smallest weight
+                        seen[x])  # BFS nearest to starting
 
         while True:
             start = min(atoms_set, key=mod_weights_start)
@@ -173,8 +190,9 @@ class Smiles:
                             front = bonds[child].keys() - {parent}
                             if front:
                                 stack.append((child, depth_now - 1, iter(sorted(front, key=mod_weights))))
-                    elif child not in disconnected:
-                        disconnected.add(parent)
+                    elif (child, parent) not in disconnected:
+                        disconnected.add((parent, child))
+                        disconnected.add((child, parent))
                         cycle = next(cycles)
                         tokens[parent].append((child, cycle))
                         tokens[child].append((parent, cycle))
@@ -259,6 +277,10 @@ class Smiles:
 
 class MoleculeSmiles(Smiles):
     __slots__ = ()
+
+    @property
+    def _smiles_order(self):
+        return self._chiral_morgan.__getitem__
 
     def _format_atom(self, n, adjacency, **kwargs):
         atom = self._atoms[n]
@@ -361,6 +383,10 @@ class MoleculeSmiles(Smiles):
 class CGRSmiles(Smiles):
     __slots__ = ()
 
+    @property
+    def _smiles_order(self):
+        return self.atoms_order.__getitem__
+
     def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
         charge = self._charges[n]
@@ -400,6 +426,10 @@ class CGRSmiles(Smiles):
 
 class QuerySmiles(Smiles):
     __slots__ = ()
+
+    @property
+    def _smiles_order(self):
+        return self.atoms_order.__getitem__
 
     def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
@@ -453,6 +483,10 @@ class QuerySmiles(Smiles):
 
 class QueryCGRSmiles(Smiles):
     __slots__ = ()
+
+    @property
+    def _smiles_order(self):
+        return self.atoms_order.__getitem__
 
     def _format_atom(self, n, **kwargs):
         atom = self._atoms[n]
