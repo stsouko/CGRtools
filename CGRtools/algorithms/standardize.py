@@ -20,7 +20,7 @@
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from itertools import count
-from typing import List, TYPE_CHECKING, Union
+from typing import List, TYPE_CHECKING, Union, Tuple
 from ..containers import query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..exceptions import ValenceError
@@ -34,23 +34,35 @@ if TYPE_CHECKING:
 class Standardize:
     __slots__ = ()
 
-    def canonicalize(self: 'MoleculeContainer') -> bool:
+    def canonicalize(self: 'MoleculeContainer', *,
+                     logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
+
+        :param logging: return log.
         """
         k = self.kekule()
-        s = self.standardize(fix_stereo=False)
+        s = self.standardize(fix_stereo=False, logging=logging)
         h = self.implicify_hydrogens(fix_stereo=False)
         t = self.thiele()
+        if logging:
+            if k:
+                s.insert(0, ((), -1, 'kekulized'))
+            if h:
+                s.append(((), -1, 'implicified'))
+            if t:
+                s.append(((), -1, 'aromatized'))
+            return s
         return k or s or h or t
 
-    def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> bool:
+    def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                    logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
         """
         Standardize functional groups. Return True if any non-canonical group found.
 
         :param logging: return list of fixed atoms with matched rules.
         """
-        neutralized = self.neutralize(fix_stereo=False)
+        neutralized = self.neutralize(fix_stereo=False, logging=logging)
         hs, log = self.__standardize()
         if hs:
             if not neutralized:
@@ -66,23 +78,26 @@ class Standardize:
                 self._fix_stereo()
             if logging:
                 if neutralized:
-                    log.append(((), -1, 'neutralized'))
+                    log.append((tuple(neutralized), -1, 'neutralized'))
                 return log
             return True
         if neutralized:
             if fix_stereo:
                 self._fix_stereo()
             if logging:
-                log.append(((), -1, 'neutralized'))
+                log.append((tuple(neutralized), -1, 'neutralized'))
                 return log
             return True
         if logging:
             return log
         return False
 
-    def neutralize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True) -> bool:
+    def neutralize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                   logging=False) -> Union[bool, List[int]]:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
+
+        :param logging: return list of changed atoms.
         """
         atoms = self._atoms
         charges = self._charges
@@ -130,7 +145,11 @@ class Standardize:
                 self._calc_hybridization(n)
             if fix_stereo:
                 self._fix_stereo()
+            if logging:
+                return list(hs)
             return True
+        if logging:
+            return []
         return False
 
     def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
@@ -1344,61 +1363,94 @@ class StandardizeReaction:
     __slots__ = ()
     __class_cache__ = {}
 
-    def canonicalize(self: 'ReactionContainer', fix_mapping: bool = True) -> bool:
+    def canonicalize(self: 'ReactionContainer', fix_mapping: bool = True, *,
+                     logging=False) -> Union[bool, Tuple[int, Tuple[int, ...], int, str]]:
         """
         Convert molecules to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         Works only for Molecules.
         Return True if in any molecule found not canonical group.
 
         :param fix_mapping: Search AAM errors of functional groups.
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.canonicalize() and not total:
-                total = True
+            out = m.canonicalize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, *x) for x in out)
+                else:
+                    total = True
 
         if fix_mapping and self.fix_mapping():
+            if logging:
+                total.append((-1, (), -1, 'mapping fixed'))
+                return total
             return True
 
         if total:
             self.flush_cache()
         return total
 
-    def standardize(self: 'ReactionContainer', fix_mapping: bool = True) -> bool:
+    def standardize(self: 'ReactionContainer', fix_mapping: bool = True, *,
+                    logging=False) -> Union[bool, Tuple[int, Tuple[int, ...], int, str]]:
         """
         Standardize functional groups. Works only for Molecules.
-        Return True if in any molecule found not canonical group.
 
         :param fix_mapping: Search AAM errors of functional groups.
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.standardize() and not total:
-                total = True
+            out = m.standardize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, *x) for x in out)
+                else:
+                    total = True
 
         if fix_mapping and self.fix_mapping():
+            if logging:
+                total.append((-1, (), -1, 'mapping fixed'))
+                return total
             return True
 
         if total:
             self.flush_cache()
         return total
 
-    def neutralize(self: 'ReactionContainer') -> bool:
+    def neutralize(self: 'ReactionContainer', *, logging=False) -> Union[bool, Tuple[int, Tuple[int, ...]]]:
         """
-        Transform biradical or dipole resonance structures into neutral form.
-        Works only for Molecules.
-        Return True if these groups found in any molecule.
+        Transform biradical or dipole resonance structures into neutral form. Works only for Molecules.
+
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.neutralize() and not total:
-                total = True
+            out = m.neutralize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, tuple(x)) for x in out)
+                else:
+                    total = True
         if total:
             self.flush_cache()
         return total
