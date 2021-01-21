@@ -1716,6 +1716,22 @@ class StandardizeReaction:
         self._signs = tuple(signs)
         self.flush_cache()
 
+    def check_valence(self: 'ReactionContainer') -> List[Tuple[int, Tuple[int, ...]]]:
+        """
+        Check valences of all atoms of all molecules.
+
+        Works only on molecules with aromatic rings in Kekule form.
+        :return: list of invalid molecules with invalid atoms lists
+        """
+        out = []
+        for n, m in enumerate(self.molecules()):
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            c = m.check_valence()
+            if c:
+                out.append((n, tuple(c)))
+        return out
+
     @class_cached_property
     def __standardize_compiled_rules(self):
         rules = []
