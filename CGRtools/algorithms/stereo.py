@@ -715,8 +715,10 @@ class MoleculeStereo(Stereo):
         return self.__chiral_centers[2]
 
     @property
-    def _chiral_morgan(self) -> Dict[int, int]:
-        return self.__chiral_centers[3]
+    def _chiral_morgan(self: Union['MoleculeContainer', 'MoleculeStereo']) -> Dict[int, int]:
+        if self._atoms_stereo or self._allenes_stereo or self._cis_trans_stereo:
+            return self.__chiral_centers[3]
+        return self.atoms_order
 
     @cached_property
     def _stereo_axises(self: 'MoleculeContainer') -> Tuple[Tuple[Tuple[int, ...], ...], Tuple[Tuple[int, ...], ...]]:
@@ -857,7 +859,7 @@ class MoleculeStereo(Stereo):
         return axises
 
     @cached_property
-    def __chiral_centers(self: 'MoleculeContainer'):
+    def __chiral_centers(self: Union['MoleculeContainer', 'MoleculeStereo']):
         atoms_stereo = self._atoms_stereo
         cis_trans_stereo = self._cis_trans_stereo
         allenes_stereo = self._allenes_stereo
