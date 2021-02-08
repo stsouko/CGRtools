@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,10 +18,9 @@
 #
 from CachedMethods import cached_property
 from collections import defaultdict
-from itertools import chain, combinations
-from logging import warning
+from itertools import combinations
 from operator import itemgetter
-from typing import Any, Dict, Set, Tuple, Union, TYPE_CHECKING, Type, List
+from typing import Any, Dict, Set, Tuple, Union, TYPE_CHECKING, Type, List, Optional
 from ..exceptions import ImplementationError
 
 
@@ -59,7 +58,7 @@ class SSSR:
         bonds = cls._skin_graph(bonds)
         paths = cls.__bfs(bonds)
         pid1, pid2, dist = cls.__make_pid(paths)
-        return cls.__rings_filter(cls.__c_set(pid1, pid2, dist), n_sssr, bonds)
+        return cls.__rings_filter(cls.__c_set(pid1, pid2, dist), n_sssr)
 
     @staticmethod
     def __bfs(bonds):
@@ -99,7 +98,11 @@ class SSSR:
                         terminated.append(tuple(path))  # save path.
                     for n in neighbors:
                         if n in found_odd:
-                            next_stack[n] = [n]
+                            if n in stack:
+                                if n in next_stack:
+                                    del next_stack[n]
+                            else:
+                                next_stack[n] = [n]
                         else:
                             path = [tail, n]
                             if n in stack:  # odd rings
@@ -177,8 +180,8 @@ class SSSR:
             distances = new_distances
         return pid1, pid2, distances
 
-    @staticmethod
-    def __c_set(pid1, pid2, pid1l):
+    @classmethod
+    def __c_set(cls, pid1, pid2, pid1l):
         c_set = []
         seen = set()
         for i, p1i in pid1.items():
@@ -207,126 +210,213 @@ class SSSR:
             if c_num % 2:  # odd rings
                 for c1 in p1ij:
                     for c2 in p2ij:
-                        yield c1 + c2[-2:0:-1]
+                        c = c1 + c2[-2:0:-1]
+                        if len(c) == len(set(c)):
+                            yield cls.__canonic_ring(c)
             else:
                 for c1, c2 in zip(p1ij, p1ij[1:]):
-                    yield c1 + c2[-2:0:-1]
+                    c = c1 + c2[-2:0:-1]
+                    if len(c) == len(set(c)):
+                        yield cls.__canonic_ring(c)
 
     @staticmethod
-    def __rings_filter(rings, n_sssr, bonds):
-        # step 1: collect isolated rings
+    def __canonic_ring(ring: Tuple[int, ...]) -> Tuple[int, ...]:
+        n = min(ring)
+        ndx = ring.index(n)
+        if ndx == 0:
+            if ring[-1] < ring[1]:
+                return n, *ring[:0:-1]
+            return ring
+        elif ndx == len(ring) - 1:
+            if ring[0] > ring[-2]:
+                return ring[::-1]
+            return n, *ring[:-1]
+        if ring[ndx + 1] > ring[ndx - 1]:
+            return *ring[ndx::-1], *ring[:ndx:-1]
+        return *ring[ndx:], *ring[:ndx]
+
+    @staticmethod
+    def __ring_scissors(ring: Tuple[int, ...], n: int, m: int) -> Tuple[int, ...]:
+        ndx = ring.index(n)
+        mdx = ring.index(m)
+        if ndx == 0:
+            if mdx == 1:
+                return n, *ring[:0:-1]
+            return ring
+        elif ndx == len(ring) - 1:
+            if mdx == 0:
+                return ring[::-1]
+            return n, *ring[:-1]
+        if ndx < mdx:
+            return *ring[ndx::-1], *ring[:ndx:-1]
+        return *ring[ndx:], *ring[:ndx]
+
+    @staticmethod
+    def __ring_adjacency(ring: Tuple[int, ...]) -> Dict[int, List[int]]:
+        adj = {ring[0]: [ring[-1]]}  # ring adjacency matrix
+        for n, m in zip(ring, ring[1:]):
+            adj[n].append(m)
+            adj[m] = [n]
+        adj[m].append(ring[0])
+        return adj
+
+    @classmethod
+    def __is_condensed_ring(cls, c, sssr, seen_rings):
+        # create graph of connected neighbour rings
+        ck = seen_rings[c]
+        neighbors = {x: set() for x in sssr if len(seen_rings[x].keys() & ck.keys()) > 1}
+        if len(neighbors) > 1:
+            for (i, iv), (j, jv) in combinations(neighbors.items(), 2):
+                if len(seen_rings[i].keys() & seen_rings[j].keys()) > 1:
+                    iv.add(j)
+                    jv.add(i)
+            # check if hold rings is combination of existing. (123654) is combo of (1254) and (2365)
+            #
+            # 1--2--3
+            # |  |  |
+            # 4--5--6
+            #
+            # modified NX.dfs_labeled_edges
+            # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.\
+            # traversal.depth_first_search.dfs_labeled_edges.html
+            depth_limit = len(neighbors) - 1
+            for start, nbrs in neighbors.items():
+                if not nbrs:
+                    continue
+                stack = [(start, seen_rings[start], depth_limit, iter(nbrs), {start})]
+                while stack:
+                    parent, p_adj, depth_now, children, seen = stack[-1]
+                    try:
+                        child = next(children)
+                    except StopIteration:
+                        stack.pop()
+                    else:
+                        if child not in seen:
+                            common = p_adj.keys() & seen_rings[child].keys()
+                            if len(common) > 2:  # only terminal common atoms required
+                                term = {n for n in common if len(common.intersection(p_adj[n])) == 1}
+                                if len(term) != 2:  # skip multiple contacts
+                                    continue
+                                common.difference_update(term)
+                                n, m = term
+                                mc = cls.__canonic_ring(
+                                        (*cls.__ring_scissors(tuple(x for x in parent if x not in common), n, m),
+                                         *cls.__ring_scissors(tuple(x for x in child if x not in common), m, n)[1:-1]))
+                            elif len(common) == 2:
+                                n, m = common
+                                mc = cls.__canonic_ring(
+                                        (*cls.__ring_scissors(parent, n, m),
+                                         *cls.__ring_scissors(child, m, n)[1:-1]))
+                            else:  # point connections
+                                continue
+                            if c == mc:  # macrocycle found
+                                return True
+                            elif depth_now and 2 < len(mc) <= len(c) + 1:
+                                stack.append((mc, cls.__ring_adjacency(mc), depth_now - 1, iter(neighbors[child]),
+                                              {child} | seen))
+        return False
+
+    @staticmethod
+    def __get_unique_chord(ring: Tuple[int, ...], common: Set[int]) -> Optional[Tuple[int, ...]]:
+        lc = len(common)
+        if len(ring) == lc:
+            if common == set(ring):
+                return ()
+        else:
+            if common == set(ring[:lc]):
+                return *ring[lc - 1:], ring[0]
+            for _ in range(len(ring) - 1):
+                ring = (*ring[1:], ring[0])
+                if common == set(ring[:lc]):
+                    return *ring[lc - 1:], ring[0]
+
+    @classmethod
+    def __connected_rings(cls, rings, seen_rings):
+        rings = rings.copy()
+        out = []
+        for i in range(len(rings)):
+            c = rings[i]
+            ck = seen_rings[c]
+            for j in range(i + 1, len(rings)):
+                r = rings[j]
+                rk = seen_rings[r]
+                common = rk.keys() & ck.keys()
+                if len(common) == 2:  # one common bond
+                    n, m = common
+                    if m in ck[n] and m in rk[n]:  # only common bond!
+                        c = cls.__canonic_ring((*cls.__ring_scissors(c, n, m), *cls.__ring_scissors(r, m, n)[1:-1]))
+                        ck = cls.__ring_adjacency(c)
+                        rings[j] = c
+                        seen_rings[c] = ck
+                        break
+                elif len(common) > 2:
+                    cc = cls.__get_unique_chord(c, common)
+                    if cc is None:  # skip multitouched rings
+                        continue
+                    r = cls.__get_unique_chord(r, common)
+                    if r is None:
+                        continue
+                    if cc:
+                        if r:
+                            if r[0] == cc[0]:
+                                r = r[::-1]
+                            c = cls.__canonic_ring((*cc, *r[1:-1]))
+                            ck = cls.__ring_adjacency(c)
+                            rings[j] = c
+                            seen_rings[c] = ck
+                            break
+                        else:
+                            c = cls.__canonic_ring(cc)
+                            ck = cls.__ring_adjacency(c)
+                            rings[j] = c
+                            seen_rings[c] = ck
+                            break
+                    else:
+                        c = cls.__canonic_ring(r)
+                        ck = cls.__ring_adjacency(c)
+                        rings[j] = c
+                        seen_rings[c] = ck
+                        break
+            else:  # isolated ring[s] found
+                out.append(c)
+        return out
+
+    @classmethod
+    def __rings_filter(cls, rings, n_sssr):
         c = next(rings)
         if n_sssr == 1:
             return c,
 
-        ck = frozenset(c)
-        seen_rings = {ck}
-        sssr = {ck: c}
-        condensed_rings = {ck}  # collection of contours of condensed rings
+        seen_rings = {c}
+        sssr_atoms = set(c)
+        sssr = [c]
         hold = []
         for c in rings:
-            ck = frozenset(c)
-            if len(ck) != len(c) or ck in seen_rings:
+            if c in seen_rings:
                 continue
-            seen_rings.add(ck)
+            seen_rings.add(c)
+            if sssr_atoms.issuperset(c):  # potentially condensed ring
+                hold.append(c)
+                continue
+            sssr_atoms.update(c)
+            sssr.append(c)
+            if len(sssr) == n_sssr:
+                return tuple(sssr)
 
-            # create graph of connected neighbour rings
-            neighbors = {x: set() for x in chain(sssr, condensed_rings) if len(x & ck) > 1}
-            if neighbors:
-                for i, j in combinations(neighbors, 2):
-                    if len(i & j) > 1:
-                        neighbors[i].add(j)
-                        neighbors[j].add(i)
-                # check if hold rings is combination of existing. (123654) is combo of (1254) and (2365)
-                #
-                # 1--2--3
-                # |  |  |
-                # 4--5--6
-                #
-                # modified NX.dfs_labeled_edges
-                # https://networkx.github.io/documentation/stable/reference/algorithms/generated/networkx.algorithms.\
-                # traversal.depth_first_search.dfs_labeled_edges.html
-                depth_limit = len(neighbors) - 1
-                for start, nbrs in neighbors.items():
-                    if not nbrs:
-                        continue
-                    stack = [(start, depth_limit, iter(neighbors[start]), {start})]
-                    while stack:
-                        parent, depth_now, children, seen = stack[-1]
-                        try:
-                            child = next(children)
-                        except StopIteration:
-                            stack.pop()
-                        else:
-                            if child not in seen:
-                                common = parent & child
-                                if len(common) > 2:  # only terminal common atoms required
-                                    mc = parent ^ child | {n for n in common if len(common.intersection(bonds[n])) == 1}
-                                else:  # neighbors at least have 2 common atoms
-                                    mc = parent | child
-                                if ck == mc:  # macrocycle found
-                                    break
-                                elif depth_now and 2 < len(mc) <= len(c):
-                                    stack.append((mc, depth_now - 1, iter(neighbors[child]), {child} | seen))
-                    else:
-                        continue
-                    break
-                else:
-                    # update condensed rings. need for cuban and fullerene like structures.
-                    tmp = set()
-                    ckc = ck
-                    for r in condensed_rings:
-                        common = r & ckc
-                        lc = len(common)
-                        if lc == 2:
-                            ckc |= r
-                        elif lc == len(ckc):
-                            unique = r - ckc
-                            ckc = unique | {n for n in common if not unique.isdisjoint(bonds[n])}
-                        # elif lc == len(r):  # impossible?
-                        #     ckc -= r
-                        elif lc > 2:
-                            ckc = r ^ ckc | {n for n in common if len(common.intersection(bonds[n])) == 1}
-                            while True:
-                                term = {n for n in ckc if len(ckc.intersection(bonds[n])) == 1}
-                                if not term:
-                                    break
-                                ckc -= term
-                        else:
-                            tmp.add(r)
-                    condensed_rings = tmp
+        # now we have set of plug rings (cuban fullerene), besiege rings and condensed trash
+        seen_rings = {c: cls.__ring_adjacency(c) for c in seen_rings}  # prepare adjacency
+        condensed_rings = cls.__connected_rings(sssr, seen_rings)  # collection of contours of condensed rings
 
-                    if ckc != ck and ckc in seen_rings:
-                        # check ring for full surrounding by other rings
-                        # reduced to existing ring. finish reached?
-                        neighbors = set()  # bonds of neighbors
-                        for r in sssr:
-                            if len(r & ck) > 1:
-                                for n in r:
-                                    for m in bonds[n]:
-                                        if m in r:
-                                            neighbors.add((n, m))
-                        if (c[0], c[-1]) in neighbors and all(x in neighbors for x in zip(c, c[1:])):
-                            condensed_rings.add(ck)  # add ring to condensed. required for combined rings detection.
-                            hold.append(c)
-                            continue
+        for c in hold:
+            if c in condensed_rings or cls.__is_condensed_ring(c, sssr, seen_rings):
+                continue
+            condensed_rings.insert(0, c)
+            condensed_rings = cls.__connected_rings(condensed_rings, seen_rings)
+            sssr.append(c)
+            if len(sssr) == n_sssr:
+                return tuple(sorted(sssr, key=len))
 
-                    condensed_rings.add(ckc)
-                    seen_rings.add(ckc)
-                    sssr[ck] = c
-                    if len(sssr) == n_sssr:
-                        return tuple(sssr.values())
-            else:
-                condensed_rings.add(ck)
-                sssr[ck] = c
-                if len(sssr) == n_sssr:
-                    return tuple(sssr.values())
-
-        if len(hold) < n_sssr - len(sssr):
-            raise ImplementationError
-        elif len(hold) > n_sssr - len(sssr):
-            warning('Number of closing rings more than SSSR count. Possible errors.')
-        return (*sssr.values(), *hold[:n_sssr - len(sssr)])
+        raise ImplementationError('SSSR count not reached')
 
 
 __all__ = ['SSSR']
