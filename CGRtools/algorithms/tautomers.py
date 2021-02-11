@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2020 Nail Samikaev <samikaevn@yandex.ru>
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -39,9 +39,8 @@ class Tautomers:
         Convert structure to canonical tautomeric form. Return True if structure changed.
         """
         def key(m):
-            r = sum(len(r) for r in m.sssr)  # more bigger rings is good
             a = len(m.aromatic_rings)  # more aromatics is good
-            return m.huckel_pi_electrons_energy - r - a
+            return m.huckel_pi_electrons_energy - a
 
         canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False,
                                              zwitter=zwitter, ring_chain=ring_chain, keto_enol=keto_enol), key=key)
@@ -200,7 +199,7 @@ class Tautomers:
         connected_components = [set(x) for x in self.connected_components]
 
         for q, t in chain(zip(self.__ring_rules, repeat(True)),
-                          zip(self.__chain_rules if full else self.__stripped_chain_rules, repeat(False))):
+                          zip(self.__chain_rules, repeat(False)) if full else ()):
             components, closures = q._compiled_query
             for candidate in connected_components:
                 for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate, atoms_order):
@@ -748,8 +747,21 @@ class Tautomers:
         return rules
 
     @class_cached_property
-    def __stripped_chain_rules(self):
+    def __chain_rules(self):
         rules = []  # connection, H-acceptor, H-donor
+
+        # [O,S,N:2]=[C:1]([C,H])[C:4][C:5][O,S,N;H:3]
+        q = query.QueryContainer()
+        q.add_atom('C', heteroatoms=1)  # entry
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=(1, 2), hybridization=2, heteroatoms=0)
+        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=1, heteroatoms=0)
+        q.add_atom('C', hybridization=1)
+        q.add_atom('C', hybridization=1)
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 4, 1)
+        q.add_bond(4, 5, 1)
+        q.add_bond(3, 5, 1)
+        rules.append(q)
 
         # [O,S,N:2]=[C:1]([C,H])[C:4]=,-[C:5]:,-[C;X4,a:6][O,S,N;H:3]
         q = query.QueryContainer()
@@ -799,27 +811,6 @@ class Tautomers:
         q.add_bond(6, 7, (1, 4))
         q.add_bond(3, 7, 1)
         rules.append(q)
-
-        return rules
-
-    @class_cached_property
-    def __chain_rules(self):
-        rules = []  # connection, H-acceptor, H-donor
-
-        # [O,S,N:2]=[C:1]([C,H])[C:4][C:5][O,S,N;H:3]
-        q = query.QueryContainer()
-        q.add_atom('C', heteroatoms=1)  # entry
-        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=(1, 2), hybridization=2, heteroatoms=0)
-        q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=1, heteroatoms=0)
-        q.add_atom('C', hybridization=1)
-        q.add_atom('C', hybridization=1)
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 4, 1)
-        q.add_bond(4, 5, 1)
-        q.add_bond(3, 5, 1)
-        rules.append(q)
-
-        rules.extend(self.__stripped_chain_rules)
 
         return rules
 
