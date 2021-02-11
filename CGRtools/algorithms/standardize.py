@@ -24,7 +24,7 @@ from typing import List, TYPE_CHECKING, Union, Tuple
 from ..containers import query  # cyclic imports resolve
 from ..containers.bonds import Bond
 from ..exceptions import ValenceError
-from ..periodictable import ListElement
+from ..periodictable import ListElement, H
 
 
 if TYPE_CHECKING:
@@ -238,27 +238,41 @@ class Standardize:
             self._fix_stereo()
         return len(to_remove)
 
-    def explicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True) -> int:
+    def explicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True, start_map=None, return_maps=False) -> int:
         """
         Add explicit hydrogens to atoms.
 
-        For Thiele forms of molecule causes invalidation of internal state.
-        Implicit hydrogens marks will not be set if atoms in aromatic rings.
-        Call `kekule()` and `thiele()` in sequence to fix marks.
-
         :return: number of added atoms
         """
+        hydrogens = self._hydrogens
         to_add = []
-        for n, h in self._hydrogens.items():
+        for n, h in hydrogens.items():
             try:
                 to_add.extend([n] * h)
             except TypeError:
                 raise ValenceError(f'atom {{{n}}} has valence error')
-        for n in to_add:
-            self.add_bond(n, self.add_atom('H'), 1)
-        if to_add and fix_stereo:
-            self._fix_stereo()
-        return len(to_add)
+
+        if return_maps:
+            log = []
+        if to_add:
+            bonds = self._bonds
+            m = start_map
+            for n in to_add:
+                m = self.add_atom(H(), _map=m)
+                bonds[n][m] = bonds[m][n] = Bond(1)
+                hydrogens[n] = 0
+                if return_maps:
+                    log.append((n, m))
+                m += 1
+
+            if fix_stereo:
+                self._fix_stereo()
+            if return_maps:
+                return log
+            return len(to_add)
+        if return_maps:
+            return log
+        return 0
 
     def check_valence(self: 'MoleculeContainer') -> List[int]:
         """
@@ -1604,10 +1618,45 @@ class StandardizeReaction:
         :return: number of added atoms
         """
         total = 0
+        start_map = 0
         for m in self.molecules():
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            total += m.explicify_hydrogens()
+            map = max(m, default=0)
+            if map > start_map:
+                start_map = map
+
+        mapping = defaultdict(list)
+        for m in self.reactants:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                for n, h in maps:
+                    mapping[n].append(h)
+                start_map = maps[-1][1]
+                total += len(maps)
+
+        for m in self.reagents:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                start_map = maps[-1][1]
+                total += len(maps)
+
+        for m in self.products:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                total += len(maps)
+                remap = {}
+                free = []
+                for n, h in maps:
+                    if n in mapping and mapping[n]:
+                        remap[h] = mapping[n].pop()
+                        free.append(h)
+                    elif free:
+                        remap[h] = start_map = free.pop(0)
+                    else:
+                        start_map = h
+                m.remap(remap)
+
         if total:
             self.flush_cache()
         return total
