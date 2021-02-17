@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -361,10 +361,19 @@ class Aromatize:
                 elif ab != 3:  # not pyridine oxyde
                     raise InvalidAromaticRing
             elif an == 8:  # furan
-                if ab == 2 and (ac == 0 and not radicals[n] or ac == 1 and radicals[n]):
-                    double_bonded.add(n)
+                if ab == 2:
+                    if ac == 0:
+                        if radicals[n]:
+                            raise InvalidAromaticRing('radical oxygen')
+                        double_bonded.add(n)
+                    elif ac == 1:
+                        if radicals[n]:  # furan cation-radical
+                            double_bonded.add(n)
+                        # pyrylium
+                    else:
+                        raise InvalidAromaticRing('invalid oxygen charge')
                 else:
-                    raise InvalidAromaticRing
+                    raise InvalidAromaticRing('Triple-bonded oxygen')
             elif an in (16, 34, 52):  # thiophene
                 if n not in double_bonded:  # not sulphoxyde or sulphone
                     if ab == 2:
