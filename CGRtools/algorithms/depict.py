@@ -396,13 +396,13 @@ class DepictMolecule(Depict):
                                          f'{t}</text>')
                 elif radicals[n]:
                     others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">↑</text>')
-                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                    mask['other'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
                                          f'↑</text>')
                 if atom.isotope:
                     t = atom.isotope
                     others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
                                   f'text-anchor="end">{t}</text>')
-                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                    mask['other'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
                                          f'text-anchor="end">{t}</text>')
 
                 svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
@@ -427,23 +427,23 @@ class DepictMolecule(Depict):
                     mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
                 svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
                            f'font-size="{font_size:.2f}">{symbol}{h}{span}</text>')
-                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                mask['symbols'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
                                        f'dy="{font4:.2f}">{symbol}{h}</text>')
                 if span:
-                    mask['span'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
+                    mask['span'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
                                         f'{symbol}{h}{span}</text>')
                 svg.append('    </g>')
 
                 if mapping:
                     maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" dy="{dy_m + font3:.2f}" '
                                 f'text-anchor="end">{n}</text>')
-                    mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
+                    mask['aam'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
                                        f'dy="{dy_m + font3:.2f}" text-anchor="end">{n}</text>')
 
             elif mapping:
                 maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
                             f'text-anchor="end">{n}</text>')
-                mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
+                mask['aam'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
                                    f'text-anchor="end">{n}</text>')
         if others:
             svg.append(f'    <g font-family="{config["other_font_style"]}" fill="{other_fill}" '
