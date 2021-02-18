@@ -77,13 +77,14 @@ General part
 
     pip install CGRTools[mrv]
 
-* Install CGRtools with structures `clean2d` support (optimized version) \[numba and numpy used\]::
-
-    pip install CGRtools[clean2djit]
-
-* Install CGRtools with structures `clean2d` support slow version \[without numba\]::
+* Install CGRtools with structures `clean2d` support (Note: install NodeJS into system)::
 
     pip install CGRtools[clean2d]
+
+
+* Install CGRtools with optimized XYZ parser::
+
+    pip install CGRtools[jit]
 
 * Install CGRtools library DEV version for features that are not well tested::
 
@@ -101,7 +102,7 @@ For wheel generation just type next command in source root::
 COPYRIGHT
 =========
 
-* 2014-2020 Ramil Nugmanov nougmanoff@protonmail.com main developer
+* 2014-2021 Ramil Nugmanov nougmanoff@protonmail.com main developer
 * 2014-2019 Timur Madzhidov tmadzhidov@gmail.com features and API discussion
 * 2014-2019 Alexandre Varnek varnek@unistra.fr base idea of CGR approach
 

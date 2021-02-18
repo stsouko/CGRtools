@@ -27,7 +27,8 @@ from setuptools import setup
 class _sdist(sdist):
     def finalize_options(self):
         super().finalize_options()
-        self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'INCHI/libinchi.dll']))
+        self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'INCHI/libinchi.dll',
+                                                     'clean2d/dist/clean2d.js']))
 
 
 cmd_class = {'sdist': _sdist}
@@ -42,16 +43,18 @@ if find_spec('wheel'):
             self.root_is_pure = False
             platform = get_platform()
             if platform == 'win-amd64':
-                self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll']))
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll', 'clean2d/dist/clean2d.js']))
             elif platform == 'linux-x86_64':
-                self.distribution.data_files.append(('lib', ['INCHI/libinchi.so']))
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'clean2d/dist/clean2d.js']))
+            else:
+                self.distribution.data_files.append(('lib', ['clean2d/dist/clean2d.js']))
 
     cmd_class['bdist_wheel'] = _bdist_wheel
 
 
 setup(
     name='CGRtools',
-    version='4.1.11',
+    version='4.1.12',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.containers',
               'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',
               'CGRtools.utils', 'CGRtools.attributes'],
@@ -59,10 +62,10 @@ setup(
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='nougmanoff@protonmail.com',
-    python_requires='>=3.6.0',
+    python_requires='>=3.7.0',
     cmdclass=cmd_class,
     install_requires=['CachedMethods>=0.1.4,<0.2'],
-    extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['numpy>=1.18'], 'clean2djit': ['numpy>=1.18', 'numba>=0.50']},
+    extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50']},
     data_files=[],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.rst').read_text(),
@@ -72,7 +75,6 @@ setup(
                  'Operating System :: OS Independent',
                  'Programming Language :: Python',
                  'Programming Language :: Python :: 3 :: Only',
-                 'Programming Language :: Python :: 3.6',
                  'Programming Language :: Python :: 3.7',
                  'Programming Language :: Python :: 3.8',
                  'Topic :: Scientific/Engineering',
