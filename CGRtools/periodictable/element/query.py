@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -147,6 +147,17 @@ class QueryElement(Query):
         except StopIteration:
             raise ValueError(f'QueryElement with number "{number}" not found')
         return element
+
+    @classmethod
+    def from_atom(cls, atom: Union['Element', 'QueryElement', 'AnyElement']) -> Union['QueryElement', 'AnyElement']:
+        """
+        get QueryElement or AnyElement object from Element object or copy of QueryElement or AnyElement
+        """
+        if isinstance(atom, Element):
+            return cls.from_atomic_number(atom.atomic_number)(atom.isotope)
+        elif not isinstance(atom, (QueryElement, AnyElement)):
+            raise TypeError('Element, QueryElement or AnyElement expected')
+        return atom.copy()
 
     @Core.charge.setter
     def charge(self, charge):
@@ -344,7 +355,7 @@ class ListElement(AnyElement):
         Detached from graph copy of element
         """
         copy = object.__new__(self.__class__)
-        copy._Core__isotope = self.__isotope
+        copy._Core__isotope = self._Core__isotope
         copy._elements = self._elements
         copy._numbers = self._numbers
         return copy

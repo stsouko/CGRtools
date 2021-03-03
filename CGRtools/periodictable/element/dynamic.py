@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Type
+from typing import Type, Union
 from .core import Core
+from .element import Element
 from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
@@ -114,6 +115,17 @@ class DynamicElement(Dynamic):
         except StopIteration:
             raise ValueError(f'DynamicElement with number "{number}" not found')
         return element
+
+    @classmethod
+    def from_atom(cls, atom: Union['Element', 'DynamicElement']) -> 'DynamicElement':
+        """
+        get DynamicElement object from Element object or copy of DynamicElement object
+        """
+        if isinstance(atom, Element):
+            return cls.from_atomic_number(atom.atomic_number)(atom.isotope)
+        elif not isinstance(atom, DynamicElement):
+            raise TypeError('Element or DynamicElement expected')
+        return atom.copy()
 
     @property
     def neighbors(self):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -19,6 +19,8 @@
 from typing import Tuple, Dict, Type, Union
 from .core import Core
 from .dynamic import Dynamic, DynamicElement
+from .element import Element
+from .query import QueryElement, AnyElement
 from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
@@ -129,6 +131,20 @@ class DynamicQueryElement(DynamicQuery):
         except StopIteration:
             raise ValueError(f'DynamicQueryElement with number "{number}" not found')
         return element
+
+    @classmethod
+    def from_atom(cls, atom: Union['Element', 'DynamicElement', 'DynamicQueryElement', 'DynamicAnyElement',
+                                   'QueryElement', 'AnyElement']) -> Union['DynamicQueryElement', 'DynamicAnyElement']:
+        """
+        get DynamicQueryElement or DynamicAnyElement object from Element or DynamicElement or QueryElement object or
+        copy of DynamicQueryElement or DynamicAnyElement
+        """
+        if isinstance(atom, (Element, DynamicElement, QueryElement, AnyElement)):
+            return cls.from_atomic_number(atom.atomic_number)(atom.isotope)
+        elif not isinstance(atom, (DynamicQueryElement, DynamicAnyElement)):
+            raise TypeError('Element, DynamicElement, DynamicQueryElement, DynamicAnyElement,'
+                            ' QueryElement or AnyElement expected')
+        return atom.copy()
 
     def __eq__(self, other):
         if isinstance(other, DynamicElement):

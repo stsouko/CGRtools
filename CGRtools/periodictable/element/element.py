@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -111,6 +111,15 @@ class Element(Core):
         except StopIteration:
             raise ValueError(f'Element with number "{number}" not found')
         return element
+
+    @classmethod
+    def from_atom(cls, atom: 'Element') -> 'Element':
+        """
+        get Element copy
+        """
+        if not isinstance(atom, Element):
+            raise TypeError('Element expected')
+        return atom.copy()
 
     def __eq__(self, other):
         """

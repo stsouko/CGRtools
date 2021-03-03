@@ -366,7 +366,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         sub._atoms = ca = {}
         for n in atoms:
             atom = sa[n]
-            atom = atom_type.from_atomic_number(atom.atomic_number)(atom.isotope)
+            atom = atom_type.from_atom(atom)
             ca[n] = atom
             atom._attach_to_graph(sub, n)
 
@@ -443,7 +443,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
 
         ua = u._atoms
         for n, atom in other._atoms.items():
-            atom = atom_type.from_atomic_number(atom.atomic_number)(atom.isotope)
+            atom = atom_type.from_atom(atom)
             ua[n] = atom
             atom._attach_to_graph(u, n)
 
