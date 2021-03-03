@@ -47,7 +47,10 @@ class Calculate2D:
             xn, yn = plane[n]
             xm, ym = plane[m]
             bonds.append(sqrt((xm - xn) ** 2 + (ym - yn) ** 2))
-        bond_reduce = sum(bonds) / len(bonds) / .825
+        if bonds:
+            bond_reduce = sum(bonds) / len(bonds) / .825
+        else:
+            bond_reduce = 1.
 
         self_plane = self._plane
         for n, (x, y) in plane.items():
