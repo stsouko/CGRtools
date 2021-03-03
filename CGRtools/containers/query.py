@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@ from typing import List, Tuple, Union, Dict
 from . import molecule  # cyclic imports resolve
 from .bonds import Bond, QueryBond
 from .common import Graph
-from ..algorithms.calculate2d import Calculate2DMolecule
+from ..algorithms.calculate2d import Calculate2DQuery
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
@@ -28,7 +28,7 @@ from ..algorithms.stereo import QueryStereo
 from ..periodictable import Element, QueryElement, AnyElement
 
 
-class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DMolecule):
+class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DQuery):
     __slots__ = ('_neighbors', '_hybridizations', '_atoms_stereo', '_cis_trans_stereo', '_allenes_stereo',
                  '_hydrogens', '_rings_sizes', '_heteroatoms')
 
@@ -236,7 +236,7 @@ class QueryContainer(QueryStereo, Graph, QuerySmiles, StructureComponents, Depic
         sub._rings_sizes = {n: srs[n] for n in atoms}
         sub._heteroatoms = {n: sha[n] for n in atoms}
 
-        lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
+        lost = sa.keys() - set(atoms)  # atoms not in substructure
         not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
         sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
         sub._allenes_stereo = {n: s for n, s in self._allenes_stereo.items() if

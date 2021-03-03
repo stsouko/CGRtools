@@ -119,17 +119,31 @@ class Calculate2DMolecule(Calculate2D):
         return ''.join(smiles), order
 
 
+class Calculate2DQuery(Calculate2D):
+    __slots__ = ()
+
+    def _clean2d_prepare(self):
+        radicals = self._radicals
+        self._radicals = {n: False for n in radicals}
+        try:
+            smiles, order = self._smiles(self._smiles_order, _return_order=True, stereo=False, hybridization=False,
+                                         neighbors=False, rings=False, hydrogens=False, heteroatoms=False)
+        except Exception:
+            raise
+        else:
+            return ''.join(smiles), order
+        finally:
+            self._radicals = radicals
+
+
 class Calculate2DCGR(Calculate2D):
     __slots__ = ()
 
     def _clean2d_prepare(self):
-        charges = self._charges
-        radicals = self._radicals
-
         mol = molecule.MoleculeContainer()
         for n, atom in self._atoms.items():
-            atom = Element.from_atomic_number(atom.atomic_number)(atom.isotope)
-            mol.add_atom(atom, n, charge=charges[n], is_radical=radicals[n], xy=(0., 0.))
+            atom = Element.from_atomic_number(atom.atomic_number or 6)()
+            mol.add_atom(atom, n)
         for n, m, bond in self.bonds():
             if bond.order == bond.p_order:
                 mol.add_bond(n, m, bond.order)
@@ -179,4 +193,4 @@ else:  # disable clean2d support
             raise NotImplemented('py-mini-racer required for clean2d')
 
 
-__all__ = ['Calculate2DMolecule', 'Calculate2DCGR']
+__all__ = ['Calculate2DMolecule', 'Calculate2DCGR', 'Calculate2DQuery']
