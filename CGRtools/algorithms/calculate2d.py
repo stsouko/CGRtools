@@ -36,6 +36,8 @@ class Calculate2D:
         """
         plane = {}
         smiles, order = self._clean2d_prepare()
+        if '\\' in smiles:
+            smiles = smiles.replace('\\', '\\\\')
         xy = ctx.eval(f'$.clean2d("{smiles}")')
 
         shift_x, shift_y = xy[0]

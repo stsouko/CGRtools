@@ -371,7 +371,7 @@ class SSSR:
                             rings[j] = c
                             seen_rings[c] = ck
                             break
-                    else:
+                    elif r:
                         c = cls.__canonic_ring(r)
                         ck = cls.__ring_adjacency(c)
                         rings[j] = c
