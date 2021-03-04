@@ -39,16 +39,20 @@ class BaseReactor:
             e = DynamicElement
 
         self.__to_delete = set(reactants).difference(products) if delete_atoms else set()
+
+        # prepare atoms patch
         self.__elements = elements = {}
         atoms = defaultdict(dict)
         for n, atom in products.atoms():
-            if atom.neighbors or atom.hybridization:
-                info('neighbors and hybridization for new atoms unusable')
-
             atoms[n].update(charge=atom.charge, is_radical=atom.is_radical)
-            elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
-            if n not in reactants:
-                atoms[n]['xy'] = atom.xy
+            if atom.atomic_number:  # replace atom
+                elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
+                if n not in reactants:
+                    atoms[n]['xy'] = atom.xy
+            elif n not in reactants:
+                raise ValueError('New atom should be defined')
+            else:  # use atom from reactant
+                elements[n] = None
             if is_cgr:
                 atoms[n].update(p_is_radical=atom.p_is_radical, p_charge=atom.p_charge)
 
