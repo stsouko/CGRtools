@@ -114,6 +114,10 @@ class Br(Element, PeriodIV, GroupXVII):
     def _valences_exceptions(self):
         return ((-1, False, 0, ()),
                 (-1, False, 0, ((1, 'Br'), (1, 'I'))),  # [I-Br-Br]-
+                (-1, False, 0, ((1, 'Br'), (1, 'Br'))),  # [Br-Br-Br]-
+                (-1, False, 0, ((1, 'Br'), (1, 'Cl'))),  # [Br-Br-Cl]-
+                (-1, False, 0, ((1, 'Cl'), (1, 'Cl'))),  # [Cl-Br-Cl]-
+                (-1, False, 0, ((1, 'I'), (1, 'I'))),  # [I-Br-I]-
 
                 (0, False, 0, ((1, 'O'), (2, 'O'))),  # HBrO2
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))),  # HBrO3
@@ -157,8 +161,10 @@ class I(Element, PeriodV, GroupXVII):
     def _valences_exceptions(self):
         return ((-1, False, 0, ()),
                 (-1, False, 0, ((1, 'I'), (1, 'I'))),  # [I-I-I]-
+                (-1, False, 0, ((1, 'I'), (1, 'Br'))),  # [I-I-Br]-
 
                 (0, False, 0, ((1, 'O'), (2, 'O'))),  # HIO2
+                (0, False, 0, ((1, 'C'), (2, 'O'))),
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'))),  # HIO3
                 (0, False, 0, ((1, 'O'), (2, 'O'), (2, 'O'), (2, 'O'))),  # HIO4
                 (0, False, 0, ((1, 'O'), (1, 'O'), (1, 'O'), (2, 'O'), (2, 'O'))),  # H3IO5
@@ -170,10 +176,14 @@ class I(Element, PeriodV, GroupXVII):
                 (0, False, 0, ((1, 'Br'), (1, 'Br'), (1, 'Br'))),
                 (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'Cl'))),
                 (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'C'))),
+                (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'O'))),
+                (0, False, 0, ((1, 'C'), (1, 'F'), (1, 'F'))),
 
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # IF5
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'))),  # IOF3
                 (0, False, 0, ((1, 'F'), (2, 'O'), (2, 'O'))),  # IO2F
+                (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'O'), (2, 'O'))),
+                (0, False, 0, ((1, 'C'), (1, 'O'), (1, 'O'), (1, 'O'), (1, 'O'))),
 
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # IF7
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (2, 'O'))),  # IOF5

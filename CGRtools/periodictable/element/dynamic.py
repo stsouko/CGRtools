@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,8 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Type
+from typing import Type, Union
 from .core import Core
+from .element import Element
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 
@@ -114,17 +116,28 @@ class DynamicElement(Dynamic):
             raise ValueError(f'DynamicElement with number "{number}" not found')
         return element
 
+    @classmethod
+    def from_atom(cls, atom: Union['Element', 'DynamicElement']) -> 'DynamicElement':
+        """
+        get DynamicElement object from Element object or copy of DynamicElement object
+        """
+        if isinstance(atom, Element):
+            return cls.from_atomic_number(atom.atomic_number)(atom.isotope)
+        elif not isinstance(atom, DynamicElement):
+            raise TypeError('Element or DynamicElement expected')
+        return atom.copy()
+
     @property
     def neighbors(self):
         try:
-            return sum(b.order is not None for b in self._graph()._bonds[self._map].values())
+            return self._graph().neighbors(self._map)[0]
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
     def p_neighbors(self):
         try:
-            return sum(b.p_order is not None for b in self._graph()._bonds[self._map].values())
+            return self._graph().neighbors(self._map)[1]
         except AttributeError:
             raise IsNotConnectedAtom
 
@@ -137,11 +150,8 @@ class DynamicElement(Dynamic):
             self.p_charge == other.p_charge and self.p_is_radical == other.p_is_radical
 
     def __hash__(self):
-        """
-        26bit = 9bit | 7bit | 4bit | 4bit | 1bit| 1bit
-        """
-        return (self.isotope or 0) << 17 | self.atomic_number << 10 | self.charge + 4 << 6 | \
-            self.p_charge + 4 << 2 | self.is_radical << 1 | self.p_is_radical
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.p_charge,
+                           self.is_radical, self.p_is_radical))
 
 
 __all__ = ['DynamicElement', 'Dynamic']

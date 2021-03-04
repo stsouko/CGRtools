@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -19,32 +19,50 @@
 #
 from CachedMethods import class_cached_property
 from collections import defaultdict
-from typing import List
-from ..containers import molecule, query  # cyclic imports resolve
+from itertools import count
+from typing import List, TYPE_CHECKING, Union, Tuple
+from ..containers import query  # cyclic imports resolve
+from ..containers.bonds import Bond
 from ..exceptions import ValenceError
+from ..periodictable import ListElement, H
+
+
+if TYPE_CHECKING:
+    from CGRtools import MoleculeContainer, ReactionContainer
 
 
 class Standardize:
     __slots__ = ()
-    __class_cache__ = {}
 
-    def canonicalize(self) -> bool:
+    def canonicalize(self: 'MoleculeContainer', *,
+                     logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
         """
         Convert molecule to canonical forms of functional groups and aromatic rings without explicit hydrogens.
+
+        :param logging: return log.
         """
-        s = self.standardize(fix_stereo=False)
         k = self.kekule()
+        s = self.standardize(fix_stereo=False, logging=logging)
         h = self.implicify_hydrogens(fix_stereo=False)
         t = self.thiele()
-        return s or k or h or t
+        if logging:
+            if k:
+                s.insert(0, ((), -1, 'kekulized'))
+            if h:
+                s.append(((), -1, 'implicified'))
+            if t:
+                s.append(((), -1, 'aromatized'))
+            return s
+        return k or s or h or t
 
-    def standardize(self, *, fix_stereo=True, logging=False) -> bool:
+    def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                    logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
         """
         Standardize functional groups. Return True if any non-canonical group found.
 
         :param logging: return list of fixed atoms with matched rules.
         """
-        neutralized = self.neutralize(fix_stereo=False)
+        neutralized = self.neutralize(fix_stereo=False, logging=logging)
         hs, log = self.__standardize()
         if hs:
             if not neutralized:
@@ -60,23 +78,26 @@ class Standardize:
                 self._fix_stereo()
             if logging:
                 if neutralized:
-                    log.append(((), -1, 'neutralized'))
+                    log.append((tuple(neutralized), -1, 'neutralized'))
                 return log
             return True
         if neutralized:
             if fix_stereo:
                 self._fix_stereo()
             if logging:
-                log.append(((), -1, 'neutralized'))
+                log.append((tuple(neutralized), -1, 'neutralized'))
                 return log
             return True
         if logging:
             return log
         return False
 
-    def neutralize(self, *, fix_stereo=True) -> bool:
+    def neutralize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                   logging=False) -> Union[bool, List[int]]:
         """
         Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
+
+        :param logging: return list of changed atoms.
         """
         atoms = self._atoms
         charges = self._charges
@@ -124,10 +145,50 @@ class Standardize:
                 self._calc_hybridization(n)
             if fix_stereo:
                 self._fix_stereo()
+            if logging:
+                return list(hs)
             return True
+        if logging:
+            return []
         return False
 
-    def implicify_hydrogens(self, *, fix_stereo=True) -> int:
+    def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
+        """Remove hydrogen bonds marked with 8 (any) bond
+
+        :param keep_to_terminal: Keep any bonds to terminal hydrogens
+        :return: removed bonds count
+        """
+        bonds = self._bonds
+        hg = defaultdict(set)
+        for n, atom in self._atoms.items():
+            if atom.atomic_number == 1:
+                for m, b in bonds[n].items():
+                    if b.order == 8:
+                        hg[n].add(m)
+
+        if keep_to_terminal:
+            for n, ms in hg.items():
+                if len(bonds[n]) == len(ms):  # H~A or A~H~A etc case
+                    m = ms.pop()
+                    if m in hg:  # H~H case
+                        hg[m].discard(n)
+
+        seen = set()
+        c = 0
+        for n, ms in hg.items():
+            seen.add(n)
+            for m in ms:
+                if m in seen:
+                    continue
+                c += 1
+                del bonds[n][m], bonds[m][n]
+        if c:
+            self.flush_cache()
+            if fix_stereo:
+                self._fix_stereo()
+        return c
+
+    def implicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True) -> int:
         """
         Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
 
@@ -140,9 +201,14 @@ class Standardize:
         explicit = defaultdict(list)
         for n, atom in atoms.items():
             if atom.atomic_number == 1:
-                for m in bonds[n]:
-                    if atoms[m].atomic_number != 1:
-                        explicit[m].append(n)
+                if len(bonds[n]) > 1:
+                    raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence. Try to use remove_hydrogen_bonds()')
+                for m, b in bonds[n].items():
+                    if b.order == 1:
+                        if atoms[m].atomic_number != 1:  # not H-H
+                            explicit[m].append(n)
+                    elif b.order != 8:
+                        raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence {{{b.order}}}.')
 
         to_remove = set()
         for n, hs in explicit.items():
@@ -155,12 +221,15 @@ class Standardize:
                 explicit_sum = 0
                 explicit_dict = defaultdict(int)
                 for m, bond in bonds[n].items():
-                    if m not in hi:
+                    if m not in hi and bond.order != 8:
                         explicit_sum += bond.order
                         explicit_dict[(bond.order, atoms[m].atomic_number)] += 1
-
+                try:
+                    rules = atom.valence_rules(charge, is_radical, explicit_sum)
+                except ValenceError:
+                    break
                 if any(s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()) and h >= i
-                       for s, d, h in atom.valence_rules(charge, is_radical, explicit_sum)):
+                       for s, d, h in rules):
                     to_remove.update(hi)
                     break
         for n in to_remove:
@@ -169,29 +238,43 @@ class Standardize:
             self._fix_stereo()
         return len(to_remove)
 
-    def explicify_hydrogens(self, *, fix_stereo=True) -> int:
+    def explicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True, start_map=None, return_maps=False) -> int:
         """
         Add explicit hydrogens to atoms.
 
-        For Thiele forms of molecule causes invalidation of internal state.
-        Implicit hydrogens marks will not be set if atoms in aromatic rings.
-        Call `kekule()` and `thiele()` in sequence to fix marks.
-
         :return: number of added atoms
         """
+        hydrogens = self._hydrogens
         to_add = []
-        for n, h in self._hydrogens.items():
+        for n, h in hydrogens.items():
             try:
                 to_add.extend([n] * h)
             except TypeError:
                 raise ValenceError(f'atom {{{n}}} has valence error')
-        for n in to_add:
-            self.add_bond(n, self.add_atom('H'), 1)
-        if to_add and fix_stereo:
-            self._fix_stereo()
-        return len(to_add)
 
-    def check_valence(self) -> List[int]:
+        if return_maps:
+            log = []
+        if to_add:
+            bonds = self._bonds
+            m = start_map
+            for n in to_add:
+                m = self.add_atom(H(), _map=m)
+                bonds[n][m] = bonds[m][n] = Bond(1)
+                hydrogens[n] = 0
+                if return_maps:
+                    log.append((n, m))
+                m += 1
+
+            if fix_stereo:
+                self._fix_stereo()
+            if return_maps:
+                return log
+            return len(to_add)
+        if return_maps:
+            return log
+        return 0
+
+    def check_valence(self: 'MoleculeContainer') -> List[int]:
         """
         Check valences of all atoms.
 
@@ -202,6 +285,7 @@ class Standardize:
         charges = self._charges
         radicals = self._radicals
         bonds = self._bonds
+        hydrogens = self._hydrogens
         errors = set(atoms)
         for n, atom in atoms.items():
             charge = charges[n]
@@ -221,13 +305,14 @@ class Standardize:
                 except ValenceError:
                     pass
                 else:
+                    hs = hydrogens[n]
                     for s, d, h in rules:
-                        if s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                        if h == hs and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
                             errors.discard(n)
                             break
         return list(errors)
 
-    def clean_isotopes(self) -> bool:
+    def clean_isotopes(self: 'MoleculeContainer') -> bool:
         """
         Clean isotope marks from molecule.
         Return True if any isotope found.
@@ -242,11 +327,12 @@ class Standardize:
             return True
         return False
 
-    def __standardize(self):
+    def __standardize(self: Union['MoleculeContainer', 'Standardize']):
         atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
         bonds = self._bonds
         hs = set()
         log = []
+        flush = False
         for r, (pattern, atom_fix, bonds_fix) in enumerate(self.__standardize_compiled_rules):
             seen = set()
             for mapping in pattern.get_mapping(self, automorphism_filter=False):
@@ -259,17 +345,32 @@ class Standardize:
                     for key, value in fix.items():
                         atom_map[key][n] = value
                 for n, m, b in bonds_fix:
-                    bonds[mapping[n]][mapping[m]]._Bond__order = b
+                    n = mapping[n]
+                    m = mapping[m]
+                    if m in bonds[n]:
+                        bonds[n][m]._Bond__order = b
+                        if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
+                            flush = True
+                    else:
+                        flush = True
+                        bonds[n][m] = bonds[m][n] = Bond(b)
                 log.append((tuple(match), r, str(pattern)))
+                # flush cache
+                if flush:
+                    try:
+                        del self.__dict__['__cached_args_method_neighbors']
+                    except KeyError:  # already flushed before
+                        pass
+                    flush = False
             hs.update(seen)
         return hs, log
 
-    def __patch_path(self, path):
+    def __patch_path(self: 'MoleculeContainer', path):
         bonds = self._bonds
         for n, m, b in path:
             bonds[n][m]._Bond__order = b
 
-    def __find_delocalize_path(self, start, finish, constrains):
+    def __find_delocalize_path(self: 'MoleculeContainer', start, finish, constrains):
         bonds = self._bonds
         stack = [(start, n, 0, b.order + 1) for n, b in bonds[start].items() if n in constrains and b.order < 3]
         path = []
@@ -294,11 +395,12 @@ class Standardize:
                          ((n, b.order + diff) for n, b in bonds[current].items() if n not in seen and n in constrains)
                          if 1 <= b <= 3)
 
-    def __entries(self):
+    def __entries(self: 'MoleculeContainer'):
         charges = self._charges
         radicals = self._radicals
         atoms = self._atoms
         hybs = self._hybridizations
+        bonds = self._bonds
 
         transfer = set()
         entries = set()
@@ -308,13 +410,17 @@ class Standardize:
             if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52} or hybs[n] == 4:
                 # filter non-organic set, halogens and aromatics
                 continue
-            transfer.add(n)
             if charges[n] == -1:
+                if len(bonds[n]) == 4 and a.atomic_number == 5:  # skip boron
+                    continue
                 entries.add(n)
             elif charges[n] == 1:
+                if len(bonds[n]) == 4 and a.atomic_number == 7:  # skip boron
+                    continue
                 exits.add(n)
             elif radicals[n]:
                 rads.add(n)
+            transfer.add(n)
         return entries, exits, rads, transfer
 
     @class_cached_property
@@ -419,6 +525,61 @@ class Standardize:
         bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 0, 'hybridization': 1}, 2: {'charge': 0, 'hybridization': 1}}
         bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        # A   H   A     A     H   A
+        #  \ / \ /       \  .. \ /
+        #   B   B    >>   B     B
+        #  / \ / \       / \  .. \
+        # A   H   A     A   H     A
+        #
+        atoms = ({'atom': 'B', 'neighbors': 4}, {'atom': 'B', 'neighbors': 4},
+                 {'atom': 'H', 'neighbors': 2}, {'atom': 'H', 'neighbors': 2})
+        bonds = ((1, 3, 1), (1, 4, 1), (2, 3, 1), (2, 4, 1))
+        atom_fix = {}
+        bonds_fix = ((1, 3, 8), (2, 4, 8))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        #        [A-]                 A
+        #         |                   |
+        # [A-] - [B+3] - [A-] >> A - [B-] - A
+        #         |                   |
+        #        [A-]                 A
+        #
+        atoms = ({'atom': 'B', 'charge': 3, 'neighbors': 4}, {'atom': 'A', 'charge': -1}, {'atom': 'A', 'charge': -1},
+                 {'atom': 'A', 'charge': -1}, {'atom': 'A', 'charge': -1})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': -1}, 2: {'charge': 0}, 3: {'charge': 0}, 4: {'charge': 0}, 5: {'charge': 0}}
+        bonds_fix = ()
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        #        A             A
+        #        |             |
+        # [A-] - B - A >> A - [B-] - A
+        #        |             |
+        #        A             A
+        #
+        atoms = ({'atom': 'B', 'neighbors': 4}, {'atom': 'A', 'charge': -1},
+                 {'atom': 'A'}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': -1}, 2: {'charge': 0}}
+        bonds_fix = ()
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        #      A             A
+        #      |             |
+        # A -  B - A >> A - [B-] - A
+        #      |             |
+        #      A             A
+        #
+        atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 1},)
+        bonds = ()
+        atom_fix = {1: {'charge': -1}}
+        bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Ammonium
@@ -845,30 +1006,6 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Aromatic N-Oxide
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     O           [O-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-        # Aromatic N-Nitride?
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     N           [N-]
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 4}, {'atom': 'N', 'hybridization': 2})
-        bonds = ((1, 2, 2),)
-        atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((atoms, bonds, atom_fix, bonds_fix))
-
         # Nitroso
         #
         # - [N+] - [O-]  >>  - N = O
@@ -904,11 +1041,12 @@ class Standardize:
 
         # Amide
         #
-        #       OH        O
+        #      [O,S]H    [O,S]
         #      /         //
         # N = C  >> NH - C
         #
-        atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'hybridization': 2})
+        atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': ListElement(['O', 'S']), 'neighbors': 1},
+                 {'atom': 'N', 'hybridization': 2})
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
         bonds_fix = ((1, 2, 2), (1, 3, 1))
@@ -961,7 +1099,7 @@ class Standardize:
         bonds_fix = ()
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfoxide
+        # Sulfodioxide
         #
         #       C                   C
         #       |                   |
@@ -992,7 +1130,7 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Sulfon
+        # Sulfoxide
         #
         #           C            C
         #          /            /
@@ -1005,6 +1143,38 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1))
         atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfone
+        #
+        #       [O-]          O
+        #       /            //
+        # A = [S+2]  >>  A = S
+        #       \            \\
+        #       [O-]          O
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfone
+        #
+        #          A                  A
+        #          |                  |
+        # [O-] - [S+2] - [O-] >>  O = S = O
+        #          |                  |
+        #          A                  A
+        #
+        atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 4}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
+                 {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
+                    3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Sulfonium ylide
@@ -1020,6 +1190,36 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Sulfite
+        #
+        #  O              O
+        #  \\             \\
+        #  [S-] - A  >>    S - A
+        #  //             /
+        #  O            [O-]
+        #
+        atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'A'})
+        bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Sulfite
+        #
+        #           A           A
+        #          /           /
+        # [O-] - [S+]  >> O = S
+        #          \           \
+        #           N           N
+        #
+        atoms = ({'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'N', 'hybridization': 1},
+                 {'atom': 'S', 'charge': 1, 'neighbors': 3}, {'atom': 'A'})
+        bonds = ((1, 3, 1), (2, 3, 1), (2, 4, 1))
+        atom_fix = {1: {'charge': 0, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+        bonds_fix = ((1, 3, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Sulfine
         #
         #  [O-] - [S+] = C  >>  O = S = C
@@ -1029,6 +1229,50 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # amide S
+        #
+        #      A1,3                 A1,3
+        #      |                    |
+        #  N = S - [OH]  >>  [NH] - S = O
+        #
+        atoms = ({'atom': 'S', 'neighbors': (3, 5), 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # amide S(VI)
+        #
+        #     [OH]                O
+        #      |                 //
+        #  N = S = N  >>  [NH] - S - [NH]
+        #      |                 \\
+        #     [OH]                O
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 1), (1, 5, 2))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}, 4: {'hybridization': 2}, 5: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1), (1, 4, 2), (1, 5, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # amide S(VI)
+        #
+        #     [OH]                O
+        #      |                 //
+        #  N = S = A  >>  [NH] - S = A
+        #      |                 |
+        #      A                 A
+        #
+        atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'A'}, {'atom': 'A'})
+        bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2), (1, 5, 1))
+        atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+        bonds_fix = ((1, 2, 2), (1, 3, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         # Silicate Selenite
@@ -1063,6 +1307,26 @@ class Standardize:
         bonds_fix = ((1, 2, 3),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        #
+        # C # C - [O,NH,S]H  >> C=C=[O,NH,S]
+        #
+        atoms = ({'atom': ListElement(['O', 'S', 'N']), 'neighbors': 1}, {'atom': 'C', 'neighbors': 2},
+                 {'atom': 'C', 'neighbors': (1, 2)})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (2, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        # C # C - [NH]R  >> C=C=[NH]R
+        #
+        atoms = ({'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'C', 'neighbors': 2},
+                 {'atom': 'C', 'neighbors': (1, 2)})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 2), (2, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
         # Ozone
         #
         # [O] -- O -- [O]  >>  O == [O+] -- [O-]
@@ -1075,6 +1339,37 @@ class Standardize:
         bonds_fix = ((1, 2, 2),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Br-ion + I-ion
+        #
+        #        A           A
+        #        |           |
+        # [Br-].[I+] >> Br - I
+        #        |           |
+        #        A           A
+        #
+        atoms = ({'atom': 'Br', 'charge': -1, 'neighbors': 0}, {'atom': 'A'}, {'atom': 'A'},
+                 {'atom': 'I', 'charge': 1, 'neighbors': 2},)
+        bonds = ((2, 4, 1), (3, 4, 1))
+        atom_fix = {1: {'charge': 0}, 4: {'charge': 0}}
+        bonds_fix = ((1, 4, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # CuCl
+        #
+        #         R - N - C                  R - N - C
+        #            /    ||                    /    ||
+        # Cl - Cu = C     || >> [Cl-] --- Cu - C     ||
+        #            \    ||                   \\    ||
+        #         R - N - C                R - [N+]- C
+        #
+        atoms = ({'atom': 'Cl', 'charge': 0, 'neighbors': 1}, {'atom': 'Cu', 'neighbors': 2},
+                 {'atom': 'C', 'charge': 0, 'neighbors': 3},
+                 {'atom': 'N', 'neighbors': 3, 'hybridization': 1}, {'atom': 'N', 'neighbors': 3, 'hybridization': 1},
+                 {'atom': 'C', 'hybridization': 2}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1), (4, 6, 1), (5, 7, 1), (6, 7, 2))
+        atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 4: {'charge': 1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 8), (2, 3, 1), (3, 4, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
         return rules
 
 
@@ -1082,66 +1377,99 @@ class StandardizeReaction:
     __slots__ = ()
     __class_cache__ = {}
 
-    def canonicalize(self, fix_mapping: bool = True) -> bool:
+    def canonicalize(self: 'ReactionContainer', fix_mapping: bool = True, *,
+                     logging=False) -> Union[bool, Tuple[int, Tuple[int, ...], int, str]]:
         """
         Convert molecules to canonical forms of functional groups and aromatic rings without explicit hydrogens.
         Works only for Molecules.
         Return True if in any molecule found not canonical group.
 
         :param fix_mapping: Search AAM errors of functional groups.
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.canonicalize() and not total:
-                total = True
+            out = m.canonicalize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, *x) for x in out)
+                else:
+                    total = True
 
         if fix_mapping and self.fix_mapping():
+            if logging:
+                total.append((-1, (), -1, 'mapping fixed'))
+                return total
             return True
 
         if total:
             self.flush_cache()
         return total
 
-    def standardize(self, fix_mapping: bool = True) -> bool:
+    def standardize(self: 'ReactionContainer', fix_mapping: bool = True, *,
+                    logging=False) -> Union[bool, Tuple[int, Tuple[int, ...], int, str]]:
         """
         Standardize functional groups. Works only for Molecules.
-        Return True if in any molecule found not canonical group.
 
         :param fix_mapping: Search AAM errors of functional groups.
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.standardize() and not total:
-                total = True
+            out = m.standardize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, *x) for x in out)
+                else:
+                    total = True
 
         if fix_mapping and self.fix_mapping():
+            if logging:
+                total.append((-1, (), -1, 'mapping fixed'))
+                return total
             return True
 
         if total:
             self.flush_cache()
         return total
 
-    def neutralize(self) -> bool:
+    def neutralize(self: 'ReactionContainer', *, logging=False) -> Union[bool, Tuple[int, Tuple[int, ...]]]:
         """
-        Transform biradical or dipole resonance structures into neutral form.
-        Works only for Molecules.
-        Return True if these groups found in any molecule.
+        Transform biradical or dipole resonance structures into neutral form. Works only for Molecules.
+
+        :param logging: return log from molecules with index of molecule at first position.
+            Otherwise return True if these groups found in any molecule.
         """
-        total = False
-        for m in self.molecules():
+        if logging:
+            total = []
+        else:
+            total = False
+        for n, m in enumerate(self.molecules()):
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            if m.neutralize() and not total:
-                total = True
+            out = m.neutralize(logging=logging)
+            if out:
+                if logging:
+                    total.extend((n, tuple(x)) for x in out)
+                else:
+                    total = True
         if total:
             self.flush_cache()
         return total
 
-    def fix_mapping(self) -> bool:
+    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction']) -> bool:
         """
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
@@ -1175,13 +1503,100 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+        if seen:
+            self.flush_cache()
+            flag = True
+            seen = set()
+        else:
+            flag = False
+
+        for bad_query, good_query, fix, valid in self.__remapping_compiled_rules:
+            cgr = ~self
+            first_free = max(cgr) + 1
+            free_number = count(first_free)
+            cgr_c = set(cgr.center_atoms)
+            del self.__dict__['__cached_method_compose']
+
+            for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
+                if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
+                    continue
+                mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
+
+                reverse = {m: n for n, m in mapping.items()}
+                for m in self.products:
+                    m.remap(mapping)
+
+                check = ~self
+                check_c = set(check.center_atoms)
+                delta = check_c - cgr_c
+                
+                for m in good_query.get_mapping(check, automorphism_filter=False):
+                    if valid.issubset(m) and delta.issubset(m.values()):
+                        seen.update(mapping)
+                        break      
+                else:
+                    # restore old mapping
+                    for m in self.products:
+                        m.remap(reverse)
+                    del self.__dict__['__cached_method_compose']
+                    free_number = count(first_free)
+                    continue
+                break
 
         if seen:
             self.flush_cache()
             return True
-        return False
+        return flag
 
-    def implicify_hydrogens(self) -> int:
+    @classmethod
+    def load_remapping_rules(cls, reactions):
+        """
+        Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
+        Reactants in pairs should be fully equal (equal molecules and equal atom orders).
+        Products should be equal but with different atom numbers.
+        """
+        for bad, good in reactions:
+            if str(bad) != str(good):
+                raise ValueError('bad and good reaction should be equal')
+
+            cgr_good, cgr_bad = ~good, ~bad
+            gc = cgr_good.augmented_substructure(cgr_good.center_atoms, deep=1)
+            bc = cgr_bad.augmented_substructure(cgr_bad.center_atoms, deep=1)
+
+            atoms = set(bc.atoms_numbers + gc.atoms_numbers)      
+
+            pr_g, pr_b, re_g, re_b = set(), set(), set(), set()
+            for pr in good.products:
+                pr_g.update(pr)
+            for pr in bad.products:
+                pr_b.update(pr) 
+            for pr in good.reactants:
+                re_g.update(pr)
+            for pr in bad.reactants:
+                re_b.update(pr)
+            atoms.update((re_b.difference(pr_b)).intersection(pr_g))
+
+            strange_atoms = pr_b.difference(pr_g)
+            atoms.update(strange_atoms)
+
+            bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
+            good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
+
+            rules = []
+            fix = {}
+            for mb, mg in zip(bad.products, good.products): 
+                fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
+            
+            valid = set(fix).difference(strange_atoms)
+            rules.append((bad_query, good_query, fix, valid))
+
+        cls.__class_cache__[cls] = {'_StandardizeReaction__remapping_compiled_rules': tuple(rules)}
+
+    @class_cached_property
+    def __remapping_compiled_rules(self):
+        return ()
+
+    def implicify_hydrogens(self: 'ReactionContainer') -> int:
         """
         Remove explicit hydrogens if possible
 
@@ -1196,22 +1611,57 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def explicify_hydrogens(self) -> int:
+    def explicify_hydrogens(self: 'ReactionContainer') -> int:
         """
         Add explicit hydrogens to atoms
 
         :return: number of added atoms
         """
         total = 0
+        start_map = 0
         for m in self.molecules():
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            total += m.explicify_hydrogens()
+            map = max(m, default=0)
+            if map > start_map:
+                start_map = map
+
+        mapping = defaultdict(list)
+        for m in self.reactants:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                for n, h in maps:
+                    mapping[n].append(h)
+                start_map = maps[-1][1]
+                total += len(maps)
+
+        for m in self.reagents:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                start_map = maps[-1][1]
+                total += len(maps)
+
+        for m in self.products:
+            maps = m.explicify_hydrogens(return_maps=True, start_map=start_map + 1)
+            if maps:
+                total += len(maps)
+                remap = {}
+                free = []
+                for n, h in maps:
+                    if n in mapping and mapping[n]:
+                        remap[h] = mapping[n].pop()
+                        free.append(h)
+                    elif free:
+                        remap[h] = start_map = free.pop(0)
+                    else:
+                        start_map = h
+                m.remap(remap)
+
         if total:
             self.flush_cache()
         return total
 
-    def thiele(self) -> bool:
+    def thiele(self: 'ReactionContainer') -> bool:
         """
         Convert structures to aromatic form. Works only for Molecules.
         Return True if in any molecule found kekule ring
@@ -1226,7 +1676,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def kekule(self) -> bool:
+    def kekule(self: 'ReactionContainer') -> bool:
         """
         Convert structures to kekule form. Works only for Molecules.
         Return True if in any molecule found aromatic ring
@@ -1241,7 +1691,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def clean_isotopes(self) -> bool:
+    def clean_isotopes(self: 'ReactionContainer') -> bool:
         """
         Clean isotope marks for all molecules in reaction.
         Returns True if in any molecule found isotope.
@@ -1257,7 +1707,7 @@ class StandardizeReaction:
             self.flush_cache()
         return flag
 
-    def clean_stereo(self):
+    def clean_stereo(self: 'ReactionContainer'):
         """
         Remove stereo data
         """
@@ -1267,7 +1717,7 @@ class StandardizeReaction:
             m.clean_stereo()
         self.flush_cache()
 
-    def clean2d(self, **kwargs):
+    def clean2d(self: 'ReactionContainer', **kwargs):
         """
         Recalculate 2d coordinates
         """
@@ -1275,7 +1725,7 @@ class StandardizeReaction:
             m.clean2d(**kwargs)
         self.fix_positions()
 
-    def fix_positions(self):
+    def fix_positions(self: Union['ReactionContainer', 'StandardizeReaction']):
         """
         Fix coordinates of molecules in reaction
         """
@@ -1284,7 +1734,7 @@ class StandardizeReaction:
         amount = len(reactants) - 1
         signs = []
         for m in reactants:
-            max_x = self.__fix_positions(m, shift_x)
+            max_x = m._fix_plane_mean(shift_x)
             if amount:
                 max_x += .2
                 signs.append(max_x)
@@ -1294,7 +1744,7 @@ class StandardizeReaction:
 
         if self.reagents:
             for m in self.reagents:
-                max_x = self.__fix_reagent_positions(m, shift_x)
+                max_x = m._fix_plane_min(shift_x, .5)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
@@ -1305,7 +1755,7 @@ class StandardizeReaction:
         products = self.products
         amount = len(products) - 1
         for m in products:
-            max_x = self.__fix_positions(m, shift_x)
+            max_x = m._fix_plane_mean(shift_x)
             if amount:
                 max_x += .2
                 signs.append(max_x)
@@ -1315,49 +1765,21 @@ class StandardizeReaction:
         self._signs = tuple(signs)
         self.flush_cache()
 
-    @staticmethod
-    def __fix_reagent_positions(molecule, shift_x):
-        plane = molecule._plane
-        shift_y = .5
+    def check_valence(self: 'ReactionContainer') -> List[Tuple[int, Tuple[int, ...]]]:
+        """
+        Check valences of all atoms of all molecules.
 
-        values = plane.values()
-        min_x = min(x for x, _ in values) - shift_x
-        max_x = max(x for x, _ in values) - min_x
-        min_y = min(y for _, y in values) - shift_y
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - min_y)
-        return max_x
-
-    @staticmethod
-    def __fix_positions(mol, shift_x):
-        plane = mol._plane
-
-        left_atom, left_atom_plane = min((x for x in plane.items()), key=lambda x: x[1][0])
-        right_atom, right_atom_plane = max((x for x in plane.items()), key=lambda x: x[1][0])
-
-        if len(mol._atoms[left_atom].atomic_symbol) == 2:
-            min_x = left_atom_plane[0] - shift_x - .2
-        else:
-            min_x = left_atom_plane[0] - shift_x
-
-        max_x = right_atom_plane[0]
-        max_x -= min_x
-
-        values = plane.values()
-        min_y = min(y for _, y in values)
-        max_y = max(y for _, y in values)
-        mean_y = (max_y + min_y) / 2
-        for n, (x, y) in plane.items():
-            plane[n] = (x - min_x, y - mean_y)
-
-        r_y = plane[right_atom][1]
-        if isinstance(mol, molecule.MoleculeContainer) and -.18 <= r_y <= .18:
-            factor = mol._hydrogens[right_atom]
-            if factor == 1:
-                max_x += .15
-            elif factor:
-                max_x += .25
-        return max_x
+        Works only on molecules with aromatic rings in Kekule form.
+        :return: list of invalid molecules with invalid atoms lists
+        """
+        out = []
+        for n, m in enumerate(self.molecules()):
+            if not isinstance(m, Standardize):
+                raise TypeError('Only Molecules supported')
+            c = m.check_valence()
+            if c:
+                out.append((n, tuple(c)))
+        return out
 
     @class_cached_property
     def __standardize_compiled_rules(self):

@@ -19,8 +19,8 @@
 from io import StringIO, TextIOWrapper
 from pathlib import Path
 from traceback import format_exc
-from typing import Iterable, Tuple, Optional
-from ._CGRrw import parse_error
+from typing import Collection, Tuple, Optional
+from ._mdl import parse_error
 from .XYZrw import XYZ
 
 
@@ -115,7 +115,7 @@ class PDBRead(XYZ):
                         self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                         failkey = True
                         atoms = []
-                        yield parse_error(count, pos, self._format_log())
+                        yield parse_error(count, pos, self._format_log(), {})
                         self._flush_log()
                 else:
                     charge = None
@@ -125,7 +125,7 @@ class PDBRead(XYZ):
                     self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
                     failkey = True
                     atoms = []
-                    yield parse_error(count, pos, self._format_log())
+                    yield parse_error(count, pos, self._format_log(), {})
                     self._flush_log()
                     continue
 
@@ -158,7 +158,7 @@ class PDBRead(XYZ):
                     if not ignore:
                         failkey = True
                         atoms = []
-                        yield parse_error(count, pos, self._format_log())
+                        yield parse_error(count, pos, self._format_log(), {})
                         self._flush_log()
                         continue
                 atoms.append((atom_name, charge, x, y, z, residue))
@@ -168,7 +168,7 @@ class PDBRead(XYZ):
                         container = self._convert_structure(atoms)
                     except ValueError:
                         self._info(f'Structure consist errors:\n{format_exc()}')
-                        yield parse_error(count, pos, self._format_log())
+                        yield parse_error(count, pos, self._format_log(), {})
                     else:
                         if self._store_log:
                             log = self._format_log()
@@ -178,17 +178,17 @@ class PDBRead(XYZ):
                     atoms = []
                 else:
                     self._info(f'Line [{n}] {line}: END or ENDMDL before ATOM or HETATM')
-                    yield parse_error(count, pos, self._format_log())
+                    yield parse_error(count, pos, self._format_log(), {})
                 count += 1
                 if seekable:
                     pos = file.tell()
                 self._flush_log()
         if atoms:  # ENDMDL or END not found
             self._info('PDB not finished')
-            yield parse_error(count, pos, self._format_log())
+            yield parse_error(count, pos, self._format_log(), {})
             self._flush_log()
 
-    def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float, str]]):
+    def _convert_structure(self, matrix: Collection[Tuple[str, Optional[int], float, float, float, str]]):
         if self.__parsed_first is None:
             mol = super()._convert_structure([(e, c, x, y, z) for e, c, x, y, z, _ in matrix])
             mol.meta['RESIDUE'] = {n: x[-1] for n, x in zip(mol, matrix)}

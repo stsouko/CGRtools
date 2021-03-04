@@ -4,8 +4,7 @@ from sys import path
 parent = abspath('..')
 if parent not in path:
     path.insert(0, parent)
-from CGRtools.files._CGRrw import elements_set
-from CGRtools.periodictable import C, DynamicC, QueryC, DynamicQueryC
+from CGRtools.periodictable import C, DynamicC, QueryC, DynamicQueryC, ListElement, AnyElement, DynamicAnyElement
 
 author = 'Dr. Ramil Nugmanov'
 copyright = '2014-2020, Dr. Ramil Nugmanov <nougmanoff@protonmail.com>'
@@ -28,7 +27,7 @@ autoclass_content = 'both'
 html_theme = 'sphinx_rtd_theme'
 html_logo = 'logo.jpg'
 html_favicon = 'favicon.ico'
-html_theme_options = {'github_user': 'cimm-kzn', 'github_repo': 'CGRtools', 'show_related': True}
+html_theme_options = {'github_user': 'stsouko', 'github_repo': 'CGRtools', 'show_related': True}
 html_show_copyright = True
 html_show_sourcelink = False
 html_sidebars = {

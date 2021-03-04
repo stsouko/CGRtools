@@ -25,9 +25,9 @@ from pathlib import Path
 from re import split
 from sys import prefix, exec_prefix
 from traceback import format_exc
-from typing import List, Optional
+from typing import List, Dict, Union
 from warnings import warn
-from ._CGRrw import CGRRead, common_isotopes, parse_error
+from ._mdl import CGRRead, common_isotopes, parse_error
 from ..containers import MoleculeContainer
 
 
@@ -88,8 +88,8 @@ class INCHIRead(CGRRead):
         pos = file.tell() if seekable else None
         for n, line in enumerate(self.__file):
             x = parse(line)
-            if x is None:
-                yield parse_error(n, pos, self._format_log())
+            if isinstance(x, dict):
+                yield parse_error(n, pos, self._format_log(), x)
                 if seekable:
                     pos = file.tell()
             else:
@@ -121,7 +121,7 @@ class INCHIRead(CGRRead):
     def __exit__(self, _type, value, traceback):
         self.close()
 
-    def read(self) -> List[Optional[MoleculeContainer]]:
+    def read(self) -> List[MoleculeContainer]:
         """
         parse whole file
 
@@ -135,7 +135,7 @@ class INCHIRead(CGRRead):
     def __next__(self):
         return next(iter(self))
 
-    def parse(self, inchi: str) -> Optional[MoleculeContainer]:
+    def parse(self, inchi: str) -> Union[MoleculeContainer, Dict[str, str]]:
         """
         convert INCHI string into MoleculeContainer object. string should be start with INCHI and
         optionally continues with space/tab separated list of key:value [or key=value] data.
@@ -144,7 +144,7 @@ class INCHIRead(CGRRead):
         inchi, *data = inchi.split()
         if not inchi:
             self._info('empty inchi string')
-            return
+            return {}
         elif self.__header is None:
             meta = {}
             for x in data:
@@ -160,13 +160,14 @@ class INCHIRead(CGRRead):
             record = self.__parse_inchi(inchi)
         except ValueError:
             self._info(f'string: {inchi}\nconsist errors:\n{format_exc()}')
-            return
+            return meta
 
         record['meta'] = meta
         try:
             container = self._convert_structure(record)
         except ValueError:
             self._info(f'record consist errors:\n{format_exc()}')
+            return meta
         else:
             if self._store_log:
                 log = self._format_log()

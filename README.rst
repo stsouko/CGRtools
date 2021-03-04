@@ -15,6 +15,8 @@ Basic operations:
    - Perform MCS search.
    - 2d depiction.
 
+Full documentation can be found `here <https://cgrtools.readthedocs.io>`_
+
 INSTALL
 =======
 
@@ -34,7 +36,7 @@ Linux Debian based
 
 Mac
 ---
-* Install python3.8 and git using [brew](<https://brew.sh>)::
+* Install python3.8 and git using `brew <https://brew.sh>`_::
 
     brew install git
     brew install python3
@@ -50,7 +52,7 @@ Mac
     
 Windows
 -------
-* Install python3.8 and git using [Chocolatey](<https://chocolatey.org/>)::
+* Install python3.8 and git using `Chocolatey <https://chocolatey.org/>`_::
 
     choco install git
     choco install python3
@@ -75,18 +77,18 @@ General part
 
     pip install CGRTools[mrv]
 
-* Install CGRtools with structures `clean2d` support (optimized version) \[numba and numpy used\]::
-
-    pip install CGRtools[clean2djit]
-
-* Install CGRtools with structures `clean2d` support slow version \[without numba\]::
+* Install CGRtools with structures `clean2d` support (Note: install NodeJS into system)::
 
     pip install CGRtools[clean2d]
 
+
+* Install CGRtools with optimized XYZ parser::
+
+    pip install CGRtools[jit]
+
 * Install CGRtools library DEV version for features that are not well tested::
 
-    pip install -U git+https://github.com/cimm-kzn/CGRtools.git@master#egg=CGRtools
-
+    pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools
 
 **If you still have questions, please open issue within github.**
 
@@ -97,30 +99,25 @@ For wheel generation just type next command in source root::
 
     python setup.py bdist_wheel
 
-On Linux additionally do repairing of package::
-
-    pip install auditwheel
-    auditwheel repair dist/CGRtools-<version>-<python_version>-linux_x86_64.whl
-
 COPYRIGHT
 =========
 
-* 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com> main developer
-* 2014-2019 Timur Madzhidov <tmadzhidov@gmail.com> features and API discussion
-* 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
+* 2014-2021 Ramil Nugmanov nougmanoff@protonmail.com main developer
+* 2014-2019 Timur Madzhidov tmadzhidov@gmail.com features and API discussion
+* 2014-2019 Alexandre Varnek varnek@unistra.fr base idea of CGR approach
 
 CONTRIBUTORS
 ============
 
-* Dinar Batyrshin <batyrshin-dinar@mail.ru>
-* Timur Gimadiev <timur.gimadiev@gmail.com>
-* Adelia Fatykhova <adelik21979@gmail.com>
-* Tagir Akhmetshin <tagirshin@gmail.com>
-* Ravil Mukhametgaleev <sonic-mc@mail.ru>
+* Dinar Batyrshin batyrshin-dinar@mail.ru
+* Timur Gimadiev timur.gimadiev@gmail.com
+* Adelia Fatykhova adelik21979@gmail.com
+* Tagir Akhmetshin tagirshin@gmail.com
+* Ravil Mukhametgaleev sonic-mc@mail.ru
 
 CITE THIS
 =========
 
 CGRtools: Python Library for Molecule, Reaction, and Condensed Graph of Reaction Processing.
 Journal of Chemical Information and Modeling 2019 59 (6), 2516-2521.
-DOI: 10.1021/acs.jcim.9b00102 
+DOI: 10.1021/acs.jcim.9b00102

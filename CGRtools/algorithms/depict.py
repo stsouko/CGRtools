@@ -396,13 +396,13 @@ class DepictMolecule(Depict):
                                          f'{t}</text>')
                 elif radicals[n]:
                     others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">↑</text>')
-                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                    mask['other'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
                                          f'↑</text>')
                 if atom.isotope:
                     t = atom.isotope
                     others.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
                                   f'text-anchor="end">{t}</text>')
-                    mask['other'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                    mask['other'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
                                          f'text-anchor="end">{t}</text>')
 
                 svg.append(f'    <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
@@ -427,23 +427,23 @@ class DepictMolecule(Depict):
                     mask['center'].append(f'        <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
                 svg.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
                            f'font-size="{font_size:.2f}">{symbol}{h}{span}</text>')
-                mask['symbols'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
+                mask['symbols'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
                                        f'dy="{font4:.2f}">{symbol}{h}</text>')
                 if span:
-                    mask['span'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
+                    mask['span'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
                                         f'{symbol}{h}{span}</text>')
                 svg.append('    </g>')
 
                 if mapping:
                     maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" dy="{dy_m + font3:.2f}" '
                                 f'text-anchor="end">{n}</text>')
-                    mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
+                    mask['aam'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
                                        f'dy="{dy_m + font3:.2f}" text-anchor="end">{n}</text>')
 
             elif mapping:
                 maps.append(f'      <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
                             f'text-anchor="end">{n}</text>')
-                mask['aam'].append(f'         <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
+                mask['aam'].append(f'          <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_m:.2f}" dy="{dy_m:.2f}" '
                                    f'text-anchor="end">{n}</text>')
         if others:
             svg.append(f'    <g font-family="{config["other_font_style"]}" fill="{other_fill}" '
@@ -937,27 +937,26 @@ class DepictQuery(Depict):
         triple_space = config['triple_space']
         dash3, dash4 = config['aromatic_dashes']
         for n, m, bond in self.bonds():
-            order = bond.order
             nx, ny = plane[n]
             mx, my = plane[m]
             ny, my = -ny, -my
-            if order == 1:
+            if bond == 1:
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
-            elif order == 4:
+            elif bond == 4:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}" '
                            f'stroke-dasharray="{dash3:.2f} {dash4:.2f}"/>')
-            elif order == 2:
+            elif bond == 2:
                 dx, dy = rotate_vector(0, double_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}"/>')
-            elif order == 3:
+            elif bond == 3:
                 dx, dy = rotate_vector(0, triple_space, mx - nx, ny - my)
                 svg.append(f'    <line x1="{nx + dx:.2f}" y1="{ny - dy:.2f}" x2="{mx + dx:.2f}" y2="{my - dy:.2f}"/>')
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}"/>')
                 svg.append(f'    <line x1="{nx - dx:.2f}" y1="{ny + dy:.2f}" x2="{mx - dx:.2f}" y2="{my + dy:.2f}"/>')
-            else:
+            else:  # other query bonds
                 svg.append(f'    <line x1="{nx:.2f}" y1="{ny:.2f}" x2="{mx:.2f}" y2="{my:.2f}" '
                            f'stroke-dasharray="{dash1:.2f} {dash2:.2f}"/>')
         return svg

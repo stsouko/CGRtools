@@ -103,14 +103,14 @@ class Isomorphism:
         yield from self.__components_mapping(other, {n: i for i, n in enumerate(other)}, automorphism_filter)
 
     def __components_mapping(self, other, o_order, automorphism_filter):
-        components, closures = self.__compiled_query
+        components, closures = self._compiled_query
         o_atoms = other._atoms
         o_bonds = other._bonds
 
         seen = set()
         if len(components) == 1:
             for candidate in other.connected_components:
-                for mapping in self.__get_mapping(components[0], closures, o_atoms, o_bonds, set(candidate), o_order):
+                for mapping in self._get_mapping(components[0], closures, o_atoms, o_bonds, set(candidate), o_order):
                     if automorphism_filter:
                         atoms = frozenset(mapping.values())
                         if atoms in seen:
@@ -119,7 +119,7 @@ class Isomorphism:
                     yield mapping
         else:
             for candidates in permutations((set(x) for x in other.connected_components), len(components)):
-                mappers = [self.__get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
+                mappers = [self._get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
                            for order, component in zip(components, candidates)]
                 for match in lazy_product(*mappers):
                     mapping = match[0]
@@ -133,7 +133,7 @@ class Isomorphism:
                     yield mapping
 
     @staticmethod
-    def __get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope, groups):
+    def _get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope, groups):
         size = len(linear_query) - 1
         order_depth = {v[0]: k for k, v in enumerate(linear_query)}
         equal_cache = defaultdict(dict)
@@ -190,7 +190,7 @@ class Isomorphism:
                             eqs[o_n] = False
 
     @cached_property
-    def __compiled_query(self):
+    def _compiled_query(self):
         return self.__compile_query(self._atoms, self._bonds, {n: atom_frequency(a) for n, a in self._atoms.items()})
 
     @staticmethod
@@ -244,7 +244,7 @@ class Isomorphism:
 
         components, closures = cls.__compile_query(atoms, bonds, atoms_frequencies)
         groups = {x: n for n, x in enumerate(atoms)}
-        mappers = [cls.__get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}, groups)
+        mappers = [cls._get_mapping(order, closures, atoms, bonds, {x for x, *_ in order}, groups)
                    for order in components]
         if len(mappers) == 1:
             for mapping in mappers[0]:

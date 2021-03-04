@@ -112,6 +112,7 @@ class Pt(Element, PeriodVI, GroupX):
     @property
     def _valences_exceptions(self):
         return ((0, False, 0, ((1, 'N'), (1, 'N'), (1, 'Cl'), (1, 'Cl'))),
+                (0, False, 0, ((1, 'N'), (1, 'N'), (1, 'O'), (1, 'O'))),
                 (0, False, 0, ((1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'), (1, 'F'))),  # PtF6
                 (0, False, 0, ((2, 'O'), (2, 'O'), (2, 'O'))))  # PtO3
 

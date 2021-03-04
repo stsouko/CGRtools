@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -21,6 +21,7 @@ from CachedMethods import class_cached_property
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Set, List, Type
 from .core import Core
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom, ValenceError
 
 
@@ -76,9 +77,16 @@ class Element(Core):
             raise IsNotConnectedAtom
 
     @property
+    def heteroatoms(self) -> int:
+        try:
+            return self._graph().heteroatoms(self._map)
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
     def neighbors(self) -> int:
         try:
-            return len(self._graph()._bonds[self._map])
+            return self._graph().neighbors(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
@@ -104,6 +112,15 @@ class Element(Core):
             raise ValueError(f'Element with number "{number}" not found')
         return element
 
+    @classmethod
+    def from_atom(cls, atom: 'Element') -> 'Element':
+        """
+        get Element copy
+        """
+        if not isinstance(atom, Element):
+            raise TypeError('Element expected')
+        return atom.copy()
+
     def __eq__(self, other):
         """
         compare attached to molecules elements
@@ -112,10 +129,7 @@ class Element(Core):
             self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical
 
     def __hash__(self):
-        """
-        21bit = 9bit | 7bit | 4bit | 1bit
-        """
-        return (self.isotope or 0) << 12 | self.atomic_number << 5 | self.charge + 4 << 1 | self.is_radical
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical))
 
     def __setstate__(self, state):
         if 'charge' in state:  # 3.1

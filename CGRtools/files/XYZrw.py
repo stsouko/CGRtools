@@ -27,8 +27,9 @@ from random import shuffle
 from traceback import format_exc
 from typing import List, Iterable, Tuple, Optional
 from warnings import warn
-from ._CGRrw import parse_error
+from ._mdl import parse_error
 from ..containers import MoleculeContainer
+
 
 if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
     from numpy import array, uint16, empty
@@ -81,6 +82,11 @@ charge_priority = {0: 0, -1: 1, 1: 2, 2: 3, 3: 4, -2: 5, -3: 6, 4: 7, -4: 8}
 
 
 class XYZ:
+    """
+    Override class below then inheritance used.
+    """
+    MoleculeContainer = MoleculeContainer
+
     def __init__(self, radius_multiplier=1.25, store_log=False):
         """
         :param radius_multiplier: Multiplier of sum of covalent radii of atoms which has bonds
@@ -129,7 +135,7 @@ class XYZ:
         return next(iter(self))
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, Optional[int], float, float, float]], charge=0, radical=0):
-        mol = MoleculeContainer()
+        mol = self.MoleculeContainer()
         atoms = mol._atoms
         charges = mol._charges
         radicals = mol._radicals
@@ -433,7 +439,7 @@ class XYZRead(XYZ):
                         except ValueError:
                             failkey = True
                             self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                             self._flush_log()
                             break
                     elif x.startswith('radical='):
@@ -442,7 +448,7 @@ class XYZRead(XYZ):
                         except ValueError:
                             failkey = True
                             self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                             self._flush_log()
                             break
                 else:
@@ -454,7 +460,7 @@ class XYZRead(XYZ):
                 except ValueError:
                     failkey = True
                     self._info(f'Line [{n}] {line}: consist errors:\n{format_exc()}')
-                    yield parse_error(count, pos, self._format_log())
+                    yield parse_error(count, pos, self._format_log(), {})
                     self._flush_log()
                 else:
                     if len(xyz) == size:
@@ -462,7 +468,7 @@ class XYZRead(XYZ):
                             container = self._convert_structure(xyz, charge, radical)
                         except ValueError:
                             self._info(f'record consist errors:\n{format_exc()}')
-                            yield parse_error(count, pos, self._format_log())
+                            yield parse_error(count, pos, self._format_log(), {})
                         else:
                             if self._store_log:
                                 log = self._format_log()
@@ -473,19 +479,37 @@ class XYZRead(XYZ):
                         failkey = True  # trigger end of XYZ
         if not failkey:  # cut XYZ
             self._info('Last structure not finished')
-            yield parse_error(count, pos, self._format_log())
+            yield parse_error(count, pos, self._format_log(), {})
             self._flush_log()
 
     def _convert_structure(self, matrix: Iterable[Tuple[str, float, float, float]], charge=0, radical=0):
         return super()._convert_structure([(e, None, x, y, z) for e, x, y, z in matrix], charge, radical)
 
     def parse(self, matrix: Iterable[Tuple[str, float, float, float]], charge: int = 0, radical: int = 0):
-        return self._convert_structure(matrix, charge, radical)
+        try:
+            container = self._convert_structure(matrix, charge, radical)
+        except ValueError:
+            self._flush_log()
+        else:
+            if self._store_log:
+                log = self._format_log()
+                if log:
+                    container.meta['CGRtoolsParserLog'] = log
+            return container
 
     def from_xyz(self, matrix, charge=0, radical=0):
-        warn('.from_xyz() deprecated. Use .parse() instead', DeprecationWarning)
-        warning('.from_xyz() deprecated. Use .parse() instead')
-        return self._convert_structure(matrix, charge, radical)
+        warn('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead', DeprecationWarning)
+        warning('.from_xyz() deprecated. Use `CGRtools.xyz` or `XYZRead.create_parser` instead')
+        return self.parse(matrix, charge, radical)
+
+    @classmethod
+    def create_parser(cls, *args, **kwargs):
+        """
+        Create XYZ parser function configured same as XYZRead object.
+        """
+        obj = object.__new__(cls)
+        super(XYZRead, obj).__init__(*args, **kwargs)
+        return obj.parse
 
 
-__all__ = ['XYZRead', 'XYZ']
+__all__ = ['XYZRead']

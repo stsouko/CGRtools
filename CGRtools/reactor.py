@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Adelia Fatykhova <adelik21979@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -25,6 +25,7 @@ from operator import or_
 from typing import Union, Iterable
 from ._functions import lazy_product
 from .containers import QueryContainer, QueryCGRContainer, MoleculeContainer, CGRContainer, ReactionContainer
+from .containers.bonds import Bond
 from .periodictable import Element, DynamicElement
 
 
@@ -51,8 +52,16 @@ class BaseReactor:
             if is_cgr:
                 atoms[n].update(p_is_radical=atom.p_is_radical, p_charge=atom.p_charge)
 
+        bonds = []
+        for n, m, b in products.bonds():
+            if is_cgr:
+                bonds.append((n, m, b))
+            else:
+                bonds.append((n, m, Bond(b.order[0])))
+
         self.__atom_attrs = dict(atoms)
         self.__products = products
+        self.__bond_attrs = bonds
 
     def _patcher(self, structure, mapping):
         elements = self.__elements

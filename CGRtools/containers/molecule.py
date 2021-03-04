@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -20,24 +20,27 @@ from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict
 from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
-from .bonds import Bond, DynamicBond
+from .bonds import Bond, DynamicBond, QueryBond
 from .common import Graph
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
+from ..algorithms.huckel import Huckel
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
+from ..algorithms.tautomers import Tautomers
 from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, X3domMolecule):
+                        DepictMolecule, Calculate2DMolecule, Tautomers, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
+    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -149,6 +152,19 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:
             self._fix_stereo()
 
+    @cached_args_method
+    def neighbors(self, n: int) -> int:
+        """number of neighbors atoms excluding any-bonded"""
+        return sum(b.order != 8 for b in self._bonds[n].values())
+
+    @cached_args_method
+    def heteroatoms(self, n: int) -> int:
+        """
+        Number of neighbored heteroatoms (not carbon or hydrogen)
+        """
+        atoms = self._atoms
+        return sum(atoms[m].atomic_number not in (1, 6) for m in self._bonds[n])
+
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
@@ -217,11 +233,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         :param meta: if True metadata will be copied to substructure
         :param as_query: return Query object based on graph substructure
         """
-        sub, atoms = super().substructure(atoms, query.QueryContainer if as_query else self.__class__, **kwargs)
-        sa = self._atoms
-        sb = self._bonds
-
+        sub, atoms = super().substructure(atoms, graph_type=query.QueryContainer if as_query else self.__class__,
+                                          atom_type=QueryElement if as_query else Element,
+                                          bond_type=QueryBond if as_query else Bond, **kwargs)
         if as_query:
+            sa = self._atoms
+            sb = self._bonds
+            sh = self._hybridizations
+            shg = self._hydrogens
+            sn = self.neighbors
+            rs = self.atoms_rings_sizes.copy()
+
             lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
             not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
             sub._atoms_stereo = {n: s for n, s in self._atoms_stereo.items() if n in not_skin}
@@ -231,28 +253,19 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             sub._cis_trans_stereo = {nm: s for nm, s in self._cis_trans_stereo.items()
                                      if not_skin.issuperset(self._stereo_cis_trans_paths[nm]) and
                                         not_skin.issuperset(x for x in self._stereo_cis_trans[nm] if x)}
-            sub._atoms = ca = {}
-            for n in atoms:
-                atom = sa[n]
-                atom = QueryElement.from_atomic_number(atom.atomic_number)(atom.isotope)
-                ca[n] = atom
-                atom._attach_to_graph(sub, n)
 
-            sh = self._hybridizations
-            sub._neighbors = {n: (len(sb[n]),) for n in atoms}
+            sub._neighbors = {n: (sn(n),) for n in atoms}
             sub._hybridizations = {n: (sh[n],) for n in atoms}
+            sub._hydrogens = {n: () if shg[n] is None else (shg[n],) for n in atoms}
+            sub._rings_sizes = {n: rs.get(n, ()) for n in atoms}
+            sub._heteroatoms = {n: () for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
-            sub._atoms = ca = {}
-            for n in atoms:
-                atom = sa[n].copy()
-                ca[n] = atom
-                atom._attach_to_graph(sub, n)
 
             # recalculate query marks
             sub._hybridizations = {}
             sub._hydrogens = {}
-            for n in sub._atoms:
+            for n in atoms:
                 sub._calc_hybridization(n)
                 sub._calc_implicit(n)
             # fix_stereo will repair data
@@ -264,34 +277,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def union(self, other, **kwargs):
         if isinstance(other, MoleculeContainer):
-            u, other = super().union(other, **kwargs)
+            u, other = super().union(other, atom_type=Element, bond_type=Bond, **kwargs)
             u._conformers.clear()
-
             u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
             u._allenes_stereo.update(other._allenes_stereo)
             u._cis_trans_stereo.update(other._cis_trans_stereo)
-
-            ub = u._bonds
-            for n, m_bond in other._bonds.items():
-                ub[n] = ubn = {}
-                for m, bond in m_bond.items():
-                    if m in ub:  # bond partially exists. need back-connection.
-                        ubn[m] = ub[m][n]
-                    else:
-                        ubn[m] = bond.copy()
-
-            ua = u._atoms
-            for n, atom in other._atoms.items():
-                atom = atom.copy()
-                ua[n] = atom
-                atom._attach_to_graph(u, n)
             return u
         elif isinstance(other, Graph):
             return other.union(self, **kwargs)
         else:
-            raise TypeError('Graph expected')
+            raise TypeError('MoleculeContainer expected')
 
     def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
@@ -418,6 +415,27 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         return self.compose(other)
 
+    def get_fast_mapping(self, other: 'MoleculeContainer', *, threshold: int = 16) -> Optional[Dict[int, int]]:
+        """
+        Get self to other fast (suboptimal) structure mapping.
+        Only one possible atoms mapping returned.
+        Effective only for big molecules.
+
+        :param threshold: molecules less than `size` atoms processed by .get_mapping
+        """
+        if isinstance(other, MoleculeContainer):
+            if len(self) != len(other):
+                return
+            if len(self) < threshold:
+                return next(self.get_mapping(other), None)
+
+            ss, so = self._smiles(self.atoms_order.get, _return_order=True)
+            os, oo = other._smiles(other.atoms_order.get, _return_order=True)
+            if ss != os:
+                return
+            return dict(zip(so, oo))
+        raise TypeError('MoleculeContainer expected')
+
     def get_mapping(self, other: 'MoleculeContainer', **kwargs):
         if isinstance(other, MoleculeContainer):
             return super().get_mapping(other, **kwargs)
@@ -429,11 +447,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         raise TypeError('MoleculeContainer expected')
 
     @cached_property
-    def molecular_charge(self):
+    def molecular_charge(self) -> int:
         """
         Total charge of molecule
         """
         return sum(self._charges.values())
+
+    @cached_property
+    def is_radical(self) -> bool:
+        """
+        True if at least one atom is radical
+        """
+        return any(self._radicals.values())
 
     def __int__(self):
         """
@@ -507,7 +532,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations[n] = hybridization
 
     def __getstate__(self):
-        return {'conformers': self._conformers, 'atoms_stereo': self._atoms_stereo,
+        return {'conformers': self._conformers, 'hydrogens': self._hydrogens, 'atoms_stereo': self._atoms_stereo,
                 'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
                 **super().__getstate__()}
 
@@ -564,12 +589,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._allenes_stereo = state['allenes_stereo']
         self._cis_trans_stereo = state['cis_trans_stereo']
 
-        # restore query and hydrogen marks
+        if 'hydrogens' not in state:  # <4.0.38
+            self._hydrogens = {}
+            for n in state['atoms']:
+                self._calc_implicit(n)
+        else:
+            self._hydrogens = state['hydrogens']
+
+        # restore query marks
         self._hybridizations = {}
-        self._hydrogens = {}
-        for n in state['bonds']:
+        for n in state['atoms']:
             self._calc_hybridization(n)
-            self._calc_implicit(n)
 
 
 __all__ = ['MoleculeContainer']

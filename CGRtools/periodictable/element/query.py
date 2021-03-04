@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,9 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import Tuple, Dict, Type
+from typing import Tuple, Dict, Type, List, Union
 from .core import Core
 from .element import Element
+from ..._functions import tuple_hash
 from ...exceptions import IsNotConnectedAtom
 
 
@@ -50,12 +51,68 @@ class Query(Core):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    _hybridization_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (1, 2): 5, (1, 3): 6, (1, 4): 7, (2, 3): 8,
-                             (2, 4): 9, (3, 4): 10, (1, 2, 3): 11, (1, 2, 4): 12, (1, 3, 4): 13, (2, 3, 4): 14,
-                             (1, 2, 3, 4): 15}  # 4 bit
-    _neighbors_bitmap = {(): 0, (1,): 1, (2,): 2, (3,): 3, (4,): 4, (5,): 5, (6,): 6,
-                         (1, 2): 7, (2, 3): 8, (3, 4): 9, (4, 5): 10, (5, 6): 11,
-                         (1, 2, 3): 12, (2, 3, 4): 13, (1, 2, 3, 4): 14}  # 15 is any other combination
+    @property
+    def heteroatoms(self) -> Tuple[int, ...]:
+        try:
+            return self._graph()._heteroatoms[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @heteroatoms.setter
+    def heteroatoms(self, heteroatoms):
+        try:
+            g = self._graph()
+            g._heteroatoms[self._map] = g._validate_neighbors(heteroatoms)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def in_ring(self) -> bool:
+        """
+        Atom in any ring.
+        """
+        try:
+            return bool(self._graph()._rings_sizes[self._map]) or self._map in self._graph().ring_atoms
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def ring_sizes(self) -> Tuple[int, ...]:
+        """
+        Atom rings sizes.
+        """
+        try:
+            return self._graph()._rings_sizes[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+        except KeyError:
+            return ()
+
+    @ring_sizes.setter
+    def ring_sizes(self, ring_sizes):
+        try:
+            g = self._graph()
+            g._rings_sizes[self._map] = g._validate_rings(ring_sizes)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
+    def implicit_hydrogens(self) -> Tuple[int, ...]:
+        try:
+            return self._graph()._hydrogens[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @implicit_hydrogens.setter
+    def implicit_hydrogens(self, implicit_hydrogens):
+        try:
+            g = self._graph()
+            g._hydrogens[self._map] = g._validate_neighbors(implicit_hydrogens)
+            g.flush_cache()
+        except AttributeError:
+            raise IsNotConnectedAtom
 
 
 class QueryElement(Query):
@@ -66,7 +123,7 @@ class QueryElement(Query):
         return self.__class__.__name__[5:]
 
     @classmethod
-    def from_symbol(cls, symbol: str) -> Type['QueryElement']:
+    def from_symbol(cls, symbol: str) -> Type[Union['QueryElement', 'AnyElement']]:
         """
         get Element class by its symbol
         """
@@ -79,7 +136,7 @@ class QueryElement(Query):
         return element
 
     @classmethod
-    def from_atomic_number(cls, number: int) -> Type['QueryElement']:
+    def from_atomic_number(cls, number: int) -> Type[Union['QueryElement', 'AnyElement']]:
         """
         get Element class by its number
         """
@@ -90,6 +147,17 @@ class QueryElement(Query):
         except StopIteration:
             raise ValueError(f'QueryElement with number "{number}" not found')
         return element
+
+    @classmethod
+    def from_atom(cls, atom: Union['Element', 'QueryElement', 'AnyElement']) -> Union['QueryElement', 'AnyElement']:
+        """
+        get QueryElement or AnyElement object from Element object or copy of QueryElement or AnyElement
+        """
+        if isinstance(atom, Element):
+            return cls.from_atomic_number(atom.atomic_number)(atom.isotope)
+        elif not isinstance(atom, (QueryElement, AnyElement)):
+            raise TypeError('Element, QueryElement or AnyElement expected')
+        return atom.copy()
 
     @Core.charge.setter
     def charge(self, charge):
@@ -144,23 +212,28 @@ class QueryElement(Query):
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
+                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                    return False
+                if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
+                    return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
                 return True
         elif isinstance(other, QueryElement) and self.atomic_number == other.atomic_number and \
                 self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical \
-                and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+                and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
             # equal query element has equal query marks
             return True
         return False
 
     def __hash__(self):
-        """
-        21bit = 9bit | 7bit | 4bit | 1bit | 4bit | 4bit
-        """
-        return (self.isotope or 0) << 20 | self.atomic_number << 13 | self.charge + 4 << 9 | self.is_radical << 8 | \
-            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical,
+                           self.neighbors, self.hybridization))
 
 
-class AnyElement(Query):  # except Hydrogen!
+class AnyElement(Query):
     __slots__ = ()
 
     def __init__(self, *args, **kwargs):
@@ -214,18 +287,98 @@ class AnyElement(Query):  # except Hydrogen!
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
+                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                    return False
+                if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
+                    return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
                 return True
         elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
-                and self.neighbors == other.neighbors and self.hybridization and other.hybridization:
+                and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
             return True
         return False
+
+    def __hash__(self):
+        return tuple_hash((self.charge, self.is_radical, self.neighbors, self.hybridization))
+
+
+class ListElement(AnyElement):
+    __slots__ = ('_elements', '_numbers')
+
+    def __init__(self, elements: List[str], *args, **kwargs):
+        """
+        Elements list
+        """
+        super().__init__()
+        self._elements = tuple(elements)
+        self._numbers = tuple(x.atomic_number.fget(None) for x in Element.__subclasses__() if x.__name__ in elements)
+
+    @property
+    def atomic_symbol(self) -> str:
+        return ','.join(self._elements)
+
+    def __eq__(self, other):
+        """
+        Compare attached to molecules elements and query elements
+        """
+        if isinstance(other, Element):
+            if other.atomic_number in self._numbers:
+                if self.charge != other.charge or self.is_radical != other.is_radical:
+                    return False
+                if self.neighbors and other.neighbors not in self.neighbors:
+                    return False
+                if self.hybridization and other.hybridization not in self.hybridization:
+                    return False
+                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                    return False
+                if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
+                    return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
+                return True
+        elif isinstance(other, Query) and self.charge == other.charge and self.is_radical == other.is_radical \
+                and self.neighbors == other.neighbors and self.hybridization == other.hybridization \
+                and self.ring_sizes == other.ring_sizes and self.implicit_hydrogens == other.implicit_hydrogens \
+                and self.heteroatoms == other.heteroatoms:
+            if isinstance(other, ListElement):
+                return self._numbers == other._numbers
+            if isinstance(other, AnyElement):
+                return True
+            return other.atomic_number in self._numbers
+        return False
+
+    def copy(self) -> 'ListElement':
+        """
+        Detached from graph copy of element
+        """
+        copy = object.__new__(self.__class__)
+        copy._Core__isotope = self._Core__isotope
+        copy._elements = self._elements
+        copy._numbers = self._numbers
+        return copy
 
     def __hash__(self):
         """
         13bit = 4bit | 1bit | 4bit | 4bit
         """
-        return self.charge + 4 << 9 | self.is_radical << 8 | \
-            self._neighbors_bitmap.get(self.neighbors, 15) << 4 | self._hybridization_bitmap[self.hybridization]
+        return tuple_hash((self._numbers, self.charge, self.is_radical, self.neighbors, self.hybridization))
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['elements'] = self._elements
+        return state
+
+    def __setstate__(self, state):
+        self._elements = state['elements']
+        self._numbers = tuple(x.atomic_number.fget(None) for x in Element.__subclasses__()
+                              if x.__name__ in state['elements'])
+        super().__setstate__(state)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}([{",".join(self._elements)}])'
 
 
-__all__ = ['QueryElement', 'AnyElement']
+__all__ = ['QueryElement', 'AnyElement', 'ListElement']

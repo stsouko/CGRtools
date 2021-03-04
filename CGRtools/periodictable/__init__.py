@@ -42,7 +42,8 @@ from .groupXVIII import *
 modules = {v.__name__: v for k, v in globals().items() if k.startswith('group') and k != 'groups'}
 elements = {k: v for k, v in globals().items() if isinstance(v, ABCMeta) and k != 'Element' and issubclass(v, Element)}
 
-__all__ = ['Element', 'DynamicElement', 'QueryElement', 'DynamicQueryElement', 'AnyElement', 'DynamicAnyElement']
+__all__ = ['Element', 'DynamicElement', 'QueryElement', 'DynamicQueryElement', 'AnyElement', 'DynamicAnyElement',
+           'ListElement', 'AnyAtom']
 __all__.extend(k for k in globals() if k.startswith('Group'))
 __all__.extend(k for k in globals() if k.startswith('Period'))
 __all__.extend(elements)
