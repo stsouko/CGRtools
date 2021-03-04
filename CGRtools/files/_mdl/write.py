@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -177,21 +177,14 @@ class MDLWrite(_MDLWrite):
 
     @classmethod
     def __convert_query(cls, g):
-        bonds = g._bonds
         atoms = {m: n for n, m in enumerate(g._atoms, start=1)}
-        wedge = defaultdict(set)
         out = []
-        for n, m, s in g._wedge_map:
-            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {bonds[n][m].order}  {s == 1 and "1" or "6"}  0  0  0\n')
-            wedge[n].add(m)
-            wedge[m].add(n)
         for n, m, b in g.bonds():
-            if m not in wedge[n]:
-                if len(b.order) > 1:
-                    raise ValueError('supported only simple QueryBond')
-                out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order[0]}  0  0  0  0\n')
-        props = []
+            if len(b.order) > 1:
+                raise ValueError('supported only simple QueryBond')
+            out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order[0]}  0  0  0  0\n')
 
+        props = []
         for n, m in g._neighbors.items():
             if m:
                 i = len(props) + 1

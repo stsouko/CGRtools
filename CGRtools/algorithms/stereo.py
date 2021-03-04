@@ -193,62 +193,6 @@ class Stereo:
         else:
             yield from super().get_mapping(other, **kwargs)
 
-    @cached_property
-    def _wedge_map(self: 'Container'):
-        plane = self._plane
-        atoms_stereo = self._atoms_stereo
-        allenes_centers = self._stereo_allenes_centers
-        atoms = self._atoms
-        used = set()
-        wedge = []
-        for n, s in self._allenes_stereo.items():
-            env = self._stereo_allenes[n]
-            term = self._stereo_allenes_terminals[n]
-            order = [(*env[:2], *term), (*env[1::-1], *term[::-1])]
-            if env[2]:
-                order.append((env[2], env[1], *term))
-                order.append((env[1], env[2], *term[::-1]))
-            if env[3]:
-                order.append((env[3], env[0], *term[::-1]))
-                order.append((env[0], env[3], *term))
-            order = sorted(order, key=lambda x: (x[0] in atoms_stereo, x[0] in allenes_centers,
-                                                 -atoms[x[0]].atomic_number))
-            while (order[0][0], order[0][2]) in used:
-                order.append(order.pop(0))
-            order = order[0]
-            used.add((order[2], order[0]))
-            s = self._translate_allene_sign(n, *order[:2])
-            v = _allene_sign((*plane[order[0]], 1), plane[order[2]], plane[order[3]], (*plane[order[1]], 0))
-            if not v:
-                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
-            if s:
-                wedge.append((order[2], order[0], v))
-            else:
-                wedge.append((order[2], order[0], -v))
-
-        for n, s in atoms_stereo.items():
-            order = sorted(self._stereo_tetrahedrons[n], key=lambda x: (x in atoms_stereo, x in allenes_centers,
-                                                                        -atoms[x].atomic_number, atoms[x].in_ring))
-            while (order[0], n) in used:
-                order.append(order.pop(0))
-            used.add((n, order[0]))
-
-            s = self._translate_tetrahedron_sign(n, order)
-            # need recalculation if XY changed
-            if len(order) == 3:
-                v = _pyramid_sign((*plane[n], 0),
-                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
-            else:
-                v = _pyramid_sign((*plane[order[3]], 0),
-                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
-            if not v:
-                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
-            if s:
-                wedge.append((n, order[0], v))
-            else:
-                wedge.append((n, order[0], -v))
-        return tuple(wedge)
-
     def _translate_tetrahedron_sign(self: 'Container', n, env):
         """
         Get sign of chiral tetrahedron atom for specified neighbors order
@@ -702,6 +646,62 @@ class MoleculeStereo(Stereo):
             # flush cache
             del self.__dict__['_MoleculeStereo__chiral_centers']
 
+    @cached_property
+    def _wedge_map(self: 'Container'):
+        plane = self._plane
+        atoms_stereo = self._atoms_stereo
+        allenes_centers = self._stereo_allenes_centers
+        atoms = self._atoms
+        used = set()
+        wedge = []
+        for n, s in self._allenes_stereo.items():
+            env = self._stereo_allenes[n]
+            term = self._stereo_allenes_terminals[n]
+            order = [(*env[:2], *term), (*env[1::-1], *term[::-1])]
+            if env[2]:
+                order.append((env[2], env[1], *term))
+                order.append((env[1], env[2], *term[::-1]))
+            if env[3]:
+                order.append((env[3], env[0], *term[::-1]))
+                order.append((env[0], env[3], *term))
+            order = sorted(order, key=lambda x: (x[0] in atoms_stereo, x[0] in allenes_centers,
+                                                 -atoms[x[0]].atomic_number))
+            while (order[0][0], order[0][2]) in used:
+                order.append(order.pop(0))
+            order = order[0]
+            used.add((order[2], order[0]))
+            s = self._translate_allene_sign(n, *order[:2])
+            v = _allene_sign((*plane[order[0]], 1), plane[order[2]], plane[order[3]], (*plane[order[1]], 0))
+            if not v:
+                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
+            if s:
+                wedge.append((order[2], order[0], v))
+            else:
+                wedge.append((order[2], order[0], -v))
+
+        for n, s in atoms_stereo.items():
+            order = sorted(self._stereo_tetrahedrons[n], key=lambda x: (x in atoms_stereo, x in allenes_centers,
+                                                                        -atoms[x].atomic_number, atoms[x].in_ring))
+            while (order[0], n) in used:
+                order.append(order.pop(0))
+            used.add((n, order[0]))
+
+            s = self._translate_tetrahedron_sign(n, order)
+            # need recalculation if XY changed
+            if len(order) == 3:
+                v = _pyramid_sign((*plane[n], 0),
+                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
+            else:
+                v = _pyramid_sign((*plane[order[3]], 0),
+                                  (*plane[order[0]], 1), (*plane[order[1]], 0), (*plane[order[2]], 0))
+            if not v:
+                info(f'need 2d clean. wedge stereo ambiguous for atom {{{n}}}')
+            if s:
+                wedge.append((n, order[0], v))
+            else:
+                wedge.append((n, order[0], -v))
+        return tuple(wedge)
+
     @property
     def _chiral_tetrahedrons(self) -> Set[int]:
         return self.__chiral_centers[0]
@@ -983,13 +983,6 @@ class MoleculeStereo(Stereo):
                 return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}, morgan
 
 
-class QueryStereo(Stereo):  # todo: implement add_wedge
-    __slots__ = ()
-
-    def add_wedge(self, n: int, m: int, mark: bool, *, clean_cache=True):
-        raise NotImplementedError
-
-
 # 1  2
 #  \ |
 #   \|
@@ -1014,4 +1007,4 @@ _alkene_translate = {(0, 1): False, (1, 0): False, (0, 3): True, (3, 0): True,
                      (2, 3): False, (3, 2): False, (2, 1): True, (1, 2): True}
 
 
-__all__ = ['MoleculeStereo', 'QueryStereo']
+__all__ = ['MoleculeStereo', 'Stereo']
