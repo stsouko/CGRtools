@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Adelia Fatykhova <adelik21979@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -19,7 +19,7 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, count, permutations
+from itertools import count, permutations
 from logging import info
 from operator import or_
 from typing import Union, Iterable
@@ -39,31 +39,43 @@ class BaseReactor:
             e = DynamicElement
 
         self.__to_delete = set(reactants).difference(products) if delete_atoms else set()
+
+        # prepare atoms patch
         self.__elements = elements = {}
         atoms = defaultdict(dict)
         for n, atom in products.atoms():
-            if atom.neighbors or atom.hybridization:
-                info('neighbors and hybridization for new atoms unusable')
             atoms[n].update(charge=atom.charge, is_radical=atom.is_radical)
-            elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
-            if n not in reactants:
-                atoms[n]['xy'] = atom.xy
             if is_cgr:
                 atoms[n].update(p_is_radical=atom.p_is_radical, p_charge=atom.p_charge)
+
+            if atom.atomic_number:  # replace atom
+                elements[n] = e.from_atomic_number(atom.atomic_number)(atom.isotope)
+                if n not in reactants:
+                    atoms[n]['xy'] = atom.xy
+            elif n not in reactants:
+                raise ValueError('New atom should be defined')
+            else:  # use atom from reactant
+                elements[n] = None
 
         bonds = []
         for n, m, b in products.bonds():
             if is_cgr:
                 bonds.append((n, m, b))
+            elif len(b.order) > 1:
+                raise ValueError('bond list in patch not supported')
             else:
                 bonds.append((n, m, Bond(b.order[0])))
 
+        self.__bonds = bonds
         self.__atom_attrs = dict(atoms)
-        self.__bond_attrs = bonds
+        self.__products = products
 
     def _patcher(self, structure, mapping):
         elements = self.__elements
+        products = self.__products
+        patch_bonds = self.__bonds
 
+        atoms = structure._atoms
         plane = structure._plane
         bonds = structure._bonds
         charges = structure._charges
@@ -71,8 +83,6 @@ class BaseReactor:
         if self.__is_cgr:
             p_charges = structure._p_charges
             p_radicals = structure._p_radicals
-
-        new = structure.__class__()
 
         to_delete = {mapping[x] for x in self.__to_delete}
         if to_delete:
@@ -100,53 +110,131 @@ class BaseReactor:
 
             to_delete.update(delete)
 
-        max_atom = max(charges) + 1
+        new = structure.__class__()
+        max_atom = max(atoms) + 1
         for n, atom in self.__atom_attrs.items():
             if n in mapping:  # add matched atoms
                 m = mapping[n]
-                new.add_atom(elements[n].copy(), m, xy=plane[m], **atom)
+                e = elements[n]
+                if e is None:
+                    e = atoms[m]
+                new.add_atom(e.copy(), m, xy=plane[m], **atom)
             else:  # new atoms
                 mapping[n] = new.add_atom(elements[n].copy(), max_atom, **atom)
                 max_atom += 1
 
-        old_atoms = set(new._atoms)
+        patch_atoms = set(new._atoms)
         if self.__is_cgr:
             for n, atom in structure.atoms():  # add unmatched atoms
-                if n not in old_atoms and n not in to_delete:
+                if n not in patch_atoms and n not in to_delete:
                     new.add_atom(atom.copy(), n, charge=charges[n], is_radical=radicals[n], xy=plane[n],
                                  p_is_radical=p_radicals[n], p_charge=p_charges[n])
         else:
             for n, atom in structure.atoms():  # add unmatched atoms
-                if n not in old_atoms and n not in to_delete:
+                if n not in patch_atoms and n not in to_delete:
                     new.add_atom(atom.copy(), n, charge=charges[n], is_radical=radicals[n], xy=plane[n])
 
-        for n, m, bond in self.__bond_attrs:  # add patch bonds
-            n = mapping[n]
-            m = mapping[m]
-            new.add_bond(n, m, bond.copy())
+        for n, m, bond in patch_bonds:  # add patch bonds
+            new.add_bond(mapping[n], mapping[m], bond.copy())
 
         for n, m_bond in bonds.items():
             if n in to_delete:  # atoms for removing
                 continue
-            to_delete.add(n)
+            to_delete.add(n)  # reuse to_delete set for seen atoms
             for m, bond in m_bond.items():
-                if m in to_delete or n in old_atoms and m in old_atoms:
+                # ignore deleted atoms and patch atoms
+                if m in to_delete or n in patch_atoms and m in patch_atoms:
                     continue
                 new.add_bond(n, m, bond.copy())
 
-        # todo: calculate stereo mark based on new atom order
+        if self.__is_cgr:  # no stereo in CGR
+            return new
+
+        # check needs of stereo calculations
+        if structure._atoms_stereo or structure._allenes_stereo or structure._cis_trans_stereo or \
+                products._atoms_stereo or products._allenes_stereo or products._cis_trans_stereo:
+            reversed_mapping = {m: n for n, m in mapping.items()}
+
+            # set patch atoms stereo
+            for n, s in products._atoms_stereo.items():
+                m = mapping[n]
+                new._atoms_stereo[m] = products._translate_tetrahedron_sign_reversed(n,
+                                                                                     [reversed_mapping[x]
+                                                                                      for x in
+                                                                                      new._stereo_tetrahedrons[m]],
+                                                                                     s)
+
+            for n, s in products._allenes_stereo.items():
+                m = mapping[n]
+                t1, t2, *_ = new._stereo_allenes[m]
+                new._allenes_stereo[m] = products._translate_allene_sign_reversed(n,
+                                                                                  reversed_mapping[t1],
+                                                                                  reversed_mapping[t2],
+                                                                                  s)
+
+            for (n, m), s in products._cis_trans_stereo.items():
+                nm = (mapping[n], mapping[m])
+                try:
+                    t1, t2, *_ = new._stereo_cis_trans[nm]
+                except KeyError:
+                    nm = nm[::-1]
+                    t2, t1, *_ = new._stereo_cis_trans[nm]
+                new._cis_trans_stereo[nm] = products._translate_cis_trans_sign_reversed(n, m,
+                                                                                        reversed_mapping[t1],
+                                                                                        reversed_mapping[t2],
+                                                                                        s)
+
+            # set unmatched part stereo
+            for n, s in structure._atoms_stereo.items():
+                if n in patch_atoms or n not in new or new._bonds[n].keys() != structure._bonds[n].keys():
+                    # skip atoms with changed neighbors
+                    continue
+                new._atoms_stereo[n] = structure._translate_tetrahedron_sign_reversed(n, new._stereo_tetrahedrons[n], s)
+
+            for n, s in structure._allenes_stereo.items():
+                if n in patch_atoms or n not in new._stereo_allenes or \
+                        set(new._stereo_allenes[n]) != set(structure._stereo_allenes[n]):
+                    # skip changed allenes
+                    continue
+                t1, t2, *_ = new._stereo_allenes[n]
+                new._allenes_stereo[n] = structure._translate_allene_sign_reversed(n, t1, t2, s)
+
+            for nm, s in structure._cis_trans_stereo.items():
+                n, m = nm
+                if n in patch_atoms or m in patch_atoms:
+                    continue
+                env = structure._stereo_cis_trans[nm]
+                try:
+                    new_env = new._stereo_cis_trans[nm]
+                except KeyError:
+                    nm = nm[::-1]
+                    try:
+                        new_env = new._stereo_cis_trans[nm]
+                    except KeyError:
+                        continue
+                    t2, t1, *_ = new_env
+                else:
+                    t1, t2, *_ = new_env
+                if set(env) != set(new_env):
+                    continue
+                new._cis_trans_stereo[nm] = structure._translate_cis_trans_sign_reversed(n, m, t1, t2, s)
+
+            new._fix_stereo()
         return new
 
     def __getstate__(self):
-        return {'elements': self.__elements, 'atom_attrs': self.__atom_attrs, 'bond_attrs': self.__bond_attrs,
-                'is_cgr': self.__is_cgr, 'to_delete': self.__to_delete}
+        return {'elements': self.__elements, 'atom_attrs': self.__atom_attrs, 'products': self.__products,
+                'is_cgr': self.__is_cgr, 'to_delete': self.__to_delete, 'bonds': self.__bonds}
 
     def __setstate__(self, state):
+        if 'bond_attrs' in state:  # <=4.0.31
+            raise ValueError('version incompatible. use 4.0.31 or older version.')
         self.__elements = state['elements']
         self.__atom_attrs = state['atom_attrs']
-        self.__bond_attrs = state['bond_attrs']
+        self.__products = state['products']
         self.__is_cgr = state['is_cgr']
         self.__to_delete = state['to_delete']
+        self.__bonds = state['bonds']
 
 
 class CGRReactor(BaseReactor):
@@ -159,7 +247,8 @@ class CGRReactor(BaseReactor):
     CGRReactor calling transforms reactants to products and
     returns generator of all possible products.
     """
-    def __init__(self, template: ReactionContainer, delete_atoms: bool = False):
+
+    def __init__(self, template: ReactionContainer, delete_atoms: bool = True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactant but
@@ -168,12 +257,18 @@ class CGRReactor(BaseReactor):
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
-        if any(isinstance(x, (CGRContainer, QueryCGRContainer)) for x in chain(template.reactants, template.products)):
+        if isinstance(reactants[0], CGRContainer):
             reactants = reduce(or_, reactants, QueryCGRContainer())
             products = reduce(or_, products, QueryCGRContainer())
-        else:
+        elif isinstance(reactants[0], QueryCGRContainer):
+            reactants = reduce(or_, reactants)
+            products = reduce(or_, products)
+        elif isinstance(reactants[0], MoleculeContainer):
             reactants = reduce(or_, reactants, QueryContainer())
             products = reduce(or_, products, QueryContainer())
+        else:
+            reactants = reduce(or_, reactants)
+            products = reduce(or_, products)
 
         self.__pattern = reactants
         self.__meta = template.meta.copy()
@@ -207,7 +302,8 @@ class Reactor(BaseReactor):
     returns generator of reaction transformations with all
     possible products
     """
-    def __init__(self, template, delete_atoms=False):
+
+    def __init__(self, template, delete_atoms=True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactants but
@@ -216,13 +312,18 @@ class Reactor(BaseReactor):
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
-        if not all(isinstance(x, (QueryContainer, MoleculeContainer)) for x in chain(products, reactants)):
-            raise TypeError('only Molecules and Queries possible')
 
-        self.__patterns = reactants = tuple(QueryContainer() | x for x in reactants)
         self.__split = len(products)
 
-        products = reduce(or_, products, QueryContainer())
+        if isinstance(reactants[0], MoleculeContainer):
+            self.__patterns = reactants = tuple(QueryContainer() | x for x in reactants)
+            products = reduce(or_, products, QueryContainer())
+        elif isinstance(reactants[0], QueryContainer):
+            self.__patterns = reactants
+            products = reduce(or_, products)
+        else:
+            raise TypeError('only Molecules and Queries possible')
+
         reactants = reduce(or_, reactants)
         self.__meta = template.meta.copy()
         super().__init__(reactants, products, delete_atoms)
@@ -238,8 +339,8 @@ class Reactor(BaseReactor):
             ignored_numbers = {x for x in ignored for x in x}
             chosen = [structures[x] for x in chosen]
             united_chosen = reduce(or_, chosen)
-            for match in lazy_product(*(x.get_mapping(y, automorphism_filter=automorphism_filter)
-                                        for x, y in zip(self.__patterns, chosen))):
+            for match in lazy_product(*(x.get_mapping(y, automorphism_filter=automorphism_filter) for x, y in
+                                        zip(self.__patterns, chosen))):
                 mapping = match[0]
                 for m in match[1:]:
                     mapping.update(m)
