@@ -123,17 +123,14 @@ class Calculate2DQuery(Calculate2D):
     __slots__ = ()
 
     def _clean2d_prepare(self):
-        radicals = self._radicals
-        self._radicals = {n: False for n in radicals}
-        try:
-            smiles, order = self._smiles(self._smiles_order, _return_order=True, stereo=False, hybridization=False,
-                                         neighbors=False, rings=False, hydrogens=False, heteroatoms=False)
-        except Exception:
-            raise
-        else:
-            return ''.join(smiles), order
-        finally:
-            self._radicals = radicals
+        mol = molecule.MoleculeContainer()
+        for n, atom in self._atoms.items():
+            atom = Element.from_atomic_number(atom.atomic_number or 6)()
+            mol.add_atom(atom, n)
+        for n, m, bond in self.bonds():
+            mol.add_bond(n, m, bond.order[0])
+        smiles, order = mol._smiles(mol._smiles_order, _return_order=True)
+        return ''.join(smiles), order
 
 
 class Calculate2DCGR(Calculate2D):
@@ -145,10 +142,7 @@ class Calculate2DCGR(Calculate2D):
             atom = Element.from_atomic_number(atom.atomic_number or 6)()
             mol.add_atom(atom, n)
         for n, m, bond in self.bonds():
-            if bond.order == bond.p_order:
-                mol.add_bond(n, m, bond.order)
-            else:
-                mol.add_bond(n, m, 1)
+            mol.add_bond(n, m, bond.order or 1)
         smiles, order = mol._smiles(mol._smiles_order, _return_order=True)
         return ''.join(smiles), order
 
