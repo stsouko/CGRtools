@@ -84,8 +84,6 @@ class BaseReactor:
             p_charges = structure._p_charges
             p_radicals = structure._p_radicals
 
-        new = structure.__class__()
-
         to_delete = {mapping[x] for x in self.__to_delete}
         if to_delete:
             # if deleted atoms have another path to remain fragment, the path is preserved
@@ -112,6 +110,7 @@ class BaseReactor:
 
             to_delete.update(delete)
 
+        new = structure.__class__()
         max_atom = max(atoms) + 1
         for n, atom in self.__atom_attrs.items():
             if n in mapping:  # add matched atoms
@@ -151,32 +150,76 @@ class BaseReactor:
         if self.__is_cgr:  # no stereo in CGR
             return new
 
-        atoms_stereo = structure._atoms_stereo
-        allenes_stereo = structure._allenes_stereo
-        cis_trans_stereo = structure._cis_trans_stereo
-
         # check needs of stereo calculations
-        if atoms_stereo or allenes_stereo or cis_trans_stereo or \
+        if structure._atoms_stereo or structure._allenes_stereo or structure._cis_trans_stereo or \
                 products._atoms_stereo or products._allenes_stereo or products._cis_trans_stereo:
             reversed_mapping = {m: n for n, m in mapping.items()}
-            new_bonds = new._bonds
-            products_bonds = products._bonds
 
-            # set signs based on new atom order.
+            # set patch atoms stereo
             for n, s in products._atoms_stereo.items():
                 m = mapping[n]
-                if len(new_bonds[m]) != len(products_bonds[n]):
-                    raise KeyError('Stereo mark on patch to base structure contact area impossible')
-                new._atoms_stereo[m] = products._translate_tetrahedron_sign_reversed(n, [reversed_mapping[x] for x in
-                                                                                         new_bonds[m]], s)
+                new._atoms_stereo[m] = products._translate_tetrahedron_sign_reversed(n,
+                                                                                     [reversed_mapping[x]
+                                                                                      for x in
+                                                                                      new._stereo_tetrahedrons[m]],
+                                                                                     s)
 
             for n, s in products._allenes_stereo.items():
                 m = mapping[n]
-                t1, t2 = new._stereo_allenes_terminals[m]
-                new._allenes_stereo[m] = products._translate_allene_sign_reversed(m, t1, t2, s)
-            new_cis_trans_stereo = new._cis_trans_stereo
-            translate_cis_trans_sign = products._translate_cis_trans_sign_reversed
+                t1, t2, *_ = new._stereo_allenes[m]
+                new._allenes_stereo[m] = products._translate_allene_sign_reversed(n,
+                                                                                  reversed_mapping[t1],
+                                                                                  reversed_mapping[t2],
+                                                                                  s)
 
+            for (n, m), s in products._cis_trans_stereo.items():
+                nm = (mapping[n], mapping[m])
+                try:
+                    t1, t2, *_ = new._stereo_cis_trans[nm]
+                except KeyError:
+                    nm = nm[::-1]
+                    t2, t1, *_ = new._stereo_cis_trans[nm]
+                new._cis_trans_stereo[nm] = products._translate_cis_trans_sign_reversed(n, m,
+                                                                                        reversed_mapping[t1],
+                                                                                        reversed_mapping[t2],
+                                                                                        s)
+
+            # set unmatched part stereo
+            for n, s in structure._atoms_stereo.items():
+                if n in patch_atoms or n not in new or new._bonds[n].keys() != structure._bonds[n].keys():
+                    # skip atoms with changed neighbors
+                    continue
+                new._atoms_stereo[n] = structure._translate_tetrahedron_sign_reversed(n, new._stereo_tetrahedrons[n], s)
+
+            for n, s in structure._allenes_stereo.items():
+                if n in patch_atoms or n not in new._stereo_allenes or \
+                        set(new._stereo_allenes[n]) != set(structure._stereo_allenes[n]):
+                    # skip changed allenes
+                    continue
+                t1, t2, *_ = new._stereo_allenes[n]
+                new._allenes_stereo[n] = structure._translate_allene_sign_reversed(n, t1, t2, s)
+
+            for nm, s in structure._cis_trans_stereo.items():
+                n, m = nm
+                if n in patch_atoms or m in patch_atoms:
+                    continue
+                env = structure._stereo_cis_trans[nm]
+                try:
+                    new_env = new._stereo_cis_trans[nm]
+                except KeyError:
+                    nm = nm[::-1]
+                    try:
+                        new_env = new._stereo_cis_trans[nm]
+                    except KeyError:
+                        continue
+                    t2, t1, *_ = new_env
+                else:
+                    t1, t2, *_ = new_env
+                if set(env) != set(new_env):
+                    continue
+                new._cis_trans_stereo[nm] = structure._translate_cis_trans_sign_reversed(n, m, t1, t2, s)
+
+            new._fix_stereo()
         return new
 
     def __getstate__(self):
@@ -205,7 +248,7 @@ class CGRReactor(BaseReactor):
     returns generator of all possible products.
     """
 
-    def __init__(self, template: ReactionContainer, delete_atoms: bool = False):
+    def __init__(self, template: ReactionContainer, delete_atoms: bool = True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactant but
@@ -260,7 +303,7 @@ class Reactor(BaseReactor):
     possible products
     """
 
-    def __init__(self, template, delete_atoms=False):
+    def __init__(self, template, delete_atoms=True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactants but

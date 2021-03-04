@@ -353,8 +353,8 @@ class Stereo:
             nf = bonds[path[0]]
             nl = bonds[path[-1]]
             n1, m1 = path[1], path[-2]
-            if any(b.order not in (1, 4) for m, b in nf.items() if m != n1) or \
-                    any(b.order not in (1, 4) for m, b in nl.items() if m != m1):
+            if any(b not in (1, 4) for m, b in nf.items() if m != n1) or \
+                    any(b not in (1, 4) for m, b in nl.items() if m != m1):
                 continue
             nn = [x for x in nf if x != n1 and atoms[x].atomic_number != 1]
             mn = [x for x in nl if x != m1 and atoms[x].atomic_number != 1]
