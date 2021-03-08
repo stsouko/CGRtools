@@ -40,7 +40,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                         DepictMolecule, Calculate2DMolecule, Tautomers, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
-    __class_cache__ = {}
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []

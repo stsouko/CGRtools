@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -42,6 +42,7 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
     Reaction storage hashable and comparable. based on reaction unique signature (SMIRKS).
     """
     __slots__ = ('__reactants', '__products', '__reagents', '__meta', '__name', '_arrow', '_signs', '__dict__')
+    __class_cache__ = {}
 
     def __init__(self, reactants: TIterable[graphs] = (), products: TIterable[graphs] = (),
                  reagents: TIterable[graphs] = (), meta: Optional[Dict] = None, name: Optional[str] = None):

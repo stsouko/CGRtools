@@ -1375,7 +1375,6 @@ class Standardize:
 
 class StandardizeReaction:
     __slots__ = ()
-    __class_cache__ = {}
 
     def canonicalize(self: 'ReactionContainer', fix_mapping: bool = True, *,
                      logging=False) -> Union[bool, Tuple[int, Tuple[int, ...], int, str]]:

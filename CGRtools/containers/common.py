@@ -32,6 +32,7 @@ from ..periodictable import AnyAtom
 class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
     __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
                  '__dict__', '__weakref__')
+    __class_cache__ = {}
 
     def __init__(self):
         self._atoms: Dict[int, AnyAtom] = {}
@@ -44,9 +45,12 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         self.__name = ''
 
     def __getstate__(self):
-        return {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self.__meta, 'plane': self._plane,
-                'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals,
-                'name': self.__name}
+        state = {'atoms': self._atoms, 'bonds': self._bonds, 'meta': self.__meta, 'plane': self._plane,
+                 'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals,
+                 'name': self.__name}
+        if self.__class_cache__.get('save_cache', False):
+            state['cache'] = self.__dict__
+        return state
 
     def __setstate__(self, state):
         self._atoms = state['atoms']
@@ -59,6 +63,12 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         self._parsed_mapping = state['parsed_mapping']
         self.__meta = state['meta']
         self.__name = state.get('name', '')  # 4.0.9 compatibility
+        if 'cache' in state:
+            self.__dict__.update(state['cache'])
+
+    @classmethod
+    def pickle_save_cache(cls, arg: bool):
+        cls.__class_cache__['save_cache'] = arg
 
     def __len__(self):
         return len(self._atoms)
