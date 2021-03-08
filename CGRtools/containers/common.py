@@ -63,11 +63,14 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
         self._parsed_mapping = state['parsed_mapping']
         self.__meta = state['meta']
         self.__name = state.get('name', '')  # 4.0.9 compatibility
-        if 'cache' in state:
+        if 'cache' in state:  # >= 4.1.15
             self.__dict__.update(state['cache'])
 
     @classmethod
     def pickle_save_cache(cls, arg: bool):
+        """
+        Store cache of Graph into pickle for speedup loading
+        """
         cls.__class_cache__['save_cache'] = arg
 
     def __len__(self):

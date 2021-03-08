@@ -118,8 +118,12 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         raise KeyError('invalid attribute')
 
     def __getstate__(self):
-        return dict(reactants=self.__reactants, products=self.__products, reagents=self.__reagents, meta=self.__meta,
-                    name=self.__name)
+        state = {'reactants': self.__reactants, 'products': self.__products, 'reagents': self.__reagents,
+                 'meta': self.__meta, 'name': self.__name, 'arrow': self._arrow, 'signs': self._signs}
+
+        if MoleculeContainer.__class_cache__.get('save_cache', False):
+            state['cache'] = self.__dict__
+        return state
 
     def __setstate__(self, state):
         if next(iter(state)) == 'reagents':  # 3.0 compatibility
@@ -129,8 +133,21 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         self.__reagents = state['reagents']
         self.__meta = state['meta']
         self.__name = state.get('name', '')  # 4.0.9 compatibility
-        self._arrow = None
-        self._signs = None
+        if 'signs' in state:  # >= 4.1.15
+            self._arrow = state['arrow']
+            self._signs = state['signs']
+        else:
+            self._arrow = None
+            self._signs = None
+        if 'cache' in state:  # >= 4.1.15
+            self.__dict__.update(state['cache'])
+
+    @classmethod
+    def pickle_save_cache(cls, arg: bool):
+        """
+        Store cache of reaction into pickle for speedup loading
+        """
+        MoleculeContainer.__class_cache__['save_cache'] = arg
 
     @property
     def reactants(self) -> Tuple[graphs, ...]:
@@ -225,7 +242,10 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
         return sha512(str(self).encode()).digest()
 
     def __bool__(self):
-        return bool(self.__reactants or self.__products or self.__reagents)
+        """
+        Exists both reactants and products
+        """
+        return bool(self.__reactants and self.__products)
 
     @cached_method
     def __str__(self):
