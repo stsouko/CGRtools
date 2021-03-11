@@ -414,20 +414,15 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         return self.compose(other)
 
-    def get_fast_mapping(self, other: 'MoleculeContainer', *, threshold: int = 16) -> Optional[Dict[int, int]]:
+    def get_fast_mapping(self, other: 'MoleculeContainer') -> Optional[Dict[int, int]]:
         """
         Get self to other fast (suboptimal) structure mapping.
         Only one possible atoms mapping returned.
         Effective only for big molecules.
-
-        :param threshold: molecules less than `size` atoms processed by .get_mapping
         """
         if isinstance(other, MoleculeContainer):
             if len(self) != len(other):
                 return
-            if len(self) < threshold:
-                return next(self.get_mapping(other), None)
-
             ss, so = self._smiles(self.atoms_order.get, _return_order=True)
             os, oo = other._smiles(other.atoms_order.get, _return_order=True)
             if ss != os:
