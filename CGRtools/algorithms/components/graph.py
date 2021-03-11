@@ -19,7 +19,14 @@
 #
 from CachedMethods import cached_property, FrozenDict
 from collections import defaultdict, deque
+from importlib.util import find_spec
 from typing import List, Tuple, Dict, Set, Any, Union
+
+
+if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
+    from numpy import uint64, zeros
+else:
+    zeros = None
 
 
 class GraphComponents:
@@ -109,12 +116,64 @@ class GraphComponents:
                 out.append(tuple(r))
         return tuple(out)
 
+    def adjacency_matrix(self, set_bonds=False):
+        """
+        Adjacency matrix of Graph.
+
+        :param set_bonds: if True set bond orders instead of 1.
+        """
+        if zeros is None:
+            raise ImportError('numpy required')
+
+        adj = zeros((len(self), len(self)), dtype=uint64)
+        mapping = {n: x for x, n in enumerate(self._atoms)}
+        if set_bonds:
+            for n, ms in self._bonds.items():
+                n = mapping[n]
+                for m, b in ms.items():
+                    adj[n, mapping[m]] = int(b)
+        else:
+            for n, ms in self._bonds.items():
+                n = mapping[n]
+                for m, b in ms.items():
+                    adj[n, mapping[m]] = 1
+        return adj
+
     @cached_property
     def ring_atoms(self):
         """
         Atoms in rings
         """
-        return {x for x in self.sssr for x in x}
+        bonds = self._skin_graph(self._bonds)
+        if not bonds:
+            return frozenset()
+
+        in_rings = set()
+        atoms = set(bonds)
+        while atoms:
+            stack = deque([(atoms.pop(), 0, 0)])
+            path = []
+            seen = set()
+            while stack:
+                c, p, d = stack.pop()
+                if len(path) > d:
+                    path = path[:d]
+                if c in in_rings:
+                    continue
+                path.append(c)
+                seen.add(c)
+
+                d += 1
+                for n in bonds[c]:
+                    if n == p:
+                        continue
+                    elif n in seen:
+                        in_rings.update(path[path.index(n):])
+                    else:
+                        stack.append((n, c, d))
+
+            atoms.difference_update(seen)
+        return in_rings
 
     @cached_property
     def rings_count(self):

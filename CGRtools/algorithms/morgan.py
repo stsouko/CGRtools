@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property
-from collections import Counter
 from itertools import groupby
 from logging import warning
 from operator import itemgetter
@@ -40,7 +39,8 @@ class Morgan:
             return {}
         elif len(atoms) == 1:  # optimize single atom containers
             return dict.fromkeys(atoms, 1)
-        return self._morgan({n: hash(a) for n, a in atoms.items()})
+        ring = self.ring_atoms
+        return self._morgan({n: tuple_hash((hash(a), n in ring)) for n, a in atoms.items()})
 
     def _morgan(self, weights: Dict[int, int]) -> Dict[int, int]:
         atoms = self._atoms
@@ -58,10 +58,7 @@ class Morgan:
             if numb == len(atoms):  # each atom now unique
                 break
             elif numb == old_numb:  # not changed. molecules like benzene
-                if min(Counter(weights.values()).items(), key=itemgetter(1))[1] > 1:
-                    if stab == 3:
-                        break
-                elif stab >= 2:
+                if stab == 3:
                     break
                 stab += 1
             elif stab:  # changed unique atoms number. reset stability check.

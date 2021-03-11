@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2014-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2014-2019 Timur Madzhidov tmadzhidov@gmail.com features and API discussion
 #  Copyright 2014-2019 Alexandre Varnek <varnek@unistra.fr> base idea of CGR approach
 #  This file is part of CGRtools.
 #
@@ -24,7 +25,7 @@ from .reactor import *
 from .utils import *
 
 
-smiles = SMILESRead.create_parser(ignore=True)
+smiles = SMILESRead.create_parser(ignore=True, remap=False)
 xyz = XYZRead.create_parser()
 
 
