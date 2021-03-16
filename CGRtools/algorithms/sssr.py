@@ -225,15 +225,15 @@ class SSSR:
         ndx = ring.index(n)
         if ndx == 0:
             if ring[-1] < ring[1]:
-                return n, *ring[:0:-1]
+                return (n, *ring[:0:-1])
             return ring
         elif ndx == len(ring) - 1:
             if ring[0] > ring[-2]:
                 return ring[::-1]
-            return n, *ring[:-1]
+            return (n, *ring[:-1])
         if ring[ndx + 1] > ring[ndx - 1]:
-            return *ring[ndx::-1], *ring[:ndx:-1]
-        return *ring[ndx:], *ring[:ndx]
+            return (*ring[ndx::-1], *ring[:ndx:-1])
+        return (*ring[ndx:], *ring[:ndx])
 
     @staticmethod
     def __ring_scissors(ring: Tuple[int, ...], n: int, m: int) -> Tuple[int, ...]:
@@ -241,15 +241,15 @@ class SSSR:
         mdx = ring.index(m)
         if ndx == 0:
             if mdx == 1:
-                return n, *ring[:0:-1]
+                return (n, *ring[:0:-1])
             return ring
         elif ndx == len(ring) - 1:
             if mdx == 0:
                 return ring[::-1]
-            return n, *ring[:-1]
+            return (n, *ring[:-1])
         if ndx < mdx:
-            return *ring[ndx::-1], *ring[:ndx:-1]
-        return *ring[ndx:], *ring[:ndx]
+            return (*ring[ndx::-1], *ring[:ndx:-1])
+        return (*ring[ndx:], *ring[:ndx])
 
     @staticmethod
     def __ring_adjacency(ring: Tuple[int, ...]) -> Dict[int, List[int]]:
@@ -324,11 +324,11 @@ class SSSR:
                 return ()
         else:
             if common == set(ring[:lc]):
-                return *ring[lc - 1:], ring[0]
+                return (*ring[lc - 1:], ring[0])
             for _ in range(len(ring) - 1):
                 ring = (*ring[1:], ring[0])
                 if common == set(ring[:lc]):
-                    return *ring[lc - 1:], ring[0]
+                    return (*ring[lc - 1:], ring[0])
 
     @classmethod
     def __connected_rings(cls, rings, seen_rings):

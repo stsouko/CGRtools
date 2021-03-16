@@ -62,7 +62,7 @@ setup(
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='nougmanoff@protonmail.com',
-    python_requires='>=3.7.1',
+    python_requires='>=3.6.1',
     cmdclass=cmd_class,
     install_requires=['CachedMethods>=0.1.4,<0.2'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50']},

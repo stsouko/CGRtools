@@ -1621,9 +1621,9 @@ class StandardizeReaction:
         for m in self.molecules():
             if not isinstance(m, Standardize):
                 raise TypeError('Only Molecules supported')
-            map = max(m, default=0)
-            if map > start_map:
-                start_map = map
+            map_ = max(m, default=0)
+            if map_ > start_map:
+                start_map = map_
 
         mapping = defaultdict(list)
         for m in self.reactants:
