@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -287,19 +287,14 @@ class INCHIread:
         return self.__obj.__exit__(_type, value, traceback)
 
 
-def getsitepackages():
-    """returns a list containing all global site-packages directories. stolen and modified site.py function
-    """
-    sitepackages = []
-    for pr in {prefix, exec_prefix}:
-        pr = Path(pr)
-        if name == 'posix':
-            sitepackages.append(pr / 'local/lib')
-        else:
-            sitepackages.append(pr)
-        sitepackages.append(pr / 'lib')
-    return sitepackages
-
+sitepackages = []
+for pr in {prefix, exec_prefix}:
+    pr = Path(pr)
+    if name == 'posix':
+        sitepackages.append(pr / 'local/lib')
+    else:
+        sitepackages.append(pr)
+    sitepackages.append(pr / 'lib')
 
 platform = get_platform()
 if platform in ('linux-x86_64', 'win-amd64'):
@@ -310,10 +305,16 @@ if platform in ('linux-x86_64', 'win-amd64'):
         opt_flag = '-'
         libname = 'libinchi.so'
 
-    for site in getsitepackages():
+    for site in sitepackages:
         lib_path = site / libname
         if lib_path.exists():
-            lib = cdll.LoadLibrary(str(lib_path))
+            try:
+                lib = cdll.LoadLibrary(str(lib_path))
+            except OSError:
+                warn('libinchi loading problem', ImportWarning)
+                __all__ = []
+                del INCHIRead, INCHIread
+                break
             __all__ = ['INCHIRead', 'INCHIread']
             break
     else:
@@ -321,6 +322,6 @@ if platform in ('linux-x86_64', 'win-amd64'):
         __all__ = []
         del INCHIRead, INCHIread
 else:
-    warn('unsupported platform', ImportWarning)
+    warn('unsupported platform for libinchi', ImportWarning)
     __all__ = []
     del INCHIRead, INCHIread
