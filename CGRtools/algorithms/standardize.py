@@ -1743,7 +1743,7 @@ class StandardizeReaction:
 
         if self.reagents:
             for m in self.reagents:
-                max_x = m._fix_plane_min(shift_x, .5)
+                max_x = m._fix_plane_min(shift_x + .4, .5)
                 shift_x = max_x + 1
             if shift_x - arrow_min < 3:
                 shift_x = arrow_min + 3
