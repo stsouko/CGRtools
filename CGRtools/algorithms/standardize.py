@@ -1468,7 +1468,7 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction']) -> bool:
+    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction'], logging=True) -> bool:
         """
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
@@ -1520,7 +1520,7 @@ class StandardizeReaction:
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
                 mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
-
+                logging = False
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
                     m.remap(mapping)
@@ -1542,10 +1542,12 @@ class StandardizeReaction:
                     continue
                 break
 
+        if logging:
+            return ()
         if seen:
             self.flush_cache()
-            return True
-        return flag
+            return (self.__remapping_compiled_rules, True)
+        return (self.__remapping_compiled_rules, False)
 
     @classmethod
     def load_remapping_rules(cls, reactions):
