@@ -1510,6 +1510,10 @@ class StandardizeReaction:
             flag = False
 
         for bad_query, good_query, fix, valid in self.__remapping_compiled_rules:
+            if logging:
+                t, f, flag_m = True, False, None
+            else:
+                t, f, flag_m = (self.__remapping_compiled_rules, True), (self.__remapping_compiled_rules, False), True 
             cgr = ~self
             first_free = max(cgr) + 1
             free_number = count(first_free)
@@ -1520,7 +1524,7 @@ class StandardizeReaction:
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
                 mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
-                logging = False
+                flag_m = False
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
                     m.remap(mapping)
@@ -1541,13 +1545,13 @@ class StandardizeReaction:
                     free_number = count(first_free)
                     continue
                 break
-
-        if logging:
-            return ()
+        
         if seen:
             self.flush_cache()
-            return (self.__remapping_compiled_rules, True)
-        return (self.__remapping_compiled_rules, False)
+            return t
+        if flag_m:
+            return ()
+        return f
 
     @classmethod
     def load_remapping_rules(cls, reactions):
