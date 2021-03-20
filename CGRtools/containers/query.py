@@ -297,8 +297,8 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
         if rings is None:
             rings = ()
         elif isinstance(rings, int):
-            if rings < 3:
-                raise ValueError('rings should be greater or equal 3')
+            if rings < 3 and rings != 0:
+                raise ValueError('rings should be greater or equal 3. ring equal to zero is no ring atom mark')
             rings = (rings,)
         elif isinstance(rings, (tuple, list)):
             if not all(isinstance(n, int) for n in rings):

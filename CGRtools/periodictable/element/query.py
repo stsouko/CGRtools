@@ -212,8 +212,12 @@ class QueryElement(Query):
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
-                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
-                    return False
+                if self.ring_sizes:
+                    if self.ring_sizes[0]:
+                        if set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                            return False
+                    elif other.ring_sizes:  # not in ring expected
+                        return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
                 if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
@@ -287,8 +291,12 @@ class AnyElement(Query):
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
-                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
-                    return False
+                if self.ring_sizes:
+                    if self.ring_sizes[0]:
+                        if set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                            return False
+                    elif other.ring_sizes:  # not in ring expected
+                        return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
                 if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
@@ -332,8 +340,12 @@ class ListElement(AnyElement):
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
-                if self.ring_sizes and set(self.ring_sizes).isdisjoint(other.ring_sizes):
-                    return False
+                if self.ring_sizes:
+                    if self.ring_sizes[0]:
+                        if set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                            return False
+                    elif other.ring_sizes:  # not in ring expected
+                        return False
                 if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
                     return False
                 if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
