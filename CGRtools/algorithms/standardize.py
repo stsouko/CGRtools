@@ -1468,10 +1468,12 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction'], logging=True) -> bool:
+    def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction'], *, logging: bool = False) -> bool:
         """
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.
         """
+        if logging:
+            log = []
         seen = set()
         if not (self.reactants and self.products):
             return False
@@ -1509,22 +1511,19 @@ class StandardizeReaction:
         else:
             flag = False
 
-        for bad_query, good_query, fix, valid in self.__remapping_compiled_rules:
-            if logging:
-                t, f, flag_m = True, False, None
-            else:
-                t, f, flag_m = (self.__remapping_compiled_rules, True), (self.__remapping_compiled_rules, False), True 
+        for rule_num, (bad_query, good_query, fix, valid) in enumerate(self.__remapping_compiled_rules):
             cgr = ~self
             first_free = max(cgr) + 1
             free_number = count(first_free)
             cgr_c = set(cgr.center_atoms)
             del self.__dict__['__cached_method_compose']
 
+            flag_m = False
             for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
                 mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
-                flag_m = False
+                flag_m = True
                 reverse = {m: n for n, m in mapping.items()}
                 for m in self.products:
                     m.remap(mapping)
@@ -1536,6 +1535,9 @@ class StandardizeReaction:
                 for m in good_query.get_mapping(check, automorphism_filter=False):
                     if valid.issubset(m) and delta.issubset(m.values()):
                         seen.update(mapping)
+                        if logging:
+                            log.append((rule_num, str(bad_query), str(good_query), tuple(fix.values()))
+                        flag = True
                         break      
                 else:
                     # restore old mapping
@@ -1545,13 +1547,14 @@ class StandardizeReaction:
                     free_number = count(first_free)
                     continue
                 break
-        
+            else:
+                if logging and flag_m:
+                    log.append((rule_num, str(bad_query), str(good_query), ()))
         if seen:
             self.flush_cache()
-            return t
-        if flag_m:
-            return ()
-        return f
+        if logging:
+            return log
+        return flag
 
     @classmethod
     def load_remapping_rules(cls, reactions):
