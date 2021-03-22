@@ -84,15 +84,22 @@ class Depict:
 
         svg = [f'<svg width="{width:.2f}cm" height="{height:.2f}cm" '
                f'viewBox="{viewbox_x:.2f} {viewbox_y:.2f} {width:.2f} '
-               f'{height:.2f}" xmlns="http://www.w3.org/2000/svg" version="1.1">\n  <g>']
+               f'{height:.2f}" xmlns="http://www.w3.org/2000/svg" version="1.1">']
+        svg.extend(self._graph_svg(atoms, bonds, masks, viewbox_x, viewbox_y, width, height))
+        svg.append('</svg>')
+        return '\n'.join(svg)
 
+    @classmethod
+    def _graph_svg(cls, atoms, bonds, masks, viewbox_x, viewbox_y, width, height):
+        config = cls._render_config
+        svg = ['  <g>']
         if bonds:
             if masks:
                 uid = str(uuid4())
                 svg.append(f'    <defs>\n      <mask id="mask-{uid}">\n'
                            f'        <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
                            f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
-                svg.extend(self._masks_svg(masks))
+                svg.extend(cls._masks_svg(masks))
                 svg.append('      </mask>\n    </defs>\n'
                            f'    <g fill="none" stroke="{config["bond_color"]}" '
                            f'stroke-width="{config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
@@ -109,9 +116,8 @@ class Depict:
             svg.append('    <g font-family="monospace">')
             svg.extend(atoms)
             svg.append('    </g>')
-
-        svg.append('  </g>\n</svg>')
-        return '\n'.join(svg)
+        svg.append('  </g>')
+        return svg
 
     @classmethod
     def _masks_svg(cls, masks):
@@ -504,31 +510,7 @@ class DepictReaction:
             svg.append('  </g>')
 
         for atoms, bonds, masks in zip(r_atoms, r_bonds, r_masks):
-            svg.append('  <g>')
-            if bonds:
-                if masks:
-                    uid = str(uuid4())
-                    svg.append(f'    <defs>\n      <mask id="mask-{uid}">\n'
-                               f'        <rect x="{viewbox_x:.2f}" y="{viewbox_y:.2f}" '
-                               f'width="{width:.2f}" height="{height:.2f}" fill="white"/>')
-                    svg.extend(Depict._masks_svg(masks))
-                    svg.append('      </mask>\n    </defs>\n'
-                               f'    <g fill="none" stroke="{config["bond_color"]}" '
-                               f'stroke-width="{config["bond_width"]:.2f}"  mask="url(#mask-{uid})">')
-                    if len(bonds) == 1:  # SVG BUG adhoc
-                        svg.append(f'      <line x1="{viewbox_x:.2f}" y1="{viewbox_y:.2f}" '
-                                   f'x2="{viewbox_x + width:.2f}" y2="{viewbox_y:.2f}" stroke="none"/>')
-                else:
-                    svg.append(f'    <g fill="none" stroke="{config["bond_color"]}" '
-                               f'stroke-width="{config["bond_width"]:.2f}">')
-                svg.extend(bonds)
-                svg.append('    </g>')
-
-            if atoms:
-                svg.append('    <g font-family="monospace">')
-                svg.extend(atoms)
-                svg.append('    </g>')
-            svg.append('  </g>')
+            svg.extend(Depict._graph_svg(atoms, bonds, masks, viewbox_x, viewbox_y, width, height))
         svg.append('</svg>')
         return '\n'.join(svg)
 
