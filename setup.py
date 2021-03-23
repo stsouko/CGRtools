@@ -54,10 +54,10 @@ if find_spec('wheel'):
 
 setup(
     name='CGRtools',
-    version='4.1.17',
-    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.containers',
-              'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',
-              'CGRtools.utils', 'CGRtools.attributes'],
+    version='4.1.18',
+    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.algorithms.standardize',
+              'CGRtools.containers', 'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable',
+              'CGRtools.periodictable.element', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/stsouko/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
