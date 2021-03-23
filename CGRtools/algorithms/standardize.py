@@ -1536,7 +1536,7 @@ class StandardizeReaction:
                     if valid.issubset(m) and delta.issubset(m.values()):
                         seen.update(mapping)
                         if logging:
-                            log.append((rule_num, str(bad_query), str(good_query), tuple(fix.values())))
+                            log.append((rule_num, str(bad_query), str(good_query), tuple(mapping.values())))
                         flag = True
                         break      
                 else:
