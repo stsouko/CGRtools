@@ -217,6 +217,7 @@ class StandardizeReaction:
         Reactants in pairs should be fully equal (equal molecules and equal atom orders).
         Products should be equal but with different atom numbers.
         """
+        rules = []
         for bad, good in reactions:
             if str(bad) != str(good):
                 raise ValueError('bad and good reaction should be equal')
@@ -244,7 +245,6 @@ class StandardizeReaction:
             bad_query = cgr_bad.substructure(atoms.intersection(cgr_bad), as_query=True)
             good_query = cgr_good.substructure(atoms.intersection(cgr_good), as_query=True)
 
-            rules = []
             fix = {}
             for mb, mg in zip(bad.products, good.products):
                 fix.update({k: v for k, v in zip(mb, mg) if k != v and k in atoms})
