@@ -34,7 +34,7 @@ class Tautomers:
     __slots__ = ()
 
     def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True,
-                    zwitter=True, ring_chain=True, keto_enol=True) -> bool:
+                    zwitter=True, ring_chain=True, keto_enol=True, limit: int = 1000) -> bool:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
         """
@@ -42,8 +42,8 @@ class Tautomers:
             a = len(m.aromatic_rings)  # more aromatics is good
             return m.huckel_pi_electrons_energy - a
 
-        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False,
-                                             zwitter=zwitter, ring_chain=ring_chain, keto_enol=keto_enol), key=key)
+        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
+                                             ring_chain=ring_chain, keto_enol=keto_enol, limit=limit), key=key)
         if canon != self:  # attach state of canonic tautomer to self
             # atoms, radicals state, parsed_mapping and plane are unchanged
             self._bonds = canon._bonds
@@ -59,7 +59,7 @@ class Tautomers:
         return False
 
     def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True,
-                            zwitter=True, ring_chain=True, keto_enol=True) -> \
+                            zwitter=True, ring_chain=True, keto_enol=True, limit: int = 1000) -> \
             Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule.
@@ -69,7 +69,10 @@ class Tautomers:
         :param zwitter: Enable acid-base tautomerization
         :param ring_chain: Enable ring-chain tautomerization
         :param keto_enol: Enable keto-enol tautomerization
+        :param limit: Maximum amount of generated structures.
         """
+        if limit < 2:
+            raise ValueError('limit should be greater or equal 2')
         yield self.copy()
         atoms_stereo = self._atoms_stereo
         allenes_stereo = self._allenes_stereo
@@ -86,6 +89,7 @@ class Tautomers:
 
         seen = {copy: None}
         queue = deque([copy])
+        counter = 1
         while queue:
             current = queue.popleft()
 
@@ -101,6 +105,9 @@ class Tautomers:
                             mol._cis_trans_stereo.update(cis_trans_stereo)
                             mol._fix_stereo()
                     yield mol
+                    counter += 1
+                    if counter == limit:
+                        return
 
             if ring_chain:
                 for mol in current._enumerate_ring_chain_tautomers(full):
@@ -115,6 +122,9 @@ class Tautomers:
                             mol._cis_trans_stereo.update(cis_trans_stereo)
                             mol._fix_stereo()
                         yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
 
             if keto_enol:
                 for mol, ket in current._enumerate_keto_enol_tautomers(full):
@@ -136,6 +146,9 @@ class Tautomers:
                             yield ster
                         else:
                             yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
                         if len(mol.aromatic_rings) > len(current.aromatic_rings):
                             # found new aromatic ring. flush queue and start from it.
                             queue.clear()
