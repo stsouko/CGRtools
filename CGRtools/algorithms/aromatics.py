@@ -76,6 +76,8 @@ class Aromatize:
                 except StopIteration:  # exotic, just skip
                     continue
                 if atoms[n].atomic_number in (5, 7, 8, 15, 16, 34) and not charges[n]:
+                    if lr == 7 and atoms[n].atomic_number != 5:  # skip electron-rich 7-membered rings
+                        continue
                     if fix_tautomers and lr == 6 and atoms[n].atomic_number == 7 and len(bonds[n]) == 2:
                         donors.append(n)
                     pyroles.add(n)
