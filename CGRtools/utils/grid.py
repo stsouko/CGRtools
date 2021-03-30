@@ -35,7 +35,8 @@ def grid_depict(molecules: Union[List[graphs], Tuple[graphs, ...]], cols: int = 
 
     planes = []
     render = []
-    shift_y = shift_x = 0.
+    shift_y = 2.
+    shift_x = 0.
     for ms in zip_longest(*[iter(molecules)] * cols):
         height = 0.
         for m in ms:
