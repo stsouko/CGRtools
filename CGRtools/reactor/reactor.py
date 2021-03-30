@@ -37,7 +37,7 @@ class Reactor(BaseReactor):
     returns generator of reaction transformations with all
     possible reactions.
     """
-    def __init__(self, template, delete_atoms=True, one_shot=True, prevent_polymerise=True):
+    def __init__(self, template, *, delete_atoms=True, one_shot=True, prevent_polymerise=True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactants but
@@ -49,20 +49,20 @@ class Reactor(BaseReactor):
         if not reactants or not products:
             raise ValueError('empty template')
 
-        self.__split = len(products)
-
         if isinstance(reactants[0], MoleculeContainer):
             self.__patterns = reactants = tuple(QueryContainer() | x for x in reactants)
-            products = reduce(or_, products, QueryContainer())
+            products_ = reduce(or_, products, QueryContainer())
         elif isinstance(reactants[0], QueryContainer):
             self.__patterns = reactants
-            products = reduce(or_, products)
+            products_ = reduce(or_, products)
         else:
             raise TypeError('only Molecules and Queries possible')
 
-        reactants = reduce(or_, reactants)
+        self.__one_shot = one_shot
+        self.__prevent_poly = prevent_polymerise
+        self.__products_atoms = tuple(set(m) for m in products)
         self.__meta = template.meta.copy()
-        super().__init__(reactants, products, delete_atoms)
+        super().__init__(reduce(or_, reactants), products_, delete_atoms)
 
     def __call__(self, structures: Iterable[MoleculeContainer], automorphism_filter: bool = True):
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
@@ -73,7 +73,7 @@ class Reactor(BaseReactor):
         for chosen in permutations(s_nums, len(self.__patterns)):
             ignored = [structures[x] for x in s_nums.difference(chosen)]
             ignored_numbers = {x for x in ignored for x in x}
-            max_ignored_number = max(ignored_numbers)
+            max_ignored_number = max(ignored_numbers, default=0)
             chosen = [structures[x] for x in chosen]
             united_chosen = reduce(or_, chosen)
             for match in lazy_product(*(x.get_mapping(y, automorphism_filter=automorphism_filter) for x, y in
@@ -86,11 +86,8 @@ class Reactor(BaseReactor):
                 collision = set(new).intersection(ignored_numbers)
                 if collision:
                     new.remap(dict(zip(collision, count(max(max_ignored_number, max(new.atoms_numbers)) + 1))))
-                if self.__split > 1:
+                if len(self.__products_atoms) > 1:
                     new = new.split()
-                    if len(new) != self.__split:
-                        info(f'expected {self.__split} molecules in reaction products, but {len(new)} formed.\n'
-                             'input molecules has disconnected components')
                 else:
                     new = [new]
                 yield ReactionContainer(structures, new + ignored, meta=self.__meta)
@@ -111,12 +108,18 @@ class Reactor(BaseReactor):
         return checked
 
     def __getstate__(self):
-        return {'patterns': self.__patterns, 'meta': self.__meta, 'split': self.__split, **super().__getstate__()}
+        return {'patterns': self.__patterns, 'meta': self.__meta, 'products_atoms': self.__products_atoms,
+                'prevent_poly': self.__prevent_poly, 'one_shot': self.__one_shot,
+                **super().__getstate__()}
 
     def __setstate__(self, state):
+        if 'split' in state:
+            raise ValueError('Reactor pickled with incompatible version.')
         self.__patterns = state['patterns']
         self.__meta = state['meta']
-        self.__split = state['split']
+        self.__one_shot = state['one_shot']
+        self.__prevent_poly = state['prevent_poly']
+        self.__products_atoms = state['products_atoms']
         super().__setstate__(state)
 
 
