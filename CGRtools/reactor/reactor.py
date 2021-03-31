@@ -49,14 +49,11 @@ class Reactor(BaseReactor):
         if not reactants or not products:
             raise ValueError('empty template')
 
-        if isinstance(reactants[0], MoleculeContainer):
-            self.__patterns = reactants = tuple(QueryContainer() | x for x in reactants)
-            products_ = reduce(or_, products, QueryContainer())
-        elif isinstance(reactants[0], QueryContainer):
+        if isinstance(reactants[0], QueryContainer):
             self.__patterns = reactants
             products_ = reduce(or_, products)
         else:
-            raise TypeError('only Molecules and Queries possible')
+            raise TypeError('only Queries supported')
 
         self.__one_shot = one_shot
         self.__prevent_poly = prevent_polymerise
@@ -87,10 +84,35 @@ class Reactor(BaseReactor):
                 if collision:
                     new.remap(dict(zip(collision, count(max(max_ignored_number, max(new.atoms_numbers)) + 1))))
                 if len(self.__products_atoms) > 1:
-                    new = new.split()
+                    components = new._connected_components(new._bonds)
+                    # multi-component molecules in product side of template will be kept.
+                    components = self.__stack_components(components,
+                                                         [{mapping[x] for x in x if x in mapping}
+                                                          for x in self.__products_atoms])
+                    matched = set(mapping.values())
+                    components = self.__stack_components(components, [set(x) - matched for x in chosen])
+                    new = [new.substructure(c) for c in components]
                 else:
                     new = [new]
                 yield ReactionContainer(structures, new + ignored, meta=self.__meta)
+
+    @staticmethod
+    def __stack_components(components, groups):
+        out = []
+        for g in groups:
+            common = []
+            tmp = []
+            for c in components:
+                if not g.isdisjoint(c):
+                    common.append(c)
+                else:
+                    tmp.append(c)
+            if common:
+                components = tmp
+                common = reduce(or_, common)
+                out.append(common)
+        out.extend(components)
+        return out
 
     @staticmethod
     def __remap(structures):

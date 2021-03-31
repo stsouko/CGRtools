@@ -40,18 +40,14 @@ class CGRReactor(BaseReactor):
         reactants, products = template.reactants, template.products
         if not reactants or not products:
             raise ValueError('empty template')
-        if isinstance(reactants[0], CGRContainer):
-            reactants = reduce(or_, reactants, QueryCGRContainer())
-            products = reduce(or_, products, QueryCGRContainer())
-        elif isinstance(reactants[0], QueryCGRContainer):
+        if isinstance(reactants[0], QueryCGRContainer):
             reactants = reduce(or_, reactants)
             products = reduce(or_, products)
-        elif isinstance(reactants[0], MoleculeContainer):
-            reactants = reduce(or_, reactants, QueryContainer())
-            products = reduce(or_, products, QueryContainer())
+        elif isinstance(reactants[0], QueryContainer):
+            reactants = reduce(or_, reactants)
+            products = reduce(or_, products)
         else:
-            reactants = reduce(or_, reactants)
-            products = reduce(or_, products)
+            raise TypeError('only QueryCGRContainer or QueryContainer supported')
 
         self.__pattern = reactants
         self.__meta = template.meta.copy()
