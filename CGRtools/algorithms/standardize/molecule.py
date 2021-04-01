@@ -189,7 +189,9 @@ class Standardize:
 
     def implicify_hydrogens(self: 'MoleculeContainer', *, fix_stereo=True) -> int:
         """
-        Remove explicit hydrogen if possible. Works only with Kekule forms of aromatic structures.
+        Remove explicit hydrogen if possible.
+        Works only with Kekule forms of aromatic structures.
+        Keeps isotopes of hydrogen.
 
         :return: number of removed hydrogens
         """
@@ -199,7 +201,7 @@ class Standardize:
         bonds = self._bonds
         explicit = defaultdict(list)
         for n, atom in atoms.items():
-            if atom.atomic_number == 1:
+            if atom.atomic_number == 1 and (atom.isotope is None or atom.isotope == 1):
                 if len(bonds[n]) > 1:
                     raise ValenceError(f'Hydrogen atom {{{n}}} has invalid valence. Try to use remove_hydrogen_bonds()')
                 for m, b in bonds[n].items():
