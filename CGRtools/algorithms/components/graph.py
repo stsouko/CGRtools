@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2020 Ravil Mukhametgaleev <sonic-mc@mail.ru>
 #  This file is part of CGRtools.
 #
@@ -23,7 +23,7 @@ from importlib.util import find_spec
 from typing import List, Tuple, Dict, Set, Any, Union
 
 
-if find_spec('numpy') and find_spec('numba'):  # try to load numba jit
+if find_spec('numpy'):
     from numpy import uint64, zeros
 else:
     zeros = None
