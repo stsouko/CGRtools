@@ -36,6 +36,8 @@ class Calculate2D:
         """
         Calculate 2d layout of graph. https://pubs.acs.org/doi/10.1021/acs.jcim.7b00425 JS implementation used.
         """
+        if ctx is None:
+            raise ImportError('py-mini-racer required for clean2d')
         plane = {}
         for _ in range(5):
             smiles, order = self._clean2d_prepare()
@@ -184,18 +186,7 @@ if find_spec('py_mini_racer') and lib_js:
     ctx.eval('const self = this')
     ctx.eval(lib_js)
 else:  # disable clean2d support
-    class Calculate2DMolecule:
-        __slots__ = ()
-
-        def clean2d(self):
-            raise NotImplemented('py-mini-racer required for clean2d')
-
-
-    class Calculate2DCGR:
-        __slots__ = ()
-
-        def clean2d(self):
-            raise NotImplemented('py-mini-racer required for clean2d')
+    ctx = None
 
 
 __all__ = ['Calculate2DMolecule', 'Calculate2DCGR', 'Calculate2DQuery']

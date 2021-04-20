@@ -2,7 +2,7 @@ channels:
   - conda-forge
   - rdkit
 dependencies:
-  - python>=3.7.0,<3.8
+  - python>=3.7.0
   - pandoc
   - rdkit
   - pip
@@ -12,6 +12,6 @@ dependencies:
   - numba
   - sphinx_rtd_theme
   - nbsphinx
-  - py-mini-racer
   - pip:
+    - py-mini-racer
     - .

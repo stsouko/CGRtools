@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -18,6 +18,14 @@
 #
 from CachedMethods import cached_property
 from importlib.util import find_spec
+
+
+if find_spec('numpy'):
+    from numpy import zeros
+    from numpy.linalg import eig
+else:
+    zeros = None
+
 
 # atom, charge, radical, non sp3 : h, k, ne
 basis = {(5, 0, False, False): (-1., .75, 0),  # X3B
@@ -43,6 +51,8 @@ class Huckel:
         Huckel method based Pi electrons energy calculator.
         Parametrized for B C N O S.
         """
+        if zeros is None:
+            raise ImportError('numpy required')
         hyb = self._hybridizations
         charge = self._charges
         radical = self._radicals
@@ -93,18 +103,6 @@ class Huckel:
             if e % 2:  # unpaired
                 energy += orbs[paired]
         return energy
-
-
-if find_spec('numpy'):
-    from numpy import zeros
-    from numpy.linalg import eig
-else:
-    class Huckel:
-        __slots__ = ()
-
-        @property
-        def huckel_pi_electrons_energy(self):
-            raise ImportError('numpy required')
 
 
 __all__ = ['Huckel']
