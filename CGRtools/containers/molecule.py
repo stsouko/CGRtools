@@ -17,7 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_args_method, cached_property
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import List, Union, Tuple, Optional, Dict
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
@@ -466,6 +466,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def __float__(self):
         return self.molecular_mass
+
+    @cached_property
+    def brutto(self) -> Dict[str, int]:
+        """Counted atoms dict"""
+        return Counter(x.atomic_symbol for x in self._atoms.values())
 
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
