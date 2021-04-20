@@ -45,6 +45,7 @@ class Reactor(BaseReactor):
                             not exists in products will be removed
         :param one_shot: do only single reaction center then True, else do all possible combinations of reactions.
         :param polymerise_limit: limit of self reactions. Zero by default - prevent polymerization.
+            Make sense than one_shot = False.
         """
         reactants, products = template.reactants, template.products
         if not reactants or not products:
@@ -59,6 +60,7 @@ class Reactor(BaseReactor):
         self.__one_shot = one_shot
         self.__polymerise_limit = polymerise_limit
         self.__products_atoms = tuple(set(m) for m in products)
+        self.__united_products = {x for x in products for x in x}
         self.__automorphism_filter = automorphism_filter
         self.__meta = template.meta.copy()
         super().__init__(reduce(or_, reactants), products_, delete_atoms)
@@ -74,13 +76,12 @@ class Reactor(BaseReactor):
                 ignored = [structures[x] for x in s_nums.difference(chosen)]
                 chosen = [structures[x] for x in chosen]
                 yield from (ReactionContainer(structures, new + ignored, meta=self.__meta)
-                            for new in self.__single_stage(chosen, ignored))
+                            for new in self.__single_stage(chosen, {x for x in ignored for x in x}))
         else:
             ...
 
     def __single_stage(self, chosen, ignored):
-        ignored_numbers = {x for x in ignored for x in x}
-        max_ignored_number = max(ignored_numbers, default=0)
+        max_ignored_number = max(ignored, default=0)
         united_chosen = reduce(or_, chosen)
         for match in lazy_product(*(x.get_mapping(y, automorphism_filter=self.__automorphism_filter) for x, y in
                                     zip(self.__patterns, chosen))):
@@ -89,7 +90,7 @@ class Reactor(BaseReactor):
                 mapping.update(m)
 
             new = self._patcher(united_chosen, mapping)
-            collision = set(new).intersection(ignored_numbers)
+            collision = set(new).intersection(ignored)
             if collision:
                 new.remap(dict(zip(collision, count(max(max_ignored_number, max(new.atoms_numbers)) + 1))))
             if len(self.__products_atoms) > 1:
