@@ -22,6 +22,7 @@ from math import sqrt
 from os import name
 from pathlib import Path
 from random import random
+from re import compile, sub
 from sys import prefix, exec_prefix
 from warnings import warn
 from ..containers import molecule
@@ -53,7 +54,7 @@ class Calculate2D:
 
         shift_x, shift_y = xy[0]
         for n, (x, y) in zip(order, xy):
-            plane[n] = (x - shift_x, y - shift_y)
+            plane[n] = (x - shift_x, shift_y - y)
 
         bonds = []
         for n, m, _ in self.bonds():
@@ -128,7 +129,8 @@ class Calculate2DMolecule(Calculate2D):
     __slots__ = ()
 
     def _clean2d_prepare(self):
-        smiles, order = self._smiles(lambda x: random(), _return_order=True)
+        smiles, order = self._smiles(lambda x: random(), _return_order=True, stereo=False)
+        smiles = [sub(hydrogen, ']', x) if x != '[H]' else x for x in smiles if x]
         return ''.join(smiles), order
 
 
@@ -185,6 +187,7 @@ if find_spec('py_mini_racer') and lib_js:
     ctx = MiniRacer()
     ctx.eval('const self = this')
     ctx.eval(lib_js)
+    hydrogen = compile(r'H[1-9]*]')
 else:  # disable clean2d support
     ctx = None
 
