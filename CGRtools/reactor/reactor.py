@@ -83,8 +83,25 @@ class Reactor(BaseReactor):
     def __single_stage(self, chosen, ignored):
         max_ignored_number = max(ignored, default=0)
         united_chosen = reduce(or_, chosen)
+        split = len(self.__products_atoms) > 1
+        if split:
+            multi_components = [x._connected_components(x._bonds) for x in chosen]
         for match in lazy_product(*(x.get_mapping(y, automorphism_filter=self.__automorphism_filter) for x, y in
                                     zip(self.__patterns, chosen))):
+            if split:
+                pairs = []
+                for comps, mapping in zip(multi_components, match):
+                    if len(comps) > 1:
+                        mapping = set(mapping.values())
+                        isolated = []
+                        used = set()
+                        for c in comps:
+                            if mapping.isdisjoint(c):
+                                isolated.append(c)
+                            else:
+                                used.update(c)
+                        for c in isolated:
+                            pairs.append((c, used))
             mapping = match[0]
             for m in match[1:]:
                 mapping.update(m)
@@ -93,16 +110,18 @@ class Reactor(BaseReactor):
             collision = set(new).intersection(ignored)
             if collision:
                 new.remap(dict(zip(collision, count(max(max_ignored_number, max(new.atoms_numbers)) + 1))))
-            if len(self.__products_atoms) > 1:
+            if split:
                 components = new._connected_components(new._bonds)
-                # stack unmatched components of reactants
-                # works only for partially matched molecules
-                matched = set(mapping.values())
-                components = self.__stack_components(components, [set(x) - matched for x in chosen])
-                # multi-component molecules in product side of template will be kept.
-                components = self.__stack_components(components,
-                                                     [{mapping[x] for x in x if x in mapping}
-                                                      for x in self.__products_atoms])
+                if pairs:
+                    # stack unmatched components of reactants
+                    # works only for partially matched molecules
+                    matched = set(mapping.values())
+                    chosen_components = []
+                    components = self.__stack_components(components, [set(x) - matched for x in chosen])
+                    # multi-component molecules in product side of template will be kept.
+                    components = self.__stack_components(components,
+                                                         [{mapping[x] for x in x if x in mapping}
+                                                          for x in self.__products_atoms])
                 yield [new.substructure(c) for c in components]
             else:
                 yield [new]
