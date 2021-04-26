@@ -42,10 +42,8 @@ class Calculate2D:
         plane = {}
         for _ in range(5):
             smiles, order = self._clean2d_prepare()
-            if '\\' in smiles:
-                smiles = smiles.replace('\\', '\\\\')
             try:
-                xy = ctx.eval(f'$.clean2d("{smiles}")')
+                xy = ctx.call('$.clean2d', smiles)
             except JSEvalException:
                 continue
             break

@@ -13,7 +13,8 @@ Basic operations:
    - Produce template based reactions and molecules.
    - Atom-to-atom mapping checker and rule-based fixer.
    - Perform MCS search.
-   - 2d depiction.
+   - 2d coordinates generation (based on `SmilesDrawer <https://github.com/reymond-group/smilesDrawer>`_)
+   - 2d/3d depiction.
 
 Full documentation can be found `here <https://cgrtools.readthedocs.io>`_
 
@@ -77,7 +78,7 @@ General part
 
     pip install CGRTools[mrv]
 
-* Install CGRtools with structures `clean2d` support (Note: install NodeJS into system)::
+* Install CGRtools with structures `clean2d` support (Note: install NodeJS into system, see `details <https://github.com/sqreen/PyMiniRacer>`_)::
 
     pip install CGRtools[clean2d]
 
