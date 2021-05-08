@@ -82,7 +82,6 @@ General part
 
     pip install CGRtools[clean2d]
 
-
 * Install CGRtools with optimized XYZ parser::
 
     pip install CGRtools[jit]
