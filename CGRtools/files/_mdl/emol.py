@@ -16,7 +16,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from csv import reader
 from ...exceptions import EmptyMolecule
 
 
@@ -36,16 +35,14 @@ class EMOLRead:
             raise ValueError('molecule not complete')
         return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': self.__meta}
 
-    def __call__(self, line, lineu=None):
-        if lineu is None:
-            lineu = line.upper()
+    def __call__(self, line):
         if self.__in_mol:
-            if lineu.startswith('M  V30 END CTAB'):
+            if line.startswith('M  V30 END CTAB'):
                 self.__in_mol = False
                 return True
             elif self.__atoms_count:
-                if lineu.startswith('M  V30 END'):
-                    x = lineu[11:].strip()
+                if line.startswith('M  V30 END'):
+                    x = line[11:].strip()
                     cp = self.__parser
                     self.__parser = None
 
@@ -57,18 +54,20 @@ class EMOLRead:
                             return
                     else:
                         return
-                    raise ValueError('invalid number of %s records or invalid CTAB' % x)
+                    raise ValueError(f'invalid number of {x} records or invalid CTAB')
 
                 elif self.__parser:
                     collected = self.__record_collector(line)
                     if collected:
                         self.__parser(collected)
 
-                elif lineu.startswith('M  V30 BEGIN ATOM'):
+                elif line.startswith('M  V30 BEGIN ATOM'):
                     self.__parser = self.__atom_parser
-                elif lineu.startswith('M  V30 BEGIN BOND'):
+                elif line.startswith('M  V30 BEGIN BOND'):
                     self.__parser = self.__bond_parser
-                elif lineu.startswith(('M  V30 BEGIN SGROUP', 'M  V30 BEGIN COLLECTION')):
+                elif line.startswith('M  V30 BEGIN SGROUP'):
+                    self.__parser = self.__sgroup_parser
+                elif line.startswith('M  V30 BEGIN COLLECTION'):
                     self.__parser = self.__ignored_block_parser
                 else:
                     raise ValueError('invalid CTAB')
@@ -88,21 +87,45 @@ class EMOLRead:
 
         elif self.__in_mol is not None:
             raise SyntaxError('invalid usage')
-        elif not lineu.startswith('M  V30 BEGIN CTAB'):
+        elif not line.startswith('M  V30 BEGIN CTAB'):
             raise ValueError('invalid CTAB')
         else:
             self.__in_mol = True
 
     def __record_collector(self, line):
         if not line.endswith('-\n'):
-            line = line[7:]
+            line = line[6:]
             if self.__record:
                 line = self.__record + line
                 self.__record = None
 
-            return next(reader([line], delimiter=' ', quotechar='"', skipinitialspace=True))
+            line = line.strip()
+            collect = []
+            tmp = []
+            until = None
+            for s in line:
+                if until:
+                    tmp.append(s)
+                    if s == until:
+                        until = None
+                elif s == '(':
+                    tmp.append('(')
+                    until = ')'
+                elif s == '"':
+                    tmp.append(s)
+                    until = '"'
+                elif s == ' ':
+                    if tmp:
+                        collect.append(''.join(tmp))
+                        tmp = []
+                else:
+                    tmp.append(s)
+            if tmp:
+                collect.append(''.join(tmp))
 
-        line = line[7:-2]
+            return collect
+
+        line = line[6:-2]
         if not self.__record:
             self.__record = line
         else:
@@ -116,7 +139,7 @@ class EMOLRead:
             raise ValueError('invalid atoms numbers')
         for kv in kvs:
             k, v = kv.split('=')
-            if k in ('CFG', 'cfg', 'Cfg'):
+            if k == 'CFG':
                 if v == '1':
                     self.__stereo.append((self.__atom_map[a1], self.__atom_map[a2], 1))
                 elif v == '3':
@@ -132,7 +155,6 @@ class EMOLRead:
         r = False
         for kv in kvs:
             k, v = kv.split('=', 1)
-            k = k.upper()
             if k == 'CHG':
                 c = int(v)
             elif k == 'MASS':
@@ -140,8 +162,8 @@ class EMOLRead:
             elif k == 'RAD':
                 r = True
 
-        self.__atom_map[n] = n = len(self.__atoms)
-        if a.startswith(('[', 'NOT', 'not', 'Not')):
+        self.__atom_map[n] = len(self.__atoms)
+        if a.startswith(('[', 'NOT')):
             raise ValueError('list of atoms not supported')
         elif a == 'D':
             if i:
@@ -151,6 +173,21 @@ class EMOLRead:
 
         self.__atoms.append({'element': a, 'isotope': i, 'charge': c, 'is_radical': r,
                              'x': float(x), 'y': float(y), 'z': float(z), 'mapping': int(m)})
+
+    def __sgroup_parser(self, line):
+        _, _type, i, *kvs = line
+        if _type.startswith('DAT'):
+            a = f = d = None
+            for kv in kvs:
+                k, v = kv.split('=', 1)
+                if k == 'ATOMS':
+                    a = tuple(self.__atom_map[x] for x in v[1:-1].split()[1:])
+                elif k == 'FIELDNAME':
+                    f = v.strip('"')
+                if k == 'FIELDDATA':
+                    d = v.strip('"')
+            if a and f and d:
+                self.__meta[f'SGROUP DAT {i}'] = (a, f, d)
 
     def __ignored_block_parser(self, line):
         return
