@@ -27,8 +27,7 @@ from setuptools import setup
 class _sdist(sdist):
     def finalize_options(self):
         super().finalize_options()
-        self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'INCHI/libinchi.dll',
-                                                     'clean2d/dist/clean2d.js']))
+        self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'INCHI/libinchi.dll']))
 
 
 cmd_class = {'sdist': _sdist}
@@ -43,21 +42,19 @@ if find_spec('wheel'):
             self.root_is_pure = False
             platform = get_platform()
             if platform == 'win-amd64':
-                self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll', 'clean2d/dist/clean2d.js']))
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.dll']))
             elif platform == 'linux-x86_64':
-                self.distribution.data_files.append(('lib', ['INCHI/libinchi.so', 'clean2d/dist/clean2d.js']))
-            else:
-                self.distribution.data_files.append(('lib', ['clean2d/dist/clean2d.js']))
+                self.distribution.data_files.append(('lib', ['INCHI/libinchi.so']))
 
     cmd_class['bdist_wheel'] = _bdist_wheel
 
 
 setup(
     name='CGRtools',
-    version='4.1.20',
-    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.components', 'CGRtools.algorithms.standardize',
-              'CGRtools.containers', 'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable',
-              'CGRtools.periodictable.element', 'CGRtools.reactor', 'CGRtools.utils', 'CGRtools.attributes'],
+    version='4.1.22',
+    packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.calculate2d', 'CGRtools.algorithms.components',
+              'CGRtools.algorithms.standardize', 'CGRtools.containers', 'CGRtools.files', 'CGRtools.files._mdl',
+              'CGRtools.periodictable', 'CGRtools.periodictable.element', 'CGRtools.utils', 'CGRtools.attributes'],
     url='https://github.com/stsouko/CGRtools',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
@@ -66,6 +63,7 @@ setup(
     cmdclass=cmd_class,
     install_requires=['CachedMethods>=0.1.4,<0.2'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50']},
+    package_data={'CGRtools.algorithms.calculate2d': ['clean2d.js']},
     data_files=[],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.rst').read_text(),

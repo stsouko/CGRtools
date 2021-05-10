@@ -19,14 +19,11 @@
 #
 from importlib.util import find_spec
 from math import sqrt
-from os import name
-from pathlib import Path
+from pkg_resources import resource_string
 from random import random
-from sys import prefix, exec_prefix
-from warnings import warn
-from ..containers import molecule
-from ..exceptions import ImplementationError
-from ..periodictable import Element
+from ...containers import molecule
+from ...exceptions import ImplementationError
+from ...periodictable import Element
 
 
 class Calculate2D:
@@ -41,10 +38,8 @@ class Calculate2D:
         plane = {}
         for _ in range(5):
             smiles, order = self._clean2d_prepare()
-            if '\\' in smiles:
-                smiles = smiles.replace('\\', '\\\\')
             try:
-                xy = ctx.eval(f'$.clean2d("{smiles}")')
+                xy = ctx.call('$.clean2d', smiles)
             except JSEvalException:
                 continue
             break
@@ -53,7 +48,7 @@ class Calculate2D:
 
         shift_x, shift_y = xy[0]
         for n, (x, y) in zip(order, xy):
-            plane[n] = (x - shift_x, y - shift_y)
+            plane[n] = (x - shift_x, shift_y - y)
 
         bonds = []
         for n, m, _ in self.bonds():
@@ -128,7 +123,12 @@ class Calculate2DMolecule(Calculate2D):
     __slots__ = ()
 
     def _clean2d_prepare(self):
-        smiles, order = self._smiles(lambda x: random(), _return_order=True)
+        hydrogens = self._hydrogens
+        self._hydrogens = {n: 0 for n in hydrogens}
+        try:
+            smiles, order = self._smiles(lambda x: random(), _return_order=True, stereo=False)
+        finally:
+            self._hydrogens = hydrogens
         return ''.join(smiles), order
 
 
@@ -142,6 +142,7 @@ class Calculate2DQuery(Calculate2D):
             mol.add_atom(atom, n)
         for n, m, bond in self.bonds():
             mol.add_bond(n, m, bond.order[0])
+        mol._hydrogens = {n: 0 for n in mol._hydrogens}
         smiles, order = mol._smiles(lambda x: random(), _return_order=True)
         return ''.join(smiles), order
 
@@ -156,35 +157,17 @@ class Calculate2DCGR(Calculate2D):
             mol.add_atom(atom, n)
         for n, m, bond in self.bonds():
             mol.add_bond(n, m, bond.order or 1)
+        mol._hydrogens = {n: 0 for n in mol._hydrogens}
         smiles, order = mol._smiles(lambda x: random(), _return_order=True)
         return ''.join(smiles), order
 
 
-sitepackages = []
-for pr in {prefix, exec_prefix}:
-    pr = Path(pr)
-    if name == 'posix':
-        sitepackages.append(pr / 'local/lib')
-    else:
-        sitepackages.append(pr)
-    sitepackages.append(pr / 'lib')
-
-for pr in sitepackages:
-    pr = pr / 'clean2d.js'
-    if pr.exists():
-        lib_js = pr.read_text()
-        break
-else:
-    warn('broken package installation. clean2d.js not found', ImportWarning)
-    lib_js = None
-
-
-if find_spec('py_mini_racer') and lib_js:
+if find_spec('py_mini_racer'):
     from py_mini_racer.py_mini_racer import MiniRacer, JSEvalException
 
     ctx = MiniRacer()
     ctx.eval('const self = this')
-    ctx.eval(lib_js)
+    ctx.eval(resource_string(__name__, 'clean2d.js'))
 else:  # disable clean2d support
     ctx = None
 

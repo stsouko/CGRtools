@@ -41,33 +41,24 @@ class MDLWrite(_MDLWrite):
 
         gc = g._charges
         gr = g._radicals
-        props = []
+        out = [bonds]
         for n, (m, a) in enumerate(g._atoms.items(), start=1):
             if a.isotope:
-                props.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
+                out.append(f'M  ISO  1 {n:3d} {a.isotope:3d}\n')
             if gr[m]:
-                props.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
+                out.append(f'M  RAD  1 {n:3d}   2\n')  # invalid for carbenes
             c = gc[m]
             if c in (-4, 4):
-                props.append(f'M  CHG  1 {n:3d} {c:3d}\n')
+                out.append(f'M  CHG  1 {n:3d} {c:3d}\n')
+        out.append('M  END\n')
 
         if self._write3d and isinstance(g, MoleculeContainer) and g._conformers:
-            if self._write3d == 2:
-                out = [self.__merge(head, self.__convert_atoms3d(g, xyz), bonds, props) for xyz in g._conformers]
+            if self._write3d == 2 and len(g._conformers) > 1:
+                return [''.join((head, self.__convert_atoms3d(g, xyz), *out)) for xyz in g._conformers]
             else:
-                out = self.__merge(head, self.__convert_atoms3d(g, g._conformers[0]), bonds, props)
+                return ''.join((head, self.__convert_atoms3d(g, g._conformers[0]), *out))
         else:
-            out = self.__merge(head, self.__convert_atoms2d(g), bonds, props)
-        return out
-
-    @staticmethod
-    def __merge(head, atoms, bonds, props):
-        out = [head]
-        out.extend(atoms)
-        out.extend(bonds)
-        out.extend(props)
-        out.append('M  END\n')
-        return ''.join(out)
+            return ''.join((head, self.__convert_atoms2d(g), *out))
 
     def __convert_atoms2d(self, g):
         gc = g._charges
@@ -91,7 +82,7 @@ class MDLWrite(_MDLWrite):
                 else:
                     out.append(f'{x:10.4f}{y:10.4f}    0.0000 {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
                                f'  0  0  0  0  0  0\n')
-        return out
+        return ''.join(out)
 
     def __convert_atoms3d(self, g, xyz):
         gc = g._charges
@@ -113,7 +104,7 @@ class MDLWrite(_MDLWrite):
                 else:
                     out.append(f'{x:10.4f}{y:10.4f}{z:10.4f} {a.atomic_symbol:3s} 0{self.__charge_map[c]}  0  0  0  0'
                                f'  0  0  0  0  0  0\n')
-        return out
+        return ''.join(out)
 
     @classmethod
     def __convert_molecule(cls, g):
@@ -128,7 +119,7 @@ class MDLWrite(_MDLWrite):
         for n, m, b in g.bonds():
             if m not in wedge[n]:
                 out.append(f'{atoms[n]:3d}{atoms[m]:3d}  {b.order}  0  0  0  0\n')
-        return out
+        return ''.join(out)
 
     @staticmethod
     def __convert_cgr(g):
@@ -173,7 +164,7 @@ class MDLWrite(_MDLWrite):
             bonds.append('\n')
 
         bonds.extend(props)
-        return bonds
+        return ''.join(bonds)
 
     @classmethod
     def __convert_query(cls, g):
@@ -208,7 +199,7 @@ class MDLWrite(_MDLWrite):
             out.append('\n')
 
         out.extend(props)
-        return out
+        return ''.join(out)
 
     __charge_map = {-3: '  7', -2: '  6', -1: '  5', 0: '  0', 1: '  3', 2: '  2', 3: '  1'}
 

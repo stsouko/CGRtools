@@ -49,7 +49,7 @@ class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
                  'parsed_mapping': self._parsed_mapping, 'charges': self._charges, 'radicals': self._radicals,
                  'name': self.__name}
         if self.__class_cache__.get('save_cache', False):
-            state['cache'] = self.__dict__
+            state['cache'] = {k: v for k, v in self.__dict__.items() if k != '__cached_method___hash__'}
         return state
 
     def __setstate__(self, state):

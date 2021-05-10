@@ -1,9 +1,15 @@
 const { Parser, Drawer } = require('smiles-drawer');
 
+const options = {
+      debug: false,
+      atomVisualization: 'default'
+    };
+const drawer = new Drawer(options);
+
+
 function clean2d(smiles) {
-    let parsed = Parser.parse(smiles)
-    let drawer = new Drawer({});
-    drawer.initDraw(parsed, 'light', true);
+    let parsed = Parser.parse(smiles);
+    drawer.initDraw(parsed, 'light', false);
     drawer.processGraph();
 
     let vertices = drawer.graph.vertices;

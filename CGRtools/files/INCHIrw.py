@@ -287,11 +287,22 @@ class INCHIread:
         return self.__obj.__exit__(_type, value, traceback)
 
 
+try:
+    from site import getuserbase
+except ImportError:
+    prefixes = {prefix, exec_prefix}
+else:
+    user_prefix = getuserbase()
+    if user_prefix:
+        prefixes = {prefix, exec_prefix, user_prefix}
+    else:
+        prefixes = {prefix, exec_prefix}
+
 sitepackages = []
-for pr in {prefix, exec_prefix}:
+for pr in prefixes:
     pr = Path(pr)
     if name == 'posix':
-        sitepackages.append(pr / 'local/lib')
+        sitepackages.append(pr / 'local' / 'lib')
     else:
         sitepackages.append(pr)
     sitepackages.append(pr / 'lib')

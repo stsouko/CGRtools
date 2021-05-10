@@ -36,14 +36,13 @@ class ERXNRead:
         self.__log_buffer = log_buffer
 
     def __call__(self, line):
-        lineu = line.upper()
         if self.__empty_skip:
-            if not lineu.startswith('M  V30 END CTAB'):
+            if not line.startswith('M  V30 END CTAB'):
                 return
             self.__empty_skip = False
         elif self.__in_mol:
             try:
-                x = self.__parser(line, lineu)
+                x = self.__parser(line)
             except EmptyMolecule:
                 if not self.__ignore:
                     raise
@@ -66,11 +65,11 @@ class ERXNRead:
                         self.__reagents.append(x)
         elif self.__rend:
             raise ValueError('parser closed')
-        elif lineu.startswith('M  V30 END'):
-            if self.__parser_group != lineu[11:].strip():
+        elif line.startswith('M  V30 END'):
+            if self.__parser_group != line[11:].strip():
                 raise ValueError('invalid CTAB')
-        elif lineu.startswith('M  V30 BEGIN'):
-            x = lineu[13:].strip()
+        elif line.startswith('M  V30 BEGIN'):
+            x = line[13:].strip()
             if x == 'REACTANT':
                 self.__in_mol = self.__reactants_count
             elif x == 'PRODUCT':
@@ -82,7 +81,7 @@ class ERXNRead:
             self.__parser_group = x
             if self.__in_mol:
                 self.__parser = EMOLRead(self.__log_buffer)
-        elif lineu.startswith('M  END'):
+        elif line.startswith('M  END'):
             self.__rend = True
             return True
         else:
