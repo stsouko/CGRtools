@@ -17,11 +17,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from collections import deque
 from functools import reduce
 from itertools import count, permutations
 from logging import info
 from operator import or_
-from typing import Iterable
+from typing import Iterable, List, Iterator
 from .base import BaseReactor
 from .._functions import lazy_product
 from ..containers import QueryContainer, MoleculeContainer, ReactionContainer
@@ -38,14 +39,13 @@ class Reactor(BaseReactor):
     possible reactions.
     """
     def __init__(self, template, *, delete_atoms: bool = True, one_shot: bool = True,
-                 polymerise_limit: int = 0, automorphism_filter: bool = True):
+                 polymerise_limit: int = 10, automorphism_filter: bool = True):
         """
         :param template: CGRtools ReactionContainer
         :param delete_atoms: if True atoms exists in reactants but
                             not exists in products will be removed
         :param one_shot: do only single reaction center then True, else do all possible combinations of reactions.
-        :param polymerise_limit: limit of self reactions. Zero by default - prevent polymerization.
-            Make sense than one_shot = False.
+        :param polymerise_limit: limit of self reactions. Make sense than one_shot = False.
         """
         reactants, products = template.reactants, template.products
         if not reactants or not products:
@@ -69,85 +69,73 @@ class Reactor(BaseReactor):
         if any(not isinstance(structure, MoleculeContainer) for structure in structures):
             raise TypeError('only list of Molecules possible')
 
+        len_patterns = len(self.__patterns)
         structures = self.__remap(structures)
+        s_nums = set(range(len(structures)))
         if self.__one_shot:
-            s_nums = set(range(len(structures)))
-            for chosen in permutations(s_nums, len(self.__patterns)):
+            for chosen in permutations(s_nums, len_patterns):
                 ignored = [structures[x] for x in s_nums.difference(chosen)]
                 chosen = [structures[x] for x in chosen]
-                yield from (ReactionContainer(structures, new + ignored, meta=self.__meta)
-                            for new in self.__single_stage(chosen, {x for x in ignored for x in x}))
+                for new in self.__single_stage(chosen, {x for x in ignored for x in x}):
+                    r = ReactionContainer([x.copy() for x in structures], new + [x.copy() for x in ignored],
+                                          meta=self.__meta)
+                    if len(new) > 1:  # try to keep salts
+                        r.contract_ions()
+                    yield r
         else:
-            ...
+            queue = deque(([structures[x] for x in chosen], [structures[x] for x in s_nums.difference(chosen)], 0)
+                          for chosen in permutations(s_nums, len_patterns))
+            seen = set()
+            while queue:
+                chosen, ignored, depth = queue.popleft()
+                depth += 1
+                for new in self.__single_stage(chosen, {x for x in ignored for x in x}):
+                    r = ReactionContainer([x.copy() for x in structures], new + [x.copy() for x in ignored],
+                                          meta=self.__meta)
+                    if len(new) > 1:
+                        r.contract_ions()  # try to keep salts
+                        if str(r) in seen:
+                            continue
+                        seen.add(str(r))
+                        if len(r.products) != len(ignored) + len(self.__products_atoms):
+                            info('ambiguous multicomponent structures. skip multistage processing')
+                            yield r
+                            continue
+                    elif str(r) in seen:
+                        continue
+                    else:
+                        seen.add(str(r))
 
-    def __single_stage(self, chosen, ignored):
+                    if depth < self.__polymerise_limit:
+                        if len_patterns == 1:  # simple case. only products or ignored can be transformed.
+                            prod = r.products
+                            for i in range(len(prod)):
+                                queue.append(([prod[i]], [*prod[:i], *prod[i + 1:]], depth))
+                        else:  # one of
+                            ...
+                    yield r
+
+    def __single_stage(self, chosen, ignored) -> Iterator[List[MoleculeContainer]]:
         max_ignored_number = max(ignored, default=0)
         united_chosen = reduce(or_, chosen)
         split = len(self.__products_atoms) > 1
-        if split:
-            multi_components = [x._connected_components(x._bonds) for x in chosen]
         for match in lazy_product(*(x.get_mapping(y, automorphism_filter=self.__automorphism_filter) for x, y in
                                     zip(self.__patterns, chosen))):
-            if split:
-                pairs = []
-                for comps, mapping in zip(multi_components, match):
-                    if len(comps) > 1:
-                        mapping = set(mapping.values())
-                        isolated = []
-                        used = set()
-                        for c in comps:
-                            if mapping.isdisjoint(c):
-                                isolated.append(c)
-                            else:
-                                used.update(c)
-                        for c in isolated:
-                            pairs.append((c, used))
             mapping = match[0]
             for m in match[1:]:
                 mapping.update(m)
-
             new = self._patcher(united_chosen, mapping)
             collision = set(new).intersection(ignored)
             if collision:
                 new.remap(dict(zip(collision, count(max(max_ignored_number, max(new.atoms_numbers)) + 1))))
+
             if split:
-                components = new._connected_components(new._bonds)
-                if pairs:
-                    # stack unmatched components of reactants
-                    # works only for partially matched molecules
-                    matched = set(mapping.values())
-                    chosen_components = []
-                    components = self.__stack_components(components, [set(x) - matched for x in chosen])
-                    # multi-component molecules in product side of template will be kept.
-                    components = self.__stack_components(components,
-                                                         [{mapping[x] for x in x if x in mapping}
-                                                          for x in self.__products_atoms])
-                yield [new.substructure(c) for c in components]
+                yield [new.substructure(c) for c in new._connected_components(new._bonds)]
             else:
                 yield [new]
 
     @staticmethod
-    def __stack_components(components, groups):
-        out = []
-        for g in groups:
-            if not g:
-                continue
-            common = []
-            tmp = []
-            for c in components:
-                if not g.isdisjoint(c):
-                    common.append(c)
-                else:
-                    tmp.append(c)
-            if common:
-                components = tmp
-                common = reduce(or_, common)
-                out.append(common)
-        out.extend(components)
-        return out
-
-    @staticmethod
-    def __remap(structures):
+    def __remap(structures) -> List[MoleculeContainer]:
         checked = []
         checked_atoms = set()
         for structure in structures:
