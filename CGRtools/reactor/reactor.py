@@ -19,7 +19,7 @@
 #
 from collections import deque
 from functools import reduce
-from itertools import count, permutations
+from itertools import count, permutations, combinations
 from logging import info
 from operator import or_
 from typing import Iterable, List, Iterator
@@ -107,12 +107,15 @@ class Reactor(BaseReactor):
                         seen.add(str(r))
 
                     if depth < self.__polymerise_limit:
+                        prod = r.products
                         if len_patterns == 1:  # simple case. only products or ignored can be transformed.
-                            prod = r.products
                             for i in range(len(prod)):
                                 queue.append(([prod[i]], [*prod[:i], *prod[i + 1:]], depth))
-                        else:  # one of
-                            ...
+                        else:  # one of products molecule combined with previously chosen
+                            for chp in combinations(chosen, len_patterns - 1):
+                                for i in range(len(prod)):
+                                    for ch in permutations(self.__remap((prod[i], *chp)), len_patterns):
+                                        queue.append((ch, [*prod[:i], *prod[i + 1:]], depth))
                     yield r
 
     def __single_stage(self, chosen, ignored) -> Iterator[List[MoleculeContainer]]:
