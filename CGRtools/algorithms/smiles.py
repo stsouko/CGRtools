@@ -17,11 +17,12 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_method
+from CachedMethods import cached_method, cached_property
 from collections import defaultdict
 from hashlib import sha512
 from itertools import count, product
 from random import random
+from typing import Tuple
 
 
 charge_str = {-4: '-4', -3: '-3', -2: '-2', -1: '-', 0: '0', 1: '+', 2: '+2', 3: '+3', 4: '+4'}
@@ -111,6 +112,15 @@ class Smiles:
     @cached_method
     def __bytes__(self):
         return sha512(str(self).encode()).digest()
+
+    @cached_property
+    def smiles_atoms_order(self) -> Tuple[int, ...]:
+        """
+        Atoms order in canonic SMILES.
+        """
+        smiles, order = self._smiles(self._smiles_order, _return_order=True)
+        self.__dict__['__cached_method___str__'] = ''.join(smiles)  # cache smiles also
+        return tuple(order)
 
     def _smiles(self, weights, *, asymmetric_closures=False, open_parenthesis='(', close_parenthesis=')',
                 delimiter='.', _return_order=False, **kwargs):

@@ -423,9 +423,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if isinstance(other, MoleculeContainer):
             if len(self) != len(other):
                 return
-            ss, so = self._smiles(self.atoms_order.get, _return_order=True)
-            os, oo = other._smiles(other.atoms_order.get, _return_order=True)
-            if ss != os:
+            so = self.smiles_atoms_order
+            oo = other.smiles_atoms_order
+            if self != other:
                 return
             return dict(zip(so, oo))
         raise TypeError('MoleculeContainer expected')
