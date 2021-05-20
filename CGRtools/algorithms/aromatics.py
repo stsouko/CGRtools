@@ -266,7 +266,7 @@ class Aromatize:
         bonds = self._bonds
         hydrogens = self._hydrogens
 
-        rings = defaultdict(set)  # aromatic skeleton
+        rings = defaultdict(list)  # aromatic skeleton
         pyroles = set()
 
         double_bonded = set()
@@ -275,7 +275,7 @@ class Aromatize:
             for m, bond in m_bond.items():
                 bo = bond.order
                 if bo == 4:
-                    rings[n].add(m)
+                    rings[n].append(m)
                 elif bo == 2:
                     double_bonded.add(n)
                 elif bo == 3:
@@ -286,19 +286,37 @@ class Aromatize:
         elif not triple_bonded.isdisjoint(rings):
             raise InvalidAromaticRing('triple bonds connected to rings')
 
+        copy_rings = {n: ms.copy() for n, ms in rings.items()}
         for r in self.sssr:
             if set(r).issubset(rings):
                 n, *_, m = r
-                if n not in rings[m]:
-                    rings[m].add(n)
-                    rings[n].add(m)
+                if n not in rings[m]:  # fix invalid structures: c1ccc-cc1
+                    rings[m].append(n)
+                    rings[n].append(m)
+                elif m in copy_rings[n]:
+                    copy_rings[n].remove(m)
+                    copy_rings[m].remove(n)
                 for n, m in zip(r, r[1:]):
                     if n not in rings[m]:
-                        rings[m].add(n)
-                        rings[n].add(m)
+                        rings[m].append(n)
+                        rings[n].append(m)
+                    elif m in copy_rings[n]:
+                        copy_rings[n].remove(m)
+                        copy_rings[m].remove(n)
 
         if any(len(ms) not in (2, 3) for ms in rings.values()):
             raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
+
+        # fix invalid smiles: c1ccccc1c2ccccc2 instead of c1ccccc1-c2ccccc2
+        seen = set()
+        for n, ms in copy_rings.items():
+            if ms:
+                seen.add(n)
+                for m in ms:
+                    if m not in seen:
+                        rings[n].remove(m)
+                        rings[m].remove(n)
+                        bonds[n][m]._Bond__order = 1
 
         double_bonded &= rings.keys()
         if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
