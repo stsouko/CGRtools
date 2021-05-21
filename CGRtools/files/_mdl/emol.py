@@ -26,6 +26,7 @@ class EMOLRead:
         self.__atom_map = {}
         self.__stereo = []
         self.__meta = {}
+        self.__hydrogens = {}
         if log_buffer is None:
             log_buffer = []
         self.__log_buffer = log_buffer
@@ -33,7 +34,8 @@ class EMOLRead:
     def getvalue(self):
         if self.__in_mol or self.__in_mol is None:
             raise ValueError('molecule not complete')
-        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': self.__meta}
+        return {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': self.__meta,
+                'hydrogens': self.__hydrogens}
 
     def __call__(self, line):
         if self.__in_mol:
@@ -187,7 +189,10 @@ class EMOLRead:
                 if k == 'FIELDDATA':
                     d = v.strip('"')
             if a and f and d:
-                self.__meta[f'SGROUP DAT {i}'] = (a, f, d)
+                if f == 'MRV_IMPLICIT_H':
+                    self.__hydrogens[a[0]] = int(d[6:])
+                else:
+                    self.__meta[f'SGROUP DAT {i}'] = (a, f, d)
 
     def __ignored_block_parser(self, line):
         return

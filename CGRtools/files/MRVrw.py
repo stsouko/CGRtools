@@ -228,6 +228,7 @@ class MRVRead(MDLStereo):
 
     def __parse_molecule(self, data):
         atoms, bonds, stereo = [], [], []
+        hydrogens = {}
         atom_map = {}
         if 'atom' in data['atomArray']:
             da = data['atomArray']['atom']
@@ -246,6 +247,8 @@ class MRVRead(MDLStereo):
                     atoms[-1].update(x=float(atom['@x2']) / 2, y=float(atom['@y2']) / 2, z=0.)
                 if '@mrvQueryProps' in atom:
                     raise ValueError('queries unsupported')
+                if '@hydrogenCount' in atom:
+                    hydrogens[n] = int(atom['@hydrogenCount'])
         else:
             atom = data['atomArray']
             for n, (_id, e) in enumerate(zip(atom['@atomID'].split(), atom['@elementType'].split())):
@@ -302,7 +305,7 @@ class MRVRead(MDLStereo):
                         self._info('incorrect bondStereo tag')
                 bonds.append((atom_map[a1], atom_map[a2], order))
 
-        mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo, 'meta': {}}
+        mol = {'atoms': atoms, 'bonds': bonds, 'stereo': stereo, 'meta': {}, 'hydrogens': hydrogens}
         if '@title' in data:
             mol['title'] = data['@title']
         return mol

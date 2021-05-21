@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -28,6 +28,21 @@ class MDLStereo(CGRRead):
 
     def _convert_molecule(self, molecule, mapping):
         mol = super()._convert_molecule(molecule, mapping)
+        hydrogens = mol._hydrogens
+        for n, h in molecule['hydrogens'].items():
+            n = mapping[n]
+            hc = hydrogens[n]
+            if hc is None:  # aromatic rings or valence errors. just store given H count.
+                hydrogens[n] = h
+            elif hc != h:  # H count mismatch. try radical state of atom.
+                if self._ignore:
+                    hydrogens[n] = h  # set parsed hydrogens count
+                    self._info(f'implicit hydrogen count ({h}) mismatch with '
+                               f'calculated ({hc}) on atom {n}. calculated count replaced.')
+                else:
+                    raise ValueError(f'implicit hydrogen count ({h}) mismatch with '
+                                     f'calculated ({hc}) on atom {n}.')
+
         if self.__ignore_stereo:
             return mol
 

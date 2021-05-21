@@ -46,6 +46,7 @@ class MOLRead:
         self.__atoms = []
         self.__bonds = []
         self.__stereo = []
+        self.__hydrogens = {}
         if log_buffer is None:
             log_buffer = []
         self.__log_buffer = log_buffer
@@ -57,7 +58,8 @@ class MOLRead:
 
     def getvalue(self):
         if self.__mend:
-            mol = {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': {}}
+            mol = {'atoms': self.__atoms, 'bonds': self.__bonds, 'stereo': self.__stereo, 'meta': {},
+                   'hydrogens': self.__hydrogens}
             if self.__cgr:
                 mol['cgr'] = self.__cgr
             if self.__query:
@@ -144,6 +146,12 @@ class MOLRead:
                             raise ValueError(f'CGR spec invalid {x}')
                         bond, p_bond = x['value'].split('>')
                         cgr.append((atoms, 'bond', (int(bond) or None, int(p_bond) or None)))
+                    elif _type == 'mrv_implicit_h':
+                        atoms = x['atoms']
+                        value = x['value']
+                        if len(atoms) != 1 or atoms[0] == -1 or not value:
+                            raise ValueError(f'MRV_IMPLICIT_H spec invalid {x}')
+                        self.__hydrogens[atoms[0]] = int(value[6:])
                     else:
                         self.__log_buffer.append(f'ignored data: {x}')
                 except KeyError:
