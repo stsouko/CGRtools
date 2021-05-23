@@ -18,9 +18,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from functools import reduce
 from itertools import permutations
 from io import StringIO, TextIOWrapper
 from logging import warning
+from operator import or_
 from pathlib import Path
 from re import split, compile, fullmatch
 from traceback import format_exc
@@ -182,7 +184,25 @@ class SMILESRead(CGRRead):
         if not smi:
             self._info('empty smiles')
             return {}
-        elif self.__header is None:
+        elif data and data[0].startswith('|f:'):
+            try:
+                contract = [sorted(int(x) for x in x.split('.')) for x in data[0][3:-1].split(',')]
+            except ValueError:
+                self._info(f'invalid cxsmiles fragments description: {data[0]}')
+                contract = None
+            else:
+                if len({x for x in contract for x in x}) < len([x for x in contract for x in x]):
+                    self._info(f'collisions in cxsmiles fragments description: {data[0]}')
+                    contract = None
+                elif any(x[0] < 0 for x in contract):
+                    self._info(f'invalid cxsmiles fragments description: {data[0]}')
+                    contract = None
+                else:
+                    data = data[1:]
+        else:
+            contract = None
+
+        if self.__header is None:
             meta = {}
             for x in data:
                 try:
@@ -242,6 +262,38 @@ class SMILESRead(CGRRead):
                 self._info(f'record consist errors:\n{format_exc()}')
                 return meta
             else:
+                if contract:
+                    if max(x for x in contract for x in x) >= len(container):
+                        self._info(f'skipped invalid contract data: {contract}')
+                    lcr = len(container.reactants)
+                    reactants = set(range(lcr))
+                    reagents = set(range(lcr, lcr + len(container.reagents)))
+                    products = set(range(lcr + len(container.reagents),
+                                         lcr + len(container.reagents) + len(container.products)))
+                    new_molecules = [None] * len(container)
+                    for c in contract:
+                        if reactants.issuperset(c):
+                            new_molecules[c[0]] = reduce(or_, (container.reactants[x] for x in c))
+                            reactants.difference_update(c)
+                        elif products.issuperset(c):
+                            new_molecules[c[0]] = reduce(or_, (container.products[x - len(container)] for x in c))
+                            products.difference_update(c)
+                        elif reagents.issuperset(c):
+                            new_molecules[c[0]] = reduce(or_, (container.reagents[x - lcr] for x in c))
+                            reagents.difference_update(c)
+                        else:
+                            self._info(f'impossible to contract different parts of reaction: {contract}')
+                    for x in reactants:
+                        new_molecules[x] = container.reactants[x]
+                    for x in products:
+                        new_molecules[x] = container.products[x - len(container)]
+                    for x in reagents:
+                        new_molecules[x] = container.reagents[x - lcr]
+                    container = ReactionContainer([x for x in new_molecules[:lcr] if x is not None],
+                                                  [x for x in new_molecules[-len(container.products):]
+                                                   if x is not None],
+                                                  [x for x in new_molecules[lcr: -len(container.products)]
+                                                   if x is not None])
                 if self._store_log:
                     log = self._format_log()
                     if log:

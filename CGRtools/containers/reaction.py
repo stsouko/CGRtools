@@ -268,6 +268,10 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
                 sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
         return '>'.join(sig)
 
+    @cached_method
+    def __len__(self):
+        return len(self.__reactants) + len(self.__products) + len(self.__reagents)
+
     def flush_cache(self):
         self.__dict__.clear()
         for m in self.molecules():
