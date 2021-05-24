@@ -249,23 +249,32 @@ class ReactionContainer(StandardizeReaction, ReactionComponents, DepictReaction)
 
     @cached_method
     def __str__(self):
-        sig = []
-        for ml in (self.__reactants, self.__reagents, self.__products):
-            sig.append('.'.join(sorted(str(x) for x in ml)))
-        return '>'.join(sig)
+        return format(self)
 
     def __format__(self, format_spec):
         """
         :param format_spec: see specification of nested containers.
             !c - Keep nested containers order
+            !C - skip cxsmiles fragments contract
         """
         sig = []
-        if '!c' in format_spec:
-            for ml in (self.__reactants, self.__reagents, self.__products):
+        count = 0
+        contract = []
+        for ml in (self.__reactants, self.__reagents, self.__products):
+            if not format_spec or '!c' not in format_spec:
+                ml = sorted(ml, key=str)
+            for m in ml:
+                if m.connected_components_count > 1:
+                    contract.append([str(x + count) for x in range(m.connected_components_count)])
+                    count += m.connected_components_count
+                else:
+                    count += 1
+            if format_spec:
                 sig.append('.'.join(format(x, format_spec) for x in ml))
-        else:
-            for ml in (self.__reactants, self.__reagents, self.__products):
-                sig.append('.'.join(sorted(format(x, format_spec) for x in ml)))
+            else:
+                sig.append('.'.join(str(x) for x in ml))
+        if (not format_spec or '!C' not in format_spec) and contract:
+            return f"{'>'.join(sig)} |f:{','.join('.'.join(x) for x in contract)}|"
         return '>'.join(sig)
 
     @cached_method
