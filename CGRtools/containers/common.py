@@ -22,14 +22,13 @@ from typing import Dict, Optional, Tuple, Iterable, Iterator, Union, List, Type
 from .bonds import Bond, DynamicBond, QueryBond
 from ..algorithms.components import GraphComponents
 from ..algorithms.isomorphism import Isomorphism
-from ..algorithms.mcs import MCS
 from ..algorithms.morgan import Morgan
 from ..algorithms.sssr import SSSR
 from ..exceptions import AtomNotFound
 from ..periodictable import AnyAtom
 
 
-class Graph(GraphComponents, Morgan, SSSR, Isomorphism, MCS, ABC):
+class Graph(GraphComponents, Morgan, SSSR, Isomorphism, ABC):
     __slots__ = ('_atoms', '_bonds', '_plane', '_charges', '_radicals', '__meta', '__name', '_parsed_mapping',
                  '__dict__', '__weakref__')
     __class_cache__ = {}

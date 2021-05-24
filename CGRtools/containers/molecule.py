@@ -27,6 +27,7 @@ from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictMolecule
 from ..algorithms.huckel import Huckel
+from ..algorithms.mcs import MCS
 from ..algorithms.smiles import MoleculeSmiles
 from ..algorithms.standardize import Standardize
 from ..algorithms.stereo import MoleculeStereo
@@ -37,7 +38,7 @@ from ..periodictable import Element, QueryElement
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
-                        DepictMolecule, Calculate2DMolecule, Tautomers, Huckel, X3domMolecule):
+                        DepictMolecule, Calculate2DMolecule, Tautomers, MCS, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
                  '_allenes_stereo')
 
@@ -433,11 +434,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def get_mapping(self, other: 'MoleculeContainer', **kwargs):
         if isinstance(other, MoleculeContainer):
             return super().get_mapping(other, **kwargs)
-        raise TypeError('MoleculeContainer expected')
-
-    def get_mcs_mapping(self, other: 'MoleculeContainer', **kwargs):
-        if isinstance(other, MoleculeContainer):
-            return super().get_mcs_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer expected')
 
     @cached_property

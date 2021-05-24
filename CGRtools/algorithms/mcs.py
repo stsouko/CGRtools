@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018, 2019 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,22 +16,24 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from abc import abstractmethod
 from collections import defaultdict
 from itertools import product, combinations, islice
 from typing import Dict, Set, Iterator, Tuple
+from ..containers import molecule
 
 
 class MCS:
     __slots__ = ()
 
-    @abstractmethod
-    def get_mcs_mapping(self, other, *, limit=10000) -> Iterator[Dict[int, int]]:
+    def get_mcs_mapping(self, other: 'molecule.MoleculeContainer', *, limit=10000) -> Iterator[Dict[int, int]]:
         """
-        find maximum common substructure. based on clique searching in product graph.
+        Find maximum common substructure. Based on clique searching in product graph.
 
         :param limit: limit tested cliques
         """
+        if not isinstance(other, molecule.MoleculeContainer):
+            raise TypeError('MoleculeContainer expected')
+
         core_product, full_product = self.__get_product(other)
         if not core_product:
             return

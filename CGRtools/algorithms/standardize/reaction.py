@@ -19,7 +19,7 @@
 from CachedMethods import class_cached_property
 from collections import defaultdict
 from itertools import count
-from typing import List, TYPE_CHECKING, Union, Tuple
+from typing import List, TYPE_CHECKING, Union, Tuple, Type
 from ...containers import query, molecule  # cyclic imports resolve
 
 
@@ -211,7 +211,7 @@ class StandardizeReaction:
         return flag
 
     @classmethod
-    def load_remapping_rules(cls, reactions):
+    def load_remapping_rules(cls: Type['ReactionContainer'], reactions):
         """
         Load AAM fixing rules. Required pairs of bad mapped and good mapped reactions.
         Reactants in pairs should be fully equal (equal molecules and equal atom orders).
@@ -474,9 +474,8 @@ class StandardizeReaction:
         #      \
         #       O-
         #
-        atoms = (
-        {'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'charge': 1}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
-        {'atom': 'O', 'neighbors': 1})
+        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'charge': 1},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (atoms, bonds), fix))
@@ -503,8 +502,8 @@ class StandardizeReaction:
         #      \
         #       OH
         #
-        atoms = (
-        {'atom': 'C', 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
+        atoms = ({'atom': 'C', 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (atoms, bonds), fix))
@@ -517,8 +516,8 @@ class StandardizeReaction:
         #      |
         #      OH
         #
-        atoms = (
-        {'atom': 'P', 'neighbors': 4, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
+        atoms = ({'atom': 'P', 'neighbors': 4, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
+                 {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (atoms, bonds), fix))
@@ -531,13 +530,11 @@ class StandardizeReaction:
         #      \            \
         #       O-           O-
         #
-        atoms = (
-        {'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
-        {'atom': 'O', 'neighbors': 1})
+        atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
-        p_atoms = (
-        {'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
-        {'atom': 'O', 'neighbors': 2})
+        p_atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
+                   {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 2})
         p_bonds = ((1, 2, 1), (1, 3, 1))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
@@ -553,8 +550,8 @@ class StandardizeReaction:
         atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
                  {'atom': 'O', 'neighbors': 1})
         bonds = ((1, 2, 1), (1, 3, 2))
-        p_atoms = (
-        {'atom': 'S', 'neighbors': 4, 'hybridization': 3}, {'atom': 'O', 'neighbors': 2}, {'atom': 'O', 'neighbors': 1})
+        p_atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3}, {'atom': 'O', 'neighbors': 2},
+                   {'atom': 'O', 'neighbors': 1})
         p_bonds = ((1, 2, 1), (1, 3, 2))
         fix = {2: 3, 3: 2}
         rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))

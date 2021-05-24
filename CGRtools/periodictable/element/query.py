@@ -233,8 +233,8 @@ class QueryElement(Query):
         return False
 
     def __hash__(self):
-        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical,
-                           self.neighbors, self.hybridization))
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical, self.neighbors,
+                           self.hybridization, self.ring_sizes, self.implicit_hydrogens, self.heteroatoms))
 
 
 class AnyElement(Query):
@@ -310,7 +310,8 @@ class AnyElement(Query):
         return False
 
     def __hash__(self):
-        return tuple_hash((self.charge, self.is_radical, self.neighbors, self.hybridization))
+        return tuple_hash((self.charge, self.is_radical, self.neighbors, self.hybridization, self.ring_sizes,
+                           self.implicit_hydrogens, self.heteroatoms))
 
 
 class ListElement(AnyElement):
@@ -376,7 +377,8 @@ class ListElement(AnyElement):
         """
         13bit = 4bit | 1bit | 4bit | 4bit
         """
-        return tuple_hash((self._numbers, self.charge, self.is_radical, self.neighbors, self.hybridization))
+        return tuple_hash((self._numbers, self.charge, self.is_radical, self.neighbors, self.hybridization,
+                           self.ring_sizes, self.implicit_hydrogens, self.heteroatoms))
 
     def __getstate__(self):
         state = super().__getstate__()

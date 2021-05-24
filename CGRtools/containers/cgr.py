@@ -366,11 +366,6 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
             return super().get_mapping(other, **kwargs)
         raise TypeError('CGRContainer expected')
 
-    def get_mcs_mapping(self, other: 'CGRContainer', **kwargs):
-        if isinstance(other, CGRContainer):
-            return super().get_mcs_mapping(other, **kwargs)
-        raise TypeError('CGRContainer expected')
-
     def decompose(self) -> Tuple['molecule.MoleculeContainer', 'molecule.MoleculeContainer']:
         """
         decompose CGR to pair of Molecules, which represents reactants and products state of reaction

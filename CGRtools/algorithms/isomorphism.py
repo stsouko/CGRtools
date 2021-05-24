@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -136,7 +136,6 @@ class Isomorphism:
     def _get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope, groups):
         size = len(linear_query) - 1
         order_depth = {v[0]: k for k, v in enumerate(linear_query)}
-        equal_cache = defaultdict(dict)
 
         stack = []
         path = []
@@ -144,14 +143,10 @@ class Isomorphism:
         reversed_mapping = {}
 
         s_n, s_atom = linear_query[0]
-        eqs = equal_cache[s_n]
         for n, o_atom in o_atoms.items():
             if n in scope:
                 if s_atom == o_atom:
-                    eqs[n] = True
                     stack.append((n, 0))
-                else:
-                    eqs[n] = False
 
         while stack:
             n, depth = stack.pop()
@@ -173,21 +168,13 @@ class Isomorphism:
                 if back != current:
                     n = path[order_depth[back]]
 
-                eqs = equal_cache[s_n]
                 uniq = set()
                 for o_n, o_bond in o_bonds[n].items():
                     if o_n in scope and o_n not in reversed_mapping and s_bond == o_bond and groups[o_n] not in uniq:
                         uniq.add(groups[o_n])
-                        if o_n in eqs:
-                            if eqs[o_n]:
-                                if all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
-                                    stack.append((o_n, depth))
-                        elif s_atom == o_atoms[o_n]:
-                            eqs[o_n] = True
-                            if all(bond == o_bonds[mapping[m]].get(o_n) for m, bond in query_closures[s_n]):
-                                stack.append((o_n, depth))
-                        else:
-                            eqs[o_n] = False
+                        if s_atom == o_atoms[o_n] and all(bond == o_bonds[mapping[m]].get(o_n)
+                                                          for m, bond in query_closures[s_n]):
+                            stack.append((o_n, depth))
 
     @cached_property
     def _compiled_query(self):
