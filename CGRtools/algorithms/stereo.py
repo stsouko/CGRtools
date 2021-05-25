@@ -864,6 +864,7 @@ class MoleculeStereo(Stereo):
         cis_trans_stereo = self._cis_trans_stereo
         allenes_stereo = self._allenes_stereo
 
+        bonds = {n: {m: int(b) for m, b in mb.items()} for n, mb in self._bonds.items()}
         morgan = self.atoms_order
         tetrahedrons = self._stereo_tetrahedrons.copy()
         cumulenes = self._stereo_cumulenes.copy()
@@ -977,7 +978,7 @@ class MoleculeStereo(Stereo):
             axises = tmp
 
             if morgan_update:
-                morgan = self._morgan({**morgan, **morgan_update})
+                morgan = self._morgan({**morgan, **morgan_update}, bonds)
                 morgan_update = {}
             else:
                 return chiral_t, {(n, m) for n, *_, m in chiral_c}, {path[len(path) // 2] for path in chiral_a}, morgan

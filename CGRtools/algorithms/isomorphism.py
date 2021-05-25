@@ -144,9 +144,8 @@ class Isomorphism:
 
         s_n, s_atom = linear_query[0]
         for n, o_atom in o_atoms.items():
-            if n in scope:
-                if s_atom == o_atom:
-                    stack.append((n, 0))
+            if n in scope and s_atom == o_atom:
+                stack.append((n, 0))
 
         while stack:
             n, depth = stack.pop()

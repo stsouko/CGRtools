@@ -69,7 +69,7 @@ class GraphComponents:
     @cached_property
     def skin_atoms(self) -> Tuple[int, ...]:
         """
-        Atoms of rings and rings linkers [without terminal atoms]
+        Atoms of skin graph.
         """
         return tuple(self._skin_graph(self._bonds))
 

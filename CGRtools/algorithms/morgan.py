@@ -40,21 +40,19 @@ class Morgan:
         elif len(atoms) == 1:  # optimize single atom containers
             return dict.fromkeys(atoms, 1)
         ring = self.ring_atoms
-        return self._morgan({n: tuple_hash((hash(a), n in ring)) for n, a in atoms.items()})
+        return self._morgan({n: tuple_hash((hash(a), n in ring)) for n, a in atoms.items()},
+                            {n: {m: int(b) for m, b in mb.items()} for n, mb in self._bonds.items()})
 
-    def _morgan(self, weights: Dict[int, int]) -> Dict[int, int]:
-        atoms = self._atoms
-        bonds = self._bonds
-
+    @staticmethod
+    def _morgan(atoms: Dict[int, int], bonds: Dict[int, Dict[int, int]]) -> Dict[int, int]:
         tries = len(atoms) - 1
-        numb = len(set(weights.values()))
+        numb = len(set(atoms.values()))
         stab = old_numb = 0
 
         for _ in range(tries):
-            weights = {n: tuple_hash((weights[n],
-                                      *(x for x in sorted((weights[m], int(b)) for m, b in ms.items()) for x in x)))
-                       for n, ms in bonds.items()}
-            old_numb, numb = numb, len(set(weights.values()))
+            atoms = {n: tuple_hash((atoms[n], *(x for x in sorted((atoms[m], b) for m, b in ms.items()) for x in x)))
+                     for n, ms in bonds.items()}
+            old_numb, numb = numb, len(set(atoms.values()))
             if numb == len(atoms):  # each atom now unique
                 break
             elif numb == old_numb:  # not changed. molecules like benzene
@@ -67,7 +65,7 @@ class Morgan:
             if numb < old_numb:
                 warning('morgan. number of attempts exceeded. uniqueness has decreased.')
 
-        return {n: i for i, (_, g) in enumerate(groupby(sorted(weights.items(), key=itemgetter(1)), key=itemgetter(1)),
+        return {n: i for i, (_, g) in enumerate(groupby(sorted(atoms.items(), key=itemgetter(1)), key=itemgetter(1)),
                                                 start=1) for n, _ in g}
 
 
