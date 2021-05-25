@@ -20,7 +20,8 @@
 from CachedMethods import cached_property, FrozenDict
 from collections import defaultdict, deque
 from importlib.util import find_spec
-from typing import List, Tuple, Dict, Set, Any, Union
+from typing import List, Tuple, Dict, Set, Any, Union, FrozenSet
+from ...containers.bonds import Bond, QueryBond, DynamicBond
 
 
 if find_spec('numpy'):
@@ -144,7 +145,7 @@ class GraphComponents:
         """
         Atoms in rings
         """
-        bonds = self._skin_graph(self._bonds)
+        bonds = self._skin_graph(self.not_special_connectivity.copy())
         if not bonds:
             return frozenset()
 
@@ -178,10 +179,38 @@ class GraphComponents:
     @cached_property
     def rings_count(self):
         """
-        SSSR rings count.
+        SSSR rings count. Ignored rings with special bonds.
         """
-        bonds = self._bonds
-        return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + self.connected_components_count
+        bonds = self.not_special_connectivity.copy()
+        return sum(len(x) for x in bonds.values()) // 2 - len(bonds) + len(self._connected_components(bonds))
+
+    @cached_property
+    def not_special_bonds(self) -> Dict[int, Dict[int, Union[Bond, QueryBond, DynamicBond]]]:
+        """
+        Bonds without special.
+        """
+        bonds = {}
+        for n, ms in self._bonds.items():
+            ngb = {}
+            for m, b in ms.items():
+                if b != 8:
+                    ngb[m] = b
+            bonds[n] = FrozenDict(ngb)
+        return FrozenDict(bonds)
+
+    @cached_property
+    def not_special_connectivity(self) -> Dict[int, FrozenSet[int]]:
+        """
+        Graph connectivity without special bonds.
+        """
+        bonds = {}
+        for n, ms in self._bonds.items():
+            ngb = set()
+            for m, b in ms.items():
+                if b != 8:
+                    ngb.add(m)
+            bonds[n] = frozenset(ngb)
+        return FrozenDict(bonds)
 
     @cached_property
     def atoms_rings(self) -> Dict[int, Tuple[Tuple[int, ...]]]:

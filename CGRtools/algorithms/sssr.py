@@ -40,12 +40,12 @@ class SSSR:
     @cached_property
     def sssr(self: 'Graph') -> Tuple[Tuple[int, ...], ...]:
         """
-        Smallest Set of Smallest Rings.
+        Smallest Set of Smallest Rings. Special bonds ignored.
 
         :return rings atoms numbers
         """
         if self.rings_count:
-            return self._sssr(self._bonds, self.rings_count)
+            return self._sssr(self.not_special_connectivity.copy(), self.rings_count)
         return ()
 
     @classmethod
