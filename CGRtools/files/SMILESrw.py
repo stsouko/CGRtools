@@ -18,6 +18,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from collections import defaultdict
+from fileinput import FileInput
 from functools import reduce
 from itertools import permutations
 from io import StringIO, TextIOWrapper
@@ -103,7 +104,7 @@ class SMILESRead(CGRRead):
         elif isinstance(file, Path):
             self._file = file.open()
             self.__is_buffer = False
-        elif isinstance(file, (TextIOWrapper, StringIO)):
+        elif isinstance(file, (TextIOWrapper, StringIO, FileInput)):
             self._file = file
             self.__is_buffer = True
         else:
@@ -126,7 +127,10 @@ class SMILESRead(CGRRead):
     def __data(self):
         file = self._file
         parse = self.parse
-        seekable = file.seekable()
+        try:
+            seekable = file.seekable()
+        except AttributeError:
+            seekable = False
         pos = file.tell() if seekable else None
         for n, line in enumerate(self.__file):
             x = parse(line)

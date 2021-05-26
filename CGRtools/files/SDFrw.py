@@ -112,7 +112,10 @@ class SDFRead(MDLRead):
         mkey = parser = record = None
         meta = defaultdict(list)
         file = self._file
-        seekable = file.seekable()
+        try:
+            seekable = file.seekable()
+        except AttributeError:
+            seekable = False
         seek = yield  # init stop
         if seek is not None:
             yield

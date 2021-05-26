@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from base64 import urlsafe_b64encode
+from fileinput import FileInput
 from io import StringIO, TextIOWrapper
 from itertools import islice
 from os.path import abspath, join
@@ -47,7 +48,7 @@ class MDLRead(MDLStereo, metaclass=MDLReadMeta):
         elif isinstance(file, Path):
             self._file = file.open()
             self._is_buffer = False
-        elif isinstance(file, (TextIOWrapper, StringIO)):
+        elif isinstance(file, (TextIOWrapper, StringIO, FileInput)):
             self._file = file
             self._is_buffer = True
         else:

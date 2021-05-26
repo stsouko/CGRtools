@@ -18,6 +18,7 @@
 #
 from ctypes import c_char, c_double, c_short, c_long, create_string_buffer, POINTER, Structure, cdll, byref
 from distutils.util import get_platform
+from fileinput import FileInput
 from io import StringIO, TextIOWrapper
 from logging import warning
 from os import name
@@ -61,7 +62,7 @@ class INCHIRead(CGRRead):
         elif isinstance(file, Path):
             self._file = file.open()
             self.__is_buffer = False
-        elif isinstance(file, (TextIOWrapper, StringIO)):
+        elif isinstance(file, (TextIOWrapper, StringIO, FileInput)):
             self._file = file
             self.__is_buffer = True
         else:
@@ -84,7 +85,10 @@ class INCHIRead(CGRRead):
     def __data(self):
         file = self._file
         parse = self.parse
-        seekable = file.seekable()
+        try:
+            seekable = file.seekable()
+        except AttributeError:
+            seekable = False
         pos = file.tell() if seekable else None
         for n, line in enumerate(self.__file):
             x = parse(line)

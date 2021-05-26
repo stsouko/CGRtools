@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from fileinput import FileInput
 from io import StringIO, TextIOWrapper
 from pathlib import Path
 from traceback import format_exc
@@ -57,7 +58,7 @@ class PDBRead(XYZ):
         elif isinstance(file, Path):
             self._file = file.open()
             self._is_buffer = False
-        elif isinstance(file, (TextIOWrapper, StringIO)):
+        elif isinstance(file, (TextIOWrapper, StringIO, FileInput)):
             self._file = file
             self._is_buffer = True
         else:
@@ -75,7 +76,10 @@ class PDBRead(XYZ):
         element_name_priority = self.__element_name_priority
         atom_name_map = self.__atom_name_map
         file = self._file
-        seekable = file.seekable()
+        try:
+            seekable = file.seekable()
+        except AttributeError:
+            seekable = False
         ignore = self.__ignore
         failkey = False
         atoms = []

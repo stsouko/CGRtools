@@ -120,7 +120,10 @@ class RDFRead(MDLRead):
         record = parser = mkey = pos = None
         failed = False
         file = self._file
-        seekable = file.seekable()
+        try:
+            seekable = file.seekable()
+        except AttributeError:
+            seekable = False
 
         if next(self.__file).startswith('$RXN'):  # parse RXN file
             is_reaction = True
