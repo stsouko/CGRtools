@@ -1023,7 +1023,7 @@ class Standardize:
         #  [C+] - N(R2)  >> C = [N+](R2)
         #
         atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 1},
-                 {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3)})
+                 {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3), 'heteroatoms': 1})
         bonds = ((1, 2, 1),)
         atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
         bonds_fix = ((1, 2, 2),)
@@ -1355,21 +1355,56 @@ class Standardize:
         bonds_fix = ((1, 4, 1),)
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # CuCl
         #
         #         R - N - C                  R - N - C
         #            /    ||                    /    ||
-        # Cl - Cu = C     || >> [Cl-] --- Cu - C     ||
+        #  A - Cu = C     :: >>    A - [Cu-] - C     ::
         #            \    ||                   \\    ||
         #         R - N - C                R - [N+]- C
         #
-        atoms = ({'atom': 'Cl', 'charge': 0, 'neighbors': 1}, {'atom': 'Cu', 'neighbors': 2},
+        atoms = ({'atom': ListElement(['Cu', 'Ag', 'Au']), 'hybridization': 2},
                  {'atom': 'C', 'charge': 0, 'neighbors': 3},
-                 {'atom': 'N', 'neighbors': 3, 'hybridization': 1}, {'atom': 'N', 'neighbors': 3, 'hybridization': 1},
-                 {'atom': 'C', 'hybridization': 2}, {'atom': 'C', 'hybridization': 2})
-        bonds = ((1, 2, 1), (2, 3, 2), (3, 4, 1), (3, 5, 1), (4, 6, 1), (5, 7, 1), (6, 7, 2))
-        atom_fix = {1: {'charge': -1}, 2: {'hybridization': 1}, 4: {'charge': 1, 'hybridization': 2}}
-        bonds_fix = ((1, 2, 8), (2, 3, 1), (3, 4, 2))
+                 {'atom': 'N', 'neighbors': 3, 'hybridization': 1, 'heteroatoms': 0},
+                 {'atom': 'N', 'neighbors': 3, 'hybridization': 1, 'heteroatoms': 0},
+                 {'atom': 'C', 'hybridization': (2, 4)}, {'atom': 'C', 'hybridization': (2, 4)})
+        bonds = ((1, 2, 2), (2, 3, 1), (2, 4, 1), (3, 5, 1), (4, 6, 1), (5, 6, (2, 4)))
+        atom_fix = {1: {'charge': -1, 'hybridization': 1}, 3: {'charge': 1, 'hybridization': 2}}
+        bonds_fix = ((1, 2, 1), (2, 3, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Ferrocene covalent charge-free
+        #  C5H5-(5)Fe(5)-C5H5
+        #
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'neighbors': 10},
+                 {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'},
+                 {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1),
+                 (1, 7, 1), (1, 8, 1), (1, 9, 1), (1, 10, 1), (1, 11, 1),
+                 (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 6, 1), (6, 2, 1),
+                 (7, 8, 1), (8, 9, 1), (9, 10, 1), (10, 11, 1), (11, 7, 1))
+        atom_fix = {1: {'charge': 2}, 2: {'charge': -1}, 3: {'hybridization': 2}, 4: {'hybridization': 2},
+                    5: {'hybridization': 2}, 6: {'hybridization': 2}, 7: {'charge': -1}, 8: {'hybridization': 2},
+                    9: {'hybridization': 2}, 10: {'hybridization': 2}, 11: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8),
+                     (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8),
+                     (3, 4, 2), (5, 6, 2), (8, 9, 2), (10, 11, 2))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Ferrocene covalent explicit H
+        #  C5H5-(5)Fe(5)-C5H5
+        #
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 2, 'neighbors': 10},
+                 {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'},
+                 {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1),
+                 (1, 7, 1), (1, 8, 1), (1, 9, 1), (1, 10, 1), (1, 11, 1),
+                 (2, 3, 1), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 2, 1),
+                 (7, 8, 1), (8, 9, 2), (9, 10, 1), (10, 11, 2), (11, 7, 1))
+        atom_fix = {}
+        bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8),
+                     (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
         return rules
 

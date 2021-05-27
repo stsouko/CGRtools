@@ -129,7 +129,7 @@ class Calculate2DMolecule(Calculate2D):
             smiles, order = self._smiles(lambda x: random(), _return_order=True, stereo=False)
         finally:
             self._hydrogens = hydrogens
-        return ''.join(smiles), order
+        return ''.join(smiles).replace('~', '-'), order
 
 
 class Calculate2DQuery(Calculate2D):
@@ -144,7 +144,7 @@ class Calculate2DQuery(Calculate2D):
             mol.add_bond(n, m, bond.order[0])
         mol._hydrogens = {n: 0 for n in mol._hydrogens}
         smiles, order = mol._smiles(lambda x: random(), _return_order=True)
-        return ''.join(smiles), order
+        return ''.join(smiles).replace('~', '-'), order
 
 
 class Calculate2DCGR(Calculate2D):
@@ -159,7 +159,7 @@ class Calculate2DCGR(Calculate2D):
             mol.add_bond(n, m, bond.order or 1)
         mol._hydrogens = {n: 0 for n in mol._hydrogens}
         smiles, order = mol._smiles(lambda x: random(), _return_order=True)
-        return ''.join(smiles), order
+        return ''.join(smiles).replace('~', '-'), order
 
 
 if find_spec('py_mini_racer'):
