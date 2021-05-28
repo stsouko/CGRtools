@@ -40,7 +40,7 @@ from ..periodictable import Element, QueryElement
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
                         DepictMolecule, Calculate2DMolecule, Tautomers, MCS, Huckel, X3domMolecule):
     __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
-                 '_allenes_stereo')
+                 '_allenes_stereo', '_backup')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
@@ -525,6 +525,50 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 elif hybridization == 1:
                     hybridization = 2
         self._hybridizations[n] = hybridization
+
+    def __enter__(self):
+        """
+        Transaction of changes. Keep current state for restoring on errors.
+        """
+        atoms = {}
+        for n, atom in self._atoms.items():
+            atom = atom.copy()
+            atoms[n] = atom
+            atom._attach_to_graph(self, n)
+
+        bonds = {}
+        for n, m_bond in self._bonds.items():
+            bonds[n] = cbn = {}
+            for m, bond in m_bond.items():
+                if m in bonds:  # bond partially exists. need back-connection.
+                    cbn[m] = bonds[m][n]
+                else:
+                    cbn[m] = bond.copy()
+        self._backup = {'atoms': atoms, 'bonds': bonds, 'parsed_mapping': self._parsed_mapping.copy(),
+                        'plane': self._plane.copy(), 'charges': self._charges.copy(), 'radicals': self._radicals.copy(),
+                        'hydrogens': self._hydrogens.copy(), 'conformers': [x.copy() for x in self._conformers],
+                        'atoms_stereo': self._atoms_stereo.copy(), 'allenes_stereo': self._allenes_stereo.copy(),
+                        'cis_trans_stereo': self._cis_trans_stereo.copy(),
+                        'hybridizations': self._hybridizations.copy()}
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:  # restore state
+            backup = self._backup
+            self._atoms = backup['atoms']
+            self._bonds = backup['bonds']
+            self._parsed_mapping = backup['parsed_mapping']
+            self._plane = backup['plane']
+            self._charges = backup['charges']
+            self._radicals = backup['radicals']
+            self._hydrogens = backup['hydrogens']
+            self._conformers = backup['conformers']
+            self._atoms_stereo = backup['atoms_stereo']
+            self._allenes_stereo = backup['allenes_stereo']
+            self._cis_trans_stereo = backup['cis_trans_stereo']
+            self._hybridizations = backup['hybridizations']
+            self.flush_cache()
+        del self._backup
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'hydrogens': self._hydrogens, 'atoms_stereo': self._atoms_stereo,
