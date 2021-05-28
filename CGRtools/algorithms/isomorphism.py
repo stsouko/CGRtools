@@ -122,7 +122,7 @@ class Isomorphism:
                 mappers = [self._get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
                            for order, component in zip(components, candidates)]
                 for match in lazy_product(*mappers):
-                    mapping = match[0]
+                    mapping = match[0].copy()
                     for m in match[1:]:
                         mapping.update(m)
                     if automorphism_filter:
