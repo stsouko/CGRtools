@@ -97,6 +97,13 @@ class DynamicBond:
         return tuple_hash((self.__order or 0, self.__p_order or 0))
 
     @property
+    def is_dynamic(self) -> bool:
+        """
+        Bond has dynamic features
+        """
+        return self.__order != self.__p_order
+
+    @property
     def order(self) -> Optional[int]:
         return self.__order
 
