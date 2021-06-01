@@ -98,6 +98,9 @@ class DynamicBond:
 
     @property
     def is_dynamic(self) -> bool:
+        """
+        Bond has dynamic features
+        """
         return self.__order != self.__p_order
 
     @property

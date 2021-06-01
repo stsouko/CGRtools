@@ -158,7 +158,6 @@ class DynamicElement(Dynamic):
         """
         Atom has dynamic features
         """
-        return self.charge != self.p_charge or self.is_radical != self.p_is_radical or \
-            self.neighbors != self.p_neighbors or self.hybridization != self.p_hybridization
+        return self.charge != self.p_charge or self.is_radical != self.p_is_radical
 
 __all__ = ['DynamicElement', 'Dynamic']
