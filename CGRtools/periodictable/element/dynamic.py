@@ -160,4 +160,5 @@ class DynamicElement(Dynamic):
         """
         return self.charge != self.p_charge or self.is_radical != self.p_is_radical
 
+
 __all__ = ['DynamicElement', 'Dynamic']
