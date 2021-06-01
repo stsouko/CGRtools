@@ -153,5 +153,12 @@ class DynamicElement(Dynamic):
         return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.p_charge,
                            self.is_radical, self.p_is_radical))
 
+    @property
+    def is_dynamic(self) -> bool:
+        """
+        Atom has dynamic features
+        """
+        return self.charge != self.p_charge or self.is_radical != self.p_is_radical or \
+            self.neighbors != self.p_neighbors or self.hybridization != self.p_hybridization
 
 __all__ = ['DynamicElement', 'Dynamic']
