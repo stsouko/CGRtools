@@ -575,7 +575,7 @@ class Tautomers:
     def __stripped_acid_rules(self):
         rules = []
 
-        # [H][N+]=,-,:
+        # Ammonia, H-imine,guanidine,amidine. [H][N+]=,-,:
         q = query.QueryContainer()
         q.add_atom('N', charge=1, hydrogens=(1, 2, 3))
         rules.append(q)
@@ -586,14 +586,14 @@ class Tautomers:
     def __acid_rules(self):
         rules = list(self.__stripped_acid_rules)
 
-        # [H][O,S,Se]-Ar
+        # Phenoles, [H][O,S,Se]-Ar
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
         q.add_atom('A', hybridization=4)
         q.add_bond(1, 2, 1)
         rules.append(q)
 
-        # [H][O,S,Se]-[C,N,P,S,Cl,Se,Br,I]=O
+        # Oxo-acids. [H][O,S,Se]-[C,N,P,S,Cl,Se,Br,I]=O
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
         q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
@@ -602,13 +602,23 @@ class Tautomers:
         q.add_bond(2, 3, 2)
         rules.append(q)
 
+        # Nitro acid. [H]O-[N+](=O)[O-]
+        q = query.QueryContainer()
+        q.add_atom('O', neighbors=1)
+        q.add_atom('N', charge=1)
+        q.add_atom('O', charge=-1)
+        q.add_atom('O')
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 2)
+        rules.append(q)
         return rules
 
     @class_cached_property
     def __stripped_base_rules(self):
         rules = []
 
-        # [O,S,Se-]-[C,N,P,S,Cl,Se,Br,I]=O
+        # Oxo-acid salts. [O,S,Se-]-[C,N,P,S,Cl,Se,Br,I]=O
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
         q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
@@ -617,14 +627,14 @@ class Tautomers:
         q.add_bond(2, 3, 2)
         rules.append(q)
 
-        # [O,S,Se-]-Ar
+        # Phenole salts. [O,S,Se-]-Ar
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
         q.add_atom('A', hybridization=4)
         q.add_bond(1, 2, 1)
         rules.append(q)
 
-        # [O-]-[N+](=O)[O-]
+        # Nitrate. [O-]-[N+](=O)[O-]
         q = query.QueryContainer()
         q.add_atom('O', charge=-1)
         q.add_atom('N', charge=1)
@@ -635,7 +645,7 @@ class Tautomers:
         q.add_bond(2, 4, 2)
         rules.append(q)
 
-        # ions
+        # ions. only for neutralizing.
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'F', 'Cl', 'Br', 'I']), charge=-1, neighbors=1)
         rules.append(q)
@@ -646,21 +656,41 @@ class Tautomers:
     def __base_rules(self):
         rules = list(self.__stripped_base_rules)
 
-        # [C,H]N=C([C,H])C
+        # Guanidine
+        q = query.QueryContainer()
+        q.add_atom('N', heteroatoms=0)
+        q.add_atom('C')
+        q.add_atom('N', heteroatoms=0)
+        q.add_atom('N', heteroatoms=0)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 1)
+        rules.append(q)
+
+        # Amidine
+        q = query.QueryContainer()
+        q.add_atom('N', heteroatoms=0)
+        q.add_atom('C', neighbors=3, heteroatoms=2)
+        q.add_atom('N', heteroatoms=0)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append(q)
+
+        # Imine. [C,H]N=C([C,H])C
         q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
         q.add_atom('C', heteroatoms=1, neighbors=(2, 3), hybridization=2)
         q.add_bond(1, 2, 2)
         rules.append(q)
 
-        # [N;H2][C;X4,a]
+        # Aliphatic 1 Amine. [N;H2][C;X4]
         q = query.QueryContainer()
         q.add_atom('N', neighbors=1)
         q.add_atom('C', hybridization=1, heteroatoms=1)
         q.add_bond(1, 2, 1)
         rules.append(q)
 
-        # HN(C)C
+        # 2 Amine. HN([C;X4])[C;X4,a]
         q = query.QueryContainer()
         q.add_atom('N', neighbors=2)
         q.add_atom('C', hybridization=1, heteroatoms=1)
@@ -669,7 +699,7 @@ class Tautomers:
         q.add_bond(1, 3, 1)
         rules.append(q)
 
-        # CN(C)C
+        # 3 Amine. [C;X4]N([C;X4])[C;X4,a]
         q = query.QueryContainer()
         q.add_atom('N')
         q.add_atom('C', hybridization=1, heteroatoms=1)
@@ -680,7 +710,7 @@ class Tautomers:
         q.add_bond(1, 4, 1)
         rules.append(q)
 
-        # :N:
+        # Pyridine. Imidazole. Triazole. :N:
         q = query.QueryContainer()
         q.add_atom('N', hybridization=4, hydrogens=0, neighbors=2)
         rules.append(q)
