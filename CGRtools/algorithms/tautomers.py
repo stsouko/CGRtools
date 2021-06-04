@@ -104,10 +104,10 @@ class Tautomers:
                             mol._allenes_stereo.update(allenes_stereo)
                             mol._cis_trans_stereo.update(cis_trans_stereo)
                             mol._fix_stereo()
-                    yield mol
-                    counter += 1
-                    if counter == limit:
-                        return
+                        yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
 
             if ring_chain:
                 for mol in current._enumerate_ring_chain_tautomers(full):
@@ -319,7 +319,7 @@ class Tautomers:
         rules = []  # query, is ketone, bond fix
         # enoles are order-dependent
 
-        # [O,S:1]=[C:3]1[N;H:2][C:4]=,:[C,N:5]-,:[C,N:6]=,:[C:7]1
+        # 2-pyridone. [O,S:1]=[C:3]1[N;H:2][C:4]=,:[C,N:5]-,:[C,N:6]=,:[C:7]1
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S']), neighbors=1)
         q.add_atom('N', hydrogens=1)
@@ -385,7 +385,7 @@ class Tautomers:
         q.add_bond(2, 10, 1)
         rules.append((q, False, (2, 3, 2), (3, 4, 1), (4, 5, 2), (1, 5, 1)))
 
-        # [O,S,NH:1]=[C:3]([C,H])[C:4]=[C:5][C:6]=[CH:7]-[O,S,N;H:2]
+        # [O,S,NH:1]=[C:3]([C,H])[C:4]=[C:5][C:6]=[C:7]([C,H])-[O,S,N;H:2]
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
         q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2), heteroatoms=0)  # donor
@@ -402,7 +402,7 @@ class Tautomers:
         q.add_bond(6, 7, 2)
         rules.append((q, False, (1, 3, 1), (2, 7, 2), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 7, 1)))
 
-        # [C;X4,a:8][N:1]=[C:3]([C,H])[C:4]=[C:5][C:6]=[CH:7]-[O,S,N;H:2]
+        # [C;X4,a:8][N:1]=[C:3]([C,H])[C:4]=[C:5][C:6]=[C:7]([C,H])-[O,S,N;H:2]
         q = query.QueryContainer()
         q.add_atom('N')  # acceptor
         q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2), heteroatoms=0)  # donor
@@ -421,7 +421,7 @@ class Tautomers:
         q.add_bond(1, 8, 1)
         rules.append((q, False, (1, 3, 1), (2, 7, 2), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 7, 1)))
 
-        # [O,S,NH:1]=[C:3]([C,H])[C:4]=[C:5]-[O,S,N;H:2]
+        # [O,S,NH:1]=[C:3]([C,H])[C:4]=[C:5]([C,H])-[O,S,N;H:2]
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
         q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2), heteroatoms=0)  # donor
@@ -434,7 +434,7 @@ class Tautomers:
         q.add_bond(4, 5, 2)
         rules.append((q, False, (1, 3, 1), (2, 5, 2), (3, 4, 2), (4, 5, 1)))
 
-        # [C;X4,a:6][N:1]=[C:3]([C,H])[C:4]=[C:5]-[O,S,N;H:2]
+        # [C;X4,a:6][N:1]=[C:3]([C,H])[C:4]=[C:5]([C,H])-[O,S,N;H:2]
         q = query.QueryContainer()
         q.add_atom('N')  # acceptor
         q.add_atom(ListElement(['O', 'S', 'N']), hydrogens=(1, 2), heteroatoms=0)  # donor
@@ -471,7 +471,7 @@ class Tautomers:
         q.add_bond(2, 3, 1)
         rules.append((q, False, (1, 3, 1), (2, 3, 2)))
 
-        # C=C([C,H])-[N;H]-N
+        # C=C([C,H])-[N;H]-N([C,H])[C,H]
         q = query.QueryContainer()
         q.add_atom('C')  # acceptor
         q.add_atom('N', hydrogens=1)  # donor
@@ -491,7 +491,7 @@ class Tautomers:
         q.add_bond(2, 3, 1)
         rules.append((q, False, (1, 3, 1), (2, 3, 2)))
 
-        # [N:1]=1[C:2][C:3]=,:[C:4][C:5]=1
+        # 2H‐pyrrole. [N:1]=1[C:2][C:3]=,:[C:4][C:5]=1
         q = query.QueryContainer()
         q.add_atom('N')  # acceptor
         q.add_atom('C', hydrogens=(1, 2))  # donor
@@ -569,6 +569,19 @@ class Tautomers:
         q.add_bond(1, 4, 1)
         rules.append((q, True, (1, 3, 1), (2, 3, 2)))
 
+        # [C;X4,H:2]-[C:3]([C,H])=[C:5]([C,H])-[C:4]([C,H])=[O,S,N;X1:1]
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'S', 'N']), neighbors=1)  # acceptor
+        q.add_atom('C', hybridization=1, hydrogens=(1, 2, 3))  # donor
+        q.add_atom('C', heteroatoms=0)
+        q.add_atom('C', heteroatoms=1)
+        q.add_atom('C', heteroatoms=0)
+        q.add_bond(1, 4, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(3, 5, 2)
+        q.add_bond(4, 5, 1)
+        rules.append((q, True, (1, 4, 1), (2, 3, 2), (3, 5, 1), (4, 5, 2)))
+
         return rules
 
     @class_cached_property
@@ -577,7 +590,7 @@ class Tautomers:
 
         # Ammonia, H-imine,guanidine,amidine. [H][N+]=,-,:
         q = query.QueryContainer()
-        q.add_atom('N', charge=1, hydrogens=(1, 2, 3))
+        q.add_atom('N', charge=1, hydrogens=(1, 2, 3, 4))
         rules.append(q)
 
         return rules
@@ -612,6 +625,11 @@ class Tautomers:
         q.add_bond(2, 3, 1)
         q.add_bond(2, 4, 2)
         rules.append(q)
+
+        # Halogen acids
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['F', 'Cl', 'Br', 'I']), neighbors=0)
+        rules.append(q)
         return rules
 
     @class_cached_property
@@ -645,9 +663,9 @@ class Tautomers:
         q.add_bond(2, 4, 2)
         rules.append(q)
 
-        # ions. only for neutralizing.
+        # ions
         q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'F', 'Cl', 'Br', 'I']), charge=-1, neighbors=1)
+        q.add_atom(ListElement(['O', 'F', 'Cl', 'Br', 'I']), charge=-1, neighbors=0)
         rules.append(q)
 
         return rules
@@ -660,8 +678,43 @@ class Tautomers:
         q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
         q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom('N')
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 1)
+        rules.append(q)
+
+        # Oxo-guanidine, Amino-guanidine
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom('N')
+        q.add_atom(ListElement(['O', 'N']))
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 1)
+        q.add_bond(1, 5, 1)
+        rules.append(q)
+
+        # O-alkyl-isourea, S-alkyl-isothiaurea
+        q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
+        q.add_atom('C')
+        q.add_atom('N')
+        q.add_atom(ListElement(['O', 'S']), neighbors=2, hybridization=1, heteroatoms=0)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(2, 4, 1)
+        rules.append(q)
+
+        # Dialkyl imidocarbonate
+        q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
+        q.add_atom('C')
+        q.add_atom('O', neighbors=2, heteroatoms=0)
+        q.add_atom('O', neighbors=2, heteroatoms=0)
         q.add_bond(1, 2, 2)
         q.add_bond(2, 3, 1)
         q.add_bond(2, 4, 1)
@@ -670,41 +723,70 @@ class Tautomers:
         # Amidine
         q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
-        q.add_atom('C', neighbors=3, heteroatoms=2)
-        q.add_atom('N', heteroatoms=0)
+        q.add_atom('C', heteroatoms=2)
+        q.add_atom('N')
         q.add_bond(1, 2, 2)
         q.add_bond(2, 3, 1)
         rules.append(q)
 
-        # Imine. [C,H]N=C([C,H])C
+        # O-alkyl-imidate (oxazoline)
         q = query.QueryContainer()
         q.add_atom('N', heteroatoms=0)
-        q.add_atom('C', heteroatoms=1, neighbors=(2, 3), hybridization=2)
+        q.add_atom('C', heteroatoms=2)
+        q.add_atom('O', neighbors=2, heteroatoms=0)
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        rules.append(q)
+
+        # Amidoxime. O-N=C([C,H])N
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('C', heteroatoms=2)
+        q.add_atom('N')
+        q.add_atom('O')
+        q.add_bond(1, 2, 2)
+        q.add_bond(2, 3, 1)
+        q.add_bond(1, 4, 1)
+        rules.append(q)
+
+        # Oxime, Hydrazone. [O,N]-N=C([C,H])[C,H]
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('C', heteroatoms=1, hybridization=2)
+        q.add_atom(ListElement(['N', 'O']))
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 1)
+        rules.append(q)
+
+        # Imine. [C,H]N=C([C,H])[C,H]
+        q = query.QueryContainer()
+        q.add_atom('N', heteroatoms=0)
+        q.add_atom('C', heteroatoms=1, hybridization=2)
         q.add_bond(1, 2, 2)
         rules.append(q)
 
-        # Aliphatic 1 Amine. [N;H2][C;X4]
+        # Alkyl amine, Hydroxylamine, Hydrazine
         q = query.QueryContainer()
         q.add_atom('N', neighbors=1)
-        q.add_atom('C', hybridization=1, heteroatoms=1)
+        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
         q.add_bond(1, 2, 1)
         rules.append(q)
 
-        # 2 Amine. HN([C;X4])[C;X4,a]
+        # Dialkyl amine, Alkyl hydroxylamine, Alkyl hydrazine
         q = query.QueryContainer()
         q.add_atom('N', neighbors=2)
+        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
         q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         rules.append(q)
 
-        # 3 Amine. [C;X4]N([C;X4])[C;X4,a]
+        # Trialkyl amine, Dialkyl-hydroxylamine, Dialkyl-hydrazine
         q = query.QueryContainer()
         q.add_atom('N')
+        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
         q.add_atom('C', hybridization=1, heteroatoms=1)
         q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=(1, 4))
         q.add_bond(1, 2, 1)
         q.add_bond(1, 3, 1)
         q.add_bond(1, 4, 1)

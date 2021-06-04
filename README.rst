@@ -92,6 +92,13 @@ General part
 
 **If you still have questions, please open issue within github.**
 
+TESTS
+=====
+
+Run unit tests::
+
+    pytest --pyargs CGRtools
+
 PACKAGING
 =========
 
