@@ -49,6 +49,7 @@ from ..exceptions import IncorrectSmiles, IsChiral, NotChiral, ValenceError
 # 9: up down bond
 # 10: dynamic bond
 # 11: dynamic atom
+# 12: dynamic aromatic atom
 
 replace_dict = {'-': 1, '=': 2, '#': 3, ':': 4, '~': 8, '.': None, '(': 2, ')': 3}
 charge_dict = {'+': 1, '+1': 1, '++': 2, '+2': 2, '+3': 3, '+++': 3, '+4': 4, '++++': 4,
@@ -66,7 +67,8 @@ dyn_charge_dict.update(tmp)
 dyn_radical_dict = {'*': (True,), '*>^': (True, ('radical', None)), '^>*': (False, ('radical', None))}
 
 atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
-dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Z][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?([*^](>[*^])?)?')
+dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?'
+                      r'([*^](>[*^])?)?')
 delimiter = compile(r'[=:]')
 
 
@@ -540,9 +542,9 @@ class SMILESRead(CGRRead):
                         except KeyError:
                             raise IncorrectSmiles(f'invalid dynamic bond token {{{token}}}')
                     else:  # dynamic atom token
-                        out.append((11, cls.__dynatom_parse(token)))
+                        out.append(cls.__dynatom_parse(token))
                 elif '*' in token:  # CGR atom radical mark
-                    out.append((11, cls.__dynatom_parse(token)))
+                    out.append(cls.__dynatom_parse(token))
                 else:  # atom token
                     out.append(cls.__atom_parse(token))
             else:  # as is types: 1, 2, 3, 4, 6, 9
@@ -625,8 +627,13 @@ class SMILESRead(CGRRead):
         else:
             is_radical = False
 
-        return {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
-                'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b'):
+            _type = 12
+            element = element.capitalize()
+        else:
+            _type = 11
+        return _type, {'element': element, 'charge': charge, 'isotope': isotope, 'is_radical': is_radical,
+                       'mapping': 0, 'x': 0., 'y': 0., 'z': 0., 'cgr': cgr}
 
     def __parse_tokens(self, smiles):
         tokens = self._raw_tokenize(smiles)
@@ -637,9 +644,9 @@ class SMILESRead(CGRRead):
         strong_cycle = not self._ignore
         t1 = tokens[0][0]
         if t1 == 2:
-            if tokens[1][0] not in (0, 8, 11):
+            if tokens[1][0] not in (0, 8, 11, 12):
                 raise IncorrectSmiles('not atom started')
-        elif t1 not in (0, 8, 11):
+        elif t1 not in (0, 8, 11, 12):
             raise IncorrectSmiles('not atom started')
 
         atoms = []
@@ -725,7 +732,7 @@ class SMILESRead(CGRRead):
                             raise IncorrectSmiles('not equal cycle bonds')
                     else:
                         bt = 1
-                        b = 4 if atoms_types[last_num] == atoms_types[a] == 8 else 1
+                        b = 4 if atoms_types[last_num] in (8, 12) and atoms_types[a] in (8, 12) else 1
 
                     if bt == 1:
                         bonds.append((last_num, a, b))
@@ -740,7 +747,7 @@ class SMILESRead(CGRRead):
                 if atoms:
                     if not previous:
                         bt = 1
-                        b = 4 if atoms_types[last_num] == token_type == 8 else 1
+                        b = 4 if token_type in (8, 12) and atoms_types[last_num] in (8, 12) else 1
                         order[last_num].append(atom_num)
                         order[atom_num].append(last_num)
                     else:
@@ -758,7 +765,7 @@ class SMILESRead(CGRRead):
                         bonds.append((atom_num, last_num, 8))
                         cgr.append(((atom_num, last_num), 'bond', b))
 
-                if token_type == 11:
+                if token_type in (11, 12):
                     cgr.extend((atom_num, *x) for x in token.pop('cgr'))
                 else:
                     stereo = token.pop('stereo')
@@ -785,7 +792,7 @@ class SMILESRead(CGRRead):
         stereo_bonds = {n: ms for n, ms in stereo_bonds.items() if len(ms) == 1 or len(ms) == set(ms.values())}
         mol = {'atoms': atoms, 'bonds': bonds, 'order': order,
                'stereo_bonds': stereo_bonds, 'stereo_atoms': stereo_atoms, 'hydrogens': hydrogens, 'meta': {}}
-        if cgr or any(x == 11 for x in atoms_types):
+        if cgr or any(x in (11, 12) for x in atoms_types):
             mol['cgr'] = cgr
         return mol
 
