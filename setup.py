@@ -51,7 +51,7 @@ if find_spec('wheel'):
 
 setup(
     name='CGRtools',
-    version='4.1.26',
+    version='4.1.27',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.calculate2d', 'CGRtools.algorithms.components',
               'CGRtools.algorithms.standardize', 'CGRtools.containers', 'CGRtools.files', 'CGRtools.files._mdl',
               'CGRtools.periodictable', 'CGRtools.periodictable.element', 'CGRtools.reactor', 'CGRtools.utils',
