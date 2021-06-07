@@ -48,13 +48,20 @@ def test_acid_protonated_nitrogen():
 
 
 def test_base_nitrogen():
-    """
-    Guanidine. Amidine. Imidate. Oxime. Hydrazone. Amidoxime. Imine. Amine. Pyridine. Imidazole. Triazole.
-    """
-    for t, v in zip_longest(['N1C=CN=N1.Cl', 'NC(N)=N.Cl',
-                             'N1C=CC=C1.Cl', 'CN(C)C(=NO)N(C)C.Cl'],
+    for t, v in zip_longest(['N1C=CN=N1.Cl', 'NC(N)=N.Cl', 'CN(C)C(=NO)N(C)C.Cl', 'CN(C)C(=NC)N(C)C.Cl',
+                             'CN(C)C(=NN)N(C)C.Cl', 'COC(N)=N.Cl', 'CSC(N)=N.Cl', 'COC(OC)=N.Cl', 'COC(C)=N.Cl',
+                             'CNN.Cl', 'CN.Cl',
+                             'N.Cl', 'N1C=CC=C1.Cl'],
                             [('N1C=CN=N1.Cl', 'N1C=CN=[NH+]1.[Cl-]', 'N1C=C[NH+]=N1.[Cl-]'),
-                             ('NC(N)=N.Cl', 'NC(N)=[NH2+].[Cl-]')]):
+                             ('NC(N)=N.Cl', 'NC(N)=[NH2+].[Cl-]'),
+                             ('CN(C)C(=NO)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]O.[Cl-]'),
+                             ('CN(C)C(=NC)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]C.[Cl-]'),
+                             ('CN(C)C(=NN)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]N.[Cl-]'),
+                             ('Cl.NC(=N)OC', '[NH2+]=C(N)OC.[Cl-]'), ('Cl.NC(=N)SC', '[NH2+]=C(N)SC.[Cl-]'),
+                             ('COC(OC)=N.Cl', 'COC(OC)=[NH2+].[Cl-]'),
+                             ('COC(C)=N.Cl', 'COC(C)=[NH2+].[Cl-]'),
+                             ('CNN.Cl', 'CN[NH3+].[Cl-]', 'C[NH2+]N.[Cl-]'),
+                             ('CN.Cl', 'C[NH3+].[Cl-]')]):
         t = smiles(t)
         t.thiele()
         t = set(t.enumerate_tautomers())
