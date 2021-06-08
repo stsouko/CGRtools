@@ -18,10 +18,12 @@
 #
 from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict, Counter
-from typing import List, Union, Tuple, Optional, Dict
+from importlib.util import find_spec
+from typing import List, Union, Tuple, Optional, Dict, FrozenSet
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
 from .common import Graph
+from .._functions import tuple_hash
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
@@ -35,6 +37,10 @@ from ..algorithms.tautomers import Tautomers
 from ..algorithms.x3dom import X3domMolecule
 from ..exceptions import ValenceError, MappingError
 from ..periodictable import Element, QueryElement
+
+
+fps_enabled = bool(find_spec('StructureFingerprint'))
+_ignored_fragments = {tuple_hash((0, 6, 0, False)), 1, 4}
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
@@ -468,6 +474,38 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """Counted atoms dict"""
         return Counter(x.atomic_symbol for x in self._atoms.values())
 
+    @cached_property
+    def fingerprint(self) -> Dict[int, FrozenSet[int]]:
+        """
+        Fingerprint of available linear fragments with set of mapped atoms.
+        Required for isomorphism tests filtering speedup.
+        Parameters can be modified globally in `MoleculeContainer._fingerprint_config`.
+        """
+        if fps_enabled and self._fingerprint_config:
+            from StructureFingerprint import LinearFingerprint
+            return {tuple_hash(k): frozenset(x for x in v for x in x) for k, v in
+                    LinearFingerprint(**self._fingerprint_config)._fragments(self).items()
+                    if not set(k).issubset(_ignored_fragments)}  # skip fragments like C-C C:C and combination.
+        return {}
+
+    @cached_args_method
+    def _component_fingerprint(self, component):
+        """
+        Fingerprint of specific component.
+        """
+        scope = set(self.connected_components[component])
+        return {k: v & scope for k, v in self.fingerprint.items() if not v.isdisjoint(scope)}
+
+    def _isomorphism_candidates(self, other, self_component, other_component):
+        if self.fingerprint:
+            self_fingerprint = self._component_fingerprint(self_component)
+            if self_fingerprint:
+                other_fingerprint = other._component_fingerprint(other_component)
+                if self_fingerprint.keys() <= other_fingerprint.keys():
+                    return {x for k in self_fingerprint for x in other_fingerprint[k]}
+                return set()
+        return super()._isomorphism_candidates(other, self_component, other_component)
+
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
         """
@@ -639,6 +677,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._hybridizations = {}
         for n in state['atoms']:
             self._calc_hybridization(n)
+
+    _fingerprint_config = {'min_radius': 2, 'max_radius': 4}  # set empty for disable screening
 
 
 __all__ = ['MoleculeContainer']

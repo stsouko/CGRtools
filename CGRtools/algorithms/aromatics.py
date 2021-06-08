@@ -223,6 +223,7 @@ class Aromatize:
         for ring in freaks:  # aromatize rule based
             rs = set(ring)
             for q in self.__freaks:
+                # used low-level API for speedup
                 components, closures = q._compiled_query
                 if any(q._get_mapping(components[0], closures, atoms, bonds, rs, self.atoms_order)):
                     n, *_, m = ring
@@ -231,6 +232,7 @@ class Aromatize:
                         bonds[n][m]._Bond__order = 4
                     for n in ring:
                         sh[n] = 4
+                    break
 
         self._fix_stereo()  # check if any stereo centers vanished.
         return True
@@ -275,29 +277,23 @@ class Aromatize:
         return True
 
     def __fix_rings(self: Union['MoleculeContainer', 'Aromatize']):
-        atoms = self._atoms
         bonds = self._bonds
-        atoms_order = self.atoms_order
-        connected_components = [set(x) for x in self.connected_components]
-
         seen = set()
         for q, af, bf in self.__bad_rings_rules:
-            components, closures = q._compiled_query
-            for candidate in connected_components:
-                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
-                    match = set(mapping.values())
-                    if not match.isdisjoint(seen):  # skip intersected groups
-                        continue
-                    seen.update(match)
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                match = set(mapping.values())
+                if not match.isdisjoint(seen):  # prevent double patching of atoms
+                    continue
+                seen.update(match)
 
-                    for n, fix in af.items():
-                        n = mapping[n]
-                        for key, value in fix.items():
-                            getattr(self, key)[n] = value
-                    for n, m, b in bf:
-                        n = mapping[n]
-                        m = mapping[m]
-                        bonds[n][m]._Bond__order = b
+                for n, fix in af.items():
+                    n = mapping[n]
+                    for key, value in fix.items():
+                        getattr(self, key)[n] = value
+                for n, m, b in bf:
+                    n = mapping[n]
+                    m = mapping[m]
+                    bonds[n][m]._Bond__order = b
         if seen:
             self.flush_cache()
 
@@ -718,7 +714,7 @@ class Aromatize:
         # imidazolium
         #         R - N : C                  R - N : C
         #            :    :                    :     :
-        #  A - Cu - C     : >>    A - [Cu-] - C      :
+        #  A - Pd - C     : >>    A - [Pd-2] - C      :
         #            :    :                    :     :
         #         R - N : C                R - [N+]: C
         #

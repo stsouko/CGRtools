@@ -16,7 +16,10 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import List, Tuple, Union, Dict
+from CachedMethods import cached_property, cached_args_method
+from importlib.util import find_spec
+from itertools import chain, product
+from typing import List, Tuple, Union, Dict, FrozenSet
 from . import molecule  # cyclic imports resolve
 from .bonds import Bond, QueryBond
 from .common import Graph
@@ -25,7 +28,10 @@ from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import Stereo
-from ..periodictable import Element, QueryElement, AnyElement
+from ..periodictable import Element, QueryElement, AnyElement, ListElement
+
+
+fps_enabled = bool(find_spec('StructureFingerprint'))
 
 
 class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DQuery):
@@ -266,6 +272,81 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
+
+    def enumerate_queries(self, *, enumerate_marks: bool = False):
+        """
+        Enumerate complex queries into multiple simple ones. For example `[N,O]-C` into `NC` and `OC`.
+
+        :param enumerate_marks: enumerate multiple marks to separate queries
+        """
+        atoms = [(n, a._numbers) for n, a in self._atoms.items() if isinstance(a, ListElement)]
+        bonds = [(n, m, b.order) for n, m, b in self.bonds() if len(b.order) > 1]
+        for combo in product(*(x for *_, x in chain(atoms, bonds))):
+            copy = self.copy()
+            for (n, _), a in zip(atoms, combo):
+                copy._atoms[n] = a = QueryElement.from_atomic_number(a)()
+                a._attach_to_graph(copy, n)
+            for (n, m, _), b in zip(bonds, combo[len(atoms):]):
+                copy._bonds[n][m]._QueryBond__order = (b,)
+
+            if enumerate_marks:
+                c = 0
+                slices = []
+                data = []
+                for attr in ('_neighbors', '_hybridizations', '_hydrogens', '_heteroatoms', '_rings_sizes'):
+                    tmp = [(n, v) for n, v in getattr(self, attr).items() if len(v) > 1]
+                    if tmp:
+                        data.extend(tmp)
+                        slices.append((attr, c, c + len(tmp)))
+                        c += len(tmp)
+
+                for combo2 in product(*(x for _, x in data)):
+                    copy2 = copy.copy()
+                    for attr, i, j in slices:
+                        attr = getattr(copy2, attr)
+                        for (n, _), v in zip(data[i: j], combo2[i: j]):
+                            attr[n] = (v,)
+                    yield copy2
+            else:
+                yield copy
+
+    @cached_property
+    def fingerprints(self) -> Tuple[Dict[int, FrozenSet[int]], ...]:
+        """
+        Fingerprints of all possible simple queries. Used for isomorphism tests filtering.
+        """
+        if not fps_enabled or not molecule.MoleculeContainer._fingerprint_config or \
+                any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
+            return ()  # skip queries with Any element
+        fps = []
+        for q in self.enumerate_queries():
+            mol = molecule.MoleculeContainer()
+            for n, a in q.atoms():
+                mol.add_atom(Element.from_atomic_number(a.atomic_number)(a.isotope), n,
+                             charge=a.charge, is_radical=a.is_radical)
+            for n, m, b in q.bonds():
+                mol.add_bond(n, m, Bond(b.order[0]))
+            if mol.fingerprint:  # skip single atom fp
+                fps.append(mol.fingerprint)
+        return tuple(fps)
+
+    @cached_args_method
+    def _component_fingerprints(self, component):
+        """
+        Fingerprints of specific component.
+        """
+        scope = set(self.connected_components[component])
+        return tuple({k for k, v in fp.items() if not v.isdisjoint(scope)} for fp in self.fingerprints)
+
+    def _isomorphism_candidates(self, other, self_component, other_component):
+        if self.fingerprints and isinstance(other, molecule.MoleculeContainer):
+            other_fingerprint = other._component_fingerprint(other_component)
+            scope = set()
+            for fp in self._component_fingerprints(self_component):
+                if fp <= other_fingerprint.keys():
+                    scope.update(x for k in fp for x in other_fingerprint[k])
+            return scope
+        return super()._isomorphism_candidates(other, self_component, other_component)
 
     @staticmethod
     def _validate_neighbors(neighbors):
