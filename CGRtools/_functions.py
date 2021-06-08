@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -70,7 +70,7 @@ def lazy_product(*args):
 if version_info[1] >= 8:
     tuple_hash = hash
 else:
-    def tuple_hash(v):
+    def tuple_hash(v) -> int:
         """
         Python 3.8 hash for tuples implemented on python.
         """

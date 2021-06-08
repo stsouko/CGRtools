@@ -51,7 +51,7 @@ if find_spec('wheel'):
 
 setup(
     name='CGRtools',
-    version='4.2.4',
+    version='4.2.5',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.calculate2d', 'CGRtools.algorithms.components',
               'CGRtools.algorithms.standardize', 'CGRtools.containers', 'CGRtools.files', 'CGRtools.files._mdl',
               'CGRtools.periodictable', 'CGRtools.periodictable.element', 'CGRtools.reactor', 'CGRtools.utils',
@@ -64,7 +64,7 @@ setup(
     cmdclass=cmd_class,
     install_requires=['CachedMethods>=0.1.4,<0.2'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50'],
-                    'pytest': ['pytest']},
+                    'pytest': ['pytest'], 'screening': ['StructureFingerprint>=2.0']},
     package_data={'CGRtools.algorithms.calculate2d': ['clean2d.js']},
     data_files=[],
     zip_safe=False,

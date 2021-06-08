@@ -16,8 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
+from CachedMethods import cached_property
 from itertools import chain, product
-from typing import List, Tuple, Union, Dict
+from typing import List, Tuple, Union, Dict, FrozenSet
 from . import molecule  # cyclic imports resolve
 from .bonds import Bond, QueryBond
 from .common import Graph
@@ -304,6 +305,23 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
                     yield copy2
             else:
                 yield copy
+
+    @cached_property
+    def fingerprints(self) -> Tuple[FrozenSet[int], ...]:
+        """
+        Fingerprints of all possible simple queries. Usable for isomorphism tests filtering.
+        """
+        if any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
+            return ()  # skip queries with Any element
+        fps = []
+        for q in self.enumerate_queries():
+            mol = molecule.MoleculeContainer()
+            for n, a in q.atoms():
+                mol.add_atom(Element.from_atomic_number(a.atomic_number)(), n)
+            for n, m, b in q.bonds():
+                mol.add_bond(n, m, Bond(b.order[0]))
+            fps.append(frozenset(mol.fingerprint))
+        return tuple(fps)
 
     @staticmethod
     def _validate_neighbors(neighbors):

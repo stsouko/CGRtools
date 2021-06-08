@@ -18,10 +18,11 @@
 #
 from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict, Counter
-from typing import List, Union, Tuple, Optional, Dict
+from typing import List, Union, Tuple, Optional, Dict, FrozenSet
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
 from .common import Graph
+from .._functions import tuple_hash
 from ..algorithms.aromatics import Aromatize
 from ..algorithms.calculate2d import Calculate2DMolecule
 from ..algorithms.components import StructureComponents
@@ -467,6 +468,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def brutto(self) -> Dict[str, int]:
         """Counted atoms dict"""
         return Counter(x.atomic_symbol for x in self._atoms.values())
+
+    @cached_property
+    def fingerprint(self) -> Dict[int, FrozenSet[int]]:
+        """
+        Fingerprint of available linear fragments with set of mapped atoms.
+        Required for isomorphism tests filtering speedup.
+        """
+        from StructureFingerprint import LinearFingerprint
+
+        return {tuple_hash(k): frozenset(x for x in v for x in x) for k, v in
+                LinearFingerprint(min_radius=1, max_radius=4)._fragments(self).items()}
 
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:

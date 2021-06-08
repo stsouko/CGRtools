@@ -86,6 +86,10 @@ General part
 
     pip install CGRtools[jit]
 
+* Install CGRtools with optimized queries::
+
+    pip install CGRtools[screening]
+
 * Install CGRtools library DEV version for features that are not well tested::
 
     pip install -U git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools
