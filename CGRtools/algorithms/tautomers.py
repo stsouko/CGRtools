@@ -104,10 +104,10 @@ class Tautomers:
                             mol._allenes_stereo.update(allenes_stereo)
                             mol._cis_trans_stereo.update(cis_trans_stereo)
                             mol._fix_stereo()
-                    yield mol
-                    counter += 1
-                    if counter == limit:
-                        return
+                        yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
 
             if ring_chain:
                 for mol in current._enumerate_ring_chain_tautomers(full):
@@ -157,10 +157,6 @@ class Tautomers:
                         queue.append(mol)
 
     def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
-        atoms = self._atoms
-        bonds = self._bonds
-        atoms_order = self.atoms_order
-        connected_components = [set(x) for x in self.connected_components]
         sssr = self.sssr
         rings_count = self.rings_count
         atoms_rings = self.atoms_rings
@@ -174,18 +170,16 @@ class Tautomers:
         else:
             heteroatoms = self.__dict__['__cached_args_method_heteroatoms'] = {}
 
-        donors = []
-        acceptors = []
+        donors = set()
+        acceptors = set()
         for q, acid in chain(zip(self.__acid_rules if full else self.__stripped_acid_rules, repeat(True)),
                              zip(self.__base_rules if full else self.__stripped_base_rules, repeat(False))):
-            components, closures = q._compiled_query
-            for candidate in connected_components:
-                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate, atoms_order):
-                    n = mapping[1]
-                    if acid:
-                        donors.append(n)
-                    else:
-                        acceptors.append(n)
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                n = mapping[1]
+                if acid:
+                    donors.add(n)
+                else:
+                    acceptors.add(n)
 
         for d, a in product(donors, acceptors):
             mol = self.copy()
@@ -206,44 +200,32 @@ class Tautomers:
             yield mol
 
     def _enumerate_ring_chain_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
-        atoms = self._atoms
-        bonds = self._bonds
-        atoms_order = self.atoms_order
-        connected_components = [set(x) for x in self.connected_components]
-
         for q, t in chain(zip(self.__ring_rules, repeat(True)),
                           zip(self.__chain_rules, repeat(False)) if full else ()):
-            components, closures = q._compiled_query
-            for candidate in connected_components:
-                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate, atoms_order):
-                    n, m, k = mapping[1], mapping[2], mapping[3]
-                    mol = self.copy()
-                    m_bonds = mol._bonds
-                    m_hydrogens = mol._hydrogens
-                    m_hybridizations = mol._hybridizations
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                n, m, k = mapping[1], mapping[2], mapping[3]
+                mol = self.copy()
+                m_bonds = mol._bonds
+                m_hydrogens = mol._hydrogens
+                m_hybridizations = mol._hybridizations
 
-                    if t:
-                        del m_bonds[n][k], m_bonds[k][n]
-                        m_bonds[n][m]._Bond__order = 2
-                        m_hydrogens[m] -= 1
-                        m_hydrogens[k] += 1
-                        m_hybridizations[m] += 1
-                        m_hybridizations[n] += 1
-                    else:
-                        m_bonds[n][m]._Bond__order = 1
-                        m_bonds[n][k] = m_bonds[k][n] = Bond(1)
-                        m_hydrogens[k] -= 1
-                        m_hydrogens[m] += 1
-                        m_hybridizations[n] -= 1
-                        m_hybridizations[m] -= 1
-                    yield mol
+                if t:
+                    del m_bonds[n][k], m_bonds[k][n]
+                    m_bonds[n][m]._Bond__order = 2
+                    m_hydrogens[m] -= 1
+                    m_hydrogens[k] += 1
+                    m_hybridizations[m] += 1
+                    m_hybridizations[n] += 1
+                else:
+                    m_bonds[n][m]._Bond__order = 1
+                    m_bonds[n][k] = m_bonds[k][n] = Bond(1)
+                    m_hydrogens[k] -= 1
+                    m_hydrogens[m] += 1
+                    m_hybridizations[n] -= 1
+                    m_hybridizations[m] -= 1
+                yield mol
 
     def _enumerate_keto_enol_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
-        atoms = self._atoms
-        bonds = self._bonds
-        atoms_order = self.atoms_order
-        connected_components = [set(x) for x in self.connected_components]
-
         sssr = self.sssr
         rings_count = self.rings_count
         atoms_rings = self.atoms_rings
@@ -259,59 +241,51 @@ class Tautomers:
 
         seen = set()
         for q, ket, *fix in (self.__keto_enol_rules if full else self.__stripped_keto_enol_rules):
-            components, closures = q._compiled_query
-            for candidate in connected_components:
-                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate - seen, atoms_order):
-                    a = mapping[1]
-                    d = mapping[2]
-                    if not ket:  # prevent 1-3 migration in 1-5 etc
-                        if d in seen:
-                            continue
-                        seen.add(d)
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                a = mapping[1]
+                d = mapping[2]
+                if not ket:  # prevent 1-3 migration in 1-5 etc
+                    dv = (d, mapping[3])
+                    if dv in seen:
+                        continue
+                    seen.add(dv)
 
-                    mol = self.copy()
-                    m_bonds = mol._bonds
-                    m_hydrogens = mol._hydrogens
-                    m_hybridizations = mol._hybridizations
+                mol = self.copy()
+                m_bonds = mol._bonds
+                m_hydrogens = mol._hydrogens
+                m_hybridizations = mol._hybridizations
 
-                    for n, m, b in fix:
-                        m_bonds[mapping[n]][mapping[m]]._Bond__order = b
+                for n, m, b in fix:
+                    m_bonds[mapping[n]][mapping[m]]._Bond__order = b
 
-                    m_hydrogens[a] += 1
-                    m_hydrogens[d] -= 1
-                    m_hybridizations[a] -= 1
-                    m_hybridizations[d] += 1
+                m_hydrogens[a] += 1
+                m_hydrogens[d] -= 1
+                m_hybridizations[a] -= 1
+                m_hybridizations[d] += 1
 
-                    # store cached sssr in new molecules for speedup
+                # store cached sssr in new molecules for speedup
+                mol.__dict__['sssr'] = sssr
+                mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
+                mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
+                k = mol.kekule()
+                t = mol.thiele()
+                # restore after kekule-thiele
+                if k or t:
                     mol.__dict__['sssr'] = sssr
                     mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
                     mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
-                    k = mol.kekule()
-                    t = mol.thiele()
-                    # restore after kekule-thiele
-                    if k or t:
-                        mol.__dict__['sssr'] = sssr
-                        mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
-                        mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
-                    mol.__dict__['rings_count'] = rings_count
-                    mol.__dict__['atoms_rings'] = atoms_rings
-                    mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
-                    yield mol, ket
+                mol.__dict__['rings_count'] = rings_count
+                mol.__dict__['atoms_rings'] = atoms_rings
+                mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
+                yield mol, ket
 
     @cached_property
     def _sugar_groups(self: Union['MoleculeContainer', 'Tautomers']):
-        atoms = self._atoms
-        bonds = self._bonds
-        atoms_order = self.atoms_order
-        connected_components = [set(x) for x in self.connected_components]
-
         ek = []
         for q in self.__sugar_group_rules:
-            components, closures = q._compiled_query
-            for candidate in connected_components:
-                for mapping in q._get_mapping(components[0], closures, atoms, bonds, candidate, atoms_order):
-                    e, k = mapping[1], mapping[2]
-                    ek.append((e, k))
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                e, k = mapping[1], mapping[2]
+                ek.append((e, k))
         return ek
 
     @class_cached_property
@@ -319,11 +293,11 @@ class Tautomers:
         rules = []  # query, is ketone, bond fix
         # enoles are order-dependent
 
-        # [O,S:1]=[C:3]1[N;H:2][C:4]=,:[C,N:5]-,:[C,N:6]=,:[C:7]1
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S']), neighbors=1)
-        q.add_atom('N', hydrogens=1)
-        q.add_atom('C')
+        # 2-pyridone. [O,S:1]=[C:3]1[N;H:2][C:4]=,:[C,N:5]-,:[C,N:6]=,:[C:7]1
+        q = query.QueryContainer()  # first 3 atoms have special role!
+        q.add_atom(ListElement(['O', 'S']), neighbors=1)  # 1st atom only acceptor
+        q.add_atom('N', hydrogens=1)  # 2nd atom only donor
+        q.add_atom('C')  # 3rd atom only direction from donor to acceptor
         q.add_atom('C')
         q.add_atom(ListElement(['C', 'N']))
         q.add_atom(ListElement(['C', 'N']))

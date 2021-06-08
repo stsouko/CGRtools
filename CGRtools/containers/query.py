@@ -16,7 +16,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from typing import List, Tuple, Union, Dict
+from CachedMethods import cached_property
+from itertools import chain, product
+from typing import List, Tuple, Union, Dict, FrozenSet
 from . import molecule  # cyclic imports resolve
 from .bonds import Bond, QueryBond
 from .common import Graph
@@ -25,7 +27,7 @@ from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import Stereo
-from ..periodictable import Element, QueryElement, AnyElement
+from ..periodictable import Element, QueryElement, AnyElement, ListElement
 
 
 class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DQuery):
@@ -266,6 +268,60 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
         if isinstance(other, (QueryContainer, molecule.MoleculeContainer)):
             return super().get_mapping(other, **kwargs)
         raise TypeError('MoleculeContainer or QueryContainer expected')
+
+    def enumerate_queries(self, *, enumerate_marks: bool = False):
+        """
+        Enumerate complex queries into multiple simple ones. For example `[N,O]-C` into `NC` and `OC`.
+
+        :param enumerate_marks: enumerate multiple marks to separate queries
+        """
+        atoms = [(n, a._numbers) for n, a in self._atoms.items() if isinstance(a, ListElement)]
+        bonds = [(n, m, b.order) for n, m, b in self.bonds() if len(b.order) > 1]
+        for combo in product(*(x for *_, x in chain(atoms, bonds))):
+            copy = self.copy()
+            for (n, _), a in zip(atoms, combo):
+                copy._atoms[n] = a = QueryElement.from_atomic_number(a)()
+                a._attach_to_graph(copy, n)
+            for (n, m, _), b in zip(bonds, combo[len(atoms):]):
+                copy._bonds[n][m]._QueryBond__order = (b,)
+
+            if enumerate_marks:
+                c = 0
+                slices = []
+                data = []
+                for attr in ('_neighbors', '_hybridizations', '_hydrogens', '_heteroatoms', '_rings_sizes'):
+                    tmp = [(n, v) for n, v in getattr(self, attr).items() if len(v) > 1]
+                    if tmp:
+                        data.extend(tmp)
+                        slices.append((attr, c, c + len(tmp)))
+                        c += len(tmp)
+
+                for combo2 in product(*(x for _, x in data)):
+                    copy2 = copy.copy()
+                    for attr, i, j in slices:
+                        attr = getattr(copy2, attr)
+                        for (n, _), v in zip(data[i: j], combo2[i: j]):
+                            attr[n] = (v,)
+                    yield copy2
+            else:
+                yield copy
+
+    @cached_property
+    def fingerprints(self) -> Tuple[FrozenSet[int], ...]:
+        """
+        Fingerprints of all possible simple queries. Usable for isomorphism tests filtering.
+        """
+        if any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
+            return ()  # skip queries with Any element
+        fps = []
+        for q in self.enumerate_queries():
+            mol = molecule.MoleculeContainer()
+            for n, a in q.atoms():
+                mol.add_atom(Element.from_atomic_number(a.atomic_number)(), n)
+            for n, m, b in q.bonds():
+                mol.add_bond(n, m, Bond(b.order[0]))
+            fps.append(frozenset(mol.fingerprint))
+        return tuple(fps)
 
     @staticmethod
     def _validate_neighbors(neighbors):
