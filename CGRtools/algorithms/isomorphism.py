@@ -20,7 +20,7 @@ from abc import abstractmethod
 from CachedMethods import cached_property
 from collections import defaultdict
 from itertools import permutations
-from typing import Dict, Iterator, Any
+from typing import Dict, Iterator, Any, Set
 from .._functions import lazy_product
 
 
@@ -33,7 +33,7 @@ frequency = {1: 10,  # H
              17: 4, 35: 4,  # Cl, Br
              53: 3,  # I
              5: 2, 14: 2,  # B, Si
-             11: 1, 12: 1, 19: 1, 20: 1}  # Na, Mag,  K, Ca
+             11: 1, 12: 1, 19: 1, 20: 1}  # Na, Mg, K, Ca
 
 
 def atom_frequency(x):
@@ -109,8 +109,11 @@ class Isomorphism:
 
         seen = set()
         if len(components) == 1:
-            for candidate in other.connected_components:
-                for mapping in self._get_mapping(components[0], closures, o_atoms, o_bonds, set(candidate), o_order):
+            for other_component in range(other.connected_components_count):
+                candidate = self._isomorphism_candidates(other, 0, other_component)
+                if not candidate:
+                    continue
+                for mapping in self._get_mapping(components[0], closures, o_atoms, o_bonds, candidate, o_order):
                     if automorphism_filter:
                         atoms = frozenset(mapping.values())
                         if atoms in seen:
@@ -118,19 +121,31 @@ class Isomorphism:
                         seen.add(atoms)
                     yield mapping
         else:
-            for candidates in permutations((set(x) for x in other.connected_components), len(components)):
-                mappers = [self._get_mapping(order, closures, o_atoms, o_bonds, component, o_order)
-                           for order, component in zip(components, candidates)]
-                for match in lazy_product(*mappers):
-                    mapping = match[0].copy()
-                    for m in match[1:]:
-                        mapping.update(m)
-                    if automorphism_filter:
-                        atoms = frozenset(mapping.values())
-                        if atoms in seen:
-                            continue
-                        seen.add(atoms)
-                    yield mapping
+            for cs in permutations(range(other.connected_components_count), len(components)):
+                mappers = []
+                for self_component, component, other_component in zip(range(len(components)), components, cs):
+                    candidate = self._isomorphism_candidates(other, self_component, other_component)
+                    if not candidate:
+                        break
+                    mappers.append(self._get_mapping(component, closures, o_atoms, o_bonds, candidate, o_order))
+                else:
+                    for match in lazy_product(*mappers):
+                        mapping = match[0].copy()
+                        for m in match[1:]:
+                            mapping.update(m)
+                        if automorphism_filter:
+                            atoms = frozenset(mapping.values())
+                            if atoms in seen:
+                                continue
+                            seen.add(atoms)
+                        yield mapping
+
+    def _isomorphism_candidates(self, other, self_component: int, other_component: int) -> Set[int]:
+        """
+        Filter of atoms with possible isomorphism.
+        By default do nothing.
+        """
+        return set(other.connected_components[other_component])
 
     @staticmethod
     def _get_mapping(linear_query, query_closures, o_atoms, o_bonds, scope, groups):
@@ -177,7 +192,12 @@ class Isomorphism:
 
     @cached_property
     def _compiled_query(self):
-        return self.__compile_query(self._atoms, self._bonds, {n: atom_frequency(a) for n, a in self._atoms.items()})
+        components, closures = self.__compile_query(self._atoms, self._bonds,
+                                                    {n: atom_frequency(a) for n, a in self._atoms.items()})
+        if self.connected_components_count > 1:
+            order = {x: n for n, c in enumerate(self.connected_components) for x in c}
+            components.sort(key=lambda x: order[x[0][0]])
+        return components, closures
 
     @staticmethod
     def __compile_query(atoms, bonds, atoms_frequencies):
@@ -237,7 +257,7 @@ class Isomorphism:
                 if any(k != v for k, v in mapping.items()):
                     yield mapping
         for match in lazy_product(*mappers):
-            mapping = match[0]
+            mapping = match[0].copy()
             for m in match[1:]:
                 mapping.update(m)
             if any(k != v for k, v in mapping.items()):

@@ -16,7 +16,8 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import cached_property
+from CachedMethods import cached_property, cached_args_method
+from importlib.util import find_spec
 from itertools import chain, product
 from typing import List, Tuple, Union, Dict, FrozenSet
 from . import molecule  # cyclic imports resolve
@@ -28,6 +29,9 @@ from ..algorithms.depict import DepictQuery
 from ..algorithms.smiles import QuerySmiles
 from ..algorithms.stereo import Stereo
 from ..periodictable import Element, QueryElement, AnyElement, ListElement
+
+
+fps_enabled = bool(find_spec('StructureFingerprint'))
 
 
 class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuery, Calculate2DQuery):
@@ -307,21 +311,42 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
                 yield copy
 
     @cached_property
-    def fingerprints(self) -> Tuple[FrozenSet[int], ...]:
+    def fingerprints(self) -> Tuple[Dict[int, FrozenSet[int]], ...]:
         """
-        Fingerprints of all possible simple queries. Usable for isomorphism tests filtering.
+        Fingerprints of all possible simple queries. Used for isomorphism tests filtering.
         """
-        if any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
+        if not fps_enabled or not molecule.MoleculeContainer._fingerprint_config or \
+                any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
             return ()  # skip queries with Any element
         fps = []
         for q in self.enumerate_queries():
             mol = molecule.MoleculeContainer()
             for n, a in q.atoms():
-                mol.add_atom(Element.from_atomic_number(a.atomic_number)(), n)
+                mol.add_atom(Element.from_atomic_number(a.atomic_number)(a.isotope), n,
+                             charge=a.charge, is_radical=a.is_radical)
             for n, m, b in q.bonds():
                 mol.add_bond(n, m, Bond(b.order[0]))
-            fps.append(frozenset(mol.fingerprint))
+            if mol.fingerprint:  # skip single atom fp
+                fps.append(mol.fingerprint)
         return tuple(fps)
+
+    @cached_args_method
+    def _component_fingerprints(self, component):
+        """
+        Fingerprints of specific component.
+        """
+        scope = set(self.connected_components[component])
+        return tuple({k for k, v in fp.items() if not v.isdisjoint(scope)} for fp in self.fingerprints)
+
+    def _isomorphism_candidates(self, other, self_component, other_component):
+        if self.fingerprints and isinstance(other, molecule.MoleculeContainer):
+            other_fingerprint = other._component_fingerprint(other_component)
+            scope = set()
+            for fp in self._component_fingerprints(self_component):
+                if fp <= other_fingerprint.keys():
+                    scope.update(x for k in fp for x in other_fingerprint[k])
+            return scope
+        return super()._isomorphism_candidates(other, self_component, other_component)
 
     @staticmethod
     def _validate_neighbors(neighbors):
