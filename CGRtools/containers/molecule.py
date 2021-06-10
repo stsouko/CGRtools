@@ -40,7 +40,6 @@ from ..periodictable import Element, QueryElement
 
 
 fps_enabled = bool(find_spec('StructureFingerprint'))
-_ignored_fragments = {tuple_hash((0, 6, 0, False)), 1, 4}
 
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
@@ -483,9 +482,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         if fps_enabled and self._fingerprint_config:
             from StructureFingerprint import LinearFingerprint
+
             return {tuple_hash(k): frozenset(x for x in v for x in x) for k, v in
-                    LinearFingerprint(**self._fingerprint_config)._fragments(self).items()
-                    if not set(k).issubset(_ignored_fragments)}  # skip fragments like C-C C:C and combination.
+                    LinearFingerprint(**self._fingerprint_config)._fragments(self).items()}
         return {}
 
     @cached_args_method
