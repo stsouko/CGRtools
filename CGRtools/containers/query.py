@@ -17,12 +17,14 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import cached_property, cached_args_method
+from collections import defaultdict
 from importlib.util import find_spec
 from itertools import chain, product
 from typing import List, Tuple, Union, Dict, FrozenSet
 from . import molecule  # cyclic imports resolve
 from .bonds import Bond, QueryBond
 from .common import Graph
+from .._functions import tuple_hash
 from ..algorithms.calculate2d import Calculate2DQuery
 from ..algorithms.components import StructureComponents
 from ..algorithms.depict import DepictQuery
@@ -318,6 +320,10 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
         if not fps_enabled or not molecule.MoleculeContainer._fingerprint_config or \
                 any(isinstance(a, AnyElement) and not isinstance(a, ListElement) for _, a in self.atoms()):
             return ()  # skip queries with Any element
+        from StructureFingerprint import LinearFingerprint
+
+        lfp = LinearFingerprint(**molecule.MoleculeContainer._fingerprint_config)
+
         fps = []
         for q in self.enumerate_queries():
             mol = molecule.MoleculeContainer()
@@ -326,8 +332,31 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
                              charge=a.charge, is_radical=a.is_radical)
             for n, m, b in q.bonds():
                 mol.add_bond(n, m, Bond(b.order[0]))
-            if mol.fingerprint:  # skip single atom fp
-                fps.append(mol.fingerprint)
+
+            # extract only longest chains
+            chains = []
+            for c in sorted(lfp._chains(mol), reverse=True, key=len):
+                sc = set(c)
+                if any(sc.issubset(x) for x in chains):
+                    continue
+                chains.append(c)
+            if not chains:
+                continue
+
+            atoms = {idx: int(atom) for idx, atom in mol.atoms()}
+            bonds = mol._bonds
+            out = defaultdict(list)
+
+            for frag in chains:
+                var = [atoms[frag[0]]]
+                for x, y in zip(frag, frag[1:]):
+                    var.append(int(bonds[x][y]))
+                    var.append(atoms[y])
+                var = tuple(var)
+                rev_var = var[::-1]
+                out[tuple_hash(var if var > rev_var else rev_var)].extend(frag)
+
+            fps.append({k: frozenset(v) for k, v in out.items()})
         return tuple(fps)
 
     @cached_args_method
