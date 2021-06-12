@@ -37,11 +37,14 @@ class Tautomers:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
         """
-        def key(m):
-            a = len(m.aromatic_rings)  # more aromatics is good
-            return m.huckel_pi_electrons_energy - a
+        def key(m):  # inspired from https://github.com/mcs07/MolVS/
+            # more aromatic rings is better
+            # less charged atoms is better
+            # keto-enol rule-based
+            # smiles alphabetically sorted (descent)
+            return len(m.aromatic_rings) * 100 - sum(x != 0 for x in m._charges.values()) * 5, str(m)
 
-        canon = min(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
+        canon = max(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
                                              keto_enol=keto_enol, limit=limit), key=key)
         if canon != self:  # attach state of canonic tautomer to self
             # atoms, radicals state, parsed_mapping and plane are unchanged
