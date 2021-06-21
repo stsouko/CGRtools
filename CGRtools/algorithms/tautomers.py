@@ -18,7 +18,7 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from CachedMethods import class_cached_property, cached_property
-from collections import deque
+from collections import deque, defaultdict
 from itertools import product, chain, repeat
 from typing import TYPE_CHECKING, Iterator, Union
 from ..containers import query  # cyclic imports resolve
@@ -42,7 +42,7 @@ class Tautomers:
             # less charged atoms is better
             # keto-enol rule-based
             # smiles alphabetically sorted (descent)
-            return len(m.aromatic_rings) * 100 - sum(x != 0 for x in m._charges.values()) * 5, str(m)
+            return len(m.aromatic_rings), -sum(x != 0 for x in m._charges.values()) * 5, str(m)
 
         canon = max(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
                                              keto_enol=keto_enol, limit=limit), key=key)
@@ -60,8 +60,8 @@ class Tautomers:
             return True
         return False
 
-    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True,
-                            zwitter=True, keto_enol=True, limit: int = 1000) -> Iterator['MoleculeContainer']:
+    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True, zwitter=True,
+                            keto_enol=True, hetero=True, limit: int = 1000) -> Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule.
 
@@ -69,6 +69,7 @@ class Tautomers:
         :param full: Do full enumeration.
         :param zwitter: Enable acid-base tautomerization
         :param keto_enol: Enable keto-enol tautomerization
+        :param hetero: Enable hetero arenes tautomerization.
         :param limit: Maximum amount of generated structures.
         """
         if limit < 2:
@@ -94,6 +95,22 @@ class Tautomers:
 
             if zwitter:
                 for mol in current._enumerate_zwitter_tautomers(full):
+                    if mol not in seen:
+                        seen[mol] = current
+                        queue.append(mol)
+                        if has_stereo:
+                            mol = mol.copy()  # prevent seen hashtable breaking
+                            mol._atoms_stereo.update(atoms_stereo)
+                            mol._allenes_stereo.update(allenes_stereo)
+                            mol._cis_trans_stereo.update(cis_trans_stereo)
+                            mol._fix_stereo()
+                        yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
+
+            if hetero:
+                for mol in current._enumerate_hetero_arene_tautomers():
                     if mol not in seen:
                         seen[mol] = current
                         queue.append(mol)
@@ -223,6 +240,7 @@ class Tautomers:
                 mol.__dict__['sssr'] = sssr
                 mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
                 mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
+                mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
                 k = mol.kekule()
                 t = mol.thiele()
                 # restore after kekule-thiele
@@ -230,18 +248,49 @@ class Tautomers:
                     mol.__dict__['sssr'] = sssr
                     mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
                     mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
+                    mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
                 mol.__dict__['rings_count'] = rings_count
                 mol.__dict__['atoms_rings'] = atoms_rings
-                mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
                 yield mol, ket
+
+    def _enumerate_hetero_arene_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
+        atoms = self._atoms
+        hydrogens = self._hydrogens
+        charges = self._charges
+        radicals = self._radicals
+
+        single_bonded = set()
+        acceptor = []
+        donor = []
+
+        rings = defaultdict(list)  # aromatic skeleton
+        for n, m_bond in self._bonds.items():
+            for m, bond in m_bond.items():
+                if bond.order == 4:
+                    rings[n].append(m)
+        if not rings:
+            return
+
+        for n, ms in rings.items():
+            if atoms[n].atomic_number in (5, 7, 15) and len(ms) == 2 and not charges[n] and not radicals[n]:
+                # only neutral B, N, P
+                if hydrogens[n]:
+                    donor.append(n)
+                else:
+                    acceptor.append(n)
+
+        components = [x for x in self._connected_components(rings) if x.issuperset(donor) and x.issuperset(acceptor)]
+        if not components:
+            return
+
+        yield
 
     @cached_property
     def _sugar_groups(self: Union['MoleculeContainer', 'Tautomers']):
         ek = []
-        for q in self.__sugar_group_rules:
-            for mapping in q.get_mapping(self, automorphism_filter=False):
-                e, k = mapping[1], mapping[2]
-                ek.append((e, k))
+        for mapping in self.__sugar_group_rule.get_mapping(self, automorphism_filter=False):
+            e, k = mapping[1], mapping[2]
+            ek.append((e, k))
         return ek
 
     @class_cached_property
@@ -743,9 +792,7 @@ class Tautomers:
         return rules
 
     @class_cached_property
-    def __sugar_group_rules(self):
-        rules = []
-
+    def __sugar_group_rule(self):
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
         q.add_atom(ListElement(['O', 'N']))  # ketone
@@ -754,9 +801,7 @@ class Tautomers:
         q.add_bond(1, 3, 1)
         q.add_bond(3, 4, 1)
         q.add_bond(2, 4, 2)
-        rules.append(q)
-
-        return rules
+        return q
 
 
 __all__ = ['Tautomers']
