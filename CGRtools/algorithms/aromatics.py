@@ -57,7 +57,7 @@ class Aromatize:
             lr = len(ring)
             if not 3 < lr < 8:  # skip 3-membered and big rings
                 continue
-            sp2 = sum(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 15) for n in ring)
+            sp2 = sum(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 8, 15, 16) for n in ring)
             if sp2 == lr:  # benzene like
                 if lr == 4:  # two bonds condensed aromatic rings
                     tetracycles.append(ring)
@@ -451,7 +451,9 @@ class Aromatize:
                     if ab == 2:
                         if radicals[n]:  # C=1O[B]OC=1
                             double_bonded.add(n)
-                        else:  # b1ccccc1 or C=1O[BH]OC=1
+                        elif hydrogens[n]:  # C=1O[BH]OC=1 or [BH]1C=CC=N1
+                            double_bonded.add(n)
+                        else:  # b1ccccc1, C=1OBOC=1 or B1C=CC=N1
                             pyroles.add(n)
                     elif not radicals[n]:
                         double_bonded.add(n)
