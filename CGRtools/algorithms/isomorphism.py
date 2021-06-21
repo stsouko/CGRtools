@@ -186,9 +186,14 @@ class Isomorphism:
                 for o_n, o_bond in o_bonds[n].items():
                     if o_n in scope and o_n not in reversed_mapping and s_bond == o_bond and groups[o_n] not in uniq:
                         uniq.add(groups[o_n])
-                        if s_atom == o_atoms[o_n] and all(bond == o_bonds[mapping[m]].get(o_n)
-                                                          for m, bond in query_closures[s_n]):
-                            stack.append((o_n, depth))
+                        if s_atom == o_atoms[o_n]:
+                            # check closures equality
+                            o_closures = o_bonds[o_n].keys() & reversed_mapping.keys()
+                            o_closures.discard(n)
+                            if o_closures == {mapping[m] for m, _ in query_closures[s_n]}:
+                                obon = o_bonds[o_n]
+                                if all(bond == obon[mapping[m]] for m, bond in query_closures[s_n]):
+                                    stack.append((o_n, depth))
 
     @cached_property
     def _compiled_query(self):
