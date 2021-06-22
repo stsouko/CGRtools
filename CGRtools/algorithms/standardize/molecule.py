@@ -1372,7 +1372,8 @@ class Standardize:
         bonds_fix = ((1, 2, 1), (2, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene covalent charge-free
+        # Ferrocene covalent bonds between Fe(0) and every carbon in cycles.
+        # Cycles has no double bonds and every carbon - charge-free
         #  C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1391,7 +1392,8 @@ class Standardize:
                      (3, 4, 2), (5, 6, 2), (8, 9, 2), (10, 11, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene covalent explicit H
+        # Ferrocene with covalent bonds between Fe(2+) and every carbon in cycles.
+        # Cycles has double bonds and C(1-)
         #  C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1407,7 +1409,8 @@ class Standardize:
                      (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene covalent charge free explicit
+        # Ferrocene with covalent bonds between Fe(0) and every C from cycles.
+        # Cycles has double bonds and every carbon in cycle is charge-free
         # C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1423,8 +1426,9 @@ class Standardize:
                      (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene covalent explicit H
-        #  C5H5-(5)Fe(5)-C5H5
+        # Ferrocene with covalent bonds between Fe(0) and only one C from cycles.
+        # Cycles has double bonds and every carbon in cycle is charge-free
+        # C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
                                        'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir'])},
@@ -1437,7 +1441,8 @@ class Standardize:
                      (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene radical charge free
+        # Ferrocene with NO bonds between Fe(0) and cycles.
+        # Cycles has NO double bonds and every carbon in cycle marked as radical
         # C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1459,7 +1464,8 @@ class Standardize:
                      (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8), (8, 9, 2), (10, 11, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene covalent charge explicit half
+        # Ferrocene with NO bonds between Fe(2+) and ONE cycle.
+        # Cycles has double bonds and one carbon in cycle is C(1-)
         # C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1471,7 +1477,8 @@ class Standardize:
         bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # Ferrocene radical charge free half
+        # Ferrocene with NO bonds between Fe(0) and ONE cycle.
+        # Cycles has double bonds and every carbon in cycle marked as radical
         # C5H5-(5)Fe(5)-C5H5
         #
         atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
@@ -1486,9 +1493,7 @@ class Standardize:
         bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (3, 4, 2), (5, 6, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
-        # atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
-        #                                'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 2, 'neighbors': 12},
-        #          {'atom': 'C', 'charge': -1}
+
 
         return rules
 
