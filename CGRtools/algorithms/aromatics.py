@@ -32,13 +32,14 @@ if TYPE_CHECKING:
 class Aromatize:
     __slots__ = ()
 
-    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True) -> bool:
+    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True, fix_metal_organics=True) -> bool:
         """
         Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
         Also marks atoms as aromatic.
 
         :param fix_tautomers: try to fix condensed rings with pyroles.
             N1C=CC2=NC=CC2=C1>>N1C=CC2=CN=CC=C12
+        :param fix_metal_organics: create neutral form of ferrocenes and imidazolium complexes.
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -86,7 +87,7 @@ class Aromatize:
                 elif an in (5, 7, 8, 15, 16, 34) and not charges[n]:
                     if fix_tautomers and lr == 6 and an == 7 and len(bonds[n]) == 2:
                         donors.append(n)
-                    elif lr == 5 and an == 7:
+                    elif fix_metal_organics and lr == 5 and an == 7:
                         try:  # check for imidazolium. CN1C=C[N+](C)=C1[Cu,Ag,Au-]X
                             m = next(m for m in bonds[n] if atoms[m].atomic_number == 6 and len(bonds[m]) == 3 and
                                      all(atoms[x].atomic_number in (29, 47, 79, 46) and charges[x] < 0 or
@@ -111,16 +112,19 @@ class Aromatize:
                         rings[n].add(m)
                         rings[m].add(n)
                 elif an == 6 and lr == 5 and charges[n] == -1:  # ferrocene, etc.
-                    try:
-                        m = next(m for m, b in bonds[n].items() if b == 8 and charges[m] > 0 and
-                                 atoms[m].atomic_number in (22, 23, 24, 25, 26, 27, 28, 40, 41, 42, 44, 72, 74, 75, 77))
-                    except StopIteration:
-                        continue
-                    fixed_charges[n] = 0  # remove charges in thiele form
-                    if m in fixed_charges:
-                        fixed_charges[m] -= 1
-                    else:
-                        fixed_charges[m] = charges[m] - 1
+                    if fix_metal_organics:
+                        try:
+                            m = next(m for m, b in bonds[n].items() if b == 8 and charges[m] > 0 and
+                                     atoms[m].atomic_number in
+                                     (22, 23, 24, 25, 26, 27, 28, 40, 41, 42, 44, 72, 74, 75, 77))
+                        except StopIteration:
+                            pass
+                        else:
+                            fixed_charges[n] = 0  # remove charges in thiele form
+                            if m in fixed_charges:
+                                fixed_charges[m] -= 1
+                            else:
+                                fixed_charges[m] = charges[m] - 1
                     pyroles.add(n)
                     n, *_, m = ring
                     rings[n].add(m)
@@ -451,10 +455,14 @@ class Aromatize:
                     if ab == 2:
                         if radicals[n]:  # C=1O[B]OC=1
                             double_bonded.add(n)
-                        elif hydrogens[n]:  # C=1O[BH]OC=1 or [BH]1C=CC=N1
-                            double_bonded.add(n)
-                        else:  # b1ccccc1, C=1OBOC=1 or B1C=CC=N1
-                            pyroles.add(n)
+                        else:
+                            ah = hydrogens[n]
+                            if not ah:  # b1ccccc1, C=1OBOC=1 or B1C=CC=N1
+                                pyroles.add(n)
+                            elif ah == 1:  # C=1O[BH]OC=1 or [BH]1C=CC=N1
+                                double_bonded.add(n)
+                            else:
+                                raise InvalidAromaticRing
                     elif not radicals[n]:
                         double_bonded.add(n)
                     else:
@@ -509,12 +517,12 @@ class Aromatize:
             components.append(component)
             atoms.difference_update(component)
 
-        for keks in lazy_product(*(self.__kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
+        for keks in lazy_product(*(self._kekule_component(c, double_bonded & c.keys(), pyroles & c.keys())
                                    for c in components)):
             yield [x for x in keks for x in x]
 
     @staticmethod
-    def __kekule_component(rings, double_bonded, pyroles):
+    def _kekule_component(rings, double_bonded, pyroles):
         # (current atom, previous atom, bond between cp atoms, path deep for cutting [None if cut impossible])
         stack: List[List[Tuple[int, int, int, Optional[int]]]]
         if double_bonded:  # start from double bonded if exists
@@ -660,25 +668,11 @@ class Aromatize:
         q.add_atom('A')
         q.add_atom('A')
         q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
+        q.add_bond(2, 3, (2, 4))
         q.add_bond(3, 4, 1)
         q.add_bond(4, 5, 4)
         q.add_bond(1, 5, 1)
         rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 4, 1)
-        q.add_bond(4, 5, 4)
-        q.add_bond(1, 5, 1)
-        rules.append(q)
-
         return rules
 
     @class_cached_property
