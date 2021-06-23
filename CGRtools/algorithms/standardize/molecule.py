@@ -1372,6 +1372,94 @@ class Standardize:
         bonds_fix = ((1, 2, 1), (2, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Cyanide ion
+        # O#C-Fe -> O(+)#C(-)...Fe
+        #
+        atoms = ({'atom': 'A', 'charge': 0},
+                 {'atom': 'C'}, {'atom': ListElement(['O', 'N'])})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Cyanide ion
+        # O#C-Fe -> O(+)#C(-)...Fe
+        #
+        atoms = ({'atom': 'A', 'charge': 1},
+                 {'atom': 'C'}, {'atom': ListElement(['O', 'N'])})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Cyanide ion
+        # O#C-Fe -> O(+)#C(-)...Fe
+        #
+        atoms = ({'atom': 'A', 'charge': 2},
+                 {'atom': 'C'}, {'atom': ListElement(['O', 'N'])})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Cyanide ion
+        # O#C-Fe -> O(+)#C(-)...Fe
+        #
+        atoms = ({'atom': 'A', 'charge': 3},
+                 {'atom': 'C'}, {'atom': ListElement(['O', 'N'])})
+        bonds = ((1, 2, 1), (2, 3, 3))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Fe-C(=O)-Fe -> Fe...C(#O)...Fe
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 3},
+                 {'atom': 'C'}, {'atom': 'O'},
+                 {'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                              'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 3}
+                 )
+        bonds = ((1, 2, 1), (2, 3, 2), (2, 4, 1), (1, 4, 1))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8), (2, 4, 8), (2, 3, 3))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Fe-C(=O)-Fe -> Fe...C(#O)...Fe
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 2},
+                 {'atom': 'C'}, {'atom': 'O'},
+                 {'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 2}
+                 )
+        bonds = ((1, 2, 1), (2, 3, 2), (2, 4, 1), (1, 4, 1))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8), (2, 4, 8), (2, 3, 3))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Fe-C(=O)-Fe -> Fe...C(#O)...Fe
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 1},
+                 {'atom': 'C'}, {'atom': 'O'},
+                 {'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 1}
+                 )
+        bonds = ((1, 2, 1), (2, 3, 2), (2, 4, 1), (1, 4, 1))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8), (2, 4, 8), (2, 3, 3))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Fe-C(=O)-Fe -> Fe...C(#O)...Fe
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 0},
+                 {'atom': 'C'}, {'atom': 'O'},
+                 {'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 0}
+                 )
+        bonds = ((1, 2, 1), (2, 3, 2), (2, 4, 1), (1, 4, 1))
+        atom_fix = {2: {'charge': -1}, 3: {'charge': 1}}
+        bonds_fix = ((1, 2, 8), (2, 4, 8), (2, 3, 3))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+        
         # Ferrocene covalent bonds between Fe(0) and every carbon in cycles.
         # Cycles has no double bonds and every carbon - charge-free
         #  C5H5-(5)Fe(5)-C5H5
@@ -1493,6 +1581,44 @@ class Standardize:
         bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (3, 4, 2), (5, 6, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
+        # Half of ferrocene with covalent bonds between Fe(0) and ONE cycle.
+        # Cycles has double bonds and every carbon in cycle is C(0)
+        # C5H5-(5)Fe
+        #
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Tl',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge':0},
+                 {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1),
+                 (2, 3, 1), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 2, 1))
+        atom_fix = {1: {'charge': 2}, 2: {'charge': -1}}
+        bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Ferrocene with covalent bonds between Fe(2+) and ONE cycle.
+        # Cycles has double bonds and one carbon in cycle is C(1-)
+        # C5H5-(5)Fe
+        #
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 2},
+                 {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((2, 3, 1), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 2, 1),
+                 (1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1))
+        atom_fix = {}
+        bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # Ferrocene with covalent bonds between Fe(1+) and ONE cycle.
+        # Cycles has double bonds and one carbon in cycle is C(1-)
+        # C5H5-(5)Fe
+        #
+        atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
+                                       'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']), 'charge': 1},
+                 {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
+        bonds = ((2, 3, 1), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 2, 1),
+                 (1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1))
+        atom_fix = {}
+        bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
 
 
         return rules
