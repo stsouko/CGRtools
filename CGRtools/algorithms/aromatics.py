@@ -401,11 +401,11 @@ class Aromatize:
                             pyroles.add(n)
                     elif ab == 2:
                         ah = hydrogens[n]
-                        if not ah:
+                        if ah is None:
                             pyroles.add(n)
                         elif ah == 1:  # only pyrole
                             double_bonded.add(n)
-                        else:
+                        elif ah:
                             raise InvalidAromaticRing
                     elif ab != 4 or an != 15:  # P(V) in ring
                         raise InvalidAromaticRing
@@ -457,11 +457,11 @@ class Aromatize:
                             double_bonded.add(n)
                         else:
                             ah = hydrogens[n]
-                            if not ah:  # b1ccccc1, C=1OBOC=1 or B1C=CC=N1
+                            if ah is None:  # b1ccccc1, C=1OBOC=1 or B1C=CC=N1
                                 pyroles.add(n)
                             elif ah == 1:  # C=1O[BH]OC=1 or [BH]1C=CC=N1
                                 double_bonded.add(n)
-                            else:
+                            elif ah:
                                 raise InvalidAromaticRing
                     elif not radicals[n]:
                         double_bonded.add(n)
