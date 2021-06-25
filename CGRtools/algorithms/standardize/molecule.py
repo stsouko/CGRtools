@@ -151,6 +151,32 @@ class Standardize:
             return []
         return False
 
+    def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
+            Union[bool, List[int]]:
+        """
+        Set canonical positions of charges in heterocycles.
+
+        :param logging: return list of changed atoms.
+        """
+        changed: List[int] = []
+
+        # todo: just do it!
+
+        # rules:
+        self.__canonic_charges_fixed_rules
+        self.__canonic_charges_morgan_rules
+
+        if changed:
+            self.flush_cache()
+            if fix_stereo:
+                self._fix_stereo()
+            if logging:
+                return changed
+            return True
+        if logging:
+            return []
+        return False
+
     def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
         """Remove hydrogen bonds marked with 8 (any) bond
 
@@ -416,13 +442,41 @@ class Standardize:
                     continue
                 entries.add(n)
             elif charges[n] == 1:
-                if len(bonds[n]) == 4 and a.atomic_number == 7:  # skip boron
+                if len(bonds[n]) == 4 and a.atomic_number == 7:  # skip ammonia
                     continue
                 exits.add(n)
             elif radicals[n]:
                 rads.add(n)
             transfer.add(n)
         return entries, exits, rads, transfer
+
+    @class_cached_property
+    def __canonic_charges_fixed_rules(self):
+        """
+        Rules working without Morgan.
+        """
+        rules: List[query.QueryContainer] = []
+
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        # todo: do it!
+        rules.append(q)
+        return rules
+
+    @class_cached_property
+    def __canonic_charges_morgan_rules(self):
+        """
+        Rules working with Morgan.
+        """
+        rules: List[query.QueryContainer] = []
+
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        # todo: do it!
+        rules.append(q)
+        return rules
 
     @class_cached_property
     def __standardize_compiled_rules(self):
