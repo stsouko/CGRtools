@@ -851,7 +851,6 @@ class DepictCGR(Depict):
             symbol = atom.atomic_symbol
             if not bonds[n] or symbol != 'C' or carbon or charges[n] or p_charges[n] or radicals[n] or p_radicals[n] \
                     or atom.isotope:
-
                 if radicals[n]:
                     r = '↑' if p_radicals[n] else '↑↓'
                 elif p_radicals[n]:
@@ -1072,7 +1071,7 @@ class DepictQuery(Depict):
                     level += level_step
 
                 if hybridizations[n]:
-                    hh = ''.join(_render_hybridization[x] for x in atom.hybridization)
+                    hh = ''.join(_render_hybridization[x] for x in hybridizations[n])
                     queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" '
                                    f'dy="{level:.2f}">{hh}</text>')
                     level += level_step
@@ -1108,7 +1107,7 @@ class DepictQuery(Depict):
 
             if queries:
                 define.append(f'      <g id="{uid}-query" font-size="{other_size:.2f}" '
-                              f'font-family="{other_font_style}" text-anchor="start">')
+                              f'font-family="{other_font_style}">')
                 define.extend(queries)
                 define.append('      </g>')
                 svg.append(f'    <use xlink:href="#{uid}-query" fill="{query_fill}"/>')
@@ -1402,19 +1401,29 @@ class DepictQueryCGR(Depict):
                                f'stroke-dasharray="{dash1:.2f} {dash2:.2f}" stroke="{broken}"/>')
         return svg
 
-    def _render_atoms(self):
+    def _render_atoms(self, uid):
+        bonds = self._bonds
         plane = self._plane
+        charges = self._charges
+        radicals = self._radicals
+        p_charges = self._p_charges
+        p_radicals = self._p_radicals
+        neighbors = self._neighbors
+        hybridizations = self._hybridizations
+        p_neighbors = self._p_neighbors
+        p_hybridizations = self._p_hybridizations
         config = self._render_config
 
         carbon = config['carbon']
         font_size = config['font_size']
         other_size = config['other_size']
-        monochrome = config['monochrome']
         atoms_colors = config['atoms_colors']
-        other_font_style = config['other_font_style']
         dx_ci, dy_ci = config['dx_ci'], config['dy_ci']
         dx_nh, dy_nh = config['dx_nh'], config['dy_nh']
         symbols_font_style = config['symbols_font_style']
+        other_font_style = config['other_font_style']
+        other_fill = config['other_color']
+        query_fill = config['query_color']
 
         font2 = .2 * font_size
         font4 = .4 * font_size
@@ -1423,39 +1432,44 @@ class DepictQueryCGR(Depict):
         font7 = .7 * font_size
         font15 = .15 * font_size
         font25 = .25 * font_size
-
-        if monochrome:
-            query_fill = other_fill = 'black'
-        else:
-            other_fill = config['other_color']
-            query_fill = config['query_color']
+        stroke_width_s = font_size * .1
+        stroke_width_o = other_size * .1
+        level_step = other_size * .8
 
         svg = []
+        symbols = []
+        fill_zone = []
         others = []
-        nghbrs = []
-        hbrdztns = []
-        mask = defaultdict(list)
+        queries = []
+        define = []
+        mask = []
+
         for n, atom in self._atoms.items():
             x, y = plane[n]
             y = -y
-            single = not self._bonds[n]
             symbol = atom.atomic_symbol
-            if single or symbol != 'C' or carbon or atom.charge or atom.is_radical:
-                if atom.charge:
-                    t = _render_charge[atom.charge]
-                    tt = "↑" if atom.is_radical else ""
-                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
-                                  f'font-size="{other_size:.2f}">{t}{tt}</text>')
-                    mask['other'].append(f'           <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
-                                         f'{t}{tt}</text>')
-                elif atom.is_radical:
-                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
-                                  f'font-size="{other_size:.2f}">↑</text>')
-                    mask['other'].append(f'           <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
-                                         f'↑</text>')
+            if not bonds[n] or symbol != 'C' or carbon or charges[n] or p_charges[n] or radicals[n] or p_radicals[n] \
+                    or neighbors[n] or hybridizations[n] or atom.isotope:
+                if radicals[n]:
+                    r = '↑' if p_radicals[n] else '↑↓'
+                elif p_radicals[n]:
+                    r = '↓↑'
+                else:
+                    r = ''
 
-                svg.append(f'      <g fill="{"black" if monochrome else atoms_colors[atom.atomic_number - 1]}" '
-                           f'font-family="{symbols_font_style}">')
+                if charges[n] != p_charges[n]:
+                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                  f'{_render_p_charge[charges[n]][p_charges[n]]}{r}</text>')
+                if charges[n]:
+                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" dy="-{dy_ci:.2f}">'
+                                  f'{_render_charge[charges[n]]}{r}</text>')
+                elif r:
+                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_ci:.2f}" '
+                                  f'dy="-{dy_ci:.2f}">{r}</text>')
+                if atom.isotope:
+                    others.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_ci:.2f}" dy="-{dy_ci:.2f}" '
+                                  f'text-anchor="end">{atom.isotope}</text>')
+
                 if len(symbol) > 1:
                     dx = font7
                     dx_nhh = dx_nh + font5
@@ -1465,7 +1479,7 @@ class DepictQueryCGR(Depict):
                     else:
                         rx = font7
                         ax = font15
-                    mask['center'].append(f'          <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
+                    fill_zone.append(f'          <ellipse cx="{x - ax:.2f}" cy="{y:.2f}" rx="{rx}" ry="{font4}"/>')
                 else:
                     if symbol == 'I':
                         dx = font15
@@ -1473,58 +1487,59 @@ class DepictQueryCGR(Depict):
                     else:
                         dx = font4
                         dx_nhh = dx_nh + font2
-                    mask['center'].append(f'          <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
-                svg.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}" '
-                           f'font-size="{font_size:.2f}">{symbol}</text>')
-                mask['symbols'].append(f'           <text x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" '
-                                       f'dy="{font4:.2f}">{symbol}</text>')
-                svg.append('      </g>')
-                dx_nnh = dx_nhh
-            else:
-                dx_nnh = dx_nh
+                    fill_zone.append(f'          <circle cx="{x:.2f}" cy="{y:.2f}" r="{font4:.2f}"/>')
 
-            if atom.neighbors:
-                level = .6 * other_size
-                nn = ''.join(str(x) for x in atom.neighbors)
-                if atom.p_neighbors:
-                    pn = ''.join(str(x) for x in atom.p_neighbors)
+                symbols.append(f'        <text id="{uid}-{n}" x="{x:.2f}" y="{y:.2f}" dx="-{dx:.2f}" dy="{font4:.2f}">'
+                               f'{symbol}</text>')
+                svg.append(f'      <use xlink:href="#{uid}-{n}" fill="{atoms_colors[atom.atomic_number - 1]}"/>')
+
+                if neighbors[n]:
+                    nn = ''.join(str(x) for x in neighbors[n])
+                    pn = ''.join(str(x) for x in p_neighbors[n])
+                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" '
+                                   f'dy="{dy_nh:.2f}">{nn}»{pn}</text>')
+                    level = dy_nh + level_step
                 else:
-                    pn = '0'
-                nghbrs.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}" '
-                              f'text-anchor="start">{nn}»{pn}</text>')
-                mask['other'].append(f'           <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{dy_nh:.2f}">'
-                                     f'{nn}»{pn}</text>')
-            else:
-                level = 0
+                    level = dy_nh
 
-            if atom.hybridization:
-                hh = ''.join(_render_hybridization[x] for x in atom.hybridization)
-                if atom.p_hybridization:
-                    ph = ''.join(_render_hybridization[x] for x in atom.p_hybridization)
-                else:
-                    ph = '0'
-                hbrdztns.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" dy="{level + dy_nh:.2f}" '
-                                f'text-anchor="start">{hh}»{ph}</text>')
-                mask['other'].append(f'           <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nnh:.2f}" '
-                                     f'dy="{level + dy_nh:.2f}">{hh}»{ph}</text>')
+                if hybridizations[n]:
+                    hh = ''.join(_render_hybridization[x] for x in hybridizations[n])
+                    ph = ''.join(_render_hybridization[x] for x in p_hybridizations[n])
+                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" '
+                                   f'dy="{level:.2f}">{hh}»{ph}</text>')
 
-        if nghbrs:
-            svg.append(f'      <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
-            svg.extend(nghbrs)
-            if hbrdztns:
-                svg.extend(hbrdztns)
-            svg.append('      </g>')
-        elif hbrdztns:
-            svg.append(f'      <g fill="{query_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
-            svg.extend(hbrdztns)
-            svg.append('      </g>')
+        if svg:  # group atoms symbols
+            if fill_zone:
+                mask.append('        <g>')
+                mask.extend(fill_zone)
+                mask.append('        </g>')
 
-        if others:
-            svg.append(f'      <g fill="{other_fill}" font-family="{other_font_style}" font-size="{other_size:.2f}">')
-            svg.extend(others)
-            svg.append('      </g>')
+            svg.insert(0, f'    <g font-size="{font_size:.2f}" font-family="{symbols_font_style}">')
+            svg.append('    </g>')
+            define.append(f'      <g id="{uid}-symbols" font-size="{font_size:.2f}" '
+                          f'font-family="{symbols_font_style}">')
+            define.extend(symbols)
+            define.append('      </g>')
+            mask.append('        <g stroke="black">\n          '
+                        f'<use xlink:href="#{uid}-symbols" stroke-width="{stroke_width_s:.2f}"/>')
 
-        return svg, mask
+            if queries:
+                define.append(f'      <g id="{uid}-query" font-size="{other_size:.2f}" '
+                              f'font-family="{other_font_style}">')
+                define.extend(queries)
+                define.append('      </g>')
+                svg.append(f'    <use xlink:href="#{uid}-query" fill="{query_fill}"/>')
+                mask.append(f'          <use xlink:href="#{uid}-query" stroke-width="{stroke_width_o:.2f}"/>')
+
+            if others:
+                define.append(f'      <g id="{uid}-attrs" font-size="{other_size:.2f}" '
+                              f'font-family="{other_font_style}">')
+                define.extend(others)
+                define.append('      </g>')
+                svg.append(f'    <use xlink:href="#{uid}-attrs" fill="{other_fill}"/>')
+                mask.append(f'          <use xlink:href="#{uid}-attrs" stroke-width="{stroke_width_o:.2f}"/>')
+            mask.append('        </g>')
+        return svg, define, mask
 
 
 _render_hybridization = {1: 's', 2: 'd', 3: 't', 4: 'a'}
