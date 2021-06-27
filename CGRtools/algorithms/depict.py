@@ -1063,12 +1063,12 @@ class DepictQuery(Depict):
                     maps.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="-{dx_mm:.2f}" '
                                 f'dy="{dy_m + font3:.2f}">{n}</text>')
 
-                level = dy_nh
                 if neighbors[n]:
                     nn = ''.join(str(x) for x in neighbors[n])
-                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" '
-                                   f'dy="{level:.2f}">{nn}</text>')
-                    level += level_step
+                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" dy="0.0">{nn}</text>')
+                    level = level_step
+                else:
+                    level = 0.
 
                 if hybridizations[n]:
                     hh = ''.join(_render_hybridization[x] for x in hybridizations[n])
@@ -1496,11 +1496,10 @@ class DepictQueryCGR(Depict):
                 if neighbors[n]:
                     nn = ''.join(str(x) for x in neighbors[n])
                     pn = ''.join(str(x) for x in p_neighbors[n])
-                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" '
-                                   f'dy="{dy_nh:.2f}">{nn}»{pn}</text>')
-                    level = dy_nh + level_step
+                    queries.append(f'        <text x="{x:.2f}" y="{y:.2f}" dx="{dx_nhh:.2f}" dy="0.0">{nn}»{pn}</text>')
+                    level = level_step
                 else:
-                    level = dy_nh
+                    level = 0.
 
                 if hybridizations[n]:
                     hh = ''.join(_render_hybridization[x] for x in hybridizations[n])
