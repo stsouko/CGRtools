@@ -78,12 +78,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             except ValenceError:
                 self._hydrogens[_map] = None
             else:
-                for s, d, h in rules:
-                    if h and not s:
-                        self._hydrogens[_map] = h
-                        break
-                else:
-                    self._hydrogens[_map] = 0
+                self._hydrogens[_map] = rules[0][2]  # first rule without neighbors
         else:
             self._hydrogens[_map] = 0
         return _map
@@ -540,7 +535,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 self._hydrogens[n] = None
                 return
             for s, d, h in rules:
-                if h and s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
+                if s.issubset(explicit_dict) and all(explicit_dict[k] >= c for k, c in d.items()):
                     self._hydrogens[n] = h
                     return
         self._hydrogens[n] = 0
