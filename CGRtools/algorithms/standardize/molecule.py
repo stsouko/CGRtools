@@ -151,7 +151,7 @@ class Standardize:
             return []
         return False
 
-    def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
+    def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False, prepare_molecule=True) -> \
             Union[bool, List[int]]:
         """
         Set canonical positions of charges in heterocycles.
@@ -161,14 +161,15 @@ class Standardize:
         changed: List[int] = []
         bonds = self._bonds
         hydrogens = self._hydrogens
-        # todo: just do it!
+        charges = self._charges
 
+        if prepare_molecule:
+            self.thiele()
 
-        self.thiele()
         seen = set()
 
         # not morgan
-        for q, af, bf in self.__canonic_charges_fixed_rules:
+        for q in self.__canonic_charges_fixed_rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
                 if len(match.intersection(seen)) > 2:  # if matched more than 2 atoms
@@ -176,18 +177,25 @@ class Standardize:
                 seen.update(match)
                 # if not 2 neighbors and 1 hydrogen  or 3 neighbors within 1st and second atoms - break
                 atom_1, atom_2 = mapping[1], mapping[2]
-                if not (((len(bonds[atom_1]) == 2) and (hydrogens[atom_1] == 1)) or (len(bonds[atom_1]) == 3)):
-                    continue
-                if not (((len(bonds[atom_2]) == 2) and (hydrogens[atom_2] == 1)) or (len(bonds[atom_2]) == 3)):
+                if len(bonds[atom_1]) == 2:
+                    if not hydrogens[atom_1]:
+                        continue
+                elif all(x == 4 for x in bonds[atom_1].values()):
                     continue
 
-                for n, fix in af.items():
-                    n = mapping[n]
-                    for key, value in fix.items():
-                        getattr(self, key)[n] = value
-                changed.extend([atom_1, atom_2])  # add atoms to changed
+                if len(bonds[atom_2]) == 2:
+                    if not hydrogens[atom_2]:
+                        continue
+                elif all(x == 4 for x in bonds[atom_2].values()):
+                    continue
+
+                charges[atom_1] = 0
+                charges[atom_2] = 1
+                changed.append(atom_1)
+                changed.append(atom_2)  # add atoms to changed
 
         # morgan
+        pairs = []
         for q in self.__canonic_charges_morgan_rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
@@ -195,21 +203,31 @@ class Standardize:
                     continue
                 seen.update(match)
                 atom_1, atom_2 = mapping[1], mapping[2]
-                if not (((len(bonds[atom_1]) == 2) and (hydrogens[atom_1] == 1)) or (len(bonds[atom_1]) == 3)):
+                if len(bonds[atom_1]) == 2:
+                    if not hydrogens[atom_1]:
+                        continue
+                elif all(x == 4 for x in bonds[atom_1].values()):
                     continue
-                if not (((len(bonds[atom_2]) == 2) and (hydrogens[atom_2] == 1)) or (len(bonds[atom_2]) == 3)):
+
+                if len(bonds[atom_2]) == 2:
+                    if not hydrogens[atom_2]:
+                        continue
+                elif all(x == 4 for x in bonds[atom_2].values()):
                     continue
                 # remove charge from 1st N atom
-                self._charges[atom_1] = 0
-                a1, a2 = self.atoms_order # morgan algorythm
-                if a1 > a2:
-                    self._charges[atom_2] = 1
-                    changed.extend((atom_1, atom_2))
-                else:
-                    self._charges[atom_1] = 1
+                charges[atom_1] = 0
+                pairs.append((atom_1, atom_2))
 
+        self.__dict__.pop('atoms_order', None)
+        for atom_1, atom_2 in pairs:
+            if self.atoms_order[atom_1] > self.atoms_order[atom_2]:
+                charges[atom_2] = 1
+                changed.append(atom_1)
+                changed.append(atom_2)
+            else:
+                charges[atom_1] = 1
 
-        if not changed:
+        if changed:
             self.flush_cache()  # clear cache
             if fix_stereo:
                 self._fix_stereo()
@@ -516,9 +534,7 @@ class Standardize:
         q.add_bond(7, 8, 4)
         q.add_bond(8, 9, 4)
         q.add_bond(9, 2, 4)
-        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
+        rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -535,9 +551,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 2, 4)
-        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
+        rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -554,9 +568,7 @@ class Standardize:
         q.add_bond(1, 6, 4)
         q.add_bond(6, 7, 4)
         q.add_bond(7, 2, 4)
-        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
+        rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -573,9 +585,7 @@ class Standardize:
         q.add_bond(5, 1, 4)
         q.add_bond(1, 6, 4)
         q.add_bond(6, 2, 4)
-        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
+        rules.append(q)
 
         return rules
 
