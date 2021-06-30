@@ -164,7 +164,7 @@ class Standardize:
         charges = self._charges
 
         if prepare_molecule:
-            self.thiele()
+            self.thiele(fix_tautomers=False)
 
         seen = set()
 
