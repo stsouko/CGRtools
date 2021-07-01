@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2021 Dmitrij Zanadvornykh <>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -151,12 +152,14 @@ class Standardize:
             return []
         return False
 
-    def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False, prepare_molecule=True) -> \
+    def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                            logging=False, prepare_molecule=True) -> \
             Union[bool, List[int]]:
         """
         Set canonical positions of charges in heterocycles.
 
         :param logging: return list of changed atoms.
+        :param prepare_molecule: do thiele procedure.
         """
         changed: List[int] = []
         bonds = self._bonds
@@ -164,12 +167,11 @@ class Standardize:
         charges = self._charges
 
         if prepare_molecule:
-            self.thiele(fix_tautomers=False)
+            self.thiele()
 
         seen = set()
-
         # not morgan
-        for q in self.__canonic_charges_fixed_rules:
+        for q, fix in self.__canonic_charges_fixed_rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
                 if len(match.intersection(seen)) > 2:  # if matched more than 2 atoms
@@ -189,14 +191,19 @@ class Standardize:
                 elif all(x == 4 for x in bonds[atom_2].values()):
                     continue
 
-                charges[atom_1] = 0
+                if fix:
+                    atom_3 = mapping[3]
+                    charges[atom_3] = 0
+                    changed.append(atom_3)
+                else:
+                    charges[atom_1] = 0
+                    changed.append(atom_1)
                 charges[atom_2] = 1
-                changed.append(atom_1)
                 changed.append(atom_2)  # add atoms to changed
 
         # morgan
         pairs = []
-        for q in self.__canonic_charges_morgan_rules:
+        for q, fix in self.__canonic_charges_morgan_rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
                 if len(match.intersection(seen)) > 2:  # if matched more than 2 atoms
@@ -214,19 +221,29 @@ class Standardize:
                         continue
                 elif all(x == 4 for x in bonds[atom_2].values()):
                     continue
-                # remove charge from 1st N atom
-                charges[atom_1] = 0
-                pairs.append((atom_1, atom_2))
 
-        self.__dict__.pop('atoms_order', None)
-        for atom_1, atom_2 in pairs:
-            if self.atoms_order[atom_1] > self.atoms_order[atom_2]:
-                charges[atom_2] = 1
-                changed.append(atom_1)
-                changed.append(atom_2)
-            else:
-                charges[atom_1] = 1
+                if fix:
+                    atom_3 = mapping[3]
+                    charges[atom_3] = 0
+                    changed.append(atom_3)
+                else:
+                    # remove charge from 1st N atom
+                    charges[atom_1] = 0
+                pairs.append((atom_1, atom_2, fix))
 
+        if pairs:
+            self.__dict__.pop('atoms_order', None)  # remove cached morgan
+            for atom_1, atom_2, fix in pairs:
+                if self.atoms_order[atom_1] > self.atoms_order[atom_2]:
+                    charges[atom_2] = 1
+                    changed.append(atom_2)
+                    if not fix:
+                        changed.append(atom_1)
+                else:
+                    charges[atom_1] = 1
+                    if fix:
+                        changed.append(atom_1)
+            del self.__dict__['atoms_order']  # remove invalid morgan
         if changed:
             self.flush_cache()  # clear cache
             if fix_stereo:
@@ -517,24 +534,79 @@ class Standardize:
         Rules working without Morgan.
         This rules are used for charge canonization for heterocycles
         """
-        rules: List[query.QueryContainer] = []
+        rules: List[Tuple[query.QueryContainer, bool]] = []
 
+        # N1C=CN2[NH+]=CC=C12
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        for _ in range(7):
-            q.add_atom('C')
-        q.add_bond(2, 3, 4)
+        q.add_atom('N')  # second should be charged atom
+        q.add_atom('N')
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 3, 4)
         q.add_bond(3, 4, 4)
         q.add_bond(3, 6, 4)
         q.add_bond(4, 5, 4)
-        q.add_bond(5, 1, 4)
-        q.add_bond(1, 6, 4)
+        q.add_bond(5, 2, 4)
+        q.add_bond(2, 6, 4)
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
-        q.add_bond(8, 9, 4)
-        q.add_bond(9, 2, 4)
-        rules.append(q)
+        q.add_bond(8, 1, 4)
+        rules.append((q, False))
+
+        # N1C=C[N+]2=C1C=CN2
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('N')  # second should be charged atom
+        q.add_atom('N', charge=1)  # bad charged
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 2, 4)
+        q.add_bond(2, 6, 4)
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 1, 4)
+        rules.append((q, True))
+
+        # N1C=C2C=CN[N+]2=C1
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('N')  # second should be charged atom
+        q.add_atom('N', charge=1)
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 2, 4)
+        q.add_bond(2, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 1, 4)
+        rules.append((q, True))
+
+        # N1C=C2NC=C[N+]2=C1
+        q = query.QueryContainer()
+        q.add_atom('N')
+        q.add_atom('N')  # second should be charged atom
+        q.add_atom('N', charge=1)
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 6, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 2, 4)
+        q.add_bond(2, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(3, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 1, 4)
+        rules.append((q, True))
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -551,7 +623,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -568,7 +640,7 @@ class Standardize:
         q.add_bond(1, 6, 4)
         q.add_bond(6, 7, 4)
         q.add_bond(7, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -585,8 +657,7 @@ class Standardize:
         q.add_bond(5, 1, 4)
         q.add_bond(1, 6, 4)
         q.add_bond(6, 2, 4)
-        rules.append(q)
-
+        #rules.append(q)
         return rules
 
     @class_cached_property
@@ -595,7 +666,80 @@ class Standardize:
         Rules working with Morgan.
         This rules is for charge canonization
         """
-        rules: List[query.QueryContainer] = []
+        rules: List[Tuple[query.QueryContainer, bool]] = []
+
+        # N1C=CC2=CC=[NH+]N12
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second can be charged atom
+        q.add_atom('N')
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 3, 4)
+        q.add_bond(1, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 2, 4)
+        q.add_bond(2, 3, 4)
+        rules.append((q, False))
+
+        # N1C=CC2=[N+]1NC=C2
+        q = query.QueryContainer()
+        q.add_atom('N')  # first can be charged atom
+        q.add_atom('N')  # second can be charged atom
+        q.add_atom('N', charge=1)  # bad charged atom
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 3, 4)
+        q.add_bond(1, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 2, 4)
+        q.add_bond(2, 3, 4)
+        rules.append((q, True))
+
+        # N1C=CN2C=C[NH+]=C12
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second can be charged atom
+        q.add_atom('N')
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 4, 4)
+        q.add_bond(2, 4, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(2, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(6, 3, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 1, 4)
+        q.add_bond(7, 3, 4)
+        rules.append((q, False))
+
+        # N1C=C[N+]2=C1NC=C2
+        q = query.QueryContainer()
+        q.add_atom('N')  # first can be charged atom
+        q.add_atom('N')  # second can be charged atom
+        q.add_atom('N', charge=1)  # bad charged atom
+        for _ in range(5):
+            q.add_atom('A')
+        q.add_bond(1, 4, 4)
+        q.add_bond(2, 4, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(2, 5, 4)
+        q.add_bond(5, 6, 4)
+        q.add_bond(6, 3, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 1, 4)
+        q.add_bond(7, 3, 4)
+        rules.append((q, True))
+
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -612,7 +756,7 @@ class Standardize:
         q.add_bond(5, 2, 4)
         q.add_bond(2, 6, 4)
         q.add_bond(6, 1, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -629,7 +773,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 1, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -646,7 +790,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -663,7 +807,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 1, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -680,7 +824,7 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -697,7 +841,7 @@ class Standardize:
         q.add_bond(2, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 3, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -714,7 +858,7 @@ class Standardize:
         q.add_bond(1, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 3, 4)
-        rules.append(q)
+        #rules.append(q)
 
         #pirazole
         q = query.QueryContainer()
@@ -727,7 +871,7 @@ class Standardize:
         q.add_bond(3, 4, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 1, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -739,7 +883,7 @@ class Standardize:
         q.add_bond(3, 4, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         #imidazole
         q = query.QueryContainer()
@@ -752,7 +896,7 @@ class Standardize:
         q.add_bond(2, 4, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 1, 4)
-        rules.append(q)
+        #rules.append(q)
 
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
@@ -764,7 +908,7 @@ class Standardize:
         q.add_bond(1, 4, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 2, 4)
-        rules.append(q)
+        #rules.append(q)
 
         return rules
 
