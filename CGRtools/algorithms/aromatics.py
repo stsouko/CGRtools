@@ -707,6 +707,19 @@ class Aromatize:
         bonds_fix = ((1, 2, 1),)
         rules.append((q, atom_fix, bonds_fix))
 
+        #
+        # : [S+] : >> : S :
+        #    |          \\
+        #   [O-]         O
+        #
+        q = query.QueryContainer()
+        q.add_atom('S', neighbors=3, hybridization=4, charge=1)
+        q.add_atom('O', neighbors=1, charge=-1)
+        q.add_bond(1, 2, 1)
+        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 0, '_hybridizations': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((q, atom_fix, bonds_fix))
+
         # imidazolium
         #         R - N : C                  R - N : C
         #            :    :                    :     :
