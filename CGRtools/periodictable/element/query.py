@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2021 Dmitrij Zanadvornykh <>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -315,16 +316,17 @@ class AnyElement(Query):
 
 
 class AnyMetal(AnyElement):
+    """
+    Charge and radical ignored any metal.
+    """
+    @property
     def atomic_symbol(self) -> str:
         return 'M'
 
     def __eq__(self, other):
-        """
-        Compare attached to metal elements and AnyMetal
-        """
         if isinstance(other, Element):
-            if not other in ('He', 'Ne', 'Ar', 'Kr', 'Xe', 'F', 'Cl', 'Br', 'I', 'C', 'N', 'O', 'H', 'Si', 'P', 'S', 'Se',
-                             'Ge', 'As', 'Sb', 'Te'):
+            if other.atomic_symbol not in {'He', 'Ne', 'Ar', 'Kr', 'Xe', 'F', 'Cl', 'Br', 'I', 'C', 'N', 'O', 'H', 'Si',
+                                           'P', 'S', 'Se', 'Ge', 'As', 'Sb', 'Te'}:
                 if self.neighbors and other.neighbors not in self.neighbors:
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
@@ -347,7 +349,8 @@ class AnyMetal(AnyElement):
         return False
 
     def __hash__(self):
-        return tuple_hash((self.neighbors, self.hybridization, self.ring_sizes, self.implicit_hydrogens, self.heteroatoms))
+        return tuple_hash((self.neighbors, self.hybridization, self.ring_sizes, self.implicit_hydrogens,
+                           self.heteroatoms))
 
 
 class ListElement(AnyElement):
@@ -410,9 +413,6 @@ class ListElement(AnyElement):
         return copy
 
     def __hash__(self):
-        """
-        13bit = 4bit | 1bit | 4bit | 4bit
-        """
         return tuple_hash((self._numbers, self.charge, self.is_radical, self.neighbors, self.hybridization,
                            self.ring_sizes, self.implicit_hydrogens, self.heteroatoms))
 

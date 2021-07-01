@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  Copyright 2019 Dayana Bashirova <dayana.bashirova@yandex.ru>
 #  This file is part of CGRtools.
@@ -26,7 +26,8 @@ from .dynamic import DynamicElement
 from .dynamic_query import *
 
 
-AnyAtom = Union[Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, AnyMetal, DynamicAnyElement, ListElement]
+AnyAtom = Union[Element, DynamicElement, QueryElement, DynamicQueryElement, AnyElement, AnyMetal, DynamicAnyElement,
+                ListElement]
 
 
 __all__ = ['Core', 'Element', 'DynamicElement', 'QueryElement', 'DynamicQueryElement',
