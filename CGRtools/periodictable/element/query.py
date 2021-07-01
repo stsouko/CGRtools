@@ -314,6 +314,42 @@ class AnyElement(Query):
                            self.implicit_hydrogens, self.heteroatoms))
 
 
+class AnyMetal(AnyElement):
+    def atomic_symbol(self) -> str:
+        return 'M'
+
+    def __eq__(self, other):
+        """
+        Compare attached to metal elements and AnyMetal
+        """
+        if isinstance(other, Element):
+            if not other in ('He', 'Ne', 'Ar', 'Kr', 'Xe', 'F', 'Cl', 'Br', 'I', 'C', 'N', 'O', 'H', 'Si', 'P', 'S', 'Se',
+                             'Ge', 'As', 'Sb', 'Te'):
+                if self.neighbors and other.neighbors not in self.neighbors:
+                    return False
+                if self.hybridization and other.hybridization not in self.hybridization:
+                    return False
+                if self.ring_sizes:
+                    if self.ring_sizes[0]:
+                        if set(self.ring_sizes).isdisjoint(other.ring_sizes):
+                            return False
+                    elif other.ring_sizes:  # not in ring expected
+                        return False
+                if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
+                    return False
+                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
+                    return False
+                return True
+        elif isinstance(other, AnyMetal) and self.neighbors == other.neighbors \
+                and self.hybridization == other.hybridization and self.ring_sizes == other.ring_sizes \
+                and self.implicit_hydrogens == other.implicit_hydrogens and self.heteroatoms == other.heteroatoms:
+            return True
+        return False
+
+    def __hash__(self):
+        return tuple_hash((self.neighbors, self.hybridization, self.ring_sizes, self.implicit_hydrogens, self.heteroatoms))
+
+
 class ListElement(AnyElement):
     __slots__ = ('_elements', '_numbers')
 
@@ -395,4 +431,4 @@ class ListElement(AnyElement):
         return f'{self.__class__.__name__}([{",".join(self._elements)}])'
 
 
-__all__ = ['QueryElement', 'AnyElement', 'ListElement']
+__all__ = ['QueryElement', 'AnyElement', 'AnyMetal', 'ListElement']
