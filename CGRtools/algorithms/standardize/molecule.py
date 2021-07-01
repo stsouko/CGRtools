@@ -740,176 +740,31 @@ class Standardize:
         q.add_bond(7, 3, 4)
         rules.append((q, True))
 
-
+        # imidazole
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
         q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(1, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 2, 4)
-        q.add_bond(2, 6, 4)
-        q.add_bond(6, 1, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
+        for _ in range(3):
+            q.add_atom('A')
         q.add_bond(1, 3, 4)
         q.add_bond(3, 2, 4)
-        q.add_bond(3, 6, 4)
         q.add_bond(2, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(6, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 1, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 1, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(1, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(6, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 2, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(1, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 2, 4)
-        q.add_bond(2, 6, 4)
-        q.add_bond(6, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 1, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(3, 6, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 1, 4)
-        q.add_bond(1, 6, 4)
-        q.add_bond(6, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 2, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(3, 1, 4)
-        q.add_bond(1, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(6, 2, 4)
-        q.add_bond(2, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 3, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        q.add_atom('N')
-        for _ in range(5):
-            q.add_atom('C')
-        q.add_bond(3, 2, 4)
-        q.add_bond(2, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(6, 1, 4)
-        q.add_bond(1, 7, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 3, 4)
-        #rules.append(q)
+        rules.append((q, False))
 
         #pirazole
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
         q.add_atom('N')  # second is possible charged atom
         for _ in range(3):
-            q.add_atom('C')
+            q.add_atom('A')
         q.add_bond(1, 2, 4)
         q.add_bond(2, 3, 4)
         q.add_bond(3, 4, 4)
         q.add_bond(4, 5, 4)
         q.add_bond(5, 1, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        for _ in range(3):
-            q.add_atom('C')
-        q.add_bond(2, 1, 4)
-        q.add_bond(1, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 2, 4)
-        #rules.append(q)
-
-        #imidazole
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        for _ in range(3):
-            q.add_atom('C')
-        q.add_bond(1, 3, 4)
-        q.add_bond(3, 2, 4)
-        q.add_bond(2, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 1, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        for _ in range(3):
-            q.add_atom('C')
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 1, 4)
-        q.add_bond(1, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 2, 4)
-        #rules.append(q)
-
+        rules.append((q, False))
         return rules
 
     @class_cached_property
