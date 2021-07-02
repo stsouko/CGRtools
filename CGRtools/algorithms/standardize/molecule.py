@@ -608,11 +608,12 @@ class Standardize:
         q.add_bond(8, 1, 4)
         rules.append((q, True))
 
+        # C1=CC=2C(=[NH+]1)C=CNC=2
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
         q.add_atom('N')  # second is possible charged atom
         for _ in range(7):
-            q.add_atom('C')
+            q.add_atom('A')
         q.add_bond(2, 9, 4)
         q.add_bond(9, 3, 4)
         q.add_bond(3, 4, 4)
@@ -623,30 +624,14 @@ class Standardize:
         q.add_bond(6, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 2, 4)
-        #rules.append(q)
+        rules.append((q, False))
 
+        # N1C2=[NH+]C=CC2=CC=C1
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
         q.add_atom('N')  # second is possible charged atom
         for _ in range(7):
-            q.add_atom('C')
-        q.add_bond(2, 8, 4)
-        q.add_bond(8, 9, 4)
-        q.add_bond(9, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 1, 4)
-        q.add_bond(1, 6, 4)
-        q.add_bond(6, 7, 4)
-        q.add_bond(7, 2, 4)
-        #rules.append(q)
-
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1)  # first atom is charged
-        q.add_atom('N')  # second is possible charged atom
-        for _ in range(7):
-            q.add_atom('C')
+            q.add_atom('A')
         q.add_bond(2, 7, 4)
         q.add_bond(7, 8, 4)
         q.add_bond(8, 9, 4)
@@ -657,7 +642,79 @@ class Standardize:
         q.add_bond(5, 1, 4)
         q.add_bond(1, 6, 4)
         q.add_bond(6, 2, 4)
-        #rules.append(q)
+        rules.append((q, False))
+
+        # N1C=C2C(=CC=[NH+]2)C=C1
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        for _ in range(7):
+            q.add_atom('A')
+        q.add_bond(5, 2, 4)
+        q.add_bond(5, 9, 4)
+        q.add_bond(2, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(4, 1, 4)
+        q.add_bond(4, 8, 4)
+        q.add_bond(1, 6, 4)
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 9, 4)
+        rules.append((q, False))
+
+        # C=1C=[NH+]C=2C=1NC=CC=2
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        for _ in range(7):
+            q.add_atom('A')
+        q.add_bond(2, 6, 4)
+        q.add_bond(2, 9, 4)
+        q.add_bond(6, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 1, 4)
+        q.add_bond(5, 9, 4)
+        q.add_bond(1, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 9, 4)
+        rules.append((q, False))
+
+        # C1=2C=[NH+]C=C1NC=CC=2
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        for _ in range(7):
+            q.add_atom('A')
+        q.add_bond(6, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 9, 4)
+        q.add_bond(2, 9, 4)
+        q.add_bond(2, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 1, 4)
+        q.add_bond(5, 1, 4)
+        q.add_bond(5, 6, 4)
+        rules.append((q, False))
+
+        # C1=2C=CNC=C1C=[NH+]C=2
+        q = query.QueryContainer()
+        q.add_atom('N', charge=1)  # first atom is charged
+        q.add_atom('N')  # second is possible charged atom
+        for _ in range(7):
+            q.add_atom('A')
+        q.add_bond(2, 6, 4)
+        q.add_bond(2, 9, 4)
+        q.add_bond(6, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(4, 8, 4)
+        q.add_bond(5, 1, 4)
+        q.add_bond(1, 7, 4)
+        q.add_bond(7, 8, 4)
+        q.add_bond(8, 9, 4)
+        rules.append((q, False))
         return rules
 
     @class_cached_property
@@ -753,7 +810,7 @@ class Standardize:
         q.add_bond(5, 1, 4)
         rules.append((q, False))
 
-        #pirazole
+        #pyrazole
         q = query.QueryContainer()
         q.add_atom('N', charge=1)  # first atom is charged
         q.add_atom('N')  # second is possible charged atom
