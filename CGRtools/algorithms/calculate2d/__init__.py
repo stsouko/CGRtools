@@ -124,11 +124,18 @@ class Calculate2DMolecule(Calculate2D):
 
     def _clean2d_prepare(self):
         hydrogens = self._hydrogens
-        self._hydrogens = {n: 0 for n in hydrogens}
+        charges = self._charges
+        allenes_stereo = self._allenes_stereo
+        atoms_stereo = self._atoms_stereo
+        self._charges = self._hydrogens = {n: 0 for n in hydrogens}
+        self._atoms_stereo = self._allenes_stereo = {}
         try:
-            smiles, order = self._smiles(lambda x: random(), _return_order=True, stereo=False)
+            smiles, order = self._smiles(lambda x: random(), _return_order=True)
         finally:
             self._hydrogens = hydrogens
+            self._charges = charges
+            self._allenes_stereo = allenes_stereo
+            self._atoms_stereo = atoms_stereo
         return ''.join(smiles).replace('~', '-'), order
 
 
