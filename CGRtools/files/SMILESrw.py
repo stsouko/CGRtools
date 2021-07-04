@@ -19,12 +19,12 @@
 #
 from collections import defaultdict
 from functools import reduce
-from itertools import permutations
+from itertools import permutations, chain
 from io import StringIO, TextIOWrapper
 from logging import warning
 from operator import or_
 from pathlib import Path
-from re import split, compile, fullmatch
+from re import split, compile, fullmatch, findall, search
 from traceback import format_exc
 from typing import Union, List, Dict
 from warnings import warn
@@ -69,6 +69,8 @@ atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)(@@|@)?(H
 dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?'
                       r'([*^](>[*^])?)?')
 delimiter = compile(r'[=:]')
+cx_fragments = compile(r'f:(?:[0-9]+(?:\.[0-9]+)+)(?:,(?:[0-9]+(?:\.[0-9]+)+))*')
+cx_radicals = compile(r'\^[1-7]:[0-9]+(?:,[0-9]+)*')
 
 
 class SMILESRead(CGRRead):
@@ -186,22 +188,38 @@ class SMILESRead(CGRRead):
         if not smi:
             self._info('empty smiles')
             return {}
-        elif data and data[0].startswith('|f:'):
-            try:
-                contract = [sorted(int(x) for x in x.split('.')) for x in data[0][3:-1].split(',')]
-            except ValueError:
-                self._info(f'invalid cxsmiles fragments description: {data[0]}')
-                contract = None
-            else:
+        elif data and data[0].startswith('|') and data[0].endswith('|'):
+            fr = search(cx_fragments, data[0])
+            if fr is not None:
+                contract = [sorted(int(x) for x in x.split('.')) for x in fr.group()[2:].split(',')]
                 if len({x for x in contract for x in x}) < len([x for x in contract for x in x]):
                     self._info(f'collisions in cxsmiles fragments description: {data[0]}')
                     contract = None
                 elif any(x[0] < 0 for x in contract):
                     self._info(f'invalid cxsmiles fragments description: {data[0]}')
                     contract = None
-                else:
+
+                radicals = [int(x) for x in findall(cx_radicals, data[0]) for x in x[3:].split(',')]
+                if any(x < 0 for x in radicals):
+                    self._info(f'invalid cxsmiles radicals description: {data[0]}')
+                    radicals = []
+                if len(set(radicals)) != len(radicals):
+                    self._info(f'collisions in cxsmiles radicals description: {data[0]}')
+                    radicals = []
+                data = data[1:]
+            else:
+                radicals = [int(x) for x in findall(cx_radicals, data[0]) for x in x[3:].split(',')]
+                if radicals:
+                    if any(x < 0 for x in radicals):
+                        self._info(f'invalid cxsmiles radicals description: {data[0]}')
+                        radicals = []
+                    if len(set(radicals)) != len(radicals):
+                        self._info(f'collisions in cxsmiles radicals description: {data[0]}')
+                        radicals = []
                     data = data[1:]
+                contract = None
         else:
+            radicals = []
             contract = None
 
         if self.__header is None:
@@ -258,6 +276,12 @@ class SMILESRead(CGRRead):
                 self._info(f'record consist errors:\n{format_exc()}')
                 return meta
 
+            if radicals:
+                atom_map = dict(enumerate(a for m in chain(record['reactants'], record['reagents'], record['products'])
+                                          for a in m['atoms']))
+                for x in radicals:
+                    atom_map[x]['is_radical'] = True
+
             try:
                 container = self._convert_reaction(record)
             except ValueError:
@@ -309,6 +333,8 @@ class SMILESRead(CGRRead):
                 return meta
 
             record['meta'].update(meta)
+            for x in radicals:
+                record['atoms'][x]['is_radical'] = True
             try:
                 container = self._convert_structure(record)
             except ValueError:
@@ -332,17 +358,26 @@ class SMILESRead(CGRRead):
             if hc is None:  # aromatic rings or valence errors. just store given H count.
                 hydrogens[n] = h
             elif hc != h:  # H count mismatch. try radical state of atom.
-                radicals[n] = True
-                calc_implicit(n)
-                if hydrogens[n] != h:  # radical state also has errors.
+                if radicals[n]:
                     if self._ignore:
-                        radicals[n] = False  # reset radical state
                         hydrogens[n] = h  # set parsed hydrogens count
                         self._info(f'implicit hydrogen count ({h}) mismatch with '
                                    f'calculated ({hc}) on atom {n}. calculated count replaced.')
                     else:
                         raise ValueError(f'implicit hydrogen count ({h}) mismatch with '
                                          f'calculated ({hc}) on atom {n}.')
+                else:
+                    radicals[n] = True
+                    calc_implicit(n)
+                    if hydrogens[n] != h:  # radical state also has errors.
+                        if self._ignore:
+                            radicals[n] = False  # reset radical state
+                            hydrogens[n] = h  # set parsed hydrogens count
+                            self._info(f'implicit hydrogen count ({h}) mismatch with '
+                                       f'calculated ({hc}) on atom {n}. calculated count replaced.')
+                        else:
+                            raise ValueError(f'implicit hydrogen count ({h}) mismatch with '
+                                             f'calculated ({hc}) on atom {n}.')
 
         if self.__ignore_stereo or not molecule['stereo_atoms'] and not molecule['stereo_bonds']:
             return mol
