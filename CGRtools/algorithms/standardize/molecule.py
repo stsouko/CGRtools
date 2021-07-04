@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2021 Dmitrij Zanadvornykh <>
+#  Copyright 2021 Dmitrij Zanadvornykh <zandmitrij@gmail.com>
 #  Copyright 2018 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
 #
@@ -45,6 +45,7 @@ class Standardize:
         s = self.standardize(fix_stereo=False, logging=logging)
         h = self.implicify_hydrogens(fix_stereo=False)
         t = self.thiele()
+        c = self.standardize_charges(prepare_molecule=False, logging=logging)
         if logging:
             if k:
                 s.insert(0, ((), -1, 'kekulized'))
@@ -52,8 +53,10 @@ class Standardize:
                 s.append(((), -1, 'implicified'))
             if t:
                 s.append(((), -1, 'aromatized'))
+            if c:
+                s.append((tuple(c), -1, 'recharged'))
             return s
-        return k or s or h or t
+        return k or s or h or t or c
 
     def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
             Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
