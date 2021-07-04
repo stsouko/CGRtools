@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  Copyright 2021 Dmitrij Zanadvornykh <>
+#  Copyright 2021 Dmitrij Zanadvornykh <zandmitrij@gmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
