@@ -30,6 +30,7 @@ from ..exceptions import EmptyMolecule
 
 
 parse_error = namedtuple('MRVParseError', ('number', 'json', 'log', 'meta'))
+organic_set = {'B', 'C', 'N', 'O', 'P', 'S', 'Se', 'F', 'Cl', 'Br', 'I'}
 
 
 def xml_dict(parent_element, stop_list=None):
@@ -434,10 +435,13 @@ class MRVWrite:
         gc = g._charges
         gr = g._radicals
         bg = g._bonds
+        hg = g._hydrogens
+        hb = g._hybridizations
 
         out = ['<atomArray>']
         for n, atom in g._atoms.items():
             x, y = gp[n]
+            ih = hg[n]
             out.append(f'<atom id="a{n}" elementType="{atom.atomic_symbol}" '
                        f'x2="{x * 2:.4f}" y2="{y * 2:.4f}" mrvMap="{n}"')
             if gc[n]:
@@ -446,6 +450,8 @@ class MRVWrite:
                 out.append(' radical="monovalent"')
             if atom.isotope:
                 out.append(f' isotope="{atom.isotope}"')
+            if ih and (atom.atomic_symbol not in organic_set or hb[n] == 4 and atom.atomic_number in (5, 7, 15)):
+                out.append(f' hydrogenCount="{ih}"')
             out.append('/>')
         out.append('</atomArray>')
 
