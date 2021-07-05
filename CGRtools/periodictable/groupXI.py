@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2019, 2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2019-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  Copyright 2019 Alexander Nikanshin <17071996sasha@gmail.com>
 #  Copyright 2019 Tagir Akhmetshin <tagirshin@gmail.com>
 #  This file is part of CGRtools.
@@ -18,7 +18,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import FrozenDict
 from .element import Element
 from .groups import GroupXI
 from .periods import PeriodIV, PeriodV, PeriodVI, PeriodVII
@@ -33,11 +32,11 @@ class Cu(Element, PeriodIV, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({63: 0.6917, 65: 0.3083, 64: 0., 67: 0.})
+        return {63: 0.6917, 64: 0., 65: 0.3083, 67: 0.}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({63: 62.929601, 65: 64.927794, 64: 63.929764, 67: 66.927730})
+        return {63: 62.929601, 64: 63.929764, 65: 64.927794, 67: 66.927730}
 
     @property
     def _common_valences(self):
@@ -63,11 +62,11 @@ class Ag(Element, PeriodV, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({107: 0.51839, 109: 0.48161, 110: 0., 111: 0.})
+        return {107: 0.51839, 109: 0.48161, 110: 0., 111: 0.}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({107: 106.905093, 109: 108.904756, 110: 109.906107, 111: 110.905291})
+        return {107: 106.905093, 109: 108.904756, 110: 109.906107, 111: 110.905291}
 
     @property
     def _common_valences(self):
@@ -95,11 +94,11 @@ class Au(Element, PeriodVI, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({197: 1.0, 195: 0., 198: 0.})
+        return {195: 0., 197: 1.0, 198: 0.}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({197: 196.966552, 195: 194.965035, 198: 197.968244})
+        return {195: 194.965035, 197: 196.966552, 198: 197.968244}
 
     @property
     def _common_valences(self):
@@ -129,11 +128,11 @@ class Rg(Element, PeriodVII, GroupXI):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({282: 1.0})
+        return {282: 1.0}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({282: 282.169127})
+        return {282: 282.169127}
 
     @property
     def _common_valences(self):
