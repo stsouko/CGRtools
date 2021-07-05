@@ -18,7 +18,6 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import FrozenDict
 from .element import Element
 from .groups import GroupV
 from .periods import PeriodIV, PeriodV, PeriodVI, PeriodVII
@@ -33,11 +32,11 @@ class V(Element, PeriodIV, GroupV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({50: 0.0025, 51: 0.9975})
+        return {50: 0.0025, 51: 0.9975}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({50: 49.947163, 51: 50.943964})
+        return {50: 49.947163, 51: 50.943964}
 
     @property
     def _common_valences(self):
@@ -79,11 +78,11 @@ class Nb(Element, PeriodV, GroupV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({93: 1.0})
+        return {93: 1.0}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({93: 92.906378})
+        return {93: 92.906378}
 
     @property
     def _common_valences(self):
@@ -122,11 +121,11 @@ class Ta(Element, PeriodVI, GroupV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({180: 0.00012, 181: 0.99988})
+        return {180: 0.00012, 181: 0.99988}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({180: 179.947466, 181: 180.947996})
+        return {180: 179.947466, 181: 180.947996}
 
     @property
     def _common_valences(self):
@@ -155,11 +154,11 @@ class Db(Element, PeriodVII, GroupV):
 
     @property
     def isotopes_distribution(self):
-        return FrozenDict({268: 1.0})
+        return {268: 1.0}
 
     @property
     def isotopes_masses(self):
-        return FrozenDict({268: 268.125676})
+        return {268: 268.125676}
 
     @property
     def _common_valences(self):
