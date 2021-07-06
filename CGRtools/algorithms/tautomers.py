@@ -260,6 +260,19 @@ class Tautomers:
                 yield mol, ket
 
     def _enumerate_hetero_arene_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
+        sssr = self.sssr
+        rings_count = self.rings_count
+        atoms_rings = self.atoms_rings
+        atoms_rings_sizes = self.atoms_rings_sizes
+        if '__cached_args_method_neighbors' in self.__dict__:
+            neighbors = self.__dict__['__cached_args_method_neighbors']
+        else:
+            neighbors = self.__dict__['__cached_args_method_neighbors'] = {}
+        if '__cached_args_method_heteroatoms' in self.__dict__:
+            heteroatoms = self.__dict__['__cached_args_method_heteroatoms']
+        else:
+            heteroatoms = self.__dict__['__cached_args_method_heteroatoms'] = {}
+
         atoms = self._atoms
         bonds = self._bonds
         hydrogens = self._hydrogens
@@ -289,6 +302,8 @@ class Tautomers:
                         single_bonded.add(n)
                 elif charges[n] == -1 and atoms[n].atomic_number == 6:  # ferrocene
                     single_bonded.add(n)
+            elif len(ms) == 3 and atoms[n].atomic_number in (5, 7, 15) and not charges[n] and not radicals[n]:
+                single_bonded.add(n)
         if not donors or not acceptors:
             return
 
@@ -323,7 +338,15 @@ class Tautomers:
                 mol = self.copy()
                 mol._hydrogens[d] = 0
                 mol._hydrogens[a] = 1
-        yield
+
+                # store cached sssr in new molecules for speedup
+                mol.__dict__['rings_count'] = rings_count
+                mol.__dict__['atoms_rings'] = atoms_rings
+                mol.__dict__['sssr'] = sssr
+                mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
+                mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
+                mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
+                yield mol
 
     @cached_property
     def _sugar_groups(self: Union['MoleculeContainer', 'Tautomers']):
