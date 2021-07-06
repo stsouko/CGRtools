@@ -237,7 +237,8 @@ class Aromatize:
                     for n in ring:
                         sh[n] = 4
                     break
-
+        if freaks:
+            self.flush_cache()  # flush again
         self._fix_stereo()  # check if any stereo centers vanished.
         return True
 
@@ -311,7 +312,7 @@ class Aromatize:
         rings = defaultdict(list)  # aromatic skeleton
         pyroles = set()
 
-        double_bonded = set()
+        double_bonded = defaultdict(list)
         triple_bonded = set()
         for n, m_bond in bonds.items():
             for m, bond in m_bond.items():
@@ -319,7 +320,7 @@ class Aromatize:
                 if bo == 4:
                     rings[n].append(m)
                 elif bo == 2:
-                    double_bonded.add(n)
+                    double_bonded[n].append(m)
                 elif bo == 3:
                     triple_bonded.add(n)
 
@@ -333,6 +334,10 @@ class Aromatize:
             if set(r).issubset(rings):
                 n, *_, m = r
                 if n not in rings[m]:  # fix invalid structures: c1ccc-cc1
+                    # remove inner ring double bonds: c1ccc=cc1
+                    if n in double_bonded and m in double_bonded and m in double_bonded[n]:
+                        double_bonded[n].remove(m)
+                        double_bonded[m].remove(n)
                     rings[m].append(n)
                     rings[n].append(m)
                 elif m in copy_rings[n]:
@@ -340,6 +345,9 @@ class Aromatize:
                     copy_rings[m].remove(n)
                 for n, m in zip(r, r[1:]):
                     if n not in rings[m]:
+                        if n in double_bonded and m in double_bonded and m in double_bonded[n]:
+                            double_bonded[n].remove(m)
+                            double_bonded[m].remove(n)
                         rings[m].append(n)
                         rings[n].append(m)
                     elif m in copy_rings[n]:
@@ -347,7 +355,8 @@ class Aromatize:
                         copy_rings[m].remove(n)
 
         if any(len(ms) not in (2, 3) for ms in rings.values()):
-            raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings')
+            raise InvalidAromaticRing('not in ring aromatic bond or hypercondensed rings: '
+                                      f'{{{", ".join(str(n) for n, ms in rings.items() if len(ms) not in (2, 3))}}}')
 
         # fix invalid smiles: c1ccccc1c2ccccc2 instead of c1ccccc1-c2ccccc2
         seen = set()
@@ -360,11 +369,16 @@ class Aromatize:
                         rings[m].remove(n)
                         bonds[n][m]._Bond__order = 1
 
-        double_bonded &= rings.keys()
+        # get double bonded ring atoms
+        double_bonded = {n for n, ms in double_bonded.items() if ms and n in rings}
         if any(len(rings[n]) != 2 for n in double_bonded):  # double bonded never condensed
             raise InvalidAromaticRing('quinone valence error')
-        if any(atoms[n].atomic_number not in (6, 15, 16, 34, 52) or charges[n] for n in double_bonded):
-            raise InvalidAromaticRing('quinone should be neutral S, Se, Te, C, P atom')
+        for n in double_bonded:
+            if atoms[n].atomic_number == 7:
+                if charges[n] != 1:
+                    raise InvalidAromaticRing('quinone should be charged N atom')
+            elif atoms[n].atomic_number not in (6, 15, 16, 33, 34, 52) or charges[n]:
+                raise InvalidAromaticRing('quinone should be neutral S, Se, Te, C, P, As atom')
 
         for n in rings:
             an = atoms[n].atomic_number
@@ -388,7 +402,7 @@ class Aromatize:
                         raise InvalidAromaticRing
                 else:
                     raise InvalidAromaticRing
-            elif an in (7, 15):
+            elif an in (7, 15, 33):
                 if ac == 0:  # pyrole or pyridine. include radical pyrole
                     if radicals[n]:
                         if ab != 2:
@@ -407,7 +421,7 @@ class Aromatize:
                             double_bonded.add(n)
                         elif ah:
                             raise InvalidAromaticRing
-                    elif ab != 4 or an != 15:  # P(V) in ring
+                    elif ab != 4 or an not in (15, 33):  # P(V) in ring
                         raise InvalidAromaticRing
                 elif ac == -1:  # pyrole only
                     if ab != 2 or radicals[n]:
@@ -448,6 +462,8 @@ class Aromatize:
                             double_bonded.add(n)
                         elif ac != 1:
                             raise InvalidAromaticRing('S, Se, Te cation in benzene like ring expected')
+                    elif ab == 3 and ac == 1 and not radicals[n]:
+                        double_bonded.add(n)
                     else:
                         raise InvalidAromaticRing('S, Se, Te hypervalent ring')
             elif an == 5:  # boron
@@ -706,6 +722,98 @@ class Aromatize:
         atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
         bonds_fix = ((1, 2, 1),)
         rules.append((q, atom_fix, bonds_fix))
+
+        #
+        # : [S+] : >> : S :
+        #    |          \\
+        #   [O-]         O
+        #
+        q = query.QueryContainer()
+        q.add_atom('S', neighbors=3, hybridization=4, charge=1)
+        q.add_atom('O', neighbors=1, charge=-1)
+        q.add_bond(1, 2, 1)
+        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 0, '_hybridizations': 2}}
+        bonds_fix = ((1, 2, 2),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        #
+        # [O-]-N:C:C:[N+]=O
+        #
+        q = query.QueryContainer()
+        q.add_atom('O', neighbors=1, charge=-1)
+        q.add_atom('N', neighbors=3)
+        q.add_atom('C')
+        q.add_atom('C')
+        q.add_atom('N', neighbors=3, charge=1)
+        q.add_atom('O', neighbors=1)
+        q.add_bond(1, 2, 1)
+        q.add_bond(2, 3, 4)
+        q.add_bond(3, 4, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 6, 2)
+        atom_fix = {2: {'_charges': 1}, 6: {'_charges': -1}}
+        bonds_fix = ((5, 6, 1),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        #
+        # N : A : N - ?
+        #  :     :
+        #   C # C
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=2)
+        q.add_atom('C', neighbors=2)
+        q.add_atom('C', neighbors=2)
+        q.add_atom('N', neighbors=(2, 3))
+        q.add_atom(ListElement(['C', 'N']))
+        q.add_bond(1, 2, 4)
+        q.add_bond(2, 3, 3)
+        q.add_bond(3, 4, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(1, 5, 4)
+        atom_fix = {}
+        bonds_fix = ((2, 3, 4),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        #
+        # C:[N+]:[C-]
+        #    \\
+        #     O
+        #
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, charge=1)
+        q.add_atom('O', neighbors=1)
+        q.add_atom('C', neighbors=(2, 3), charge=-1)
+        q.add_atom('C', neighbors=(2, 3))
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 4)
+        q.add_bond(1, 4, 4)
+        atom_fix = {2: {'_charges': -1, '_hybridizations': 1}, 3: {'_charges': 0}}
+        bonds_fix = ((1, 2, 1),)
+        rules.append((q, atom_fix, bonds_fix))
+
+        #
+        #  O=[N+] : C
+        #     :     :
+        #    O : N : C
+        q = query.QueryContainer()
+        q.add_atom('N', neighbors=3, charge=1)
+        q.add_atom('O', neighbors=1)
+        q.add_atom('O', neighbors=2)
+        q.add_atom('C', neighbors=(2, 3))
+        q.add_atom('C', neighbors=(2, 3))
+        q.add_atom('N', neighbors=(2, 3))
+        q.add_bond(1, 2, 2)
+        q.add_bond(1, 3, 4)
+        q.add_bond(1, 4, 4)
+        q.add_bond(3, 6, 4)
+        q.add_bond(4, 5, 4)
+        q.add_bond(5, 6, 4)
+        atom_fix = {1: {'_hybridizations': 2}, 3: {'_hybridizations': 1}, 4: {'_hybridizations': 2},
+                    5: {'_hybridizations': 2}, 6: {'_hybridizations': 1}}
+        bonds_fix = ((1, 3, 1), (1, 4, 1), (3, 6, 1), (4, 5, 2), (5, 6, 1))
+        rules.append((q, atom_fix, bonds_fix))
+
+        # todo: refactor!
 
         # imidazolium
         #         R - N : C                  R - N : C
