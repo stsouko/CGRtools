@@ -66,8 +66,8 @@ dyn_charge_dict = {k: (v,) for k, v in dyn_charge_dict.items()}
 dyn_charge_dict.update(tmp)
 dyn_radical_dict = {'*': (True,), '*>^': (True, ('radical', None)), '^>*': (False, ('radical', None))}
 
-atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
-dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsb][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?'
+atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsbt][a-ik-pr-vy]?)(@@|@)?(H[1-4]?)?([+-][1-4+-]?)?(:[0-9]{1,4})?')
+dyn_atom_re = compile(r'([1-9][0-9]{0,2})?([A-IK-PR-Zacnopsbt][a-ik-pr-vy]?)([+-0][1-4+-]?(>[+-0][1-4+-]?)?)?'
                       r'([*^](>[*^])?)?')
 delimiter = compile(r'[=:]')
 cx_fragments = compile(r'f:(?:[0-9]+(?:\.[0-9]+)+)(?:,(?:[0-9]+(?:\.[0-9]+)+))*')
@@ -486,6 +486,9 @@ class SMILESRead(CGRRead):
                     if not token and s == '0':
                         raise IncorrectSmiles('number starts with 0')
                     token.append(s)
+                    if len(token) == 2:
+                        tokens.append((token_type, token))
+                        token_type = token = None
                 else:
                     if s == '0':
                         raise IncorrectSmiles('number starts with 0')
@@ -624,7 +627,7 @@ class SMILESRead(CGRRead):
         else:
             mapping = 0
 
-        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b'):
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b', 'te'):
             _type = 8
             element = element.capitalize()
         else:
@@ -662,7 +665,7 @@ class SMILESRead(CGRRead):
         else:
             is_radical = False
 
-        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b'):
+        if element in ('c', 'n', 'o', 'p', 's', 'as', 'se', 'b', 'te'):
             _type = 12
             element = element.capitalize()
         else:
@@ -793,7 +796,8 @@ class SMILESRead(CGRRead):
                     if bt == 1:
                         bonds.append((atom_num, last_num, b))
                     elif bt == 9:
-                        bonds.append((atom_num, last_num, 1))
+                        bonds.append((atom_num, last_num,
+                                      4 if token_type in (8, 12) and atoms_types[last_num] in (8, 12) else 1))
                         stereo_bonds[last_num][atom_num] = b
                         stereo_bonds[atom_num][last_num] = not b
                     elif bt == 10:
