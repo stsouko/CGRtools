@@ -103,6 +103,35 @@ class Tautomers:
         counter = 1
         while queue:
             current = queue.popleft()
+            if keto_enol:
+                for mol, ket in current._enumerate_keto_enol_tautomers(full):
+                    if mol not in seen:
+                        seen[mol] = current
+                        # prevent carbonyl migration
+                        if current is not copy and not ket:  # enol to ket potentially migrate ketone.
+                            # search alpha hydroxy ketone inversion
+                            before = seen[current]._sugar_groups
+                            if any((k, e) in before for e, k in mol._sugar_groups):
+                                continue
+
+                        if has_stereo:
+                            ster = mol.copy()
+                            ster._atoms_stereo.update(atoms_stereo)
+                            ster._allenes_stereo.update(allenes_stereo)
+                            ster._cis_trans_stereo.update(cis_trans_stereo)
+                            ster._fix_stereo()
+                            yield ster
+                        else:
+                            yield mol
+                        counter += 1
+                        if counter == limit:
+                            return
+                        if len(mol.aromatic_rings) > len(current.aromatic_rings):
+                            # found new aromatic ring. flush queue and start from it.
+                            queue.clear()
+                            queue.append(mol)
+                            break
+                        queue.append(mol)
 
             if zwitter:
                 for mol in current._enumerate_zwitter_tautomers(full):
@@ -135,77 +164,6 @@ class Tautomers:
                         counter += 1
                         if counter == limit:
                             return
-
-            if keto_enol:
-                for mol, ket in current._enumerate_keto_enol_tautomers(full):
-                    if mol not in seen:
-                        seen[mol] = current
-                        # prevent carbonyl migration
-                        if current is not copy and not ket:  # enol to ket potentially migrate ketone.
-                            # search alpha hydroxy ketone inversion
-                            before = seen[current]._sugar_groups
-                            if any((k, e) in before for e, k in mol._sugar_groups):
-                                continue
-
-                        if has_stereo:
-                            ster = mol.copy()
-                            ster._atoms_stereo.update(atoms_stereo)
-                            ster._allenes_stereo.update(allenes_stereo)
-                            ster._cis_trans_stereo.update(cis_trans_stereo)
-                            ster._fix_stereo()
-                            yield ster
-                        else:
-                            yield mol
-                        counter += 1
-                        if counter == limit:
-                            return
-                        if len(mol.aromatic_rings) > len(current.aromatic_rings):
-                            # found new aromatic ring. flush queue and start from it.
-                            queue.clear()
-                            queue.append(mol)
-                            break
-                        queue.append(mol)
-
-    def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
-        sssr = self.sssr
-        rings_count = self.rings_count
-        atoms_rings = self.atoms_rings
-        atoms_rings_sizes = self.atoms_rings_sizes
-        if '__cached_args_method_neighbors' in self.__dict__:
-            neighbors = self.__dict__['__cached_args_method_neighbors']
-        else:
-            neighbors = self.__dict__['__cached_args_method_neighbors'] = {}
-        if '__cached_args_method_heteroatoms' in self.__dict__:
-            heteroatoms = self.__dict__['__cached_args_method_heteroatoms']
-        else:
-            heteroatoms = self.__dict__['__cached_args_method_heteroatoms'] = {}
-
-        donors = set()
-        acceptors = set()
-        for q, acid in chain(zip(self.__acid_rules if full else self.__stripped_acid_rules, repeat(True)),
-                             zip(self.__base_rules if full else self.__stripped_base_rules, repeat(False))):
-            for mapping in q.get_mapping(self, automorphism_filter=False):
-                n = mapping[1]
-                if acid:
-                    donors.add(n)
-                else:
-                    acceptors.add(n)
-
-        for d, a in product(donors, acceptors):
-            mol = self.copy()
-            mol._hydrogens[d] -= 1
-            mol._hydrogens[a] += 1
-            mol._charges[d] -= 1
-            mol._charges[a] += 1
-
-            # store cached sssr in new molecules for speedup
-            mol.__dict__['rings_count'] = rings_count
-            mol.__dict__['atoms_rings'] = atoms_rings
-            mol.__dict__['sssr'] = sssr
-            mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
-            mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
-            mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
-            yield mol
 
     def _enumerate_keto_enol_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         sssr = self.sssr
@@ -258,6 +216,47 @@ class Tautomers:
                 mol.__dict__['rings_count'] = rings_count
                 mol.__dict__['atoms_rings'] = atoms_rings
                 yield mol, ket
+
+    def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
+        sssr = self.sssr
+        rings_count = self.rings_count
+        atoms_rings = self.atoms_rings
+        atoms_rings_sizes = self.atoms_rings_sizes
+        if '__cached_args_method_neighbors' in self.__dict__:
+            neighbors = self.__dict__['__cached_args_method_neighbors']
+        else:
+            neighbors = self.__dict__['__cached_args_method_neighbors'] = {}
+        if '__cached_args_method_heteroatoms' in self.__dict__:
+            heteroatoms = self.__dict__['__cached_args_method_heteroatoms']
+        else:
+            heteroatoms = self.__dict__['__cached_args_method_heteroatoms'] = {}
+
+        donors = set()
+        acceptors = set()
+        for q, acid in chain(zip(self.__acid_rules if full else self.__stripped_acid_rules, repeat(True)),
+                             zip(self.__base_rules if full else self.__stripped_base_rules, repeat(False))):
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                n = mapping[1]
+                if acid:
+                    donors.add(n)
+                else:
+                    acceptors.add(n)
+
+        for d, a in product(donors, acceptors):
+            mol = self.copy()
+            mol._hydrogens[d] -= 1
+            mol._hydrogens[a] += 1
+            mol._charges[d] -= 1
+            mol._charges[a] += 1
+
+            # store cached sssr in new molecules for speedup
+            mol.__dict__['rings_count'] = rings_count
+            mol.__dict__['atoms_rings'] = atoms_rings
+            mol.__dict__['sssr'] = sssr
+            mol.__dict__['atoms_rings_sizes'] = atoms_rings_sizes
+            mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
+            mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
+            yield mol
 
     def _enumerate_hetero_arene_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
         sssr = self.sssr
@@ -355,6 +354,18 @@ class Tautomers:
             e, k = mapping[1], mapping[2]
             ek.append((e, k))
         return ek
+
+    @class_cached_property
+    def __sugar_group_rule(self):
+        q = query.QueryContainer()
+        q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
+        q.add_atom(ListElement(['O', 'N']))  # ketone
+        q.add_atom('C', hybridization=1, heteroatoms=1)
+        q.add_atom('C', hybridization=2, heteroatoms=1)
+        q.add_bond(1, 3, 1)
+        q.add_bond(3, 4, 1)
+        q.add_bond(2, 4, 2)
+        return q
 
     @class_cached_property
     def __stripped_keto_enol_rules(self):
@@ -853,18 +864,6 @@ class Tautomers:
         rules.append(q)
 
         return rules
-
-    @class_cached_property
-    def __sugar_group_rule(self):
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
-        q.add_atom(ListElement(['O', 'N']))  # ketone
-        q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=2, heteroatoms=1)
-        q.add_bond(1, 3, 1)
-        q.add_bond(3, 4, 1)
-        q.add_bond(2, 4, 2)
-        return q
 
 
 __all__ = ['Tautomers']
