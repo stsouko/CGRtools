@@ -592,6 +592,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             self.flush_cache()
         del self._backup
 
+    def pack(self):
+        """
+        Pack into compressed bytes.
+        """
+
+    @classmethod
+    def unpack(cls, data):
+        """
+        Unpack from compressed bytes.
+        """
+
     def __getstate__(self):
         return {'conformers': self._conformers, 'hydrogens': self._hydrogens, 'atoms_stereo': self._atoms_stereo,
                 'allenes_stereo': self._allenes_stereo, 'cis_trans_stereo': self._cis_trans_stereo,
