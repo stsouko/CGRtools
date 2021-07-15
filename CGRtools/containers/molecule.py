@@ -490,16 +490,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         scope = set(self.connected_components[component])
         return {k: v & scope for k, v in self.fingerprint.items() if not v.isdisjoint(scope)}
 
-    def _isomorphism_candidates(self, other, self_component, other_component):
-        if self.fingerprint:
-            self_fingerprint = self._component_fingerprint(self_component)
-            if self_fingerprint:
-                other_fingerprint = other._component_fingerprint(other_component)
-                if self_fingerprint.keys() <= other_fingerprint.keys():
-                    return {x for k in self_fingerprint for x in other_fingerprint[k]}
-                return set()
-        return super()._isomorphism_candidates(other, self_component, other_component)
-
     @cached_args_method
     def _explicit_hydrogens(self, n: int) -> int:
         """
