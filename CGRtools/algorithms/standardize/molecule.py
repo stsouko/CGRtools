@@ -980,11 +980,11 @@ class Standardize:
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         #
-        #          N          [N-]
-        #         //          /
-        # [C,N] = N  >> C = [N+]
-        #         \         \
-        #          A         A
+        #          N             [N-]
+        #         //             /
+        # [C,N] = N  >> [C,N] = [N+]
+        #         \              \
+        #          A              A
         #
         atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
                  {'atom': ListElement(['C', 'N'])}, {'atom': 'A'})
@@ -1351,6 +1351,17 @@ class Standardize:
         bonds = ((1, 2, 1), (1, 3, 2))
         atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
         bonds_fix = ((1, 2, 2), (1, 3, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        # fix pyridin-2-one. note: order dependent
+        #
+        atoms = ({'atom': 'C', 'neighbors': 3}, {'atom': ListElement(['O', 'S']), 'neighbors': 1},
+                 {'atom': 'N', 'neighbors': 2}, {'atom': 'A', 'hybridization': 2}, {'atom': 'A', 'hybridization': 2},
+                 {'atom': 'A', 'hybridization': 2}, {'atom': 'A', 'hybridization': 2})
+        bonds = ((1, 2, 2), (1, 3, 1), (1, 4, 1), (3, 7, 1), (4, 5, (1, 2)), (5, 6, (1, 2)), (6, 7, (1, 2)))
+        atom_fix = {2: {'hybridization': 1}, 3: {'hybridization': 2}}
+        bonds_fix = ((1, 2, 1), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         #
