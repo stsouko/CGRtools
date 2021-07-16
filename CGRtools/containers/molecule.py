@@ -19,6 +19,9 @@
 from CachedMethods import cached_args_method, cached_property
 from collections import defaultdict, Counter
 from importlib.util import find_spec
+from itertools import zip_longest
+from math import ceil
+from struct import pack_into, unpack_from, iter_unpack
 from typing import List, Union, Tuple, Optional, Dict, FrozenSet
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
@@ -592,16 +595,181 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             self.flush_cache()
         del self._backup
 
-    def pack(self):
+    def pack(self) -> bytes:
         """
         Pack into compressed bytes.
+        Note:
+            * Less than 4096 atoms supported. Atoms mapping should be in range 1-4095.
+            * Implicit hydrogens count should be in range 0-7
+            * Isotope shift should be in range -15 - 15 relatively mdl.common_isotopes
+            * Atoms neighbors should be in range 0-15
+
+        Format specification:
+        16 bit - number of atoms
+        Atom block 9 bytes (repeated):
+        12 bit - atom number
+        4 bit - number of neighbors
+        2 bit tetrahedron sign (00 - not stereo, 10 or 11 - has stereo)
+        2 bit - allene sign
+        5 bit - isotope (00000 - not specified, over = isotope - common_isotope + 16)
+        7 bit - atomic number (<=118)
+        32 bit - XY float16 coordinates
+        3 bit - hydrogens (0-7)
+        4 bit - charge (charge + 4. possible range -4 - 4)
+        1 bit - radical state
+        Connection table: flatten list of neighbors. neighbors count stored in atom block.
+        For example CC(=O)O - {1: [2], 2: [1, 3, 4], 3: [2], 4: [2]} >> [2, 1, 3, 4, 2, 2].
+        Repeated block (equal to bonds count).
+        24 bit - paired 12 bit numbers.
+        Bonds order block (repeated):
+        16 bit - 5 bonds grouped (3 bit each). 1 bit unused. Zero padding used than bonds count not proportional to 5.
         """
+        from ..files._mdl.mol import common_isotopes
+        bonds = self._bonds
+        plane = self._plane
+        charges = self._charges
+        radicals = self._radicals
+        hydrogens = self._hydrogens
+        atoms_stereo = self._atoms_stereo
+        allenes_stereo = self._allenes_stereo
+        cis_trans_stereo = self._cis_trans_stereo
+
+        data = bytearray(2 +  # atoms count
+                         9 * self.atoms_count +  # atoms data
+                         3 * self.bonds_count +  # connection table
+                         2 * ceil(self.bonds_count / 5))  # bonds order
+        pack_into('H', data, 0, self.atoms_count)
+
+        neighbors = []
+        bonds_pack = []
+        seen = set()
+        for o, (n, a) in enumerate(self._atoms.items()):
+            bs = bonds[n]
+            neighbors.extend(bs)
+            seen.add(n)
+            for m, b in bs.items():
+                if m not in seen:
+                    bonds_pack.append(b.order - 1)  # 8 - 4 bit, but 7 - 3 bit
+
+            # 3 bit - hydrogens (0-7) | 4 bit - charge | 1 bit - radical
+            hcr = (charges[n] + 4) << 1
+            if radicals[n]:
+                hcr |= 1
+            hcr |= hydrogens[n] << 5
+
+            # 2 bit tetrahedron sign | 2 bit - allene sign | 5 bit - isotope | 7 bit - atomic number (<=118)
+            sia = a.atomic_number
+            if a.isotope:
+                sia |= (a.isotope - common_isotopes[a.atomic_symbol] + 16) << 7
+
+            if n in atoms_stereo:
+                if atoms_stereo[n]:
+                    sia |= 0xc000
+                else:
+                    sia |= 0x8000
+            if n in allenes_stereo:
+                if allenes_stereo[n]:
+                    sia |= 0x3000
+                else:
+                    sia |= 0x2000
+
+            pack_into('2H2eB', data, 2 + 9 * o,
+                      (n << 4) | len(bs),  # 12 bit - atom number | 4 bit - number of neighbors
+                      sia, *plane[n], hcr)
+
+        shift = 2 + 9 * self.atoms_count
+        ngb = iter(neighbors)
+        for o, (n1, n2) in enumerate(zip_longest(ngb, ngb)):
+            # 12 bit + 12 bit
+            pack_into('I', data, shift + 3 * o, (n1 << 12) | n2)
+
+        # 16 bit - 5 bonds packing. 1 bit empty.
+        shift += 3 * self.bonds_count
+        bp = iter(bonds_pack)
+        for o, (b1, b2, b3, b4, b5) in enumerate(zip_longest(bp, bp, bp, bp, bp, fillvalue=0)):
+            pack_into('H', data, shift + 2 * o, (b1 << 12) | (b2 << 9) | (b3 << 6) | (b4 << 3) | b5)
+
+        # 16 bit - neighbor | 3 bit bond type
+        return bytes(data)
 
     @classmethod
-    def unpack(cls, data):
+    def unpack(cls, data: bytes) -> 'MoleculeContainer':
         """
         Unpack from compressed bytes.
         """
+        from ..files._mdl.mol import common_isotopes
+        mol = cls()
+        atoms = mol._atoms
+        bonds = mol._bonds
+        plane = mol._plane
+        charges = mol._charges
+        radicals = mol._radicals
+        hydrogens = mol._hydrogens
+        atoms_stereo = mol._atoms_stereo
+        allenes_stereo = mol._allenes_stereo
+        cis_trans_stereo = mol._cis_trans_stereo
+
+        neighbors = {}
+        for o in range(unpack_from('H', data, 0)[0]):
+            nn, sia, x, y, hcr = unpack_from('2H2eB', data, 2 + 9 * o)
+            n = nn >> 4
+            neighbors[n] = nn & 0x0f
+            # stereo
+            s = sia >> 14
+            if s:
+                atoms_stereo[n] = s == 3
+            s = (sia >> 12) & 3
+            if s:
+                allenes_stereo[n] = s == 3
+
+            # atoms
+            a = Element.from_atomic_number(sia & 0x7f)
+            ai = (sia >> 7) & 0x1f
+            if ai:
+                ai += common_isotopes[a.__name__] - 16
+            else:
+                ai = None
+            atoms[n] = a = a(ai)
+            a._attach_to_graph(mol, n)
+
+            charges[n] = ((hcr >> 1) & 0x0f) - 4
+            radicals[n] = bool(hcr & 0x01)
+            hydrogens[n] = hcr >> 5
+            plane[n] = (x, y)
+
+        bc = sum(neighbors.values()) // 2
+        shift = 2 + 9 * len(neighbors)
+        connections = []
+        for o in range(bc):
+            nn = unpack_from('I', data, shift + 3 * o)[0]
+            connections.append((nn >> 12) & 0x0fff)
+            connections.append(nn & 0x0fff)
+
+        shift += 3 * bc
+        orders = []
+        for o in range(ceil(bc / 5)):
+            bb = unpack_from('H', data, shift + 2 * o)[0]
+            orders.append(((bb >> 12) & 0x07) + 1)
+            orders.append(((bb >> 9) & 0x07) + 1)
+            orders.append(((bb >> 6) & 0x07) + 1)
+            orders.append(((bb >> 3) & 0x07) + 1)
+            orders.append((bb & 0x07) + 1)
+        orders = orders[:bc]  # skip padding
+
+        con = iter(connections)
+        ords = iter(orders)
+        for n, ms in neighbors.items():
+            bonds[n] = cbn = {}
+            for _ in range(ms):
+                m = next(con)
+                if m in bonds:  # bond partially exists. need back-connection.
+                    cbn[m] = bonds[m][n]
+                else:
+                    cbn[m] = Bond(next(ords))
+
+        for n in neighbors:
+            mol._calc_hybridization(n)
+        return mol
 
     def __getstate__(self):
         return {'conformers': self._conformers, 'hydrogens': self._hydrogens, 'atoms_stereo': self._atoms_stereo,
