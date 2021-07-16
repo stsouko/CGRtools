@@ -21,8 +21,9 @@ from collections import defaultdict, Counter
 from importlib.util import find_spec
 from itertools import zip_longest
 from math import ceil
-from struct import pack_into, unpack_from, iter_unpack
+from struct import pack_into, unpack_from
 from typing import List, Union, Tuple, Optional, Dict, FrozenSet
+from zlib import compress, decompress
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
 from .common import Graph
@@ -605,7 +606,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             * Atoms neighbors should be in range 0-15
 
         Format specification:
-        16 bit - number of atoms
+        12 bit - number of atoms
+        12 bit - cis/trans stereo block size
         Atom block 9 bytes (repeated):
         12 bit - atom number
         4 bit - number of neighbors
@@ -623,9 +625,18 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         24 bit - paired 12 bit numbers.
         Bonds order block (repeated):
         16 bit - 5 bonds grouped (3 bit each). 1 bit unused. Zero padding used than bonds count not proportional to 5.
+        Cis/trans data block (repeated):
+        24 bit - atoms pair
+        7 bit - zero padding
+        1 bit - sign
         """
-        from ..files._mdl.mol import common_isotopes
         bonds = self._bonds
+        if max(bonds) > 4095:
+            raise ValueError('Big molecules not supported')
+        if any(len(x) > 15 for x in bonds.values()):
+            raise ValueError('To many neighbors not supported')
+        from ..files._mdl.mol import common_isotopes
+
         plane = self._plane
         charges = self._charges
         radicals = self._radicals
@@ -634,11 +645,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         allenes_stereo = self._allenes_stereo
         cis_trans_stereo = self._cis_trans_stereo
 
-        data = bytearray(2 +  # atoms count
+        data = bytearray(3 +  # atoms count + cis/trans bit
                          9 * self.atoms_count +  # atoms data
                          3 * self.bonds_count +  # connection table
-                         2 * ceil(self.bonds_count / 5))  # bonds order
-        pack_into('H', data, 0, self.atoms_count)
+                         2 * ceil(self.bonds_count / 5) +  # bonds order
+                         4 * len(cis_trans_stereo))
+        pack_into('HB', data, 0, (self.atoms_count << 4) | (len(cis_trans_stereo) >> 8), len(cis_trans_stereo) & 0xff)
+        shift = 3
 
         neighbors = []
         bonds_pack = []
@@ -673,11 +686,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 else:
                     sia |= 0x2000
 
-            pack_into('2H2eB', data, 2 + 9 * o,
+            pack_into('2H2eB', data, shift + 9 * o,
                       (n << 4) | len(bs),  # 12 bit - atom number | 4 bit - number of neighbors
                       sia, *plane[n], hcr)
 
-        shift = 2 + 9 * self.atoms_count
+        shift += 9 * self.atoms_count
         ngb = iter(neighbors)
         for o, (n1, n2) in enumerate(zip_longest(ngb, ngb)):
             # 12 bit + 12 bit
@@ -689,14 +702,19 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         for o, (b1, b2, b3, b4, b5) in enumerate(zip_longest(bp, bp, bp, bp, bp, fillvalue=0)):
             pack_into('H', data, shift + 2 * o, (b1 << 12) | (b2 << 9) | (b3 << 6) | (b4 << 3) | b5)
 
+        shift += 2 * ceil(self.bonds_count / 5)
+        for o, ((n, m), s) in enumerate(cis_trans_stereo.items()):
+            pack_into('I', data, shift + 4 * o, (n << 20) | (m << 8) | s)
+
         # 16 bit - neighbor | 3 bit bond type
-        return bytes(data)
+        return compress(bytes(data), 9)
 
     @classmethod
     def unpack(cls, data: bytes) -> 'MoleculeContainer':
         """
         Unpack from compressed bytes.
         """
+        data = decompress(data)
         from ..files._mdl.mol import common_isotopes
         mol = cls()
         atoms = mol._atoms
@@ -710,8 +728,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         cis_trans_stereo = mol._cis_trans_stereo
 
         neighbors = {}
-        for o in range(unpack_from('H', data, 0)[0]):
-            nn, sia, x, y, hcr = unpack_from('2H2eB', data, 2 + 9 * o)
+        acs, cts = unpack_from('HB', data, 0)
+        cts |= (acs & 0x0f) << 8
+        shift = 3
+        for o in range(acs >> 4):
+            nn, sia, x, y, hcr = unpack_from('2H2eB', data, shift + 9 * o)
             n = nn >> 4
             neighbors[n] = nn & 0x0f
             # stereo
@@ -738,7 +759,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             plane[n] = (x, y)
 
         bc = sum(neighbors.values()) // 2
-        shift = 2 + 9 * len(neighbors)
+        shift += 9 * len(neighbors)
         connections = []
         for o in range(bc):
             nn = unpack_from('I', data, shift + 3 * o)[0]
@@ -766,6 +787,11 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     cbn[m] = bonds[m][n]
                 else:
                     cbn[m] = Bond(next(ords))
+
+        shift += 2 * ceil(bc / 5)
+        for o in range(cts):  # cis/trans
+            ct = unpack_from('I', data, shift + 4 * o)[0]
+            cis_trans_stereo[(ct >> 20, (ct >> 8) & 0x0fff)] = ct & 0x01
 
         for n in neighbors:
             mol._calc_hybridization(n)
