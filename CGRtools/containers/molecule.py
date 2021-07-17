@@ -606,6 +606,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             * Atoms neighbors should be in range 0-15
 
         Format specification:
+        Big endian bytes order
         12 bit - number of atoms
         12 bit - cis/trans stereo block size
         Atom block 9 bytes (repeated):
@@ -650,12 +651,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                          3 * self.bonds_count +  # connection table
                          2 * ceil(self.bonds_count / 5) +  # bonds order
                          4 * len(cis_trans_stereo))
-        pack_into('HB', data, 0, (self.atoms_count << 4) | (len(cis_trans_stereo) >> 8), len(cis_trans_stereo) & 0xff)
+        pack_into('>HB', data, 0, (self.atoms_count << 4) | (len(cis_trans_stereo) >> 8), len(cis_trans_stereo) & 0xff)
         shift = 3
 
         neighbors = []
         bonds_pack = []
         seen = set()
+        hold = []
         for o, (n, a) in enumerate(self._atoms.items()):
             bs = bonds[n]
             neighbors.extend(bs)
@@ -686,25 +688,27 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 else:
                     sia |= 0x2000
 
-            pack_into('2H2eB', data, shift + 9 * o,
-                      (n << 4) | len(bs),  # 12 bit - atom number | 4 bit - number of neighbors
-                      sia, *plane[n], hcr)
+            hold.append((shift + 9 * o, (n << 4) | len(bs), sia, *plane[n], hcr))
 
-        shift += 9 * self.atoms_count
-        ngb = iter(neighbors)
-        for o, (n1, n2) in enumerate(zip_longest(ngb, ngb)):
+        shift += 9 * self.atoms_count + 3 * self.bonds_count - 4
+        ngb = iter(reversed(neighbors))
+        for o, (n2, n1) in enumerate(zip_longest(ngb, ngb)):
             # 12 bit + 12 bit
-            pack_into('I', data, shift + 3 * o, (n1 << 12) | n2)
+            pack_into('>I', data, shift - 3 * o, (n1 << 12) | n2)
+
+        # pack after connection table for preventing override!
+        for x in hold:
+            pack_into('>2H2eB', data, *x)
 
         # 16 bit - 5 bonds packing. 1 bit empty.
-        shift += 3 * self.bonds_count
+        shift += 4
         bp = iter(bonds_pack)
         for o, (b1, b2, b3, b4, b5) in enumerate(zip_longest(bp, bp, bp, bp, bp, fillvalue=0)):
-            pack_into('H', data, shift + 2 * o, (b1 << 12) | (b2 << 9) | (b3 << 6) | (b4 << 3) | b5)
+            pack_into('>H', data, shift + 2 * o, (b1 << 12) | (b2 << 9) | (b3 << 6) | (b4 << 3) | b5)
 
         shift += 2 * ceil(self.bonds_count / 5)
         for o, ((n, m), s) in enumerate(cis_trans_stereo.items()):
-            pack_into('I', data, shift + 4 * o, (n << 20) | (m << 8) | s)
+            pack_into('>I', data, shift + 4 * o, (n << 20) | (m << 8) | s)
 
         # 16 bit - neighbor | 3 bit bond type
         return compress(bytes(data), 9)
@@ -714,7 +718,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         Unpack from compressed bytes.
         """
-        data = decompress(data)
+        data = memoryview(decompress(data))
         from ..files._mdl.mol import common_isotopes
         mol = cls()
         atoms = mol._atoms
@@ -728,11 +732,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         cis_trans_stereo = mol._cis_trans_stereo
 
         neighbors = {}
-        acs, cts = unpack_from('HB', data, 0)
-        cts |= (acs & 0x0f) << 8
+        acs = int.from_bytes(data[:3], 'big')
         shift = 3
-        for o in range(acs >> 4):
-            nn, sia, x, y, hcr = unpack_from('2H2eB', data, shift + 9 * o)
+        for o in range(acs >> 12):
+            nn, sia, x, y, hcr = unpack_from('>2H2eB', data, shift + 9 * o)
             n = nn >> 4
             neighbors[n] = nn & 0x0f
             # stereo
@@ -759,17 +762,17 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             plane[n] = (x, y)
 
         bc = sum(neighbors.values()) // 2
-        shift += 9 * len(neighbors)
+        shift += 9 * len(neighbors) - 1
         connections = []
         for o in range(bc):
-            nn = unpack_from('I', data, shift + 3 * o)[0]
+            nn = unpack_from('>I', data, shift + 3 * o)[0]
             connections.append((nn >> 12) & 0x0fff)
             connections.append(nn & 0x0fff)
 
-        shift += 3 * bc
+        shift += 1 + 3 * bc
         orders = []
         for o in range(ceil(bc / 5)):
-            bb = unpack_from('H', data, shift + 2 * o)[0]
+            bb = unpack_from('>H', data, shift + 2 * o)[0]
             orders.append(((bb >> 12) & 0x07) + 1)
             orders.append(((bb >> 9) & 0x07) + 1)
             orders.append(((bb >> 6) & 0x07) + 1)
@@ -789,8 +792,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     cbn[m] = Bond(next(ords))
 
         shift += 2 * ceil(bc / 5)
-        for o in range(cts):  # cis/trans
-            ct = unpack_from('I', data, shift + 4 * o)[0]
+        for o in range(acs & 0x0fff):  # cis/trans
+            ct = unpack_from('>I', data, shift + 4 * o)[0]
             cis_trans_stereo[(ct >> 20, (ct >> 8) & 0x0fff)] = ct & 0x01
 
         for n in neighbors:
