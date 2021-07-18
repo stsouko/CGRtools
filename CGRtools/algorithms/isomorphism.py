@@ -18,7 +18,7 @@
 #
 from abc import abstractmethod
 from CachedMethods import cached_property
-from collections import defaultdict
+from collections import defaultdict, deque
 from itertools import permutations
 from typing import Dict, Iterator, Any, Set
 from .._functions import lazy_product
@@ -59,24 +59,28 @@ class Isomorphism:
     def __ge__(self, other):
         return other.is_substructure(self)
 
-    def is_substructure(self, other) -> bool:
+    def is_substructure(self, other, *, optimize: bool = True) -> bool:
         """
         Test self is substructure of other
+
+        :param optimize: Morgan weights based automorphism preventing.
         """
         try:
-            next(self.get_mapping(other))
+            next(self.get_mapping(other, optimize=optimize, automorphism_filter=False))
         except StopIteration:
             return False
         return True
 
-    def is_equal(self, other) -> bool:
+    def is_equal(self, other, *, optimize: bool = True) -> bool:
         """
         Test self is same structure as other
+
+        :param optimize: Morgan weights based automorphism preventing.
         """
         if len(self) != len(other):
             return False
         try:
-            next(self.get_mapping(other))
+            next(self.get_mapping(other, optimize=optimize, automorphism_filter=False))
         except StopIteration:
             return False
         return True
@@ -152,12 +156,12 @@ class Isomorphism:
         size = len(linear_query) - 1
         order_depth = {v[0]: k for k, v in enumerate(linear_query)}
 
-        stack = []
+        stack = deque()
         path = []
         mapping = {}
         reversed_mapping = {}
 
-        s_n, s_atom = linear_query[0]
+        s_n, _, s_atom, _ = linear_query[0]
         for n, o_atom in o_atoms.items():
             if n in scope and s_atom == o_atom:
                 stack.append((n, 0))
@@ -214,7 +218,7 @@ class Isomorphism:
             seen.add(start)
             stack = [(n, start, atoms[n], bond) for n, bond in sorted(bonds[start].items(), reverse=True,
                                                                       key=lambda x: atoms_frequencies[x[0]])]
-            order = [(start, atoms[start])]
+            order = [(start, None, atoms[start], None)]
             components.append(order)
 
             while stack:
