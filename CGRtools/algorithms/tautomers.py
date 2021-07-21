@@ -41,9 +41,9 @@ class Tautomers:
         def key(m):  # inspired from https://github.com/mcs07/MolVS/
             # more aromatic rings is better
             # less charged atoms is better
-            # keto-enol rule-based. not implemented
+            # lower Huckel energy is better
             # smiles alphabetically sorted (descent). bad rule!
-            return len(m.aromatic_rings), -sum(x != 0 for x in m._charges.values()), str(m)
+            return len(m.aromatic_rings), -sum(x != 0 for x in m._charges.values()), -m.huckel_energy, str(m)
 
         canon = max(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
                                              keto_enol=keto_enol, limit=limit), key=key)
