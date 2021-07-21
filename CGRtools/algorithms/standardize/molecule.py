@@ -1236,11 +1236,11 @@ class Standardize:
 
         #
         #    |           |
-        #  - N - ? >> - [N+] - ?
+        #  - N -   >> - [N+] -
         #    \\          |
         #    [O,N]      [O,N-]
         #
-        atoms = ({'atom': 'N', 'neighbors': (3, 4), 'hybridization': 2},
+        atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 2},
                  {'atom': ListElement(['O', 'N']), 'hybridization': 2})
         bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 1, 'hybridization': 1}, 2: {'charge': -1, 'hybridization': 1}}
@@ -1363,6 +1363,10 @@ class Standardize:
         atom_fix = {2: {'hybridization': 1}, 3: {'hybridization': 2}}
         bonds_fix = ((1, 2, 1), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # todo:
+        # [C;a:10][N;H:2][N:3]=[C:4]1[C:5]=,:[C:6][C:7](=[O:1])[C:8]=,:[C:9]1
+        # [C;a:10][N;H:2][N:3]=[C:4]1[C:5](=[O:1])[C:6]=,:[C:7]-,:[C:8]=,:[C:9]1
 
         #
         #       A                   A
