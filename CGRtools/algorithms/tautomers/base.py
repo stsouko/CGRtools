@@ -24,16 +24,16 @@ def _stripped_rules():
     from ...containers import QueryContainer
     rules = []
 
-    # Oxo-acid salts. [O,S,Se-]-[C,N,P,S,Cl,Se,Br,I]=O
+    # Oxo-acid salts. [O,S,Se-]-[P,S,Cl,Se,Br,I]=O
     q = QueryContainer()
     q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
-    q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
+    q.add_atom(ListElement(['P', 'S', 'Cl', 'Se', 'Br', 'I']))
     q.add_atom('O')
     q.add_bond(1, 2, 1)
     q.add_bond(2, 3, 2)
     rules.append(q)
 
-    # Phenole salts or alcoholates. [O,S,Se-]-Ar
+    # Phenole salts, alcoholates, carbon acids, nitrite. [O,S,Se-]-Ar
     q = QueryContainer()
     q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
     q.add_atom(ListElement(['C', 'N']))

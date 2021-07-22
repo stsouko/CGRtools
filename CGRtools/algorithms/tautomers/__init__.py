@@ -19,9 +19,9 @@
 #
 from CachedMethods import cached_property
 from collections import deque, defaultdict
-from itertools import product, chain, repeat
+from itertools import product, chain, repeat, combinations
 from lazy_object_proxy import Proxy
-from typing import TYPE_CHECKING, Iterator, Union
+from typing import TYPE_CHECKING, Iterator, Union, List
 from .acid import rules as acid_rules, stripped_rules as stripped_acid_rules
 from .base import rules as base_rules, stripped_rules as stripped_base_rules
 from ...exceptions import InvalidAromaticRing
@@ -51,8 +51,29 @@ sugar_group = Proxy(_sugar_group)
 class Tautomers:
     __slots__ = ()
 
-    def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True,
-                    zwitter=True, keto_enol=True, limit: int = 1000) -> bool:
+    def neutralize(self, *, fix_stereo=True, logging=False) -> Union[bool, List[int]]:
+        """
+        Convert organic salts to neutral form if possible. Only one possible form used for charge unbalanced structures.
+
+        :param logging: return changed atoms list
+        """
+        try:
+            mol, changed = next(self._neutralize())
+        except StopIteration:
+            if logging:
+                return []
+            return False
+
+        self._charges.update(mol._charges)
+        self._hydrogens.update(mol._hydrogens)
+        self.flush_cache()
+        if fix_stereo:
+            self._fix_stereo()
+        if logging:
+            return changed
+        return True
+
+    def tautomerize(self: 'MoleculeContainer', *, prepare_molecules=True, limit: int = 1000) -> bool:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
         """
@@ -63,8 +84,7 @@ class Tautomers:
             # smiles alphabetically sorted (descent). bad rule!
             return len(m.aromatic_rings), -sum(x != 0 for x in m._charges.values()), -m.huckel_energy, str(m)
 
-        canon = max(self.enumerate_tautomers(prepare_molecules=prepare_molecules, full=False, zwitter=zwitter,
-                                             keto_enol=keto_enol, limit=limit), key=key)
+        canon = max(self.enumerate_tautomers(prepare_molecules=prepare_molecules, limit=limit), key=key)
         if canon != self:  # attach state of canonic tautomer to self
             # atoms, radicals state, parsed_mapping and plane are unchanged
             self._bonds = canon._bonds
@@ -199,6 +219,50 @@ class Tautomers:
                         counter += 1
                         if counter == limit:
                             return
+
+    def _neutralize(self):
+        donors = []
+        acceptors = []
+        for q in stripped_acid_rules:
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                donors.append(mapping[1])
+        for q in stripped_base_rules:
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                acceptors.append(mapping[1])
+
+        if not donors or not acceptors:
+            return
+        elif len(donors) > len(acceptors):
+            copy = self.copy()
+            for a in acceptors:
+                copy._hydrogens[a] += 1
+                copy._charges[a] += 1
+            for c in combinations(donors, len(acceptors)):
+                mol = copy.copy()
+                for d in c:
+                    mol._hydrogens[d] -= 1
+                    mol._charges[d] -= 1
+                yield mol, acceptors + list(c)
+        elif len(donors) < len(acceptors):
+            copy = self.copy()
+            for d in donors:
+                copy._hydrogens[d] -= 1
+                copy._charges[d] -= 1
+            for c in combinations(acceptors, len(donors)):
+                mol = copy.copy()
+                for a in c:
+                    mol._hydrogens[a] += 1
+                    mol._charges[a] += 1
+                yield mol, donors + list(c)
+        else:
+            mol = self.copy()
+            for d in donors:
+                mol._hydrogens[d] -= 1
+                mol._charges[d] -= 1
+            for a in acceptors:
+                mol._hydrogens[a] += 1
+                mol._charges[a] += 1
+            yield mol, donors + acceptors
 
     def _enumerate_keto_enol_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
         sssr = self.sssr
