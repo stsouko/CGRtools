@@ -465,10 +465,10 @@ class Tautomers:
         q.add_bond(2, 3, 2)
         rules.append(q)
 
-        # Phenole salts. [O,S,Se-]-Ar
+        # Phenole salts or alcoholates. [O,S,Se-]-Ar
         q = query.QueryContainer()
         q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
-        q.add_atom(ListElement(['C', 'N']), hybridization=4)
+        q.add_atom(ListElement(['C', 'N']))
         q.add_bond(1, 2, 1)
         rules.append(q)
 
