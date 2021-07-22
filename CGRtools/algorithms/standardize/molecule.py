@@ -435,12 +435,12 @@ class Standardize:
                     atoms[m].valence_rules(charges[m], False, sum(int(y) for x, y in bonds[m].items() if x != l) + b)
                 except ValenceError:
                     continue
-                for n, m, b in path:
-                    bonds[n][m]._Bond__order = b
                 radicals[n] = radicals[m] = False
                 rads.discard(m)
                 hs.add(n)
                 hs.update(x for _, x, _ in path)
+                for n, m, b in path:
+                    bonds[n][m]._Bond__order = b
                 break  # path found
             # path not found. atom n keep as is
         while entries and exits:
@@ -452,12 +452,12 @@ class Standardize:
                                            sum(int(y) for x, y in bonds[m].items() if x != l) + b)
                 except ValenceError:
                     continue
-                for n, m, b in path:
-                    bonds[n][m]._Bond__order = b
                 charges[n] = charges[m] = 0
                 exits.discard(m)
                 hs.add(n)
                 hs.update(x for _, x, _ in path)
+                for n, m, b in path:
+                    bonds[n][m]._Bond__order = b
                 break  # path from negative atom to positive atom found.
             # path not found. keep negative atom n as is
         if hs:
