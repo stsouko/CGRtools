@@ -62,7 +62,7 @@ setup(
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.1',
     cmdclass=cmd_class,
-    install_requires=['CachedMethods>=0.1.4,<0.2'],
+    install_requires=['CachedMethods>=0.1.4,<0.2', 'lazy_object_proxy>=1.6'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50'],
                     'pytest': ['pytest'], 'screening': ['StructureFingerprint>=2.0']},
     package_data={'CGRtools.algorithms.calculate2d': ['clean2d.js']},

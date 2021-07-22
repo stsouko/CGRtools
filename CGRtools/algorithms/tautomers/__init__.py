@@ -17,17 +17,35 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import class_cached_property, cached_property
+from CachedMethods import cached_property
 from collections import deque, defaultdict
 from itertools import product, chain, repeat
+from lazy_object_proxy import Proxy
 from typing import TYPE_CHECKING, Iterator, Union
-from ..containers import query  # cyclic imports resolve
-from ..exceptions import InvalidAromaticRing
-from ..periodictable import ListElement
+from .acid import rules as acid_rules, stripped_rules as stripped_acid_rules
+from .base import rules as base_rules, stripped_rules as stripped_base_rules
+from ...exceptions import InvalidAromaticRing
+from ...periodictable import ListElement
 
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
+
+
+def _sugar_group():
+    from ...containers import QueryContainer
+    q = QueryContainer()
+    q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
+    q.add_atom(ListElement(['O', 'N']))  # ketone
+    q.add_atom('C', hybridization=1, heteroatoms=1)
+    q.add_atom('C', hybridization=2, heteroatoms=1)
+    q.add_bond(1, 3, 1)
+    q.add_bond(3, 4, 1)
+    q.add_bond(2, 4, 2)
+    return q
+
+
+sugar_group = Proxy(_sugar_group)
 
 
 class Tautomers:
@@ -38,7 +56,7 @@ class Tautomers:
         """
         Convert structure to canonical tautomeric form. Return True if structure changed.
         """
-        def key(m):  # inspired from https://github.com/mcs07/MolVS/
+        def key(m):
             # more aromatic rings is better
             # less charged atoms is better
             # lower Huckel energy is better
@@ -87,18 +105,37 @@ class Tautomers:
             copy.kekule()
             copy.implicify_hydrogens()
 
-        ster = copy.copy()
-        ster.thiele()
+        out = copy.copy()
+        out.thiele()
         if has_stereo:
-            ster._atoms_stereo.update(atoms_stereo)
-            ster._allenes_stereo.update(allenes_stereo)
-            ster._cis_trans_stereo.update(cis_trans_stereo)
-            ster._fix_stereo()
-        yield ster
+            out._atoms_stereo.update(atoms_stereo)
+            out._allenes_stereo.update(allenes_stereo)
+            out._cis_trans_stereo.update(cis_trans_stereo)
+            out._fix_stereo()
+        yield out
 
-        seen = {copy: None}
+        thiele = copy.copy()
+        thiele.thiele(fix_tautomers=False, fix_metal_organics=False)
+        seen = {thiele: None}
         queue = deque([copy])
         counter = 1
+        while queue:  # first of all try to neutralize
+            current = queue.popleft()
+            for mol in current._enumerate_zwitter_tautomers(False):
+                if mol not in seen:
+                    seen[mol] = None
+                    queue.append(mol)
+                    if has_stereo:
+                        mol = mol.copy()  # prevent seen hashtable breaking
+                        mol._atoms_stereo.update(atoms_stereo)
+                        mol._allenes_stereo.update(allenes_stereo)
+                        mol._cis_trans_stereo.update(cis_trans_stereo)
+                        mol._fix_stereo()
+                    yield mol
+                    counter += 1
+                    if counter == limit:
+                        return
+
         while queue:
             current = queue.popleft()
             if keto_enol:
@@ -113,12 +150,12 @@ class Tautomers:
                                 continue
 
                         if has_stereo:
-                            ster = mol.copy()
-                            ster._atoms_stereo.update(atoms_stereo)
-                            ster._allenes_stereo.update(allenes_stereo)
-                            ster._cis_trans_stereo.update(cis_trans_stereo)
-                            ster._fix_stereo()
-                            yield ster
+                            out = mol.copy()
+                            out._atoms_stereo.update(atoms_stereo)
+                            out._allenes_stereo.update(allenes_stereo)
+                            out._cis_trans_stereo.update(cis_trans_stereo)
+                            out._fix_stereo()
+                            yield out
                         else:
                             yield mol
                         counter += 1
@@ -164,6 +201,7 @@ class Tautomers:
                             return
 
     def _enumerate_keto_enol_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
+        sssr = self.sssr
         if '__cached_args_method_neighbors' in self.__dict__:
             neighbors = self.__dict__['__cached_args_method_neighbors']
         else:
@@ -191,13 +229,15 @@ class Tautomers:
             mol._hybridizations[a] = 1
             mol._hybridizations[d] = 2
 
-            # store cache in new molecules for speedup
+            # save cache
+            mol.__dict__['sssr'] = sssr
             mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
             mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
-            if mol.thiele(fix_tautomers=False, fix_metal_organics=False):
-                mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
-                mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
-            yield mol, ket
+            thiele = mol.copy()
+            thiele.__dict__['sssr'] = sssr
+            thiele.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
+            thiele.thiele(fix_tautomers=False, fix_metal_organics=False)
+            yield mol, thiele, ket
 
     def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
         if '__cached_args_method_neighbors' in self.__dict__:
@@ -211,8 +251,8 @@ class Tautomers:
 
         donors = set()
         acceptors = set()
-        for q, acid in chain(zip(self.__acid_rules if full else self.__stripped_acid_rules, repeat(True)),
-                             zip(self.__base_rules if full else self.__stripped_base_rules, repeat(False))):
+        for q, acid in chain(zip(acid_rules if full else stripped_acid_rules, repeat(True)),
+                             zip(base_rules if full else stripped_base_rules, repeat(False))):
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 n = mapping[1]
                 if acid:
@@ -316,7 +356,7 @@ class Tautomers:
     @cached_property
     def _sugar_groups(self: Union['MoleculeContainer', 'Tautomers']):
         ek = []
-        for mapping in self.__sugar_group_rule.get_mapping(self, automorphism_filter=False):
+        for mapping in sugar_group.get_mapping(self, automorphism_filter=False):
             e, k = mapping[1], mapping[2]
             ek.append((e, k))
         return ek
@@ -392,230 +432,6 @@ class Tautomers:
 
             if len(path) % 2 == 0:  # time to yield
                 yield path, not hydrogen
-
-    @class_cached_property
-    def __sugar_group_rule(self):
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
-        q.add_atom(ListElement(['O', 'N']))  # ketone
-        q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=2, heteroatoms=1)
-        q.add_bond(1, 3, 1)
-        q.add_bond(3, 4, 1)
-        q.add_bond(2, 4, 2)
-        return q
-
-    @class_cached_property
-    def __stripped_acid_rules(self):
-        rules = []
-
-        # Ammonia, H-imine,guanidine,amidine. [H][N+]=,-,:
-        q = query.QueryContainer()
-        q.add_atom('N', charge=1, hydrogens=(1, 2, 3, 4))
-        rules.append(q)
-        return rules
-
-    @class_cached_property
-    def __acid_rules(self):
-        rules = list(self.__stripped_acid_rules)
-
-        # Phenoles, [H][O,S,Se]-Ar
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
-        q.add_atom(ListElement(['C', 'N']), hybridization=4)
-        q.add_bond(1, 2, 1)
-        rules.append(q)
-
-        # Oxo-acids. [H][O,S,Se]-[C,N,P,S,Cl,Se,Br,I]=O
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'Se']), neighbors=1)
-        q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
-        q.add_atom('O')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
-        rules.append(q)
-
-        # Nitro acid. [H]O-[N+](=O)[O-]
-        q = query.QueryContainer()
-        q.add_atom('O', neighbors=1)
-        q.add_atom('N', charge=1)
-        q.add_atom('O', charge=-1)
-        q.add_atom('O')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        rules.append(q)
-
-        # Halogen acids
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['F', 'Cl', 'Br', 'I']), neighbors=0)
-        rules.append(q)
-        return rules
-
-    @class_cached_property
-    def __stripped_base_rules(self):
-        rules = []
-
-        # Oxo-acid salts. [O,S,Se-]-[C,N,P,S,Cl,Se,Br,I]=O
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
-        q.add_atom(ListElement(['C', 'N', 'P', 'S', 'Cl', 'Se', 'Br', 'I']))
-        q.add_atom('O')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 2)
-        rules.append(q)
-
-        # Phenole salts or alcoholates. [O,S,Se-]-Ar
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'S', 'Se']), charge=-1)
-        q.add_atom(ListElement(['C', 'N']))
-        q.add_bond(1, 2, 1)
-        rules.append(q)
-
-        # Nitrate. [O-]-[N+](=O)[O-]
-        q = query.QueryContainer()
-        q.add_atom('O', charge=-1)
-        q.add_atom('N', charge=1)
-        q.add_atom('O', charge=-1)
-        q.add_atom('O')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 2)
-        rules.append(q)
-
-        # ions
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['O', 'F', 'Cl', 'Br', 'I']), charge=-1, neighbors=0)
-        rules.append(q)
-        return rules
-
-    @class_cached_property
-    def __base_rules(self):
-        rules = list(self.__stripped_base_rules)
-
-        # Guanidine
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_atom('N')
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 1)
-        rules.append(q)
-
-        # Oxo-guanidine, Amino-guanidine
-        q = query.QueryContainer()
-        q.add_atom('N')
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_atom('N')
-        q.add_atom(ListElement(['O', 'N']))
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 1)
-        q.add_bond(1, 5, 1)
-        rules.append(q)
-
-        # O-alkyl-isourea, S-alkyl-isothiaurea
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C')
-        q.add_atom('N')
-        q.add_atom(ListElement(['O', 'S']), neighbors=2, hybridization=1, heteroatoms=0)
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 1)
-        rules.append(q)
-
-        # Dialkyl imidocarbonate
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C')
-        q.add_atom('O', neighbors=2, heteroatoms=0)
-        q.add_atom('O', neighbors=2, heteroatoms=0)
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        q.add_bond(2, 4, 1)
-        rules.append(q)
-
-        # Amidine
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C', heteroatoms=2)
-        q.add_atom('N')
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        rules.append(q)
-
-        # O-alkyl-imidate (oxazoline)
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C', heteroatoms=2)
-        q.add_atom('O', neighbors=2, heteroatoms=0)
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        rules.append(q)
-
-        # Amidoxime. O-N=C([C,H])N
-        q = query.QueryContainer()
-        q.add_atom('N')
-        q.add_atom('C', heteroatoms=2)
-        q.add_atom('N')
-        q.add_atom('O')
-        q.add_bond(1, 2, 2)
-        q.add_bond(2, 3, 1)
-        q.add_bond(1, 4, 1)
-        rules.append(q)
-
-        # Oxime, Hydrazone. [O,N]-N=C([C,H])[C,H]
-        q = query.QueryContainer()
-        q.add_atom('N')
-        q.add_atom('C', heteroatoms=1, hybridization=2)
-        q.add_atom(ListElement(['N', 'O']))
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 1)
-        rules.append(q)
-
-        # Imine. [C,H]N=C([C,H])[C,H]
-        q = query.QueryContainer()
-        q.add_atom('N', heteroatoms=0)
-        q.add_atom('C', heteroatoms=1, hybridization=2)
-        q.add_bond(1, 2, 2)
-        rules.append(q)
-
-        # Alkyl amine, Hydroxylamine, Hydrazine
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=1)
-        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
-        q.add_bond(1, 2, 1)
-        rules.append(q)
-
-        # Dialkyl amine, Alkyl hydroxylamine, Alkyl hydrazine
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_bond(1, 2, 1)
-        q.add_bond(1, 3, 1)
-        rules.append(q)
-
-        # Trialkyl amine, Dialkyl-hydroxylamine, Dialkyl-hydrazine
-        q = query.QueryContainer()
-        q.add_atom('N')
-        q.add_atom(ListElement(['C', 'O', 'N']), hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_atom('C', hybridization=1, heteroatoms=1)
-        q.add_bond(1, 2, 1)
-        q.add_bond(1, 3, 1)
-        q.add_bond(1, 4, 1)
-        rules.append(q)
-
-        # Pyridine. Imidazole. Triazole. :N:
-        q = query.QueryContainer()
-        q.add_atom('N', hybridization=4, hydrogens=0, neighbors=2)
-        rules.append(q)
-        return rules
 
 
 __all__ = ['Tautomers']
