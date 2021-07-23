@@ -99,25 +99,23 @@ class Tautomers:
             return True
         return False
 
-    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=True, zwitter=True,
-                            keto_enol=True, hetero=True, limit: int = 1000) -> Iterator['MoleculeContainer']:
+    def enumerate_tautomers(self: 'MoleculeContainer', *, prepare_molecules=True, full=False, limit: int = 1000) -> \
+            Iterator['MoleculeContainer']:
         """
         Enumerate all possible tautomeric forms of molecule.
 
         :param prepare_molecules: Standardize structures for correct processing.
-        :param full: Do full enumeration.
-        :param zwitter: Enable acid-base tautomerization
-        :param keto_enol: Enable keto-enol tautomerization
-        :param hetero: Enable hetero arenes tautomerization.
+        :param full: Do zwitter-ions enumeration.
         :param limit: Maximum amount of generated structures.
         """
-        if limit < 2:
-            raise ValueError('limit should be greater or equal 2')
+        if limit < 3:
+            raise ValueError('limit should be greater or equal 3')
 
         atoms_stereo = self._atoms_stereo
         allenes_stereo = self._allenes_stereo
         cis_trans_stereo = self._cis_trans_stereo
         has_stereo = bool(atoms_stereo or allenes_stereo or cis_trans_stereo)
+        counter = 1
 
         copy = self.copy()
         copy.clean_stereo()
@@ -126,7 +124,7 @@ class Tautomers:
             copy.implicify_hydrogens()
 
         out = copy.copy()
-        out.thiele()
+        out.thiele(fix_tautomers=False)
         if has_stereo:
             out._atoms_stereo.update(atoms_stereo)
             out._allenes_stereo.update(allenes_stereo)
@@ -134,14 +132,85 @@ class Tautomers:
             out._fix_stereo()
         yield out
 
-        thiele = copy.copy()
-        thiele.thiele(fix_tautomers=False, fix_metal_organics=False)
-        seen = {thiele: None}
+        # first of all try to neutralize
+        if copy.neutralize(fix_stereo=False):
+            out = copy.copy()
+            out.thiele(fix_tautomers=False)
+            if has_stereo:
+                out._atoms_stereo.update(atoms_stereo)
+                out._allenes_stereo.update(allenes_stereo)
+                out._cis_trans_stereo.update(cis_trans_stereo)
+                out._fix_stereo()
+            yield out
+            counter += 1
+
+        # now we have neutralized structure.
+        # lets iteratively do keto-enol transformations.
         queue = deque([copy])
-        counter = 1
-        while queue:  # first of all try to neutralize
+        new_queue = []  # new_queue - molecules suitable for hetero-arenes enumeration.
+
+        thiele = copy.copy()
+        thiele.thiele(fix_tautomers=False)
+        seen = {thiele: None}
+
+        while queue:
             current = queue.popleft()
-            for mol in current._enumerate_zwitter_tautomers(False):
+            for mol, ket in current._enumerate_keto_enol_tautomers():
+                if mol not in seen:
+                    seen[mol] = current
+                    # prevent carbonyl migration
+                    if current is not copy and not ket:  # enol to ket potentially migrate ketone.
+                        # search alpha hydroxy ketone inversion
+                        before = seen[current]._sugar_groups
+                        if any((k, e) in before for e, k in mol._sugar_groups):
+                            continue
+
+                    if has_stereo:
+                        out = mol.copy()
+                        out._atoms_stereo.update(atoms_stereo)
+                        out._allenes_stereo.update(allenes_stereo)
+                        out._cis_trans_stereo.update(cis_trans_stereo)
+                        out._fix_stereo()
+                        yield out
+                    else:
+                        yield mol
+                    counter += 1
+                    if counter == limit:
+                        return
+                    if len(mol.aromatic_rings) > len(current.aromatic_rings):
+                        # found new aromatic ring. flush queue and start from it.
+                        queue.clear()
+                        queue.append(mol)
+                        break
+                    queue.append(mol)
+
+        # new hetero-arenes also should be included to this list.
+        queue = deque(new_queue)
+        while queue:
+            current = queue.popleft()
+            for mol in current._enumerate_hetero_arene_tautomers():
+                if mol not in seen:
+                    seen[mol] = None
+                    queue.append(mol)
+                    new_queue.append(mol)
+                    if has_stereo:
+                        mol = mol.copy()
+                        mol._atoms_stereo.update(atoms_stereo)
+                        mol._allenes_stereo.update(allenes_stereo)
+                        mol._cis_trans_stereo.update(cis_trans_stereo)
+                        mol._fix_stereo()
+                    yield mol
+                    counter += 1
+                    if counter == limit:
+                        return
+
+        if not full:
+            return
+
+        queue = deque(new_queue)
+        while queue:
+            current = queue.popleft()
+            for mol in current._enumerate_zwitter_tautomers():
                 if mol not in seen:
                     seen[mol] = None
                     queue.append(mol)
@@ -155,70 +224,6 @@ class Tautomers:
                     counter += 1
                     if counter == limit:
                         return
-
-        while queue:
-            current = queue.popleft()
-            if keto_enol:
-                for mol, ket in current._enumerate_keto_enol_tautomers():
-                    if mol not in seen:
-                        seen[mol] = current
-                        # prevent carbonyl migration
-                        if current is not copy and not ket:  # enol to ket potentially migrate ketone.
-                            # search alpha hydroxy ketone inversion
-                            before = seen[current]._sugar_groups
-                            if any((k, e) in before for e, k in mol._sugar_groups):
-                                continue
-
-                        if has_stereo:
-                            out = mol.copy()
-                            out._atoms_stereo.update(atoms_stereo)
-                            out._allenes_stereo.update(allenes_stereo)
-                            out._cis_trans_stereo.update(cis_trans_stereo)
-                            out._fix_stereo()
-                            yield out
-                        else:
-                            yield mol
-                        counter += 1
-                        if counter == limit:
-                            return
-                        if len(mol.aromatic_rings) > len(current.aromatic_rings):
-                            # found new aromatic ring. flush queue and start from it.
-                            queue.clear()
-                            queue.append(mol)
-                            break
-                        queue.append(mol)
-
-            if zwitter:
-                for mol in current._enumerate_zwitter_tautomers(full):
-                    if mol not in seen:
-                        seen[mol] = current
-                        queue.append(mol)
-                        if has_stereo:
-                            mol = mol.copy()  # prevent seen hashtable breaking
-                            mol._atoms_stereo.update(atoms_stereo)
-                            mol._allenes_stereo.update(allenes_stereo)
-                            mol._cis_trans_stereo.update(cis_trans_stereo)
-                            mol._fix_stereo()
-                        yield mol
-                        counter += 1
-                        if counter == limit:
-                            return
-
-            if hetero:
-                for mol in current._enumerate_hetero_arene_tautomers():
-                    if mol not in seen:
-                        seen[mol] = current
-                        queue.append(mol)
-                        if has_stereo:
-                            mol = mol.copy()
-                            mol._atoms_stereo.update(atoms_stereo)
-                            mol._allenes_stereo.update(allenes_stereo)
-                            mol._cis_trans_stereo.update(cis_trans_stereo)
-                            mol._fix_stereo()
-                        yield mol
-                        counter += 1
-                        if counter == limit:
-                            return
 
     def _neutralize(self):
         donors = []
@@ -303,7 +308,8 @@ class Tautomers:
             thiele.thiele(fix_tautomers=False, fix_metal_organics=False)
             yield mol, thiele, ket
 
-    def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers'], full=True):
+    def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
+        sssr = self.sssr
         if '__cached_args_method_neighbors' in self.__dict__:
             neighbors = self.__dict__['__cached_args_method_neighbors']
         else:
@@ -313,16 +319,14 @@ class Tautomers:
         else:
             heteroatoms = self.__dict__['__cached_args_method_heteroatoms'] = {}
 
-        donors = set()
-        acceptors = set()
-        for q, acid in chain(zip(acid_rules if full else stripped_acid_rules, repeat(True)),
-                             zip(base_rules if full else stripped_base_rules, repeat(False))):
+        donors = []
+        acceptors = []
+        for q in acid_rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
-                n = mapping[1]
-                if acid:
-                    donors.add(n)
-                else:
-                    acceptors.add(n)
+                donors.append(mapping[1])
+        for q in base_rules:
+            for mapping in q.get_mapping(self, automorphism_filter=False):
+                acceptors.append(mapping[1])
 
         for d, a in product(donors, acceptors):
             mol = self.copy()
@@ -332,11 +336,13 @@ class Tautomers:
             mol._charges[a] += 1
 
             # store cache in new molecules for speedup
+            mol.__dict__['sssr'] = sssr
             mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
             mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
             yield mol
 
     def _enumerate_hetero_arene_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
+        sssr = self.sssr
         if '__cached_args_method_neighbors' in self.__dict__:
             neighbors = self.__dict__['__cached_args_method_neighbors']
         else:
@@ -413,6 +419,7 @@ class Tautomers:
                 mol._hydrogens[a] = 1
 
                 # store cache in new molecules for speedup
+                mol.__dict__['sssr'] = sssr
                 mol.__dict__['__cached_args_method_neighbors'] = neighbors.copy()
                 mol.__dict__['__cached_args_method_heteroatoms'] = heteroatoms.copy()
                 yield mol
