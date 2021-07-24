@@ -1582,6 +1582,20 @@ class Standardize:
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         #
+        #       OH          O
+        #      /           //
+        # C = C    >> C - C
+        #      \           \
+        #      [O,N]       [O,N]
+        #
+        atoms = ({'atom': 'O', 'neighbors': 1}, {'atom': ListElement(['O', 'N'])},
+                 {'atom': 'C'}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 3, 1), (2, 3, 1), (3, 4, 2))
+        atom_fix = {1: {'hybridization': 2}, 4: {'hybridization': 1}}
+        bonds_fix = ((1, 3, 2), (3, 4, 1))
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
         #         R - N - C                  R - N - C
         #            /    ||                    /    ||
         #  A - Cu = C     :: >>    A - [Cu-] - C     ::

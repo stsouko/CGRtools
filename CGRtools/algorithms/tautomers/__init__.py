@@ -37,8 +37,8 @@ def _sugar_group():
     q = QueryContainer()
     q.add_atom(ListElement(['O', 'N']), hydrogens=(1, 2))  # enol
     q.add_atom(ListElement(['O', 'N']))  # ketone
-    q.add_atom('C', hybridization=1, heteroatoms=1)
-    q.add_atom('C', hybridization=2, heteroatoms=1)
+    q.add_atom('C', hybridization=1)
+    q.add_atom('C', hybridization=2)
     q.add_bond(1, 3, 1)
     q.add_bond(3, 4, 1)
     q.add_bond(2, 4, 2)
