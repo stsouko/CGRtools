@@ -206,13 +206,13 @@ class Tautomers:
 
         # lets iteratively do keto-enol transformations.
         rings_count = len(thiele.aromatic_rings)  # increase rings strategy.
-        queue = deque([copy])
+        queue = deque([(copy, thiele)])
         new_queue = [thiele]  # new_queue - molecules suitable for hetero-arenes enumeration.
         # store aromatic form to seen. kekule forms not suitable for duplicate checking.
         seen = {thiele: None}  # value is parent molecule - required for preventing migrations in sugars.
 
         while queue:
-            current = queue.popleft()
+            current, thiele_current = queue.popleft()
             for mol, ket in current._enumerate_keto_enol_tautomers():
                 thiele = mol.copy()
                 # set cache to child structures.
@@ -240,7 +240,7 @@ class Tautomers:
                         continue
                     elif rc > rings_count:  # higher aromaticity found. flush old queues.
                         rings_count = rc
-                        queue = deque([mol])
+                        queue = deque([(mol, thiele)])
                         new_queue = [thiele]
                         copy = mol  # new entry point.
                         if has_stereo:
@@ -251,13 +251,13 @@ class Tautomers:
                             thiele._fix_stereo()
                         yield thiele
                         break
-                    elif current is not copy and not ket:  # prevent carbonyl migration in sugars. skip entry point.
+                    elif current is not copy and ket:  # prevent carbonyl migration in sugars. skip entry point.
                         # search alpha hydroxy ketone inversion
-                        before = seen[current]._sugar_groups
+                        before = seen[thiele_current]._sugar_groups
                         if any((k, e) in before for e, k in mol._sugar_groups):
                             continue
 
-                    queue.append(mol)
+                    queue.append((mol, thiele))
                     new_queue.append(thiele)
                     if has_stereo:
                         thiele = thiele.copy()
@@ -534,7 +534,7 @@ class Tautomers:
                         continue
                     elif n in seen:  # aromatic ring destruction. pyridine double bonds shift
                         if not stack:
-                            path = [None]
+                            path = []
                     elif b.order == bond and atoms[n].atomic_number == 6:
                         hb = hybridizations[n]
                         if hb == 2:  # grow up
@@ -549,7 +549,7 @@ class Tautomers:
                             cp.append((current, n, 2))
                             yield cp, False
 
-            if len(path) % 2 == 0:  # time to yield
+            if path and len(path) % 2 == 0:  # time to yield
                 yield path, hydrogen
 
 
