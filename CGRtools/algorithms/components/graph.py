@@ -196,7 +196,7 @@ class GraphComponents:
                 if b != 8:
                     ngb[m] = b
             bonds[n] = FrozenDict(ngb)
-        return FrozenDict(bonds)
+        return bonds
 
     @cached_property
     def not_special_connectivity(self) -> Dict[int, FrozenSet[int]]:
@@ -210,7 +210,7 @@ class GraphComponents:
                 if b != 8:
                     ngb.add(m)
             bonds[n] = frozenset(ngb)
-        return FrozenDict(bonds)
+        return bonds
 
     @cached_property
     def atoms_rings(self) -> Dict[int, Tuple[Tuple[int, ...]]]:
