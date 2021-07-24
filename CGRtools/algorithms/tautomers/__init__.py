@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2020 Nail Samikaev <samikaevn@yandex.ru>
 #  Copyright 2020, 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2020 Nail Samikaev <samikaevn@yandex.ru>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -146,43 +146,50 @@ class Tautomers:
 
         # now we have neutralized structure.
         # lets iteratively do keto-enol transformations.
-        queue = deque([copy])
-        new_queue = []  # new_queue - molecules suitable for hetero-arenes enumeration.
-
+        # prepare aromatic form for hetero-arenes and zwitter-ions enumeration
         thiele = copy.copy()
         thiele.thiele(fix_tautomers=False)
-        seen = {thiele: None}
+        rings_count = len(thiele.aromatic_rings)  # increase rings strategy.
+        queue = deque([copy])
+        new_queue = [thiele]  # new_queue - molecules suitable for hetero-arenes enumeration.
+        # store aromatic form to seen. kekule forms not suitable for duplicate checking.
+        seen = {thiele: None}  # value is parent molecule - required for preventing migrations in sugars.
 
         while queue:
             current = queue.popleft()
             for mol, ket in current._enumerate_keto_enol_tautomers():
-                if mol not in seen:
-                    seen[mol] = current
-                    # prevent carbonyl migration
-                    if current is not copy and not ket:  # enol to ket potentially migrate ketone.
+                thiele_mol = mol.copy()
+                thiele_mol.thiele(fix_tautomers=False)
+                if thiele_mol not in seen:
+                    seen[thiele_mol] = current
+                    rc = len(thiele_mol.aromatic_rings)
+                    if rc < rings_count:  # skip aromatic rings destruction
+                        continue
+                    elif rc > rings_count:  # higher aromaticity found. flush old queues.
+                        rings_count = rc
+                        queue = deque([mol])
+                        new_queue = [thiele_mol]
+                        copy = mol  # new entry point.
+                        break
+                    elif current is not copy and not ket:  # prevent carbonyl migration in sugars. skip entry point.
                         # search alpha hydroxy ketone inversion
                         before = seen[current]._sugar_groups
                         if any((k, e) in before for e, k in mol._sugar_groups):
                             continue
 
+                    queue.append(mol)
+                    new_queue.append(thiele_mol)
                     if has_stereo:
-                        out = mol.copy()
-                        out._atoms_stereo.update(atoms_stereo)
-                        out._allenes_stereo.update(allenes_stereo)
-                        out._cis_trans_stereo.update(cis_trans_stereo)
-                        out._fix_stereo()
-                        yield out
-                    else:
-                        yield mol
+                        thiele_mol = thiele_mol.copy()
+                        thiele_mol._atoms_stereo.update(atoms_stereo)
+                        thiele_mol._allenes_stereo.update(allenes_stereo)
+                        thiele_mol._cis_trans_stereo.update(cis_trans_stereo)
+                        thiele_mol._fix_stereo()
+                    yield thiele_mol
+
                     counter += 1
                     if counter == limit:
                         return
-                    if len(mol.aromatic_rings) > len(current.aromatic_rings):
-                        # found new aromatic ring. flush queue and start from it.
-                        queue.clear()
-                        queue.append(mol)
-                        break
-                    queue.append(mol)
 
         # new hetero-arenes also should be included to this list.
         queue = deque(new_queue)
