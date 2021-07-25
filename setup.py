@@ -55,7 +55,7 @@ if find_spec('cython'):
         def finalize_options(self):
             super().finalize_options()
             from Cython.Build import cythonize
-            self.distribution.ext_modules = cythonize(self.distribution.ext_modules)
+            self.distribution.ext_modules = cythonize(self.distribution.ext_modules, language_level=3)
 
     cmd_class['build'] = _build
 
