@@ -172,6 +172,8 @@ class Tautomers:
         else:
             yield thiele
 
+        seen = {thiele: None}  # value is parent molecule - required for preventing migrations in sugars.
+
         # first of all try to neutralize
         if copy.neutralize(fix_stereo=False):
             thiele = copy.copy()
@@ -203,13 +205,13 @@ class Tautomers:
             else:
                 yield thiele
             counter += 1
+            seen[thiele] = None
 
         # lets iteratively do keto-enol transformations.
         rings_count = len(thiele.aromatic_rings)  # increase rings strategy.
         queue = deque([(copy, thiele)])
         new_queue = [thiele]  # new_queue - molecules suitable for hetero-arenes enumeration.
         # store aromatic form to seen. kekule forms not suitable for duplicate checking.
-        seen = {thiele: None}  # value is parent molecule - required for preventing migrations in sugars.
 
         while queue:
             current, thiele_current = queue.popleft()

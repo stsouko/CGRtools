@@ -25,11 +25,10 @@ def test_keto_enol_2h_pyrrole():
     2H‐pyrrole. [N:1]=1[C:2][C:3]=,:[C:4][C:5]=1
     """
     for t, v in zip(['C1C=CC=N1', 'C1N=CC2=C1C=CC=C2'], ['c1cc[nH]c1', 'c12c(cccc1)c[nH]c2']):
-        t = smiles(t)
-        t.thiele()
-        t = list(t.enumerate_tautomers())
+        s = smiles(t)
+        t = list(s.enumerate_tautomers())
         assert len(t) == 2, ' '.join(str(x) for x in t)
-        assert t[1] == smiles(v)
+        assert t == {s, smiles(v)}
 
 
 def test_acid_protonated_nitrogen():
@@ -39,10 +38,11 @@ def test_acid_protonated_nitrogen():
     for t, v in zip_longest(['C=[NH2+].[Cl-]', 'C=[NH+]C.[Cl-]', 'C[NH3+].[Cl-]', 'C[NH2+]C.[Cl-]', 'C[NH1+](C)C.[Cl-]',
                              '[NH4+].[Cl-]', 'C=[N+](C)C.[Cl-]', 'C[N+](C)(C)C.[Cl-]'],
                             ['C=N.Cl', 'C=NC.Cl', 'CN.Cl', 'CNC.Cl', 'CN(C)C.Cl', 'N.Cl']):
-        t = list(smiles(t).enumerate_tautomers())
+        s = smiles(t)
+        t = set(s.enumerate_tautomers())
         if v:
             assert len(t) == 2, ' '.join(str(x) for x in t)
-            assert t[1] == smiles(v)
+            assert t == {s, smiles(v)}
         else:
             assert len(t) == 1
 
@@ -52,7 +52,8 @@ def test_base_nitrogen():
                              'CN(C)C(=NN)N(C)C.Cl', 'COC(N)=N.Cl', 'CSC(N)=N.Cl', 'COC(OC)=N.Cl', 'COC(C)=N.Cl',
                              'CNN.Cl', 'CN.Cl',
                              'N.Cl', 'N1C=CC=C1.Cl'],
-                            [('N1C=CN=N1.Cl', 'N1C=CN=[NH+]1.[Cl-]', 'N1C=C[NH+]=N1.[Cl-]'),
+                            [('N1N=NC=C1.Cl', 'N1=CC=NN1.Cl', '[NH+]=1NC=CN=1.[Cl-]', 'N1=[NH+]C=CN1.[Cl-]',
+                              'N1=CC=[NH+]N1.[Cl-]'),
                              ('NC(N)=N.Cl', 'NC(N)=[NH2+].[Cl-]'),
                              ('CN(C)C(=NO)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]O.[Cl-]'),
                              ('CN(C)C(=NC)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]C.[Cl-]'),
@@ -62,15 +63,14 @@ def test_base_nitrogen():
                              ('COC(C)=N.Cl', 'COC(C)=[NH2+].[Cl-]'),
                              ('CNN.Cl', 'CN[NH3+].[Cl-]', 'C[NH2+]N.[Cl-]'),
                              ('CN.Cl', 'C[NH3+].[Cl-]')]):
-        t = smiles(t)
-        t.thiele()
-        t = set(t.enumerate_tautomers())
+        s = smiles(t)
+        t = set(s.enumerate_tautomers())
         if v:
             assert len(t) == len(v), ' '.join(str(x) for x in t)
             vs = set()
             for x in v:
                 x = smiles(x)
-                x.thiele()
+                x.thiele(fix_tautomers=False)
                 vs.add(x)
             assert t == vs, ' '.join(str(x) for x in t) + ' != ' + ' '.join(str(x) for x in vs)
         else:
