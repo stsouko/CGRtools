@@ -98,30 +98,6 @@ class StandardizeReaction:
             self.flush_cache()
         return total
 
-    def neutralize(self: 'ReactionContainer', *, logging=False) -> Union[bool, Tuple[int, Tuple[int, ...]]]:
-        """
-        Transform biradical or dipole resonance structures into neutral form. Works only for Molecules.
-
-        :param logging: return log from molecules with index of molecule at first position.
-            Otherwise return True if these groups found in any molecule.
-        """
-        if logging:
-            total = []
-        else:
-            total = False
-        for n, m in enumerate(self.molecules()):
-            if not isinstance(m, molecule.MoleculeContainer):
-                raise TypeError('Only Molecules supported')
-            out = m.neutralize(logging=logging)
-            if out:
-                if logging:
-                    total.extend((n, tuple(x)) for x in out)
-                else:
-                    total = True
-        if total:
-            self.flush_cache()
-        return total
-
     def fix_mapping(self: Union['ReactionContainer', 'StandardizeReaction'], *, logging: bool = False) -> bool:
         """
         Fix atom-to-atom mapping of some functional groups. Return True if found AAM errors.

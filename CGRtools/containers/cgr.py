@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2017-2020 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2017-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -164,14 +164,16 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
         copy._p_charges = self._p_charges.copy()
         return copy
 
-    def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['CGRContainer',
-                                                                                'query.QueryCGRContainer']:
+    def substructure(self, atoms, *, as_query: bool = False, skip_neighbors_marks=False,
+                     skip_hybridizations_marks=False, **kwargs) -> Union['CGRContainer', 'query.QueryCGRContainer']:
         """
         create substructure containing atoms from atoms list
 
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
         :param as_query: return Query object based on graph substructure
+        :param skip_neighbors_marks: Don't set neighbors count marks on substructured queries
+        :param skip_hybridizations_marks: Don't set hybridizations marks on substructured queries
         """
         sub, atoms = super().substructure(atoms, graph_type=query.QueryCGRContainer if as_query else self.__class__,
                                           atom_type=DynamicQueryElement if as_query else DynamicElement,
@@ -182,19 +184,26 @@ class CGRContainer(Graph, CGRSmiles, CGRComponents, DepictCGR, Calculate2DCGR, X
         sub._p_radicals = {n: spr[n] for n in atoms}
 
         if as_query:
-            sh = self._hybridizations
-            sph = self._p_hybridizations
-            ngb = self.neighbors
+            if skip_hybridizations_marks:
+                sub._hybridizations = {n: () for n in atoms}
+                sub._p_hybridizations = {n: () for n in atoms}
+            else:
+                sh = self._hybridizations
+                sph = self._p_hybridizations
+                sub._hybridizations = {n: (sh[n],) for n in atoms}
+                sub._p_hybridizations = {n: (sph[n],) for n in atoms}
 
-            sub._hybridizations = {n: (sh[n],) for n in atoms}
-            sub._p_hybridizations = {n: (sph[n],) for n in atoms}
-
-            sub._neighbors = cn = {}
-            sub._p_neighbors = cpn = {}
-            for n in atoms:
-                sn, pn = ngb(n)
-                cn[n] = (sn,)
-                cpn[n] = (pn,)
+            if skip_neighbors_marks:
+                sub._neighbors = {n: () for n in atoms}
+                sub._p_neighbors = {n: () for n in atoms}
+            else:
+                ngb = self.neighbors
+                sub._neighbors = cn = {}
+                sub._p_neighbors = cpn = {}
+                for n in atoms:
+                    sn, pn = ngb(n)
+                    cn[n] = (sn,)
+                    cpn[n] = (pn,)
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
             # recalculate query marks

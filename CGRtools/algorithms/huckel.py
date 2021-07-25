@@ -46,7 +46,7 @@ class Huckel:
     __slots__ = ()
 
     @cached_property
-    def huckel_pi_electrons_energy(self) -> float:
+    def huckel_energy(self) -> float:
         """
         Huckel method based Pi electrons energy calculator.
         Parametrized for B C N O S.
@@ -70,7 +70,7 @@ class Huckel:
                 if ah or ac or ar:  # unsaturated carbon
                     adj[n] = {}
                     alpha[n], beta[n], electrons[n] = basis[(6, ac, ar, ah)]
-            elif an in (5, 7, 8, 15, 16, 33, 34):
+            elif an in (5, 7, 8, 16):
                 try:
                     alpha[n], beta[n], electrons[n] = basis[(an, ac, ar, ah)]
                 except KeyError:  # not parametrized or don't have Pi orbitals

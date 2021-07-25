@@ -65,7 +65,7 @@ class Standardize:
 
         :param logging: return list of fixed atoms with matched rules.
         """
-        neutralized = self.neutralize(fix_stereo=False, logging=logging)
+        neutralized = self.__fix_resonance(logging=logging)
         hs, log = self.__standardize()
         if hs:
             if not neutralized:
@@ -81,78 +81,18 @@ class Standardize:
                 self._fix_stereo()
             if logging:
                 if neutralized:
-                    log.append((tuple(neutralized), -1, 'neutralized'))
+                    log.append((tuple(neutralized), -1, 'resonance'))
                 return log
             return True
         if neutralized:
             if fix_stereo:
                 self._fix_stereo()
             if logging:
-                log.append((tuple(neutralized), -1, 'neutralized'))
+                log.append((tuple(neutralized), -1, 'resonance'))
                 return log
             return True
         if logging:
             return log
-        return False
-
-    def neutralize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
-            Union[bool, List[int]]:
-        """
-        Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
-
-        :param logging: return list of changed atoms.
-        """
-        atoms = self._atoms
-        charges = self._charges
-        radicals = self._radicals
-        bonds = self._bonds
-        entries, exits, rads, constrains = self.__entries()
-        hs = set()
-        while len(rads) > 1:
-            n = rads.pop()
-            for path in self.__find_delocalize_path(n, rads, constrains):
-                l, m, b = path[-1]
-                if b == 1:  # required pi-bond
-                    continue
-                try:
-                    atoms[m].valence_rules(charges[m], False, sum(int(y) for x, y in bonds[m].items() if x != l) + b)
-                except ValenceError:
-                    continue
-                self.__patch_path(path)
-                radicals[n] = radicals[m] = False
-                rads.discard(m)
-                hs.add(n)
-                hs.update(x for _, x, _ in path)
-                break  # path found
-            # path not found. atom n keep as is
-        while entries and exits:
-            n = entries.pop()
-            for path in self.__find_delocalize_path(n, exits, constrains):
-                l, m, b = path[-1]
-                try:
-                    atoms[m].valence_rules(charges[m] - 1, radicals[m],
-                                           sum(int(y) for x, y in bonds[m].items() if x != l) + b)
-                except ValenceError:
-                    continue
-                self.__patch_path(path)
-                charges[n] = charges[m] = 0
-                exits.discard(m)
-                hs.add(n)
-                hs.update(x for _, x, _ in path)
-                break  # path from negative atom to positive atom found.
-            # path not found. keep negative atom n as is
-        if hs:
-            self.flush_cache()
-            for n in hs:
-                self._calc_implicit(n)
-                self._calc_hybridization(n)
-            if fix_stereo:
-                self._fix_stereo()
-            if logging:
-                return list(hs)
-            return True
-        if logging:
-            return []
         return False
 
     def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
@@ -473,10 +413,64 @@ class Standardize:
             hs.update(seen)
         return hs, log
 
-    def __patch_path(self: 'MoleculeContainer', path):
+    def __fix_resonance(self: Union['MoleculeContainer', 'Standardize'], *, logging=False) -> Union[bool, List[int]]:
+        """
+        Transform biradical or dipole resonance structures into neutral form. Return True if structure form changed.
+
+        :param logging: return list of changed atoms.
+        """
+        atoms = self._atoms
+        charges = self._charges
+        radicals = self._radicals
         bonds = self._bonds
-        for n, m, b in path:
-            bonds[n][m]._Bond__order = b
+        entries, exits, rads, constrains = self.__entries()
+        hs = set()
+        while len(rads) > 1:
+            n = rads.pop()
+            for path in self.__find_delocalize_path(n, rads, constrains):
+                l, m, b = path[-1]
+                if b == 1:  # required pi-bond
+                    continue
+                try:
+                    atoms[m].valence_rules(charges[m], False, sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
+                radicals[n] = radicals[m] = False
+                rads.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+                for n, m, b in path:
+                    bonds[n][m]._Bond__order = b
+                break  # path found
+            # path not found. atom n keep as is
+        while entries and exits:
+            n = entries.pop()
+            for path in self.__find_delocalize_path(n, exits, constrains):
+                l, m, b = path[-1]
+                try:
+                    atoms[m].valence_rules(charges[m] - 1, radicals[m],
+                                           sum(int(y) for x, y in bonds[m].items() if x != l) + b)
+                except ValenceError:
+                    continue
+                charges[n] = charges[m] = 0
+                exits.discard(m)
+                hs.add(n)
+                hs.update(x for _, x, _ in path)
+                for n, m, b in path:
+                    bonds[n][m]._Bond__order = b
+                break  # path from negative atom to positive atom found.
+            # path not found. keep negative atom n as is
+        if hs:
+            self.flush_cache()
+            for n in hs:
+                self._calc_implicit(n)
+                self._calc_hybridization(n)
+            if logging:
+                return list(hs)
+            return True
+        if logging:
+            return []
+        return False
 
     def __find_delocalize_path(self: 'MoleculeContainer', start, finish, constrains):
         bonds = self._bonds
@@ -507,7 +501,6 @@ class Standardize:
         charges = self._charges
         radicals = self._radicals
         atoms = self._atoms
-        hybs = self._hybridizations
         bonds = self._bonds
 
         transfer = set()
@@ -515,7 +508,7 @@ class Standardize:
         exits = set()
         rads = set()
         for n, a in atoms.items():
-            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52} or hybs[n] == 4:
+            if a.atomic_number not in {5, 6, 7, 8, 14, 15, 16, 33, 34, 52}:
                 # filter non-organic set, halogens and aromatics
                 continue
             if charges[n] == -1:
@@ -1236,11 +1229,11 @@ class Standardize:
 
         #
         #    |           |
-        #  - N - ? >> - [N+] - ?
+        #  - N -   >> - [N+] -
         #    \\          |
         #    [O,N]      [O,N-]
         #
-        atoms = ({'atom': 'N', 'neighbors': (3, 4), 'hybridization': 2},
+        atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 2},
                  {'atom': ListElement(['O', 'N']), 'hybridization': 2})
         bonds = ((1, 2, 2),)
         atom_fix = {1: {'charge': 1, 'hybridization': 1}, 2: {'charge': -1, 'hybridization': 1}}
@@ -1363,6 +1356,10 @@ class Standardize:
         atom_fix = {2: {'hybridization': 1}, 3: {'hybridization': 2}}
         bonds_fix = ((1, 2, 1), (1, 3, 2))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        # todo:
+        # [C;a:10][N;H:2][N:3]=[C:4]1[C:5]=,:[C:6][C:7](=[O:1])[C:8]=,:[C:9]1
+        # [C;a:10][N;H:2][N:3]=[C:4]1[C:5](=[O:1])[C:6]=,:[C:7]-,:[C:8]=,:[C:9]1
 
         #
         #       A                   A
@@ -1582,6 +1579,20 @@ class Standardize:
         bonds = ()
         atom_fix = {1: {'charge': 0}, 2: {'charge': 0}}
         bonds_fix = ((1, 2, 1),)
+        rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+        #
+        #       OH          O
+        #      /           //
+        # C = C    >> C - C
+        #      \           \
+        #      [O,N]       [O,N]
+        #
+        atoms = ({'atom': 'O', 'neighbors': 1}, {'atom': ListElement(['O', 'N'])},
+                 {'atom': 'C'}, {'atom': 'C', 'hybridization': 2})
+        bonds = ((1, 3, 1), (2, 3, 1), (3, 4, 2))
+        atom_fix = {1: {'hybridization': 2}, 4: {'hybridization': 1}}
+        bonds_fix = ((1, 3, 2), (3, 4, 1))
         rules.append((atoms, bonds, atom_fix, bonds_fix))
 
         #

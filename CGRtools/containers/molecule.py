@@ -224,8 +224,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         copy._cis_trans_stereo = self._cis_trans_stereo.copy()
         return copy
 
-    def substructure(self, atoms, *, as_query: bool = False, **kwargs) -> Union['MoleculeContainer',
-                                                                                'query.QueryContainer']:
+    def substructure(self, atoms, *, as_query: bool = False, skip_neighbors_marks=False,
+                     skip_hybridizations_marks=False, skip_hydrogens_marks=False, skip_rings_sizes_marks=False,
+                     **kwargs) -> Union['MoleculeContainer', 'query.QueryContainer']:
         """
         Create substructure containing atoms from atoms list.
 
@@ -236,6 +237,10 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         :param atoms: list of atoms numbers of substructure
         :param meta: if True metadata will be copied to substructure
         :param as_query: return Query object based on graph substructure
+        :param skip_neighbors_marks: Don't set neighbors count marks on substructured queries
+        :param skip_hybridizations_marks: Don't set hybridizations marks on substructured queries
+        :param skip_hydrogens_marks: Don't set hydrogens count marks on substructured queries
+        :param skip_rings_sizes_marks: Don't set rings_sizes marks on substructured queries
         """
         sub, atoms = super().substructure(atoms, graph_type=query.QueryContainer if as_query else self.__class__,
                                           atom_type=QueryElement if as_query else Element,
@@ -243,10 +248,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if as_query:
             sa = self._atoms
             sb = self._bonds
-            sh = self._hybridizations
-            shg = self._hydrogens
-            sn = self.neighbors
-            rs = self.atoms_rings_sizes.copy()
 
             lost = {n for n, a in sa.items() if a.atomic_number != 1} - set(atoms)  # atoms not in substructure
             not_skin = {n for n in atoms if lost.isdisjoint(sb[n])}
@@ -258,11 +259,28 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                                      if not_skin.issuperset(self._stereo_cis_trans_paths[nm]) and
                                         not_skin.issuperset(x for x in self._stereo_cis_trans[nm] if x)}
 
-            sub._neighbors = {n: (sn(n),) for n in atoms}
-            sub._hybridizations = {n: (sh[n],) for n in atoms}
-            sub._hydrogens = {n: () if shg[n] is None else (shg[n],) for n in atoms}
-            sub._rings_sizes = {n: rs.get(n, ()) for n in atoms}
             sub._heteroatoms = {n: () for n in atoms}
+
+            if skip_hybridizations_marks:
+                sub._hybridizations = {n: () for n in atoms}
+            else:
+                sh = self._hybridizations
+                sub._hybridizations = {n: (sh[n],) for n in atoms}
+            if skip_neighbors_marks:
+                sub._neighbors = {n: () for n in atoms}
+            else:
+                sn = self.neighbors
+                sub._neighbors = {n: (sn(n),) for n in atoms}
+            if skip_hydrogens_marks:
+                sub._hydrogens = {n: () for n in atoms}
+            else:
+                shg = self._hydrogens
+                sub._hydrogens = {n: () if shg[n] is None else (shg[n],) for n in atoms}
+            if skip_rings_sizes_marks:
+                sub._rings_sizes = {n: () for n in atoms}
+            else:
+                rs = self.atoms_rings_sizes
+                sub._rings_sizes = {n: rs.get(n, ()) for n in atoms}
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
 

@@ -126,10 +126,12 @@ class Element(Core):
         compare attached to molecules elements
         """
         return isinstance(other, Element) and self.atomic_number == other.atomic_number and \
-            self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical
+            self.isotope == other.isotope and self.charge == other.charge and self.is_radical == other.is_radical and \
+            self.implicit_hydrogens == other.implicit_hydrogens
 
     def __hash__(self):
-        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical))
+        return tuple_hash((self.isotope or 0, self.atomic_number, self.charge, self.is_radical,
+                           self.implicit_hydrogens or 0))
 
     def __setstate__(self, state):
         if 'charge' in state:  # 3.1
