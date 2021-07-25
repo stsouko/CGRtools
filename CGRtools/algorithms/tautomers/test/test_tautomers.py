@@ -24,11 +24,14 @@ def test_keto_enol_2h_pyrrole():
     """
     2H‐pyrrole. [N:1]=1[C:2][C:3]=,:[C:4][C:5]=1
     """
-    for t, v in zip(['C1C=CC=N1', 'C1N=CC2=C1C=CC=C2'], ['c1cc[nH]c1', 'c12c(cccc1)c[nH]c2']):
+    for t, v in zip(['C1C=CC=N1', 'C1N=CC2=C1C=CC=C2'], ['C=1C=CNC=1', 'N1C=C2C=CC=CC2=C1']):
         s = smiles(t)
-        t = list(s.enumerate_tautomers())
+        t = set(s.enumerate_tautomers())
+        v = smiles(v)
+        s.thiele()
+        v.thiele()
         assert len(t) == 2, ' '.join(str(x) for x in t)
-        assert t == {s, smiles(v)}
+        assert t == {s, v}, f'{", ".join(str(x) for x in t)} != {s}, {v}'
 
 
 def test_acid_protonated_nitrogen():
@@ -60,11 +63,11 @@ def test_base_nitrogen():
                              ('CN(C)C(=NN)N(C)C.Cl', 'CN(C)C(N(C)C)=[NH+]N.[Cl-]'),
                              ('Cl.NC(=N)OC', '[NH2+]=C(N)OC.[Cl-]'), ('Cl.NC(=N)SC', '[NH2+]=C(N)SC.[Cl-]'),
                              ('COC(OC)=N.Cl', 'COC(OC)=[NH2+].[Cl-]'),
-                             ('COC(C)=N.Cl', 'COC(C)=[NH2+].[Cl-]'),
+                             ('COC(C)=N.Cl', 'COC(C)=[NH2+].[Cl-]', 'C(N)(OC)=C.Cl'),
                              ('CNN.Cl', 'CN[NH3+].[Cl-]', 'C[NH2+]N.[Cl-]'),
                              ('CN.Cl', 'C[NH3+].[Cl-]')]):
         s = smiles(t)
-        t = set(s.enumerate_tautomers())
+        t = set(s.enumerate_tautomers(full=True))
         if v:
             assert len(t) == len(v), ' '.join(str(x) for x in t)
             vs = set()

@@ -343,7 +343,8 @@ class QueryContainer(Stereo, Graph, QuerySmiles, StructureComponents, DepictQuer
             if not chains:
                 continue
 
-            atoms = {idx: int(atom) for idx, atom in mol.atoms()}
+            atoms = {idx: tuple_hash((atom.isotope or 0, atom.atomic_number, atom.charge, atom.is_radical))
+                     for idx, atom in mol.atoms()}
             bonds = mol._bonds
             out = defaultdict(list)
 
