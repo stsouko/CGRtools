@@ -728,7 +728,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         for o, ((n, m), s) in enumerate(cis_trans_stereo.items()):
             pack_into('>I', data, shift + 4 * o, (n << 20) | (m << 8) | s)
 
-        # 16 bit - neighbor | 3 bit bond type
         return compress(bytes(data), 9)
 
     @classmethod
@@ -736,8 +735,51 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         Unpack from compressed bytes.
         """
-        data = memoryview(decompress(data))
+        from ._unpack import unpack
+
+        (mapping, atom_numbers, isotopes, neighbors, connections, orders, charges, radicals, hydrogens, plane,
+         atoms_stereo, allenes_stereo, cis_trans_stereo) = unpack(decompress(data))
+
+        mol = object.__new__(cls)
+        mol._plane = plane
+        mol._charges = charges
+        mol._radicals = radicals
+        mol._hydrogens = hydrogens
+        mol._atoms_stereo = atoms_stereo
+        mol._allenes_stereo = allenes_stereo
+        mol._cis_trans_stereo = cis_trans_stereo
+
+        mol._conformers = []
+        mol._hybridizations = {}
+        atoms = mol._atoms = {}
+        bonds = mol._bonds = {}
+
+        for n, a, i in zip(mapping, atom_numbers, isotopes):
+            a = Element.from_atomic_number(a)
+            atoms[n] = a = a(i or None)
+            a._attach_to_graph(mol, n)
+
+        con = iter(connections)
+        ords = iter(orders)
+        for n, ms in zip(mapping, neighbors):
+            bonds[n] = cbn = {}
+            for _ in range(ms):
+                m = next(con)
+                if m in bonds:  # bond partially exists. need back-connection.
+                    cbn[m] = bonds[m][n]
+                else:
+                    cbn[m] = Bond(next(ords))
+            mol._calc_hybridization(n)
+        return mol
+
+    @classmethod
+    def pure_unpack(cls, data: bytes) -> 'MoleculeContainer':
+        """
+        Unpack from compressed bytes. Python implementation.
+        """
         from ..files._mdl.mol import common_isotopes
+
+        data = memoryview(decompress(data))
         mol = cls()
         atoms = mol._atoms
         bonds = mol._bonds

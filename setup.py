@@ -18,10 +18,11 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from distutils.command.sdist import sdist
+from distutils.command.build import build
 from distutils.util import get_platform
 from importlib.util import find_spec
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, Extension
 
 
 class _sdist(sdist):
@@ -49,9 +50,19 @@ if find_spec('wheel'):
     cmd_class['bdist_wheel'] = _bdist_wheel
 
 
+if find_spec('cython'):
+    class _build(build):
+        def finalize_options(self):
+            super().finalize_options()
+            from Cython.Build import cythonize
+            self.distribution.ext_modules = cythonize(self.distribution.ext_modules, language_level=3)
+
+    cmd_class['build'] = _build
+
+
 setup(
     name='CGRtools',
-    version='4.2.18',
+    version='4.2.19',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.calculate2d', 'CGRtools.algorithms.components',
               'CGRtools.algorithms.standardize', 'CGRtools.algorithms.tautomers', 'CGRtools.containers',
               'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',
@@ -62,10 +73,13 @@ setup(
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.6.1',
     cmdclass=cmd_class,
+    ext_modules=[Extension('CGRtools.containers._unpack', ['CGRtools/containers/_unpack.pyx'],
+                           extra_compile_args=['-O3'])],
+    setup_requires=['wheel', 'cython'],
     install_requires=['CachedMethods>=0.1.4,<0.2', 'lazy_object_proxy>=1.6'],
     extras_require={'mrv': ['lxml>=4.1'], 'clean2d': ['py-mini-racer>=0.4.0'], 'jit': ['numpy>=1.18', 'numba>=0.50'],
                     'pytest': ['pytest'], 'screening': ['StructureFingerprint>=2.1']},
-    package_data={'CGRtools.algorithms.calculate2d': ['clean2d.js']},
+    package_data={'CGRtools.algorithms.calculate2d': ['clean2d.js'], 'CGRtools.containers': ['_unpack.pyx']},
     data_files=[],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.rst').read_text(),
