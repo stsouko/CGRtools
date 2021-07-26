@@ -731,7 +731,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         return compress(bytes(data), 9)
 
     @classmethod
-    def unpack(cls, data: bytes):
+    def unpack(cls, data: bytes) -> 'MoleculeContainer':
         """
         Unpack from compressed bytes.
         """
@@ -749,6 +749,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         mol._allenes_stereo = allenes_stereo
         mol._cis_trans_stereo = cis_trans_stereo
 
+        mol._conformers = []
         mol._hybridizations = {}
         atoms = mol._atoms = {}
         bonds = mol._bonds = {}
@@ -776,8 +777,9 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         Unpack from compressed bytes. Python implementation.
         """
-        data = memoryview(decompress(data))
         from ..files._mdl.mol import common_isotopes
+
+        data = memoryview(decompress(data))
         mol = cls()
         atoms = mol._atoms
         bonds = mol._bonds
