@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+#
+#  Copyright 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  This file is part of CGRtools.
+#
+#  CGRtools is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  GNU Lesser General Public License for more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with this program; if not, see <https://www.gnu.org/licenses/>.
+#
+from libc.math cimport ldexp
 from CGRtools.containers.bonds import Bond
 
 
@@ -12,13 +31,12 @@ def unpack(bytes data):
     cdef unsigned short[4096] hybridization
     cdef short[4095] charges
     cdef bint[4095] radicals, is_tet, is_all, tet_sign, all_sign, ct_sign
-    cdef float[4095] x, y
+    cdef double[4095] x, y
     cdef bint[4096] seen
 
     cdef object bond
     cdef dict py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds, tmp
     cdef dict py_atoms_stereo, py_allenes_stereo, py_cis_trans_stereo
-    cdef tuple py_xy
     cdef list py_mapping, py_atoms, py_isotopes
 
     # lets extract data
@@ -52,9 +70,9 @@ def unpack(bytes data):
             isotopes[i] = 0
 
         a, b = data[shift + 4: shift + 6]
-        x[i] = a << 8 | b
+        x[i] = double_from2bytes(a, b)
         a, b = data[shift + 6: shift + 8]
-        y[i] = a << 8 | b
+        y[i] = double_from2bytes(a, b)
 
         a = data[shift + 8]
         hydrogens[i] = a >> 5
@@ -118,9 +136,7 @@ def unpack(bytes data):
         py_charges[n] = charges[i]
         py_radicals[n] = radicals[i]
         py_hydrogens[n] = hydrogens[i]
-
-        py_xy = (x[i], y[i])
-        py_plane[n] = py_xy
+        py_plane[n] = (x[i], y[i])
 
         if is_tet[i]:
             py_atoms_stereo[n] = tet_sign[i]
@@ -172,8 +188,7 @@ def unpack(bytes data):
         py_hybridization[n] = hybridization[n]
 
     for i in range(nct):
-        py_xy = (cis_trans_1[i], cis_trans_2[i])
-        py_cis_trans_stereo[py_xy] = ct_sign[i]
+        py_cis_trans_stereo[(cis_trans_1[i], cis_trans_2[i])] = ct_sign[i]
 
     return (py_mapping, py_atoms, py_isotopes,
             py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds,
@@ -190,4 +205,26 @@ common_isotopes[:] = [0, -15, -12, -9, -7, -5, -4, -2, 0, 3, 4, 7, 8, 11, 12, 15
                       254, 262, 265, 265, 269, 262, 273, 273, 277, 281, 278]
 
 
-from timeit import timeit
+cdef double double_from2bytes(unsigned char a, unsigned char b):
+    cdef bint sign
+    cdef int e
+    cdef unsigned int f
+    cdef double x
+
+    sign = a >> 7
+    e = (a >> 2) & 0x1f
+    f = ((a & 0x03) << 8) | b
+
+    x = f / 1024.
+
+    if e:
+        x += 1.
+        e -= 15
+    else:
+        e = -14
+
+    x = ldexp(x, e)
+
+    if sign:
+        return -x
+    return x
