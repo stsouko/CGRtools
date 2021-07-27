@@ -1,22 +1,27 @@
+from CGRtools.containers.bonds import Bond
 
 
 def unpack(bytes data):
     cdef short isotope_shift
     cdef unsigned char a, b, c, d
-    cdef unsigned short na, nct, i, n, shift = 3
-    cdef unsigned long bb, nb = 0
+    cdef unsigned short na, nct, i, j, n, m, bo, shift = 3, order_shift = 0
+    cdef unsigned long nb = 0
 
-    cdef unsigned short[4095] atom, neighbors, hydrogens, orders, mapping, isotopes, cis_trans_1, cis_trans_2
+    cdef unsigned short[4095] mapping, atom, isotopes, hydrogens, neighbors, orders, cis_trans_1, cis_trans_2
     cdef unsigned short[8190] connections
+    cdef unsigned short[4096] hybridization
     cdef short[4095] charges
     cdef bint[4095] radicals, is_tet, is_all, tet_sign, all_sign, ct_sign
     cdef float[4095] x, y
+    cdef bint[4096] seen
 
-    cdef dict py_charges, py_radicals, py_hydrogens, py_plane
+    cdef object bond
+    cdef dict py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds, tmp
     cdef dict py_atoms_stereo, py_allenes_stereo, py_cis_trans_stereo
     cdef tuple py_xy
-    cdef list py_mapping, py_atoms, py_isotopes, py_neighbors, py_connections, py_orders
+    cdef list py_mapping, py_atoms, py_isotopes
 
+    # lets extract data
     a, b, c = data[:3]
     na = a << 4| (b & 0xf0) >> 4
     nct = (b & 0x0f) << 8 | c
@@ -65,12 +70,7 @@ def unpack(bytes data):
         connections[i * 2 + 1] = (b & 0x0f) << 8 | c
         shift += 3
 
-    if nb % 5:
-        bb = nb // 5 + 1
-    else:
-        bb = nb // 5
-
-    for i in range(bb):
+    for i in range((nb // 5 + 1) if nb % 5 else (nb // 5)):
         a, b = data[shift: shift + 2]
         orders[i * 5] = (a >> 4) + 1
         orders[i * 5 + 1] = ((a >> 1) & 0x07) + 1
@@ -86,13 +86,17 @@ def unpack(bytes data):
         ct_sign[i] = d
         shift += 4
 
+    # prepare working structures
+    for i in range(na):
+        n = mapping[i]
+        seen[n] = False
+        hybridization[n] = 1
+
+    # define returned data
     py_mapping = []
     py_atoms = []
     py_isotopes = []
-    py_neighbors = []
-    py_connections = []
-    py_orders = []
-
+    py_bonds = {}
     py_charges = {}
     py_radicals = {}
     py_hydrogens = {}
@@ -100,12 +104,16 @@ def unpack(bytes data):
     py_atoms_stereo = {}
     py_allenes_stereo = {}
     py_cis_trans_stereo = {}
+    py_hybridization = {}
+
+    shift = 0
     for i in range(na):
         n = mapping[i]
+
+        # fill intermediate data
         py_mapping.append(n)
         py_atoms.append(atom[i])
-        py_isotopes.append(isotopes[i])
-        py_neighbors.append(neighbors[i])
+        py_isotopes.append(isotopes[i] or None)
 
         py_charges[n] = charges[i]
         py_radicals[n] = radicals[i]
@@ -119,17 +127,56 @@ def unpack(bytes data):
         if is_all[i]:
             py_allenes_stereo[n] = all_sign[i]
 
-    for i in range(nb):
-        py_orders.append(orders[i])
-    for i in range(nb * 2):
-        py_connections.append(connections[i])
+        tmp = {}
+        py_bonds[n] = tmp
+        seen[n] = True
+        for j in range(shift, shift + neighbors[i]):
+            m = connections[j]
+            if seen[m]:  # bond partially exists. need back-connection.
+                tmp[m] = py_bonds[m][n]
+            else:
+                bo = orders[order_shift]
+                bond = object.__new__(Bond)
+                bond._Bond__order = bo
+                tmp[m] = bond
+                order_shift += 1
+
+                # calc hyb for n atom
+                if hybridization[n] != 4:
+                    if bo == 4:
+                        hybridization[n] = 4
+                    elif bo == 2:
+                        if hybridization[n] == 1:
+                            hybridization[n] = 2
+                        else:
+                            hybridization[n] = 3
+                    elif bo == 3:
+                        hybridization[n] = 3
+
+                # calc hyb for m atom
+                if hybridization[m] != 4:
+                    if bo == 4:
+                        hybridization[m] = 4
+                    elif bo == 2:
+                        if hybridization[m] == 1:
+                            hybridization[m] = 2
+                        else:
+                            hybridization[m] = 3
+                    elif bo == 3:
+                        hybridization[m] = 3
+
+        shift += neighbors[i]
+
+    for i in range(na):
+        n = mapping[i]
+        py_hybridization[n] = hybridization[n]
 
     for i in range(nct):
         py_xy = (cis_trans_1[i], cis_trans_2[i])
         py_cis_trans_stereo[py_xy] = ct_sign[i]
 
-    return (py_mapping, py_atoms, py_isotopes, py_neighbors, py_connections, py_orders,
-            py_charges, py_radicals, py_hydrogens, py_plane,
+    return (py_mapping, py_atoms, py_isotopes,
+            py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds,
             py_atoms_stereo, py_allenes_stereo, py_cis_trans_stereo)
 
 

@@ -23,6 +23,7 @@ from itertools import zip_longest
 from math import ceil
 from struct import pack_into, unpack_from
 from typing import List, Union, Tuple, Optional, Dict, FrozenSet
+from weakref import ref
 from zlib import compress, decompress
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
@@ -735,12 +736,15 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         Unpack from compressed bytes.
         """
-        from ._unpack import unpack
-
-        (mapping, atom_numbers, isotopes, neighbors, connections, orders, charges, radicals, hydrogens, plane,
+        try:  # windows? ;)
+            from ._unpack import unpack
+        except ImportError:
+            return cls.pure_unpack(data)
+        (mapping, atom_numbers, isotopes, charges, radicals, hydrogens, plane, hybridization, bonds,
          atoms_stereo, allenes_stereo, cis_trans_stereo) = unpack(decompress(data))
 
         mol = object.__new__(cls)
+        mol._bonds = bonds
         mol._plane = plane
         mol._charges = charges
         mol._radicals = radicals
@@ -750,26 +754,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         mol._cis_trans_stereo = cis_trans_stereo
 
         mol._conformers = []
-        mol._hybridizations = {}
+        mol._hybridizations = hybridization
         atoms = mol._atoms = {}
-        bonds = mol._bonds = {}
 
         for n, a, i in zip(mapping, atom_numbers, isotopes):
-            a = Element.from_atomic_number(a)
-            atoms[n] = a = a(i or None)
-            a._attach_to_graph(mol, n)
-
-        con = iter(connections)
-        ords = iter(orders)
-        for n, ms in zip(mapping, neighbors):
-            bonds[n] = cbn = {}
-            for _ in range(ms):
-                m = next(con)
-                if m in bonds:  # bond partially exists. need back-connection.
-                    cbn[m] = bonds[m][n]
-                else:
-                    cbn[m] = Bond(next(ords))
-            mol._calc_hybridization(n)
+            atoms[n] = a = object.__new__(Element.from_atomic_number(a))
+            a._Core__isotope = i
+            a._graph = ref(mol)
+            a._map = n
         return mol
 
     @classmethod
