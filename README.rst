@@ -101,6 +101,8 @@ TESTS
 
 Run unit tests::
 
+    git clone https://github.com/stsouko/CGRtools.git && cd CGRtools  # skip if already got sources
+    pip install -e .
     pytest --pyargs CGRtools
 
 PACKAGING
