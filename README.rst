@@ -1,5 +1,11 @@
 CGRTools
 ========
+
+
+.. image:: https://zenodo.org/badge/14690494.svg
+   :target: https://zenodo.org/badge/latestdoi/14690494
+
+
 Tools for processing of reactions based on Condensed Graph of Reaction (CGR) approach.
 
 Basic operations:
