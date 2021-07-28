@@ -22,6 +22,7 @@ from itertools import zip_longest
 from math import ceil
 from struct import pack_into, unpack_from
 from typing import List, Union, Tuple, Optional, Dict
+from weakref import ref
 from zlib import compress, decompress
 from . import cgr, query  # cyclic imports resolve
 from .bonds import Bond, DynamicBond, QueryBond
@@ -643,7 +644,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         for o, ((n, m), s) in enumerate(cis_trans_stereo.items()):
             pack_into('>I', data, shift + 4 * o, (n << 20) | (m << 8) | s)
 
-        # 16 bit - neighbor | 3 bit bond type
         return compress(bytes(data), 9)
 
     @classmethod
@@ -651,8 +651,42 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         Unpack from compressed bytes.
         """
-        data = memoryview(decompress(data))
+        try:  # windows? ;)
+            from ._unpack import unpack
+        except ImportError:
+            return cls.pure_unpack(data)
+        (mapping, atom_numbers, isotopes, charges, radicals, hydrogens, plane, hybridization, bonds,
+         atoms_stereo, allenes_stereo, cis_trans_stereo) = unpack(decompress(data))
+
+        mol = object.__new__(cls)
+        mol._bonds = bonds
+        mol._plane = plane
+        mol._charges = charges
+        mol._radicals = radicals
+        mol._hydrogens = hydrogens
+        mol._atoms_stereo = atoms_stereo
+        mol._allenes_stereo = allenes_stereo
+        mol._cis_trans_stereo = cis_trans_stereo
+
+        mol._conformers = []
+        mol._hybridizations = hybridization
+        atoms = mol._atoms = {}
+
+        for n, a, i in zip(mapping, atom_numbers, isotopes):
+            atoms[n] = a = object.__new__(Element.from_atomic_number(a))
+            a._Core__isotope = i
+            a._graph = ref(mol)
+            a._map = n
+        return mol
+
+    @classmethod
+    def pure_unpack(cls, data: bytes) -> 'MoleculeContainer':
+        """
+        Unpack from compressed bytes. Python implementation.
+        """
         from ..files._mdl.mol import common_isotopes
+
+        data = memoryview(decompress(data))
         mol = cls()
         atoms = mol._atoms
         bonds = mol._bonds
