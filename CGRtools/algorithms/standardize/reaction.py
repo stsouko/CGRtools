@@ -20,7 +20,8 @@ from CachedMethods import class_cached_property
 from collections import defaultdict
 from itertools import count
 from typing import List, TYPE_CHECKING, Union, Tuple, Type
-from ...containers import query, molecule  # cyclic imports resolve
+from .mapping import rules as mapping_rules
+from ...containers import molecule  # cyclic imports resolve
 
 
 if TYPE_CHECKING:
@@ -110,10 +111,10 @@ class StandardizeReaction:
         elif not isinstance(self.reactants[0], molecule.MoleculeContainer):
             raise TypeError('Only Molecules supported')
 
-        for r_pattern, p_pattern, fix in self.__standardize_compiled_rules:
+        for r_pattern, p_pattern, fix in mapping_rules:
             found = []
             for m in self.reactants:
-                for mapping in r_pattern.get_mapping(m, automorphism_filter=False):
+                for mapping in r_pattern.get_mapping(m, optimize=False, automorphism_filter=False):
                     if mapping[1] not in seen:
                         found.append(({fix.get(k, k): v for k, v in mapping.items()},
                                       {mapping[k]: mapping[v] for k, v in fix.items()}))
@@ -121,7 +122,7 @@ class StandardizeReaction:
             if not found:
                 continue
             for m in self.products:
-                for mapping in p_pattern.get_mapping(m, automorphism_filter=False):
+                for mapping in p_pattern.get_mapping(m, optimize=False, automorphism_filter=False):
                     atom = mapping[1]
                     if atom in seen:
                         continue
@@ -134,6 +135,8 @@ class StandardizeReaction:
                     del found[n]
                     m.remap(v)
                     seen.add(atom)
+                    if logging:
+                        log.append(('group remap', list(v)))
         if seen:
             self.flush_cache()
             flag = True
@@ -149,7 +152,7 @@ class StandardizeReaction:
             del self.__dict__['__cached_method_compose']
 
             flag_m = False
-            for mapping in bad_query.get_mapping(cgr, automorphism_filter=False):
+            for mapping in bad_query.get_mapping(cgr, optimize=False, automorphism_filter=False):
                 if not seen.isdisjoint(mapping.values()):  # prevent matching same RC
                     continue
                 mapping = {mapping[n]: next(free_number) if m is None else mapping[m] for n, m in fix.items()}
@@ -420,119 +423,6 @@ class StandardizeReaction:
             if c:
                 out.append((n, tuple(c)))
         return out
-
-    @class_cached_property
-    def __standardize_compiled_rules(self):
-        rules = []
-        for (r_atoms, r_bonds), (p_atoms, p_bonds), fix in self.__standardize_rules():
-            r_q = query.QueryContainer()
-            p_q = query.QueryContainer()
-            for a in r_atoms:
-                r_q.add_atom(**a)
-            for n, m, b in r_bonds:
-                r_q.add_bond(n, m, b)
-            for a in p_atoms:
-                p_q.add_atom(**a)
-            for n, m, b in p_bonds:
-                p_q.add_bond(n, m, b)
-            rules.append((r_q, p_q, fix))
-        return rules
-
-    @staticmethod
-    def __standardize_rules():
-        rules = []
-
-        # Nitro
-        #
-        #      O
-        #     //
-        # * - N+
-        #      \
-        #       O-
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'charge': 1},
-                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (atoms, bonds), fix))
-
-        # Carbonate
-        #
-        #      O
-        #     //
-        # * - C
-        #      \
-        #       O-
-        #
-        atoms = ({'atom': 'C', 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
-                 {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (atoms, bonds), fix))
-
-        # Carbon Acid
-        #
-        #      O
-        #     //
-        # * - C
-        #      \
-        #       OH
-        #
-        atoms = ({'atom': 'C', 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
-                 {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (atoms, bonds), fix))
-
-        # Phosphate
-        #
-        #      *
-        #      |
-        #  * - P = O
-        #      |
-        #      OH
-        #
-        atoms = ({'atom': 'P', 'neighbors': 4, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
-                 {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (atoms, bonds), fix))
-
-        # Nitro addition
-        #
-        #      O             O -- *
-        #     //            /
-        # * - N+   >>  * = N+
-        #      \            \
-        #       O-           O-
-        #
-        atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
-                 {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        p_atoms = ({'atom': 'N', 'neighbors': 3, 'charge': 1, 'hybridization': 2},
-                   {'atom': 'O', 'neighbors': 1, 'charge': -1}, {'atom': 'O', 'neighbors': 2})
-        p_bonds = ((1, 2, 1), (1, 3, 1))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
-
-        # Sulphate addition
-        #
-        #      O [3]            O -- * [2]
-        #     //               /
-        # * = S - *   >>  * = S - *
-        #     |               \\
-        #     O- [2]           O [3]
-        #
-        atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3}, {'atom': 'O', 'neighbors': 1, 'charge': -1},
-                 {'atom': 'O', 'neighbors': 1})
-        bonds = ((1, 2, 1), (1, 3, 2))
-        p_atoms = ({'atom': 'S', 'neighbors': 4, 'hybridization': 3}, {'atom': 'O', 'neighbors': 2},
-                   {'atom': 'O', 'neighbors': 1})
-        p_bonds = ((1, 2, 1), (1, 3, 2))
-        fix = {2: 3, 3: 2}
-        rules.append(((atoms, bonds), (p_atoms, p_bonds), fix))
-
-        return rules
 
 
 __all__ = ['StandardizeReaction']
