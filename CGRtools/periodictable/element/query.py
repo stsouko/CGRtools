@@ -317,7 +317,9 @@ class AnyElement(Query):
 
 class AnyMetal(AnyElement):
     """
-    Charge and radical ignored any metal.
+    Charge and radical ignored any metal. Rings, hydrogens and heteroatoms count also ignored.
+
+    Class designed for d-elements matching in standardization.
     """
     @property
     def atomic_symbol(self) -> str:
@@ -331,26 +333,14 @@ class AnyMetal(AnyElement):
                     return False
                 if self.hybridization and other.hybridization not in self.hybridization:
                     return False
-                if self.ring_sizes:
-                    if self.ring_sizes[0]:
-                        if set(self.ring_sizes).isdisjoint(other.ring_sizes):
-                            return False
-                    elif other.ring_sizes:  # not in ring expected
-                        return False
-                if self.implicit_hydrogens and other.implicit_hydrogens not in self.implicit_hydrogens:
-                    return False
-                if self.heteroatoms and other.heteroatoms not in self.heteroatoms:
-                    return False
                 return True
         elif isinstance(other, AnyMetal) and self.neighbors == other.neighbors \
-                and self.hybridization == other.hybridization and self.ring_sizes == other.ring_sizes \
-                and self.implicit_hydrogens == other.implicit_hydrogens and self.heteroatoms == other.heteroatoms:
+                and self.hybridization == other.hybridization:
             return True
         return False
 
     def __hash__(self):
-        return tuple_hash((self.neighbors, self.hybridization, self.ring_sizes, self.implicit_hydrogens,
-                           self.heteroatoms))
+        return tuple_hash((self.neighbors, self.hybridization))
 
 
 class ListElement(AnyElement):

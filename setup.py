@@ -62,7 +62,7 @@ if find_spec('cython'):
 
 setup(
     name='CGRtools',
-    version='4.2.20',
+    version='4.2.21',
     packages=['CGRtools', 'CGRtools.algorithms', 'CGRtools.algorithms.calculate2d', 'CGRtools.algorithms.components',
               'CGRtools.algorithms.standardize', 'CGRtools.algorithms.tautomers', 'CGRtools.containers',
               'CGRtools.files', 'CGRtools.files._mdl', 'CGRtools.periodictable', 'CGRtools.periodictable.element',

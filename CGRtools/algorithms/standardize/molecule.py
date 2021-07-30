@@ -22,6 +22,7 @@ from collections import defaultdict
 from typing import List, TYPE_CHECKING, Union, Tuple
 from .charged_heterocycles import fixed_rules, morgan_rules
 from .groups import rules as groups_rules
+from .metal_organics import rules as metal_rules
 from ...containers.bonds import Bond
 from ...exceptions import ValenceError
 from ...periodictable import H
@@ -44,6 +45,7 @@ class Standardize:
         k = self.kekule()
         s = self.standardize(fix_stereo=False, logging=logging)
         h = self.implicify_hydrogens(fix_stereo=False)
+        m = self.standardize_metal_organics(fix_stereo=False, logging=logging)
         t = self.thiele()
         c = self.standardize_charges(prepare_molecule=False, logging=logging)
         if logging:
@@ -51,12 +53,14 @@ class Standardize:
                 s.insert(0, ((), -1, 'kekulized'))
             if h:
                 s.append(((), -1, 'implicified'))
+            if m:
+                s.extend(m)
             if t:
                 s.append(((), -1, 'aromatized'))
             if c:
                 s.append((tuple(c), -1, 'recharged'))
             return s
-        return k or s or h or t or c
+        return k or s or h or m or t or c
 
     def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
             Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
@@ -96,8 +100,7 @@ class Standardize:
         return False
 
     def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
-                            logging=False, prepare_molecule=True) -> \
-            Union[bool, List[int]]:
+                            logging=False, prepare_molecule=True) -> Union[bool, List[int]]:
         """
         Set canonical positions of charges in heterocycles.
 
@@ -197,6 +200,14 @@ class Standardize:
         if logging:
             return []
         return False
+
+    def standardize_metal_organics(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
+                                   logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
+        """
+        Standardize metal-organics. Return True if any non-canonical group found.
+
+        :param logging: return list of fixed atoms with matched rules.
+        """
 
     def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
         """Remove hydrogen bonds marked with 8 (any) bond
