@@ -752,10 +752,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         mol._atoms_stereo = atoms_stereo
         mol._allenes_stereo = allenes_stereo
         mol._cis_trans_stereo = cis_trans_stereo
+        mol._hybridizations = hybridization
 
         mol._conformers = []
-        mol._hybridizations = hybridization
-        atoms = mol._atoms = {}
+        mol._parsed_mapping = {}
+        mol._Graph__meta = {}
+        mol._Graph__name = ''
+        mol._atoms = atoms = {}
 
         for n, a, i in zip(mapping, atom_numbers, isotopes):
             atoms[n] = a = object.__new__(Element.from_atomic_number(a))
