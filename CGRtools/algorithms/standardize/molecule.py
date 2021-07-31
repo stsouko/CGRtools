@@ -70,17 +70,12 @@ class Standardize:
         :param logging: return list of fixed atoms with matched rules.
         """
         neutralized = self.__fix_resonance(logging=logging)
-        hs, log = self.__standardize()
-        if hs:
+        log = self.__standardize()
+        if log:
             if not neutralized:
                 self.flush_cache()
-            for n in hs:
-                self._calc_implicit(n)
             # second round. need for intersected groups.
-            hs, lg = self.__standardize()
-            log.extend(lg)
-            for n in hs:
-                self._calc_implicit(n)
+            log.extend(self.__standardize())
             if fix_stereo:
                 self._fix_stereo()
             if logging:
@@ -208,6 +203,55 @@ class Standardize:
 
         :param logging: return list of fixed atoms with matched rules.
         """
+        bonds = self._bonds
+        charges = self._charges
+        radicals = self._radicals
+
+        log = []
+        flush = False
+        for r, (pattern, atom_fix, bonds_fix) in enumerate(metal_rules):
+            hs = set()
+            seen = set()
+            for mapping in pattern.get_mapping(self, automorphism_filter=False):
+                match = set(mapping.values())
+                if not match.isdisjoint(seen):  # skip intersected groups
+                    continue
+                seen.update(match)
+
+                for n, (ch, ir) in atom_fix.items():
+                    n = mapping[n]
+                    hs.add(n)
+                    charges[n] += ch
+                    radicals[n] = ir
+                for n, m, b in bonds_fix:
+                    n = mapping[n]
+                    m = mapping[m]
+                    hs.add(n)
+                    hs.add(m)
+                    if m in bonds[n]:
+                        bonds[n][m]._Bond__order = b
+                        if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
+                            flush = True
+                    else:
+                        bonds[n][m] = bonds[m][n] = Bond(b)
+                        if b != 8:
+                            flush = True
+                log.append((tuple(match), r, str(pattern)))
+            # flush cache
+            if flush:
+                try:
+                    del self.__dict__['__cached_args_method_neighbors']
+                except KeyError:  # already flushed before
+                    pass
+                flush = False
+            for n in hs:
+                self._calc_implicit(n)
+                self._calc_hybridization(n)
+        if fix_stereo:
+            self._fix_stereo()
+        if logging:
+            return log
+        return bool(log)
 
     def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
         """Remove hydrogen bonds marked with 8 (any) bond
@@ -401,18 +445,22 @@ class Standardize:
                 seen.update(match)
                 for n, fix in atom_fix.items():
                     n = mapping[n]
+                    hs.add(n)
                     for key, value in fix.items():
                         atom_map[key][n] = value
                 for n, m, b in bonds_fix:
                     n = mapping[n]
                     m = mapping[m]
+                    hs.add(n)
+                    hs.add(m)
                     if m in bonds[n]:
                         bonds[n][m]._Bond__order = b
                         if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
                             flush = True
                     else:
-                        flush = True
                         bonds[n][m] = bonds[m][n] = Bond(b)
+                        if b != 8:
+                            flush = True
                 log.append((tuple(match), r, str(pattern)))
                 # flush cache
                 if flush:
@@ -421,8 +469,9 @@ class Standardize:
                     except KeyError:  # already flushed before
                         pass
                     flush = False
-            hs.update(seen)
-        return hs, log
+        for n in hs:
+            self._calc_implicit(n)
+        return log
 
     def __fix_resonance(self: Union['MoleculeContainer', 'Standardize'], *, logging=False) -> Union[bool, List[int]]:
         """

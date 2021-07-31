@@ -25,20 +25,29 @@ def _rules():
     rules = []
 
     #
-    #         R - N - C                  R - N - C
-    #            /    ||                    /    ||
-    #  A - Cu = C     :: >>    A - [Cu-] - C     ::
-    #            \    ||                   \\    ||
-    #         R - N - C                R - [N+]- C
+    #        R - N - C                 R - N - C
+    #           /    ||                   /    ||
+    #  A - M = C     || >>    A - M .. [C-]    ||
+    #           \    ||                  \\    ||
+    #        R - N - C               R - [N+]- C
     #
-    atoms = ({'atom': ListElement(['Cu', 'Ag', 'Au']), 'hybridization': 2}, {'atom': 'C', 'charge': 0, 'neighbors': 3},
-             {'atom': 'N', 'neighbors': 3, 'hybridization': 1, 'heteroatoms': 0},
-             {'atom': 'N', 'neighbors': 3, 'hybridization': 1, 'heteroatoms': 0}, {'atom': 'C', 'hybridization': (2, 4)},
-             {'atom': 'C', 'hybridization': (2, 4)})
-    bonds = ((1, 2, 2), (2, 3, 1), (2, 4, 1), (3, 5, 1), (4, 6, 1), (5, 6, (2, 4)))
-    atom_fix = {1: {'charge': -1, 'hybridization': 1}, 3: {'charge': 1, 'hybridization': 2}}
-    bonds_fix = ((1, 2, 1), (2, 3, 2))
-    rules.append((atoms, bonds, atom_fix, bonds_fix))
+    q = QueryContainer()
+    q.add_atom(AnyMetal())
+    q.add_atom('C')
+    q.add_atom('N', hybridization=1, neighbors=3, heteroatoms=0)
+    q.add_atom('N', hybridization=1, neighbors=3, heteroatoms=0)
+    q.add_atom('C', hybridization=2)
+    q.add_atom('C', hybridization=2)
+    q.add_bond(1, 2, 2)
+    q.add_bond(2, 3, 1)
+    q.add_bond(2, 4, 1)
+    q.add_bond(3, 5, 1)
+    q.add_bond(4, 6, 1)
+    q.add_bond(5, 6, (1, 2))
+
+    atom_fix = {2: (-1, False), 3: (1, False)}  # atom: (charge diff, radical)
+    bonds_fix = ((1, 2, 8), (2, 3, 2))
+    rules.append((q, atom_fix, bonds_fix))
 
     # Ferrocene covalent charge-free
     #  C5H5-(5)Fe(5)-C5H5
@@ -55,7 +64,6 @@ def _rules():
     bonds_fix = (
     (1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8),
     (3, 4, 2), (5, 6, 2), (8, 9, 2), (10, 11, 2))
-    rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     # Ferrocene covalent explicit H
     #  C5H5-(5)Fe(5)-C5H5
@@ -70,7 +78,6 @@ def _rules():
     atom_fix = {}
     bonds_fix = (
     (1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
-    rules.append((atoms, bonds, atom_fix, bonds_fix))
     return rules
 
 
