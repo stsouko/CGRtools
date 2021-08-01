@@ -65,14 +65,14 @@ class Element(Core):
     @property
     def explicit_hydrogens(self) -> int:
         try:
-            return self._graph()._explicit_hydrogens(self._map)
+            return self._graph().explicit_hydrogens(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 
     @property
     def total_hydrogens(self) -> int:
         try:
-            return self._graph()._total_hydrogens(self._map)
+            return self._graph().total_hydrogens(self._map)
         except AttributeError:
             raise IsNotConnectedAtom
 

@@ -182,6 +182,33 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         atoms = self._atoms
         return sum(atoms[m].atomic_number not in (1, 6) for m in self._bonds[n])
 
+    def implicit_hydrogens(self, n: int) -> Optional[int]:
+        """
+        Number of implicit hydrogen atoms connected to atom.
+
+        Returns None if count are ambiguous.
+        """
+        return self._hydrogens[n]
+
+    @cached_args_method
+    def explicit_hydrogens(self, n: int) -> int:
+        """
+        Number of explicit hydrogen atoms connected to atom.
+
+        Take into account any type of bonds with hydrogen atoms.
+        """
+        atoms = self._atoms
+        return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
+
+    @cached_args_method
+    def total_hydrogens(self, n: int) -> int:
+        """
+        Number of hydrogen atoms connected to atom.
+
+        Take into account any type of bonds with hydrogen atoms.
+        """
+        return self._hydrogens[n] + self.explicit_hydrogens(n)
+
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
@@ -513,20 +540,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         """
         scope = set(self.connected_components[component])
         return {k: v & scope for k, v in self.fingerprint.items() if not v.isdisjoint(scope)}
-
-    @cached_args_method
-    def _explicit_hydrogens(self, n: int) -> int:
-        """
-        Number of explicit hydrogen atoms connected to atom.
-
-        Take into account any type of bonds with hydrogen atoms.
-        """
-        atoms = self._atoms
-        return sum(atoms[m].atomic_number == 1 for m in self._bonds[n])
-
-    @cached_args_method
-    def _total_hydrogens(self, n: int) -> int:
-        return self._hydrogens[n] + self._explicit_hydrogens(n)
 
     def _calc_implicit(self, n: int):
         atoms = self._atoms
