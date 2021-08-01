@@ -23,19 +23,18 @@ from CGRtools.containers.bonds import Bond
 def unpack(bytes data):
     cdef short isotope_shift
     cdef unsigned char a, b, c, d
-    cdef unsigned short na, nct, i, j, n, m, bo, shift = 3, order_shift = 0
+    cdef unsigned short na, nct, i, j, n, m, shift = 3, order_shift = 0
     cdef unsigned long nb = 0
 
     cdef unsigned short[4095] mapping, atom, isotopes, hydrogens, neighbors, orders, cis_trans_1, cis_trans_2
     cdef unsigned short[8190] connections
-    cdef unsigned short[4096] hybridization
     cdef short[4095] charges
     cdef bint[4095] radicals, is_tet, is_all, tet_sign, all_sign, ct_sign
     cdef double[4095] x, y
     cdef bint[4096] seen
 
     cdef object bond
-    cdef dict py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds, tmp
+    cdef dict py_charges, py_radicals, py_hydrogens, py_plane, py_bonds, tmp
     cdef dict py_atoms_stereo, py_allenes_stereo, py_cis_trans_stereo
     cdef list py_mapping, py_atoms, py_isotopes
 
@@ -46,7 +45,8 @@ def unpack(bytes data):
 
     for i in range(na):
         a, b = data[shift: shift + 2]
-        mapping[i] = a << 4 | (b & 0xf0) >> 4
+        mapping[i] = n = a << 4 | (b & 0xf0) >> 4
+        seen[n] = False
         neighbors[i] = b & 0x0f
         nb += b & 0x0f
 
@@ -104,12 +104,6 @@ def unpack(bytes data):
         ct_sign[i] = d
         shift += 4
 
-    # prepare working structures
-    for i in range(na):
-        n = mapping[i]
-        seen[n] = False
-        hybridization[n] = 1
-
     # define returned data
     py_mapping = []
     py_atoms = []
@@ -122,7 +116,6 @@ def unpack(bytes data):
     py_atoms_stereo = {}
     py_allenes_stereo = {}
     py_cis_trans_stereo = {}
-    py_hybridization = {}
 
     shift = 0
     for i in range(na):
@@ -151,47 +144,18 @@ def unpack(bytes data):
             if seen[m]:  # bond partially exists. need back-connection.
                 tmp[m] = py_bonds[m][n]
             else:
-                bo = orders[order_shift]
                 bond = object.__new__(Bond)
-                bond._Bond__order = bo
+                bond._Bond__order = orders[order_shift]
                 tmp[m] = bond
                 order_shift += 1
 
-                # calc hyb for n atom
-                if hybridization[n] != 4:
-                    if bo == 4:
-                        hybridization[n] = 4
-                    elif bo == 2:
-                        if hybridization[n] == 1:
-                            hybridization[n] = 2
-                        else:
-                            hybridization[n] = 3
-                    elif bo == 3:
-                        hybridization[n] = 3
-
-                # calc hyb for m atom
-                if hybridization[m] != 4:
-                    if bo == 4:
-                        hybridization[m] = 4
-                    elif bo == 2:
-                        if hybridization[m] == 1:
-                            hybridization[m] = 2
-                        else:
-                            hybridization[m] = 3
-                    elif bo == 3:
-                        hybridization[m] = 3
-
         shift += neighbors[i]
-
-    for i in range(na):
-        n = mapping[i]
-        py_hybridization[n] = hybridization[n]
 
     for i in range(nct):
         py_cis_trans_stereo[(cis_trans_1[i], cis_trans_2[i])] = ct_sign[i]
 
     return (py_mapping, py_atoms, py_isotopes,
-            py_charges, py_radicals, py_hydrogens, py_plane, py_hybridization, py_bonds,
+            py_charges, py_radicals, py_hydrogens, py_plane, py_bonds,
             py_atoms_stereo, py_allenes_stereo, py_cis_trans_stereo)
 
 

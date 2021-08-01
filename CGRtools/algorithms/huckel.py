@@ -53,7 +53,7 @@ class Huckel:
         """
         if zeros is None:
             raise ImportError('numpy required')
-        hyb = self._hybridizations
+        hyb = self.hybridization
         charge = self._charges
         radical = self._radicals
 
@@ -65,7 +65,7 @@ class Huckel:
             an = a.atomic_number
             ac = charge[n]
             ar = radical[n]
-            ah = hyb[n] > 1
+            ah = hyb(n) > 1
             if an == 6:
                 if ah or ac or ar:  # unsaturated carbon
                     adj[n] = {}

@@ -49,12 +49,10 @@ fps_enabled = bool(find_spec('StructureFingerprint'))
 
 class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeSmiles, StructureComponents,
                         DepictMolecule, Calculate2DMolecule, Tautomers, MCS, Huckel, X3domMolecule):
-    __slots__ = ('_conformers', '_hybridizations', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo',
-                 '_allenes_stereo', '_backup')
+    __slots__ = ('_conformers', '_atoms_stereo', '_hydrogens', '_cis_trans_stereo', '_allenes_stereo', '_backup')
 
     def __init__(self):
         self._conformers: List[Dict[int, Tuple[float, float, float]]] = []
-        self._hybridizations: Dict[int, int] = {}
         self._hydrogens: Dict[int, Optional[int]] = {}
         self._atoms_stereo: Dict[int, bool] = {}
         self._allenes_stereo: Dict[int, bool] = {}
@@ -75,7 +73,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 raise TypeError('Element object expected')
 
         _map = super().add_atom(atom, *args, charge=charge, is_radical=is_radical, **kwargs)
-        self._hybridizations[_map] = 1
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         if atom.atomic_number != 1:
@@ -106,10 +103,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         self._calc_implicit(n)
         self._calc_implicit(m)
 
-        if bond.order != 1:  # 1 is neutral. 8 is rare. skip.
-            self._calc_hybridization(n)
-            self._calc_hybridization(m)
-
         if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:  # not hydrogen
             # fix stereo if formed not to hydrogen bond
             self._fix_stereo()
@@ -126,15 +119,12 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         isnt_hydrogen = self._atoms[n].atomic_number != 1
         super().delete_atom(n)
 
-        del self._hybridizations[n]
         del self._hydrogens[n]
         self._conformers.clear()  # clean conformers. need full recalculation for new system
 
         for m in old_bonds:
             self._calc_implicit(m)
 
-        for m in old_bonds:
-            self._calc_hybridization(m)
         if isnt_hydrogen:  # hydrogen atom not used for stereo coding
             self._fix_stereo()
 
@@ -151,8 +141,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
         self._calc_implicit(n)
         self._calc_implicit(m)
-        self._calc_hybridization(n)
-        self._calc_hybridization(m)
 
         if self._atoms[n].atomic_number != 1 and self._atoms[m].atomic_number != 1:
             self._fix_stereo()
@@ -161,6 +149,30 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def neighbors(self, n: int) -> int:
         """number of neighbors atoms excluding any-bonded"""
         return sum(b.order != 8 for b in self._bonds[n].values())
+
+    @cached_args_method
+    def hybridization(self, n: int) -> int:
+        """
+        Atom hybridization.
+
+        1 - if atom has zero or only single bonded neighbors, 2 - if has only one double bonded neighbor and any amount
+        of single bonded, 3 - if has one triple bonded and any amount of double and single bonded neighbors or
+        two and more double bonded and any amount of single bonded neighbors, 4 - if atom in aromatic ring.
+        """
+        hybridization = 1
+        for bond in self._bonds[n].values():
+            order = bond.order
+            if order == 4:
+                return 4
+            elif order == 3:
+                if hybridization != 3:
+                    hybridization = 3
+            elif order == 2:
+                if hybridization == 1:
+                    hybridization = 2
+                elif hybridization == 2:
+                    hybridization = 3
+        return hybridization
 
     @cached_args_method
     def heteroatoms(self, n: int) -> int:
@@ -173,27 +185,22 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
     def remap(self, mapping, *, copy=False) -> 'MoleculeContainer':
         h = super().remap(mapping, copy=copy)
         mg = mapping.get
-        shg = self._hydrogens
 
         if copy:
-            hh = h._hybridizations
             hhg = h._hydrogens
             hc = h._conformers
             has = h._atoms_stereo
             hal = h._allenes_stereo
             hcs = h._cis_trans_stereo
         else:
-            hh = {}
             hhg = {}
             hc = []
             has = {}
             hal = {}
             hcs = {}
 
-        for n, hyb in self._hybridizations.items():
-            m = mg(n, n)
-            hh[m] = hyb
-            hhg[m] = shg[n]
+        for n, hg in self._hydrogens.items():
+            hhg[mg(n, n)] = hg
 
         hc.extend({mg(n, n): x for n, x in c.items()} for c in self._conformers)
 
@@ -207,7 +214,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if copy:
             return h
 
-        self._hybridizations = hh
         self._hydrogens = hhg
         self._conformers = hc
         self._atoms_stereo = has
@@ -217,7 +223,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
 
     def copy(self, **kwargs) -> 'MoleculeContainer':
         copy = super().copy(**kwargs)
-        copy._hybridizations = self._hybridizations.copy()
         copy._hydrogens = self._hydrogens.copy()
         copy._conformers = [c.copy() for c in self._conformers]
         copy._atoms_stereo = self._atoms_stereo.copy()
@@ -265,8 +270,8 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             if skip_hybridizations_marks:
                 sub._hybridizations = {n: () for n in atoms}
             else:
-                sh = self._hybridizations
-                sub._hybridizations = {n: (sh[n],) for n in atoms}
+                sh = self.hybridization
+                sub._hybridizations = {n: (sh(n),) for n in atoms}
             if skip_neighbors_marks:
                 sub._neighbors = {n: () for n in atoms}
             else:
@@ -285,16 +290,13 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
 
-            # recalculate query marks
-            sub._hybridizations = {}
             sub._hydrogens = {}
             for n in atoms:
-                sub._calc_hybridization(n)
                 sub._calc_implicit(n)
             # fix_stereo will repair data
-            sub._atoms_stereo = self._atoms_stereo
-            sub._allenes_stereo = self._allenes_stereo
-            sub._cis_trans_stereo = self._cis_trans_stereo
+            sub._atoms_stereo = self._atoms_stereo.copy()
+            sub._allenes_stereo = self._allenes_stereo.copy()
+            sub._cis_trans_stereo = self._cis_trans_stereo.copy()
             sub._fix_stereo()
         return sub
 
@@ -302,7 +304,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         if isinstance(other, MoleculeContainer):
             u, other = super().union(other, atom_type=Element, bond_type=Bond, **kwargs)
             u._conformers.clear()
-            u._hybridizations.update(other._hybridizations)
             u._hydrogens.update(other._hydrogens)
             u._atoms_stereo.update(other._atoms_stereo)
             u._allenes_stereo.update(other._allenes_stereo)
@@ -554,23 +555,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                     return
         self._hydrogens[n] = 0
 
-    def _calc_hybridization(self, n: int):
-        hybridization = 1
-        for bond in self._bonds[n].values():
-            order = bond.order
-            if order == 4:
-                self._hybridizations[n] = 4
-                return
-            elif order == 3:
-                if hybridization != 3:
-                    hybridization = 3
-            elif order == 2:
-                if hybridization == 2:
-                    hybridization = 3
-                elif hybridization == 1:
-                    hybridization = 2
-        self._hybridizations[n] = hybridization
-
     def __enter__(self):
         """
         Transaction of changes. Keep current state for restoring on errors.
@@ -593,8 +577,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                         'plane': self._plane.copy(), 'charges': self._charges.copy(), 'radicals': self._radicals.copy(),
                         'hydrogens': self._hydrogens.copy(), 'conformers': [x.copy() for x in self._conformers],
                         'atoms_stereo': self._atoms_stereo.copy(), 'allenes_stereo': self._allenes_stereo.copy(),
-                        'cis_trans_stereo': self._cis_trans_stereo.copy(),
-                        'hybridizations': self._hybridizations.copy()}
+                        'cis_trans_stereo': self._cis_trans_stereo.copy()}
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -611,7 +594,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             self._atoms_stereo = backup['atoms_stereo']
             self._allenes_stereo = backup['allenes_stereo']
             self._cis_trans_stereo = backup['cis_trans_stereo']
-            self._hybridizations = backup['hybridizations']
             self.flush_cache()
         del self._backup
 
@@ -740,7 +722,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             from ._unpack import unpack
         except ImportError:
             return cls.pure_unpack(data)
-        (mapping, atom_numbers, isotopes, charges, radicals, hydrogens, plane, hybridization, bonds,
+        (mapping, atom_numbers, isotopes, charges, radicals, hydrogens, plane, bonds,
          atoms_stereo, allenes_stereo, cis_trans_stereo) = unpack(decompress(data))
 
         mol = object.__new__(cls)
@@ -752,7 +734,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         mol._atoms_stereo = atoms_stereo
         mol._allenes_stereo = allenes_stereo
         mol._cis_trans_stereo = cis_trans_stereo
-        mol._hybridizations = hybridization
 
         mol._conformers = []
         mol._parsed_mapping = {}
@@ -850,9 +831,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         for o in range(acs & 0x0fff):  # cis/trans
             ct = unpack_from('>I', data, shift + 4 * o)[0]
             cis_trans_stereo[(ct >> 20, (ct >> 8) & 0x0fff)] = ct & 0x01
-
-        for n in neighbors:
-            mol._calc_hybridization(n)
         return mol
 
     def __getstate__(self):
@@ -919,11 +897,6 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
                 self._calc_implicit(n)
         else:
             self._hydrogens = state['hydrogens']
-
-        # restore query marks
-        self._hybridizations = {}
-        for n in state['atoms']:
-            self._calc_hybridization(n)
 
     _fingerprint_config = {'min_radius': 2, 'max_radius': 4}  # set empty for disable screening
 

@@ -90,6 +90,13 @@ class Element(Core):
         except AttributeError:
             raise IsNotConnectedAtom
 
+    @property
+    def hybridization(self):
+        try:
+            return self._graph().hybridization(self._map)
+        except AttributeError:
+            raise IsNotConnectedAtom
+
     @classmethod
     def from_symbol(cls, symbol: str) -> Type['Element']:
         """

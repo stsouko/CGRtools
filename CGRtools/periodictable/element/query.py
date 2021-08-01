@@ -34,6 +34,13 @@ class Query(Core):
         except AttributeError:
             raise IsNotConnectedAtom
 
+    @property
+    def hybridization(self):
+        try:
+            return self._graph()._hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
     @neighbors.setter
     def neighbors(self, neighbors):
         try:
@@ -43,7 +50,7 @@ class Query(Core):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    @Core.hybridization.setter
+    @hybridization.setter
     def hybridization(self, hybridization):
         try:
             g = self._graph()

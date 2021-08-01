@@ -436,7 +436,7 @@ class MRVWrite:
         gr = g._radicals
         bg = g._bonds
         hg = g._hydrogens
-        hb = g._hybridizations
+        hb = g.hybridization
 
         out = ['<atomArray>']
         for n, atom in g._atoms.items():
@@ -450,7 +450,7 @@ class MRVWrite:
                 out.append(' radical="monovalent"')
             if atom.isotope:
                 out.append(f' isotope="{atom.isotope}"')
-            if ih and (atom.atomic_symbol not in organic_set or hb[n] == 4 and atom.atomic_number in (5, 7, 15)):
+            if ih and (atom.atomic_symbol not in organic_set or hb(n) == 4 and atom.atomic_number in (5, 7, 15)):
                 out.append(f' hydrogenCount="{ih}"')
             out.append('/>')
         out.append('</atomArray>')

@@ -77,6 +77,16 @@ class Dynamic(Core):
             raise IsNotConnectedAtom
 
     @property
+    def hybridization(self):
+        """
+        Hybridization of atom
+        """
+        try:
+            return self._graph()._hybridizations[self._map]
+        except AttributeError:
+            raise IsNotConnectedAtom
+
+    @property
     def p_hybridization(self):
         """
         Product state hybridization of atom

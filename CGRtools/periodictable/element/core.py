@@ -155,16 +155,13 @@ class Core(ABC):
         """
 
     @property
+    @abstractmethod
     def hybridization(self):
         """
         1 - if atom has zero or only single bonded neighbors, 2 - if has only one double bonded neighbor and any amount
         of single bonded, 3 - if has one triple bonded and any amount of double and single bonded neighbors or
         two double bonded and any amount of single bonded neighbors, 4 - if atom in aromatic ring.
         """
-        try:
-            return self._graph()._hybridizations[self._map]
-        except AttributeError:
-            raise IsNotConnectedAtom
 
     @property
     def in_ring(self) -> bool:

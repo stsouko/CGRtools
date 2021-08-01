@@ -91,7 +91,6 @@ class Tautomers:
             # atoms, radicals state, parsed_mapping and plane are unchanged
             self._bonds = canon._bonds
             self._charges = canon._charges  # for zwitter-ionic tautomers
-            self._hybridizations = canon._hybridizations
             self._hydrogens = canon._hydrogens
             self._atoms_stereo = canon._atoms_stereo
             self._allenes_stereo = canon._allenes_stereo
@@ -384,8 +383,6 @@ class Tautomers:
 
             mol._hydrogens[a] += 1
             mol._hydrogens[d] -= 1
-            mol._hybridizations[a] = 1
-            mol._hybridizations[d] = 2
             yield mol, ket
 
     def _enumerate_zwitter_tautomers(self: Union['MoleculeContainer', 'Tautomers']):
@@ -487,7 +484,7 @@ class Tautomers:
         bonds = self._bonds
         charge = self._charges
         hydrogens = self._hydrogens
-        hybridizations = self._hybridizations
+        hybridization = self.hybridization
         heteroatoms = self.heteroatoms
         neighbors = self.neighbors
 
@@ -498,7 +495,7 @@ class Tautomers:
             if charge[n] or not neighbors(n) or heteroatoms(n):
                 continue
             if a.atomic_number in (7, 8):
-                if hybridizations[n] == 2:  # imine!
+                if hybridization(n) == 2:  # imine!
                     acceptors.append(n)
                 elif hydrogens[n]:  # amine!
                     donors.append(n)
@@ -508,9 +505,9 @@ class Tautomers:
             seen = {atom}
             # stack is neighbors
             if hydrogen:  # enol
-                stack = [(atom, n, 2, 0) for n in bonds[atom] if hybridizations[n] == 2]
+                stack = [(atom, n, 2, 0) for n in bonds[atom] if hybridization(n) == 2]
             else:  # ketone
-                stack = [(atom, n, 1, 0) for n, b in bonds[atom].items() if hybridizations[n] == 2 and b.order == 2]
+                stack = [(atom, n, 1, 0) for n, b in bonds[atom].items() if hybridization(n) == 2 and b.order == 2]
 
             while stack:
                 last, current, bond, depth = stack.pop()
@@ -538,7 +535,7 @@ class Tautomers:
                         if not stack:
                             path = []
                     elif b.order == bond and atoms[n].atomic_number == 6:
-                        hb = hybridizations[n]
+                        hb = hybridization(n)
                         if hb == 2:  # grow up
                             stack.append((current, n, next_bond, depth))
                         elif hydrogen:

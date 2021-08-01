@@ -296,7 +296,7 @@ class MoleculeSmiles(Smiles):
         atom = self._atoms[n]
         charge = self._charges[n]
         ih = self._hydrogens[n]
-        hyb = self._hybridizations[n]
+        hyb = self.hybridization(n)
 
         smi = ['',  # [
                str(atom.isotope) if atom.isotope else '',  # isotope
@@ -375,7 +375,7 @@ class MoleculeSmiles(Smiles):
                         m2 = next(x for x in adjacency[n2] if x in env)
                         return '/' if self._translate_cis_trans_sign(n2, m, m2, n) else '\\'
 
-            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+            if kwargs.get('aromatic', True) and self.hybridization(n) == self.hybridization(m) == 4:
                 return '-'
             return ''
         elif order == 2:
@@ -383,7 +383,7 @@ class MoleculeSmiles(Smiles):
         elif order == 3:
             return '#'
         elif order == 1:
-            if kwargs.get('aromatic', True) and self._hybridizations[n] == self._hybridizations[m] == 4:
+            if kwargs.get('aromatic', True) and self.hybridization(n) == self.hybridization(m) == 4:
                 return '-'
             return ''
         else:  # order == 8

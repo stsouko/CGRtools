@@ -17,7 +17,6 @@
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
 from typing import Tuple, Dict, Type, Union
-from .core import Core
 from .dynamic import Dynamic, DynamicElement
 from .element import Element
 from .query import QueryElement, AnyElement
@@ -72,7 +71,7 @@ class DynamicQuery(Dynamic):
         except AttributeError:
             raise IsNotConnectedAtom
 
-    @Core.hybridization.setter
+    @Dynamic.hybridization.setter
     def hybridization(self, hybridization):
         try:
             g = self._graph()

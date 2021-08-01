@@ -45,7 +45,7 @@ def _rules():
     q.add_bond(4, 6, 1)
     q.add_bond(5, 6, (1, 2))
 
-    atom_fix = {2: (-1, False), 3: (1, False)}  # atom: (charge diff, radical)
+    atom_fix = {2: (-1, None), 3: (1, None)}  # atom: (charge diff, new radical state or None)
     bonds_fix = ((1, 2, 8), (2, 3, 2))
     rules.append((q, atom_fix, bonds_fix))
 

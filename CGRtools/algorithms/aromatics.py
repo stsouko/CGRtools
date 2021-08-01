@@ -43,7 +43,7 @@ class Aromatize:
         """
         atoms = self._atoms
         bonds = self._bonds
-        sh = self._hybridizations
+        sh = self.hybridization
         charges = self._charges
         hydrogens = self._hydrogens
 
@@ -58,7 +58,7 @@ class Aromatize:
             lr = len(ring)
             if not 3 < lr < 8:  # skip 3-membered and big rings
                 continue
-            sp2 = sum(sh[n] == 2 and atoms[n].atomic_number in (5, 6, 7, 8, 15, 16) for n in ring)
+            sp2 = sum(sh(n) == 2 and atoms[n].atomic_number in (5, 6, 7, 8, 15, 16) for n in ring)
             if sp2 == lr:  # benzene like
                 if lr == 4:  # two bonds condensed aromatic rings
                     tetracycles.append(ring)
@@ -78,7 +78,7 @@ class Aromatize:
                         rings[m].add(n)
             elif 4 < lr == sp2 + 1:  # pyroles, furanes, etc
                 try:
-                    n = next(n for n in ring if sh[n] == 1)
+                    n = next(n for n in ring if sh(n) == 1)
                 except StopIteration:  # exotic, just skip
                     continue
                 an = atoms[n].atomic_number
@@ -205,8 +205,6 @@ class Aromatize:
         seen = set()
         for ring in rings:
             seen.update(ring)
-        for n in seen:
-            sh[n] = 4
         charges.update(fixed_charges)
 
         # reset bonds to single
@@ -234,8 +232,6 @@ class Aromatize:
                     bonds[n][m]._Bond__order = 4
                     for n, m in zip(ring, ring[1:]):
                         bonds[n][m]._Bond__order = 4
-                    for n in ring:
-                        sh[n] = 4
                     break
         if freaks:
             self.flush_cache()  # flush again
@@ -511,7 +507,6 @@ class Aromatize:
             atoms.add(n)
             atoms.add(m)
         for n in atoms:
-            self._calc_hybridization(n)
             self._calc_implicit(n)
 
     def __kekule_full(self):
