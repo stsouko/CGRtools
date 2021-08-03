@@ -21,7 +21,7 @@
 from collections import defaultdict
 from typing import List, TYPE_CHECKING, Union, Tuple
 from .charged_heterocycles import fixed_rules, morgan_rules
-from .groups import rules as groups_rules
+from .groups import *
 from .metal_organics import rules as metal_rules
 from ...containers.bonds import Bond
 from ...exceptions import ValenceError
@@ -45,7 +45,6 @@ class Standardize:
         k = self.kekule()
         s = self.standardize(fix_stereo=False, logging=logging)
         h = self.implicify_hydrogens(fix_stereo=False)
-        m = self.standardize_metal_organics(fix_stereo=False, logging=logging)
         t = self.thiele()
         c = self.standardize_charges(prepare_molecule=False, logging=logging)
         if logging:
@@ -53,14 +52,12 @@ class Standardize:
                 s.insert(0, ((), -1, 'kekulized'))
             if h:
                 s.append(((), -1, 'implicified'))
-            if m:
-                s.extend(m)
             if t:
                 s.append(((), -1, 'aromatized'))
             if c:
                 s.append((tuple(c), -1, 'recharged'))
             return s
-        return k or s or h or m or t or c
+        return k or s or h or t or c
 
     def standardize(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True, logging=False) -> \
             Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
@@ -70,29 +67,21 @@ class Standardize:
         :param logging: return list of fixed atoms with matched rules.
         """
         neutralized = self.__fix_resonance(logging=logging)
-        log = self.__standardize()
-        if log:
-            if not neutralized:
-                self.flush_cache()
-            # second round. need for intersected groups.
-            log.extend(self.__standardize())
-            if fix_stereo:
-                self._fix_stereo()
-            if logging:
-                if neutralized:
-                    log.append((tuple(neutralized), -1, 'resonance'))
-                return log
-            return True
         if neutralized:
-            if fix_stereo:
-                self._fix_stereo()
-            if logging:
-                log.append((tuple(neutralized), -1, 'resonance'))
-                return log
-            return True
+            self.flush_cache()
+        log = self.__standardize(double_rules)
+        log.extend(self.__standardize(double_rules))  # double shot rules for overlapped groups
+        log.extend(self.__standardize(single_rules))
+        log.extend(self.__standardize(metal_rules))  # metal-organics fix
+        if log:
+            self.flush_cache()
+        if fix_stereo:
+            self._fix_stereo()
         if logging:
+            if neutralized:
+                log.append((tuple(neutralized), -1, 'resonance'))
             return log
-        return False
+        return neutralized or bool(log)
 
     def standardize_charges(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
                             logging=False, prepare_molecule=True) -> Union[bool, List[int]]:
@@ -195,63 +184,6 @@ class Standardize:
         if logging:
             return []
         return False
-
-    def standardize_metal_organics(self: Union['MoleculeContainer', 'Standardize'], *, fix_stereo=True,
-                                   logging=False) -> Union[bool, List[Tuple[Tuple[int, ...], int, str]]]:
-        """
-        Standardize metal-organics. Return True if any non-canonical group found.
-
-        :param logging: return list of fixed atoms with matched rules.
-        """
-        bonds = self._bonds
-        charges = self._charges
-        radicals = self._radicals
-
-        log = []
-        flush = False
-        for r, (pattern, atom_fix, bonds_fix) in enumerate(metal_rules):
-            hs = set()
-            seen = set()
-            for mapping in pattern.get_mapping(self, automorphism_filter=False):
-                match = set(mapping.values())
-                if not match.isdisjoint(seen):  # skip intersected groups
-                    continue
-                seen.update(match)
-
-                for n, (ch, ir) in atom_fix.items():
-                    n = mapping[n]
-                    hs.add(n)
-                    charges[n] += ch
-                    radicals[n] = ir
-                for n, m, b in bonds_fix:
-                    n = mapping[n]
-                    m = mapping[m]
-                    hs.add(n)
-                    hs.add(m)
-                    if m in bonds[n]:
-                        bonds[n][m]._Bond__order = b
-                        if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
-                            flush = True
-                    else:
-                        bonds[n][m] = bonds[m][n] = Bond(b)
-                        if b != 8:
-                            flush = True
-                log.append((tuple(match), r, str(pattern)))
-            # flush cache
-            if flush:
-                try:
-                    del self.__dict__['__cached_args_method_neighbors']
-                except KeyError:  # already flushed before
-                    pass
-                flush = False
-            for n in hs:
-                self._calc_implicit(n)
-                self._calc_hybridization(n)
-        if fix_stereo:
-            self._fix_stereo()
-        if logging:
-            return log
-        return bool(log)
 
     def remove_hydrogen_bonds(self: 'MoleculeContainer', *, keep_to_terminal=True, fix_stereo=True) -> int:
         """Remove hydrogen bonds marked with 8 (any) bond
@@ -430,24 +362,32 @@ class Standardize:
             return True
         return False
 
-    def __standardize(self: Union['MoleculeContainer', 'Standardize']):
-        atom_map = {'charge': self._charges, 'is_radical': self._radicals, 'hybridization': self._hybridizations}
+    def __standardize(self: Union['MoleculeContainer', 'Standardize'], rules):
         bonds = self._bonds
-        hs = set()
+        charges = self._charges
+        radicals = self._radicals
+
         log = []
         flush = False
-        for r, (pattern, atom_fix, bonds_fix) in enumerate(groups_rules):
+        for r, (pattern, atom_fix, bonds_fix) in enumerate(rules):
+            hs = set()
             seen = set()
-            for mapping in pattern.get_mapping(self, automorphism_filter=False):
+            # collect constrain Any-atoms
+            any_atoms = [n for n, a in pattern.atoms() if a.atomic_symbol == 'A' and n not in atom_fix]
+            for mapping in pattern.get_mapping(self, optimize=False, automorphism_filter=False):
                 match = set(mapping.values())
                 if not match.isdisjoint(seen):  # skip intersected groups
                     continue
-                seen.update(match)
-                for n, fix in atom_fix.items():
+                if any_atoms:  # accept overlapping of Any-atoms
+                    seen.update(match - {mapping[n] for n in any_atoms})
+                else:
+                    seen.update(match)
+                for n, (ch, ir) in atom_fix.items():
                     n = mapping[n]
                     hs.add(n)
-                    for key, value in fix.items():
-                        atom_map[key][n] = value
+                    charges[n] += ch
+                    if ir is not None:
+                        radicals[n] = ir
                 for n, m, b in bonds_fix:
                     n = mapping[n]
                     m = mapping[m]
@@ -462,15 +402,26 @@ class Standardize:
                         if b != 8:
                             flush = True
                 log.append((tuple(match), r, str(pattern)))
-                # flush cache
-                if flush:
+            # flush cache only for changed atoms.
+            if flush:  # neighbors count changed
+                if '__cached_args_method_neighbors' in self.__dict__:
+                    ngb = self.__dict__['__cached_args_method_neighbors']
+                    for n in hs:
+                        try:
+                            del ngb[(n,)]
+                        except KeyError:
+                            pass
+                flush = False
+            # need hybridization recalculation
+            if '__cached_args_method_hybridization' in self.__dict__:
+                hyb = self.__dict__['__cached_args_method_hybridization']
+                for n in hs:
                     try:
-                        del self.__dict__['__cached_args_method_neighbors']
+                        del hyb[(n,)]
                     except KeyError:  # already flushed before
                         pass
-                    flush = False
-        for n in hs:
-            self._calc_implicit(n)
+            for n in hs:  # hydrogens count recalculation
+                self._calc_implicit(n)
         return log
 
     def __fix_resonance(self: Union['MoleculeContainer', 'Standardize'], *, logging=False) -> Union[bool, List[int]]:
@@ -521,10 +472,8 @@ class Standardize:
                 break  # path from negative atom to positive atom found.
             # path not found. keep negative atom n as is
         if hs:
-            self.flush_cache()
             for n in hs:
                 self._calc_implicit(n)
-                self._calc_hybridization(n)
             if logging:
                 return list(hs)
             return True

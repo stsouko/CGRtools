@@ -20,7 +20,10 @@ from lazy_object_proxy import Proxy
 from ...periodictable import ListElement
 
 
-def _rules():
+def _rules_single():
+    """
+    rules without overlapping. these rules can match once to same set of atoms.
+    """
     from ...containers import QueryContainer
 
     raw_rules = []
@@ -48,7 +51,7 @@ def _rules():
     #
     atoms = ({'atom': 'B'}, {'atom': 'N', 'neighbors': 3, 'hybridization': 2})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': -1}, 2: {'charge': 1}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -61,7 +64,7 @@ def _rules():
     #
     atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 2}, {'atom': 'N', 'neighbors': 4, 'hybridization': 2})
     bonds = ((1, 2, 2),)
-    atom_fix = {1: {'charge': -1, 'hybridization': 1}, 2: {'charge': 1, 'hybridization': 1}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -75,7 +78,7 @@ def _rules():
     atoms = ({'atom': 'B', 'charge': -1, 'neighbors': 3, 'hybridization': 2},
              {'atom': 'N', 'charge': 1, 'neighbors': 3, 'hybridization': 2})
     bonds = ((1, 2, 2),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 1}, 2: {'charge': 0, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -89,7 +92,7 @@ def _rules():
     atoms = ({'atom': 'B', 'charge': 3, 'neighbors': 4}, {'atom': 'A', 'charge': -1}, {'atom': 'A', 'charge': -1},
              {'atom': 'A', 'charge': -1}, {'atom': 'A', 'charge': -1})
     bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
-    atom_fix = {1: {'charge': -1}, 2: {'charge': 0}, 3: {'charge': 0}, 4: {'charge': 0}, 5: {'charge': 0}}
+    atom_fix = {1: (-4, None), 2: (1, None), 3: (1, None), 4: (1, None), 5: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -102,7 +105,7 @@ def _rules():
     #
     atoms = ({'atom': 'B', 'neighbors': 4}, {'atom': 'A', 'charge': -1}, {'atom': 'A'}, {'atom': 'A'}, {'atom': 'A'})
     bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1))
-    atom_fix = {1: {'charge': -1}, 2: {'charge': 0}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -115,7 +118,7 @@ def _rules():
     #
     atoms = ({'atom': 'B', 'neighbors': 4, 'hybridization': 1},)
     bonds = ()
-    atom_fix = {1: {'charge': -1}}
+    atom_fix = {1: (-1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -128,7 +131,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 1},)
     bonds = ()
-    atom_fix = {1: {'charge': 1}}
+    atom_fix = {1: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -139,10 +142,9 @@ def _rules():
     #      \         \
     #       OH       [O-]
     #
-    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1},
-             {'atom': 'C', 'hybridization': 2})
+    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1}, {'atom': 'C'})
     bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1}, 4: {'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 4, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -156,58 +158,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': ListElement(['C', 'N', 'O'])},
              {'atom': 'A'})
     bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
-    bonds_fix = ((1, 2, 1),)
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    #
-    #          N             [N-]
-    #         //             /
-    # [C,N] = N  >> [C,N] = [N+]
-    #         \              \
-    #          A              A
-    #
-    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
-             {'atom': ListElement(['C', 'N'])}, {'atom': 'A'})
-    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
-    bonds_fix = ((1, 2, 1),)
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    #
-    # [N-] - [N+] = O >> N = [N+] - [O-]
-    #         |               |
-    #         A               A
-    #
-    atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
-             {'atom': 'N', 'charge': -1, 'hybridization': 1, 'neighbors': (1, 2)})
-    bonds = ((1, 2, 2), (1, 3, 1))
-    atom_fix = {2: {'charge': -1, 'hybridization': 1}, 3: {'charge': 0, 'hybridization': 2}}
-    bonds_fix = ((1, 2, 1), (1, 3, 2))
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    #
-    # [N+] = N = N - ? >> [N+] = [N+] - [N-] - ?
-    #        |                    |
-    #        A                    A
-    #
-    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
-             {'atom': 'N', 'charge': 1, 'hybridization': 2, 'neighbors': 3}, {'atom': 'A'})
-    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
-    bonds_fix = ((1, 2, 1),)
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    # fix CN(=O)=N(=O)C
-    #
-    # [N+] = N = O >> [N+] = [N+] - O-
-    #        |                |
-    #        A                A
-    #
-    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
-             {'atom': 'N', 'charge': 1, 'hybridization': 2, 'neighbors': 3}, {'atom': 'A'})
-    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -219,10 +170,61 @@ def _rules():
     #       OH            O
     #
     atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3}, {'atom': 'O', 'charge': -1, 'neighbors': 1},
-             {'atom': 'O', 'neighbors': 1}, {'atom': 'C', 'hybridization': 2})
+             {'atom': 'O', 'neighbors': 1}, {'atom': 'C'})
     bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 2))
-    atom_fix = {3: {'hybridization': 2}, 4: {'hybridization': 1}}
+    atom_fix = {}
     bonds_fix = ((1, 3, 2), (1, 4, 1))
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    # fix CN(=O)=N(=O)C
+    #
+    # [N+] = N = O >> [N+] = [N+] - O-
+    #        |                |
+    #        A                A
+    #
+    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1},
+             {'atom': 'N', 'charge': 1, 'hybridization': 2, 'neighbors': 3}, {'atom': 'A'})
+    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+    atom_fix = {1: (1, None), 2: (-1, None)}
+    bonds_fix = ((1, 2, 1),)
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    # Fix CN(=O)=N(=N)C
+    # [N+] = N = N - ? >> [N+] = [N+] - [N-] - ?
+    #        |                    |
+    #        A                    A
+    #
+    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
+             {'atom': 'N', 'charge': 1, 'hybridization': 2, 'neighbors': 3}, {'atom': 'A'})
+    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+    atom_fix = {1: (1, None), 2: (-1, None)}
+    bonds_fix = ((1, 2, 1),)
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    # For N-case not unique!
+    #          N             [N-]
+    #         //             /
+    # [C,N] = N  >> [C,N] = [N+]
+    #         \              \
+    #          A              A
+    #
+    atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
+             {'atom': ListElement(['C', 'N'])}, {'atom': 'A'})
+    bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
+    atom_fix = {1: (1, None), 2: (-1, None)}
+    bonds_fix = ((1, 2, 1),)
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    #
+    # [N-] - [N+] = O >> N = [N+] - [O-]
+    #         |               |
+    #         A               A
+    #
+    atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 3, 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
+             {'atom': 'N', 'charge': -1, 'hybridization': 1, 'neighbors': (1, 2)})
+    bonds = ((1, 2, 2), (1, 3, 1))
+    atom_fix = {2: (-1, None), 3: (1, None)}
+    bonds_fix = ((1, 2, 1), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
@@ -235,7 +237,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1},
              {'atom': 'A', 'charge': -1})
     bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -246,7 +248,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1}, {'atom': 'A'})
     bonds = ((1, 2, 4), (1, 3, 4), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}, 3: {'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -260,7 +262,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 2, 'charge': -1}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
     bonds = ((1, 2, 2), (1, 3, 2))
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -269,7 +271,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1}, {'atom': ListElement(['O', 'C', 'N'])})
     bonds = ((1, 2, 3), (1, 3, 2))
-    atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -279,7 +281,7 @@ def _rules():
     atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2}, {'atom': 'N', 'neighbors': 1},
              {'atom': ListElement(['N', 'C', 'O']), 'charge': -1, 'hybridization': 1})
     bonds = ((1, 2, 3), (1, 3, 1))
-    atom_fix = {2: {'charge': -1, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {2: (-1, None), 3: (1, None)}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -289,7 +291,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
              {'atom': 'N', 'charge': -1, 'neighbors': 1}, {'atom': 'A'})
     bonds = ((1, 2, 3), (1, 3, 2), (2, 4, 1))
-    atom_fix = {1: {'charge': 1}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -299,7 +301,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 2, 'hybridization': 2},
              {'atom': 'N', 'neighbors': 1})
     bonds = ((1, 2, 2), (1, 3, 2))
-    atom_fix = {1: {'charge': 1}, 3: {'charge': -1}}
+    atom_fix = {1: (1, None), 3: (-1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -309,17 +311,17 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 2, 'hybridization': 1},
              {'atom': 'N', 'neighbors': 1})
     bonds = ((1, 2, 1), (1, 3, 3))
-    atom_fix = {1: {'charge': 1}, 2: {'hybridization': 2}, 3: {'charge': -1, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 3: (-1, None)}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
     # [N-] # N = N - A >> [N-] == [N+] == N - A
     #
-    atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1, 'hybridization': 3, 'charge': -1},
+    atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1, 'charge': -1},
              {'atom': 'N', 'hybridization': 2, 'neighbors': 2})
     bonds = ((1, 2, 3), (1, 3, 2))
-    atom_fix = {1: {'charge': 1}, 2: {'hybridization': 2}}
+    atom_fix = {1: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -328,7 +330,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1, 'charge': -1}, {'atom': 'N', 'neighbors': 1})
     bonds = ((1, 2, 2), (1, 3, 3))
-    atom_fix = {1: {'charge': 1}, 3: {'hybridization': 2, 'charge': -1}}
+    atom_fix = {1: (1, None), 3: (-1, None)}
     bonds_fix = ((1, 3, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -337,7 +339,7 @@ def _rules():
     #
     atoms = ({'atom': 'C', 'neighbors': (1, 2)}, {'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1})
     bonds = ((1, 2, 3), (2, 3, 2))
-    atom_fix = {1: {'hybridization': 2}, 2: {'charge': 1}, 3: {'charge': -1}}
+    atom_fix = {2: (1, None), 3: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -347,7 +349,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': ListElement(['O', 'N']), 'hybridization': 2},
              {'atom': 'C', 'neighbors': (1, 2)})
     bonds = ((1, 2, 2), (1, 3, 3))
-    atom_fix = {1: {'charge': 1}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -357,7 +359,7 @@ def _rules():
     atoms = ({'atom': ListElement(['O', 'N', 'S']), 'neighbors': 1}, {'atom': 'N', 'neighbors': 2},
              {'atom': 'C', 'neighbors': (1, 2)})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'charge': -1}, 2: {'charge': 1}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -367,7 +369,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'neighbors': 2},
              {'atom': 'C', 'neighbors': (1, 2)})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'charge': -1}, 2: {'charge': 1}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -377,7 +379,7 @@ def _rules():
     atoms = ({'atom': ListElement(['O', 'N', 'S']), 'neighbors': 1}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
              {'atom': 'C', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'charge': -1}, 3: {'charge': 0}}
+    atom_fix = {1: (-1, None), 3: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -387,7 +389,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'N', 'charge': 1, 'neighbors': 2},
              {'atom': 'C', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'charge': -1}, 3: {'charge': 0}}
+    atom_fix = {1: (-1, None), 3: (1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -396,7 +398,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'C', 'neighbors': 1}, {'atom': 'A'})
     bonds = ((1, 2, 3), (1, 3, 1))
-    atom_fix = {1: {'charge': 1}, 2: {'charge': -1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -407,7 +409,7 @@ def _rules():
     atoms = ({'atom': 'C', 'charge': -1, 'neighbors': (1, 2), 'hybridization': 2},
              {'atom': 'N', 'charge': 1, 'neighbors': 2}, {'atom': 'N', 'neighbors': 1})
     bonds = ((1, 2, 2), (2, 3, 2))
-    atom_fix = {1: {'charge': 0}, 3: {'charge': -1}}
+    atom_fix = {1: (1, None), 3: (-1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -419,7 +421,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 4, 'hybridization': 2}, {'atom': ListElement(['O', 'N']), 'hybridization': 2})
     bonds = ((1, 2, 2),)
-    atom_fix = {1: {'charge': 1, 'hybridization': 1}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -432,7 +434,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 2, 'is_radical': True}, {'atom': 'O', 'neighbors': 1})
     bonds = ((1, 2, 2),)
-    atom_fix = {1: {'hybridization': 1, 'is_radical': False}, 2: {'is_radical': True, 'hybridization': 1}}
+    atom_fix = {1: (0, False), 2: (0, True)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -445,7 +447,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 3}, {'atom': 'N', 'neighbors': 1}, {'atom': 'C'}, {'atom': 'C'})
     bonds = ((1, 2, 3), (1, 3, 1), (1, 4, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -454,7 +456,7 @@ def _rules():
     #
     atoms = ({'atom': 'N', 'neighbors': 2}, {'atom': 'N', 'charge': 1, 'neighbors': 1}, {'atom': 'C'})
     bonds = ((1, 2, 2), (1, 3, 1))
-    atom_fix = {1: {'charge': 1, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 3}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 3),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -464,7 +466,7 @@ def _rules():
     atoms = ({'atom': 'C', 'charge': -1, 'neighbors': 2},
              {'atom': 'N', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 1}, {'atom': 'O', 'neighbors': 1})
     bonds = ((1, 2, 1), (1, 3, 2))
-    atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -473,7 +475,7 @@ def _rules():
     #
     atoms = ({'atom': 'C', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1})
     bonds = ((1, 2, 3), (1, 3, 1))
-    atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 2}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -482,7 +484,7 @@ def _rules():
     #
     atoms = ({'atom': 'C', 'neighbors': 2}, {'atom': 'N', 'neighbors': 1}, {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 3), (1, 3, 1))
-    atom_fix = {2: {'charge': -1, 'hybridization': 2}, 3: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {2: (-1, None), 3: (1, None)}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -492,7 +494,7 @@ def _rules():
     atoms = ({'atom': 'N', 'charge': 1, 'neighbors': 2, 'hybridization': 1},
              {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -502,7 +504,7 @@ def _rules():
     atoms = ({'atom': 'N', 'neighbors': 3, 'hybridization': 1},
              {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3), 'heteroatoms': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 1, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -510,9 +512,9 @@ def _rules():
     #  [C+] = N(R)  >>  C # [N+](R)
     #
     atoms = ({'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2},
-             {'atom': 'C', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 2})
+             {'atom': 'C', 'charge': 1, 'neighbors': (1, 2), 'hybridization': 2, 'heteroatoms': 1})
     bonds = ((1, 2, 2),)
-    atom_fix = {1: {'charge': 1, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 3}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 3),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -524,24 +526,37 @@ def _rules():
     atoms = ({'atom': 'C', 'hybridization': 2}, {'atom': ListElement(['O', 'S']), 'neighbors': 1},
              {'atom': 'N', 'hybridization': 2})
     bonds = ((1, 2, 1), (1, 3, 2))
-    atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 2), (1, 3, 1))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
-    # fix pyridin-2-one. note: order dependent
+    # fix pyridin-2-one. note: only after amide rule
     #
     atoms = ({'atom': 'C', 'neighbors': 3}, {'atom': ListElement(['O', 'S']), 'neighbors': 1},
              {'atom': 'N', 'neighbors': 2}, {'atom': 'A', 'hybridization': 2}, {'atom': 'A', 'hybridization': 2},
              {'atom': 'A', 'hybridization': 2}, {'atom': 'A', 'hybridization': 2})
     bonds = ((1, 2, 2), (1, 3, 1), (1, 4, 1), (3, 7, 1), (4, 5, (1, 2)), (5, 6, (1, 2)), (6, 7, (1, 2)))
-    atom_fix = {2: {'hybridization': 1}, 3: {'hybridization': 2}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 1), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     # todo:
     # [C;a:10][N;H:2][N:3]=[C:4]1[C:5]=,:[C:6][C:7](=[O:1])[C:8]=,:[C:9]1
     # [C;a:10][N;H:2][N:3]=[C:4]1[C:5](=[O:1])[C:6]=,:[C:7]-,:[C:8]=,:[C:9]1
+
+    #
+    #       OH          O
+    #      /           //
+    # C = C    >> C - C
+    #      \           \
+    #      [O,N]       [O,N]
+    #
+    atoms = ({'atom': 'O', 'neighbors': 1}, {'atom': ListElement(['O', 'N'])}, {'atom': 'C'}, {'atom': 'C'})
+    bonds = ((1, 3, 1), (2, 3, 1), (3, 4, 2))
+    atom_fix = {}
+    bonds_fix = ((1, 3, 2), (3, 4, 1))
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
     #       A                   A
@@ -553,7 +568,7 @@ def _rules():
     atoms = ({'atom': 'P', 'charge': 1, 'neighbors': 4, 'hybridization': 1},
              {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -567,7 +582,7 @@ def _rules():
     atoms = ({'atom': 'P', 'charge': -1, 'neighbors': 4, 'hybridization': 1},
              {'atom': 'C', 'charge': 1, 'neighbors': (1, 2, 3), 'hybridization': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -582,21 +597,21 @@ def _rules():
              {'atom': 'F', 'neighbors': 1}, {'atom': 'F', 'neighbors': 1}, {'atom': 'F', 'neighbors': 1},
              {'atom': 'F', 'neighbors': 1})
     bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1))
-    atom_fix = {1: {'charge': -1}}
+    atom_fix = {1: (-1, None)}
     bonds_fix = ()
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
     #           A                   A
     #          /                   /
-    # [O-] - [S,Si,Se+]  >>  O = [S,Si,Se+]
+    # [O-] - [S,Si,Se+]  >>  O = [S,Si,Se]
     #          \                   \
     #           A                   A
     #
     atoms = ({'atom': ListElement(['S', 'Se', 'Si']), 'charge': 1, 'neighbors': 3, 'hybridization': 1},
              {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -610,7 +625,7 @@ def _rules():
     atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 4, 'hybridization': 2},
              {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -624,8 +639,7 @@ def _rules():
     atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 3, 'hybridization': 2},
              {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1), (1, 3, 1))
-    atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
-                3: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-2, None), 2: (1, None), 3: (1, None)}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -639,8 +653,7 @@ def _rules():
     atoms = ({'atom': 'S', 'charge': 2, 'neighbors': 4, 'hybridization': 1},
              {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'O', 'charge': -1, 'neighbors': 1})
     bonds = ((1, 2, 1), (1, 3, 1))
-    atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2},
-                3: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-2, None), 2: (1, None), 3: (1, None)}
     bonds_fix = ((1, 2, 2), (1, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -652,7 +665,7 @@ def _rules():
     atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3, 'hybridization': 1},
              {'atom': 'C', 'charge': 1, 'hybridization': 1, 'neighbors': (1, 2, 3)})
     bonds = ((1, 2, 1),)
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -666,7 +679,7 @@ def _rules():
     atoms = ({'atom': 'S', 'charge': -1, 'neighbors': 3}, {'atom': 'O', 'neighbors': 1}, {'atom': 'O', 'neighbors': 1},
              {'atom': 'A'})
     bonds = ((1, 2, 2), (1, 3, 2), (1, 4, 1))
-    atom_fix = {1: {'charge': 0, 'hybridization': 2}, 2: {'charge': -1, 'hybridization': 1}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -675,7 +688,7 @@ def _rules():
     #
     atoms = ({'atom': 'S', 'charge': 1, 'neighbors': 2}, {'atom': 'O', 'charge': -1, 'neighbors': 1}, {'atom': 'C'})
     bonds = ((1, 2, 1), (1, 3, 2))
-    atom_fix = {1: {'charge': 0, 'hybridization': 3}, 2: {'charge': 0, 'hybridization': 2}}
+    atom_fix = {1: (-1, None), 2: (1, None)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -687,32 +700,8 @@ def _rules():
     atoms = ({'atom': 'S', 'neighbors': (3, 5), 'hybridization': 2}, {'atom': 'O', 'neighbors': 1},
              {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2})
     bonds = ((1, 2, 1), (1, 3, 2))
-    atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 2), (1, 3, 1))
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    #
-    #     [OH]                O
-    #      |                 //
-    #  N = S = A  >>  [NH] - S = A
-    #      |                 |
-    #      A                 A
-    #
-    atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
-             {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'A'}, {'atom': 'A'})
-    bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2), (1, 5, 1))
-    atom_fix = {2: {'hybridization': 2}, 3: {'hybridization': 1}}
-    bonds_fix = ((1, 2, 2), (1, 3, 1))
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    # Carbon Monoxide
-    #
-    # [CX1] = O  >> [С-] # [O+]
-    #
-    atoms = ({'atom': 'C', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 1})
-    bonds = ((1, 2, 2),)
-    atom_fix = {1: {'charge': -1, 'hybridization': 3, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 3}}
-    bonds_fix = ((1, 2, 3),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
@@ -721,18 +710,28 @@ def _rules():
     atoms = ({'atom': ListElement(['O', 'S', 'N']), 'neighbors': 1}, {'atom': 'C', 'neighbors': 2},
              {'atom': 'C', 'neighbors': (1, 2)})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 2), (2, 3, 2))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     #
-    # C # C - [NH]R  >> C=C=[NH]R
+    # C # C - [NH]R  >> C=C=NR
     #
     atoms = ({'atom': 'N', 'neighbors': 2, 'hybridization': 1}, {'atom': 'C', 'neighbors': 2},
              {'atom': 'C', 'neighbors': (1, 2)})
     bonds = ((1, 2, 1), (2, 3, 3))
-    atom_fix = {1: {'hybridization': 2}, 3: {'hybridization': 2}}
+    atom_fix = {}
     bonds_fix = ((1, 2, 2), (2, 3, 2))
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    # Carbon Monoxide
+    #
+    # [CX1] = O  >> [С-] # [O+]
+    #
+    atoms = ({'atom': 'C', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 1})
+    bonds = ((1, 2, 2),)
+    atom_fix = {1: (-1, False), 2: (1, None)}
+    bonds_fix = ((1, 2, 3),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     # Ozone
@@ -742,8 +741,7 @@ def _rules():
     atoms = ({'atom': 'O', 'neighbors': 1, 'is_radical': True}, {'atom': 'O', 'neighbors': 2},
              {'atom': 'O', 'neighbors': 1, 'is_radical': True})
     bonds = ((1, 2, 1), (2, 3, 1))
-    atom_fix = {1: {'hybridization': 2, 'is_radical': False}, 2: {'charge': 1, 'hybridization': 2},
-                3: {'charge': -1, 'is_radical': False}}
+    atom_fix = {1: (0, False), 2: (1, None), 3: (-1, False)}
     bonds_fix = ((1, 2, 2),)
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
@@ -758,22 +756,8 @@ def _rules():
     atoms = ({'atom': 'Br', 'charge': -1, 'neighbors': 0},
              {'atom': 'I', 'charge': 1, 'neighbors': 2, 'hybridization': 1},)
     bonds = ()
-    atom_fix = {1: {'charge': 0}, 2: {'charge': 0}}
+    atom_fix = {1: (1, None), 2: (-1, None)}
     bonds_fix = ((1, 2, 1),)
-    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
-
-    #
-    #       OH          O
-    #      /           //
-    # C = C    >> C - C
-    #      \           \
-    #      [O,N]       [O,N]
-    #
-    atoms = ({'atom': 'O', 'neighbors': 1}, {'atom': ListElement(['O', 'N'])}, {'atom': 'C'},
-             {'atom': 'C', 'hybridization': 2})
-    bonds = ((1, 3, 1), (2, 3, 1), (3, 4, 2))
-    atom_fix = {1: {'hybridization': 2}, 4: {'hybridization': 1}}
-    bonds_fix = ((1, 3, 2), (3, 4, 1))
     raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
 
     compiled_rules = []
@@ -787,7 +771,38 @@ def _rules():
     return compiled_rules
 
 
-rules = Proxy(_rules)
+def _rules_double():
+    from ...containers import QueryContainer
+
+    raw_rules = []
+
+    #
+    #     [OH]                O
+    #      |                 //
+    #  N = S = A  >>  [NH] - S = A
+    #      |                 |
+    #      A                 A
+    #
+    atoms = ({'atom': 'S', 'neighbors': 4}, {'atom': 'O', 'neighbors': 1},
+             {'atom': 'N', 'neighbors': (1, 2), 'hybridization': 2}, {'atom': 'A'}, {'atom': 'A'})
+    bonds = ((1, 2, 1), (1, 3, 2), (1, 4, 2), (1, 5, 1))
+    atom_fix = {}
+    bonds_fix = ((1, 2, 2), (1, 3, 1))
+    raw_rules.append((atoms, bonds, atom_fix, bonds_fix))
+
+    compiled_rules = []
+    for atoms, bonds, atom_fix, bonds_fix in raw_rules:
+        q = QueryContainer()
+        for a in atoms:
+            q.add_atom(**a)
+        for n, m, b in bonds:
+            q.add_bond(n, m, b)
+        compiled_rules.append((q, atom_fix, bonds_fix))
+    return compiled_rules
 
 
-__all__ = ['rules']
+single_rules = Proxy(_rules_single)
+double_rules = Proxy(_rules_double)
+
+
+__all__ = ['single_rules', 'double_rules']
