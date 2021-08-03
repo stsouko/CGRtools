@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2018-2021 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of CGRtools.
 #
 #  CGRtools is free software; you can redistribute it and/or modify
@@ -16,229 +16,21 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from CachedMethods import class_cached_property
 from collections import defaultdict, deque
 from typing import List, Optional, Tuple, TYPE_CHECKING, Union
-from .._functions import lazy_product
-from ..containers import query  # cyclic imports resolve
-from ..exceptions import InvalidAromaticRing
-from ..periodictable import ListElement
+from .rules import rules
+from ..._functions import lazy_product
+from ...exceptions import InvalidAromaticRing
 
 
 if TYPE_CHECKING:
     from CGRtools import MoleculeContainer
 
 
-class Aromatize:
+class Kekule:
     __slots__ = ()
 
-    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True, fix_metal_organics=True) -> bool:
-        """
-        Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
-        Also marks atoms as aromatic.
-
-        :param fix_tautomers: try to fix condensed rings with pyroles.
-            N1C=CC2=NC=CC2=C1>>N1C=CC2=CN=CC=C12
-        :param fix_metal_organics: create neutral form of ferrocenes and imidazolium complexes.
-        """
-        atoms = self._atoms
-        bonds = self._bonds
-        sh = self.hybridization
-        charges = self._charges
-        hydrogens = self._hydrogens
-
-        rings = defaultdict(set)  # aromatic? skeleton. include quinones
-        tetracycles = []
-        pyroles = set()
-        acceptors = set()
-        donors = []
-        freaks = []
-        fixed_charges = {}
-        for ring in self.sssr:
-            lr = len(ring)
-            if not 3 < lr < 8:  # skip 3-membered and big rings
-                continue
-            sp2 = sum(sh(n) == 2 and atoms[n].atomic_number in (5, 6, 7, 8, 15, 16) for n in ring)
-            if sp2 == lr:  # benzene like
-                if lr == 4:  # two bonds condensed aromatic rings
-                    tetracycles.append(ring)
-                else:
-                    if fix_tautomers and lr % 2:  # find potential pyroles
-                        try:
-                            n = next(n for n in ring if atoms[n].atomic_number == 7 and not charges[n])
-                        except StopIteration:
-                            pass
-                        else:
-                            acceptors.add(n)
-                    n, *_, m = ring
-                    rings[n].add(m)
-                    rings[m].add(n)
-                    for n, m in zip(ring, ring[1:]):
-                        rings[n].add(m)
-                        rings[m].add(n)
-            elif 4 < lr == sp2 + 1:  # pyroles, furanes, etc
-                try:
-                    n = next(n for n in ring if sh(n) == 1)
-                except StopIteration:  # exotic, just skip
-                    continue
-                an = atoms[n].atomic_number
-                if lr == 7 and an != 5:  # skip electron-rich 7-membered rings
-                    continue
-                elif an in (5, 7, 8, 15, 16, 34) and not charges[n]:
-                    if fix_tautomers and lr == 6 and an == 7 and len(bonds[n]) == 2:
-                        donors.append(n)
-                    elif fix_metal_organics and lr == 5 and an == 7:
-                        try:  # check for imidazolium. CN1C=C[N+](C)=C1[Cu,Ag,Au-]X
-                            m = next(m for m in bonds[n] if atoms[m].atomic_number == 6 and len(bonds[m]) == 3 and
-                                     all(atoms[x].atomic_number in (29, 47, 79, 46) and charges[x] < 0 or
-                                         atoms[x].atomic_number == 7 and charges[x] == 1
-                                         for x in bonds[m] if x != n))
-                        except StopIteration:
-                            pass
-                        else:
-                            for x in bonds[m]:
-                                if charges[x] < 0:
-                                    if x in fixed_charges:
-                                        fixed_charges[x] += 1
-                                    else:
-                                        fixed_charges[x] = charges[x] + 1
-                                else:
-                                    fixed_charges[x] = 0
-                    pyroles.add(n)
-                    n, *_, m = ring
-                    rings[n].add(m)
-                    rings[m].add(n)
-                    for n, m in zip(ring, ring[1:]):
-                        rings[n].add(m)
-                        rings[m].add(n)
-                elif an == 6 and lr == 5 and charges[n] == -1:  # ferrocene, etc.
-                    if fix_metal_organics:
-                        try:
-                            m = next(m for m, b in bonds[n].items() if b == 8 and charges[m] > 0 and
-                                     atoms[m].atomic_number in
-                                     (22, 23, 24, 25, 26, 27, 28, 40, 41, 42, 44, 72, 74, 75, 77))
-                        except StopIteration:
-                            pass
-                        else:
-                            fixed_charges[n] = 0  # remove charges in thiele form
-                            if m in fixed_charges:
-                                fixed_charges[m] -= 1
-                            else:
-                                fixed_charges[m] = charges[m] - 1
-                    pyroles.add(n)
-                    n, *_, m = ring
-                    rings[n].add(m)
-                    rings[m].add(n)
-                    for n, m in zip(ring, ring[1:]):
-                        rings[n].add(m)
-                        rings[m].add(n)
-            # like N1C=Cn2cccc12
-            elif lr == 5 and sum(atoms[x].atomic_number == 7 and not charges[x] for x in ring) > 1:
-                freaks.append(ring)
-        if not rings:
-            return False
-        double_bonded = {n for n in rings if any(m not in rings and b.order == 2 for m, b in bonds[n].items())}
-
-        # fix_tautomers
-        if fix_tautomers and acceptors and donors:
-            for start in donors:
-                stack = [(start, n, 0, 2) for n in rings[start] if n not in double_bonded]
-                path = []
-                seen = {start}
-                while stack:
-                    last, current, depth, order = stack.pop()
-                    if len(path) > depth:
-                        seen.difference_update(x for _, x, _ in path[depth:])
-                        path = path[:depth]
-                    path.append((last, current, order))
-                    if current in acceptors:  # we found
-                        if order == 1:
-                            acceptors.discard(current)
-                            pyroles.discard(start)
-                            pyroles.add(current)
-                            hydrogens[current] = 1
-                            hydrogens[start] = 0
-                            break
-                        else:
-                            continue
-
-                    depth += 1
-                    seen.add(current)
-                    new_order = 1 if order == 2 else 2
-                    stack.extend((current, n, depth, new_order) for n in rings[current] if
-                                 n not in seen and n not in double_bonded and bonds[current][n].order == order)
-                for n, m, o in path:
-                    bonds[n][m]._Bond__order = o
-                if not acceptors:
-                    break
-
-        if double_bonded:  # delete quinones
-            for n in double_bonded:
-                for m in rings.pop(n):
-                    rings[m].discard(n)
-
-            for n in [n for n, ms in rings.items() if not ms]:  # imide leads to isolated atoms
-                del rings[n]
-            if not rings:
-                return False
-            while True:
-                try:
-                    n = next(n for n, ms in rings.items() if len(ms) == 1)
-                except StopIteration:
-                    break
-                m = rings.pop(n).pop()
-                if n in pyroles:
-                    rings[m].discard(n)
-                else:
-                    pm = rings.pop(m)
-                    pm.discard(n)
-                    for x in pm:
-                        rings[x].discard(m)
-        if not rings:
-            return False
-
-        n_sssr = sum(len(x) for x in rings.values()) // 2 - len(rings) + len(self._connected_components(rings))
-        if not n_sssr:
-            return False
-        rings = self._sssr(rings, n_sssr)  # search rings again
-
-        seen = set()
-        for ring in rings:
-            seen.update(ring)
-        charges.update(fixed_charges)
-
-        # reset bonds to single
-        for ring in tetracycles:
-            if seen.issuperset(ring):
-                n, *_, m = ring
-                bonds[n][m]._Bond__order = 1
-                for n, m in zip(ring, ring[1:]):
-                    bonds[n][m]._Bond__order = 1
-
-        for ring in rings:
-            n, *_, m = ring
-            bonds[n][m]._Bond__order = 4
-            for n, m in zip(ring, ring[1:]):
-                bonds[n][m]._Bond__order = 4
-
-        self.flush_cache()
-        for ring in freaks:  # aromatize rule based
-            rs = set(ring)
-            for q in self.__freaks:
-                # used low-level API for speedup
-                components, closures = q._compiled_query
-                if any(q._get_mapping(components[0], closures, atoms, bonds, rs, self.atoms_order)):
-                    n, *_, m = ring
-                    bonds[n][m]._Bond__order = 4
-                    for n, m in zip(ring, ring[1:]):
-                        bonds[n][m]._Bond__order = 4
-                    break
-        if freaks:
-            self.flush_cache()  # flush again
-        self._fix_stereo()  # check if any stereo centers vanished.
-        return True
-
-    def kekule(self: Union['Aromatize', 'MoleculeContainer']) -> bool:
+    def kekule(self: Union['Kekule', 'MoleculeContainer']) -> bool:
         """
         Convert structure to kekule form. Return True if found any aromatic ring. Set implicit hydrogen count and
         hybridization marks on atoms.
@@ -253,13 +45,13 @@ class Aromatize:
             return True
         return False
 
-    def enumerate_kekule(self: Union['Aromatize', 'MoleculeContainer']):
+    def enumerate_kekule(self: Union['Kekule', 'MoleculeContainer']):
         """
         Enumerate all possible kekule forms of molecule.
         """
         for form in self.__kekule_full():
             copy = self.copy()
-            copy._Aromatize__kekule_patch(form)
+            copy._Kekule__kekule_patch(form)
             yield copy
 
     def check_thiele(self, fast=True) -> bool:
@@ -277,10 +69,10 @@ class Aromatize:
             return False
         return True
 
-    def __fix_rings(self: Union['MoleculeContainer', 'Aromatize']):
+    def __fix_rings(self: Union['MoleculeContainer', 'Kekule']):
         bonds = self._bonds
         seen = set()
-        for q, af, bf in self.__bad_rings_rules:
+        for q, af, bf in rules:
             for mapping in q.get_mapping(self, automorphism_filter=False):
                 match = set(mapping.values())
                 if not match.isdisjoint(seen):  # prevent double patching of atoms
@@ -304,6 +96,7 @@ class Aromatize:
         radicals = self._radicals
         bonds = self._bonds
         hydrogens = self._hydrogens
+        neighbors = self.neighbors
 
         rings = defaultdict(list)  # aromatic skeleton
         pyroles = set()
@@ -379,7 +172,7 @@ class Aromatize:
         for n in rings:
             an = atoms[n].atomic_number
             ac = charges[n]
-            ab = len(bonds[n])
+            ab = neighbors(n)
             if an == 6:  # carbon
                 if ac == 0:
                     if ab not in (2, 3):
@@ -510,7 +303,7 @@ class Aromatize:
             self._calc_implicit(n)
 
     def __kekule_full(self):
-        self.__fix_rings()  # fix pyridine n-oxyde
+        self.__fix_rings()  # fix bad aromatic rings
         rings, pyroles, double_bonded = self.__prepare_rings()
         atoms = set(rings)
         components = []
@@ -668,236 +461,5 @@ class Aromatize:
         if nether_yielded:
             raise InvalidAromaticRing(f'kekule form not found for: {list(rings)}')
 
-    @class_cached_property
-    def __freaks(self):
-        rules = []
 
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_atom('A')
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, (2, 4))
-        q.add_bond(3, 4, 1)
-        q.add_bond(4, 5, 4)
-        q.add_bond(1, 5, 1)
-        rules.append(q)
-        return rules
-
-    @class_cached_property
-    def __bad_rings_rules(self):
-        rules = []
-
-        # Aromatic N-Oxide
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     O           [O-]
-        #
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=3, hybridization=4)
-        q.add_atom('O', neighbors=1)
-        q.add_bond(1, 2, 2)
-        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        # Aromatic N-Nitride?
-        #
-        #  : N :  >>  : [N+] :
-        #    \\           \
-        #     N           [N-]
-        #
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=3, hybridization=4)
-        q.add_atom('N', neighbors=(1, 2), hybridization=2)
-        q.add_bond(1, 2, 2)
-        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1, '_hybridizations': 1}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        #
-        # : [S+] : >> : S :
-        #    |          \\
-        #   [O-]         O
-        #
-        q = query.QueryContainer()
-        q.add_atom('S', neighbors=3, hybridization=4, charge=1)
-        q.add_atom('O', neighbors=1, charge=-1)
-        q.add_bond(1, 2, 1)
-        atom_fix = {1: {'_charges': 0}, 2: {'_charges': 0, '_hybridizations': 2}}
-        bonds_fix = ((1, 2, 2),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        #
-        # [O-]-N:C:C:[N+]=O
-        #
-        q = query.QueryContainer()
-        q.add_atom('O', neighbors=1, charge=-1)
-        q.add_atom('N', neighbors=3)
-        q.add_atom('C')
-        q.add_atom('C')
-        q.add_atom('N', neighbors=3, charge=1)
-        q.add_atom('O', neighbors=1)
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 2)
-        atom_fix = {2: {'_charges': 1}, 6: {'_charges': -1}}
-        bonds_fix = ((5, 6, 1),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        #
-        # N : A : N - ?
-        #  :     :
-        #   C # C
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=2)
-        q.add_atom('C', neighbors=2)
-        q.add_atom('C', neighbors=2)
-        q.add_atom('N', neighbors=(2, 3))
-        q.add_atom(ListElement(['C', 'N']))
-        q.add_bond(1, 2, 4)
-        q.add_bond(2, 3, 3)
-        q.add_bond(3, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(1, 5, 4)
-        atom_fix = {}
-        bonds_fix = ((2, 3, 4),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        #
-        # C:[N+]:[C-]
-        #    \\
-        #     O
-        #
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=3, charge=1)
-        q.add_atom('O', neighbors=1)
-        q.add_atom('C', neighbors=(2, 3), charge=-1)
-        q.add_atom('C', neighbors=(2, 3))
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 4)
-        q.add_bond(1, 4, 4)
-        atom_fix = {2: {'_charges': -1, '_hybridizations': 1}, 3: {'_charges': 0}}
-        bonds_fix = ((1, 2, 1),)
-        rules.append((q, atom_fix, bonds_fix))
-
-        #
-        #  O=[N+] : C
-        #     :     :
-        #    O : N : C
-        q = query.QueryContainer()
-        q.add_atom('N', neighbors=3, charge=1)
-        q.add_atom('O', neighbors=1)
-        q.add_atom('O', neighbors=2)
-        q.add_atom('C', neighbors=(2, 3))
-        q.add_atom('C', neighbors=(2, 3))
-        q.add_atom('N', neighbors=(2, 3))
-        q.add_bond(1, 2, 2)
-        q.add_bond(1, 3, 4)
-        q.add_bond(1, 4, 4)
-        q.add_bond(3, 6, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        atom_fix = {1: {'_hybridizations': 2}, 3: {'_hybridizations': 1}, 4: {'_hybridizations': 2},
-                    5: {'_hybridizations': 2}, 6: {'_hybridizations': 1}}
-        bonds_fix = ((1, 3, 1), (1, 4, 1), (3, 6, 1), (4, 5, 2), (5, 6, 1))
-        rules.append((q, atom_fix, bonds_fix))
-
-        # todo: refactor!
-
-        # imidazolium
-        #         R - N : C                  R - N : C
-        #            :    :                    :     :
-        #  A - Pd - C     : >>    A - [Pd-2] - C      :
-        #            :    :                    :     :
-        #         R - N : C                R - [N+]: C
-        #
-        q = query.QueryContainer()  # bis Pd complex
-        q.add_atom('Pd')
-        q.add_atom('C', rings_sizes=5, neighbors=3)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_atom('C', rings_sizes=5, neighbors=3)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 4)
-        q.add_bond(2, 4, 4)
-        q.add_bond(1, 5, 1)
-        q.add_bond(5, 6, 4)
-        q.add_bond(5, 7, 4)
-        atom_fix = {1: {'_charges': -2}, 3: {'_charges': 1}, 6: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
-
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['Cu', 'Ag', 'Au', 'Pd']))
-        q.add_atom('C', rings_sizes=5, neighbors=3)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_atom('N', rings_sizes=5, neighbors=3, heteroatoms=0)
-        q.add_bond(1, 2, 1)
-        q.add_bond(2, 3, 4)
-        q.add_bond(2, 4, 4)
-        atom_fix = {1: {'_charges': -1}, 3: {'_charges': 1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
-
-        # ferrocene uncharged
-        #
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
-                                'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']))
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_bond(1, 2, 8)
-        q.add_bond(1, 7, 8)
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(2, 6, 4)
-        q.add_bond(7, 8, 4)
-        q.add_bond(8, 9, 4)
-        q.add_bond(9, 10, 4)
-        q.add_bond(10, 11, 4)
-        q.add_bond(7, 11, 4)
-        atom_fix = {1: {'_charges': 2}, 2: {'_charges': -1}, 7: {'_charges': -1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
-
-        # half ferrocene uncharged
-        #
-        q = query.QueryContainer()
-        q.add_atom(ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
-                                'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']))
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_atom('C', rings_sizes=5)
-        q.add_bond(1, 2, 8)
-        q.add_bond(2, 3, 4)
-        q.add_bond(3, 4, 4)
-        q.add_bond(4, 5, 4)
-        q.add_bond(5, 6, 4)
-        q.add_bond(2, 6, 4)
-        atom_fix = {1: {'_charges': 1}, 2: {'_charges': -1}}
-        bonds_fix = ()
-        rules.append((q, atom_fix, bonds_fix))
-        return rules
-
-
-__all__ = ['Aromatize']
+__all__ = ['Kekule']
