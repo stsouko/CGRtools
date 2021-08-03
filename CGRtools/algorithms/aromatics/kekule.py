@@ -251,8 +251,15 @@ class Kekule:
                             double_bonded.add(n)
                         elif ac != 1:
                             raise InvalidAromaticRing('S, Se, Te cation in benzene like ring expected')
-                    elif ab == 3 and ac == 1 and not radicals[n]:
-                        double_bonded.add(n)
+                    elif ab == 3:
+                        if radicals[n]:
+                            if ac:
+                                raise InvalidAromaticRing('S, Se, Te ion-radical ring')
+                            double_bonded.add(n)
+                        elif ac == 1:
+                            double_bonded.add(n)
+                        elif ac:
+                            raise InvalidAromaticRing('S, Se, Te invalid charge ring')
                     else:
                         raise InvalidAromaticRing('S, Se, Te hypervalent ring')
             elif an == 5:  # boron

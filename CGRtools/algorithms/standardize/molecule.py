@@ -20,7 +20,7 @@
 #
 from collections import defaultdict
 from typing import List, TYPE_CHECKING, Union, Tuple
-from .charged_heterocycles import fixed_rules, morgan_rules
+from .charged import fixed_rules, morgan_rules
 from .groups import *
 from .metal_organics import rules as metal_rules
 from ...containers.bonds import Bond
