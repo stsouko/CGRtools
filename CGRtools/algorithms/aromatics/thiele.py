@@ -50,14 +50,13 @@ freak_rules = Proxy(_freaks)
 class Thiele:
     __slots__ = ()
 
-    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True, fix_metal_organics=True) -> bool:
+    def thiele(self: 'MoleculeContainer', *, fix_tautomers=True) -> bool:
         """
         Convert structure to aromatic form (Huckel rule ignored). Return True if found any kekule ring.
         Also marks atoms as aromatic.
 
         :param fix_tautomers: try to fix condensed rings with pyroles.
             N1C=CC2=NC=CC2=C1>>N1C=CC2=CN=CC=C12
-        :param fix_metal_organics: create neutral form of ferrocenes and imidazolium complexes.
         """
         atoms = self._atoms
         bonds = self._bonds
@@ -71,7 +70,6 @@ class Thiele:
         acceptors = set()
         donors = []
         freaks = []
-        fixed_charges = {}
         for ring in self.sssr:
             lr = len(ring)
             if not 3 < lr < 8:  # skip 3-membered and big rings
@@ -105,23 +103,6 @@ class Thiele:
                 elif an in (5, 7, 8, 15, 16, 34) and not charges[n]:
                     if fix_tautomers and lr == 6 and an == 7 and len(bonds[n]) == 2:
                         donors.append(n)
-                    elif fix_metal_organics and lr == 5 and an == 7:
-                        try:  # check for imidazolium. CN1C=C[N+](C)=C1[Cu,Ag,Au-]X
-                            m = next(m for m in bonds[n] if atoms[m].atomic_number == 6 and len(bonds[m]) == 3 and
-                                     all(atoms[x].atomic_number in (29, 47, 79, 46) and charges[x] < 0 or
-                                         atoms[x].atomic_number == 7 and charges[x] == 1
-                                         for x in bonds[m] if x != n))
-                        except StopIteration:
-                            pass
-                        else:
-                            for x in bonds[m]:
-                                if charges[x] < 0:
-                                    if x in fixed_charges:
-                                        fixed_charges[x] += 1
-                                    else:
-                                        fixed_charges[x] = charges[x] + 1
-                                else:
-                                    fixed_charges[x] = 0
                     pyroles.add(n)
                     n, *_, m = ring
                     rings[n].add(m)
@@ -130,19 +111,6 @@ class Thiele:
                         rings[n].add(m)
                         rings[m].add(n)
                 elif an == 6 and lr == 5 and charges[n] == -1:  # ferrocene, etc.
-                    if fix_metal_organics:
-                        try:
-                            m = next(m for m, b in bonds[n].items() if b == 8 and charges[m] > 0 and
-                                     atoms[m].atomic_number in
-                                     (22, 23, 24, 25, 26, 27, 28, 40, 41, 42, 44, 72, 74, 75, 77))
-                        except StopIteration:
-                            pass
-                        else:
-                            fixed_charges[n] = 0  # remove charges in thiele form
-                            if m in fixed_charges:
-                                fixed_charges[m] -= 1
-                            else:
-                                fixed_charges[m] = charges[m] - 1
                     pyroles.add(n)
                     n, *_, m = ring
                     rings[n].add(m)
@@ -223,7 +191,6 @@ class Thiele:
         seen = set()
         for ring in rings:
             seen.update(ring)
-        charges.update(fixed_charges)
 
         # reset bonds to single
         for ring in tetracycles:
