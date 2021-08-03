@@ -257,7 +257,7 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         copy._cis_trans_stereo = self._cis_trans_stereo.copy()
         return copy
 
-    def substructure(self, atoms, *, as_query: bool = False, skip_neighbors_marks=False,
+    def substructure(self, atoms, *, as_query: bool = False, recalculate_hydrogens=True, skip_neighbors_marks=False,
                      skip_hybridizations_marks=False, skip_hydrogens_marks=False, skip_rings_sizes_marks=False,
                      **kwargs) -> Union['MoleculeContainer', 'query.QueryContainer']:
         """
@@ -317,9 +317,14 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
         else:
             sub._conformers = [{n: c[n] for n in atoms} for c in self._conformers]
 
-            sub._hydrogens = {}
-            for n in atoms:
-                sub._calc_implicit(n)
+            if recalculate_hydrogens:
+                sub._hydrogens = {}
+                for n in atoms:
+                    sub._calc_implicit(n)
+            else:
+                hg = self._hydrogens
+                sub._hydrogens = {n: hg[n] for n in atoms}
+
             # fix_stereo will repair data
             sub._atoms_stereo = self._atoms_stereo.copy()
             sub._allenes_stereo = self._allenes_stereo.copy()
@@ -340,6 +345,15 @@ class MoleculeContainer(MoleculeStereo, Graph, Aromatize, Standardize, MoleculeS
             return other.union(self, **kwargs)
         else:
             raise TypeError('MoleculeContainer expected')
+
+    def split(self, meta: bool = False) -> List['MoleculeContainer']:
+        """
+        Split disconnected structure to connected substructures
+
+        :param meta: copy metadata to each substructure
+        :return: list of substructures
+        """
+        return [self.substructure(c, meta=meta, recalculate_hydrogens=False) for c in self.connected_components]
 
     def compose(self, other: Union['MoleculeContainer', 'cgr.CGRContainer']) -> 'cgr.CGRContainer':
         """
