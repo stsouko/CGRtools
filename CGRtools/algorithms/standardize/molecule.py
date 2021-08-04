@@ -374,6 +374,8 @@ class Standardize:
             seen = set()
             # collect constrain Any-atoms
             any_atoms = [n for n, a in pattern.atoms() if a.atomic_symbol == 'A' and n not in atom_fix]
+            # AnyMetal can match multiple times
+            any_atoms.extend(n for n, a in pattern.atoms() if a.atomic_symbol == 'M')
             for mapping in pattern.get_mapping(self, optimize=False, automorphism_filter=False):
                 match = set(mapping.values())
                 if not match.isdisjoint(seen):  # skip intersected groups

@@ -49,35 +49,129 @@ def _rules():
     bonds_fix = ((1, 2, 8), (2, 3, 2))
     rules.append((q, atom_fix, bonds_fix))
 
-    # Ferrocene covalent charge-free
-    #  C5H5-(5)Fe(5)-C5H5
     #
-    atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']),
-                     'neighbors': 10}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'},
-             {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'})
-    bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1), (1, 8, 1), (1, 9, 1), (1, 10, 1), (1, 11, 1),
-             (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 6, 1), (6, 2, 1), (7, 8, 1), (8, 9, 1), (9, 10, 1), (10, 11, 1),
-             (11, 7, 1))
-    atom_fix = {1: {'charge': 2}, 2: {'charge': -1}, 3: {'hybridization': 2}, 4: {'hybridization': 2},
-                5: {'hybridization': 2}, 6: {'hybridization': 2}, 7: {'charge': -1}, 8: {'hybridization': 2},
-                9: {'hybridization': 2}, 10: {'hybridization': 2}, 11: {'hybridization': 2}}
-    bonds_fix = (
-    (1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8),
-    (3, 4, 2), (5, 6, 2), (8, 9, 2), (10, 11, 2))
+    # cyanide
+    #
+    q = QueryContainer()
+    q.add_atom('C')
+    q.add_atom('N')
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 3)
+    q.add_bond(1, 3, 1)
 
-    # Ferrocene covalent explicit H
-    #  C5H5-(5)Fe(5)-C5H5
-    #
-    atoms = ({'atom': ListElement(['Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Zr', 'Nb', 'Mo', 'Ru', 'Hf', 'W', 'Re', 'Ir']),
-                     'charge': 2, 'neighbors': 10}, {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'},
-             {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C', 'charge': -1}, {'atom': 'C'}, {'atom': 'C'}, {'atom': 'C'},
-             {'atom': 'C'})
-    bonds = ((1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1), (1, 8, 1), (1, 9, 1), (1, 10, 1), (1, 11, 1),
-             (2, 3, 1), (3, 4, 2), (4, 5, 1), (5, 6, 2), (6, 2, 1), (7, 8, 1), (8, 9, 2), (9, 10, 1), (10, 11, 2),
-             (11, 7, 1))
+    atom_fix = {1: (-1, None), 3: (1, None)}
+    bonds_fix = ((1, 3, 8),)
+    rules.append((q, atom_fix, bonds_fix))
+
+    q = QueryContainer()
+    q.add_atom('C', charge=-1)
+    q.add_atom('N')
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 3)
+    q.add_bond(1, 3, 1)
+
     atom_fix = {}
-    bonds_fix = (
-    (1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8), (1, 11, 8))
+    bonds_fix = ((1, 3, 8),)
+    rules.append((q, atom_fix, bonds_fix))
+
+    #
+    # carbonyl
+    #
+    q = QueryContainer()
+    q.add_atom('C')
+    q.add_atom('O')
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 3)
+    q.add_bond(1, 3, 1)
+
+    atom_fix = {1: (-1, None), 2: (1, None)}
+    bonds_fix = ((1, 3, 8),)
+    rules.append((q, atom_fix, bonds_fix))
+
+    q = QueryContainer()
+    q.add_atom('C', is_radical=True)
+    q.add_atom('O')
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 2)
+    q.add_bond(1, 3, 1)
+
+    atom_fix = {1: (-1, False), 2: (1, None)}
+    bonds_fix = ((1, 3, 8), (1, 2, 3))
+    rules.append((q, atom_fix, bonds_fix))
+
+    q = QueryContainer()
+    q.add_atom('C', neighbors=2)
+    q.add_atom('O')
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 2)
+    q.add_bond(1, 3, 1)
+
+    atom_fix = {1: (-1, None), 2: (1, None)}
+    bonds_fix = ((1, 3, 8), (1, 2, 3))
+    rules.append((q, atom_fix, bonds_fix))
+
+    q = QueryContainer()
+    q.add_atom('C')
+    q.add_atom('O')
+    q.add_atom(AnyMetal())
+    q.add_atom(AnyMetal())
+    q.add_bond(1, 2, 2)
+    q.add_bond(1, 3, 1)
+    q.add_bond(1, 4, 1)
+
+    atom_fix = {1: (-1, None), 2: (1, None)}
+    bonds_fix = ((1, 3, 8), (1, 4, 8), (1, 2, 3))
+    rules.append((q, atom_fix, bonds_fix))
+
+    #
+    # Ferrocene covalent uncharged
+    #
+    q = QueryContainer()
+    q.add_atom(AnyMetal())
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_bond(1, 2, 1); q.add_bond(1, 3, 1); q.add_bond(1, 4, 1); q.add_bond(1, 5, 1); q.add_bond(1, 6, 1)
+    q.add_bond(1, 7, 1); q.add_bond(1, 8, 1); q.add_bond(1, 9, 1); q.add_bond(1, 10, 1); q.add_bond(1, 11, 1)
+    q.add_bond(2, 3, 1); q.add_bond(3, 4, 1); q.add_bond(4, 5, 1); q.add_bond(5, 6, 1); q.add_bond(6, 2, 1)
+    q.add_bond(7, 8, 1); q.add_bond(8, 9, 1); q.add_bond(9, 10, 1); q.add_bond(10, 11, 1); q.add_bond(11, 7, 1)
+
+    atom_fix = {1: (2, None), 2: (-1, None), 7: (-1, None)}
+    bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8),
+                 (1, 11, 8), (3, 4, 2), (5, 6, 2), (8, 9, 2), (10, 11, 2))
+    rules.append((q, atom_fix, bonds_fix))
+
+    #
+    # Ferrocene covalent charged
+    #
+    q = QueryContainer()
+    q.add_atom(AnyMetal())
+    q.add_atom('C', charge=-1)
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C', charge=-1)
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_atom('C')
+    q.add_bond(1, 2, 1); q.add_bond(1, 3, 1); q.add_bond(1, 4, 1); q.add_bond(1, 5, 1); q.add_bond(1, 6, 1)
+    q.add_bond(1, 7, 1); q.add_bond(1, 8, 1); q.add_bond(1, 9, 1); q.add_bond(1, 10, 1); q.add_bond(1, 11, 1)
+    q.add_bond(2, 3, 1); q.add_bond(3, 4, 2); q.add_bond(4, 5, 1); q.add_bond(5, 6, 2); q.add_bond(6, 2, 1)
+    q.add_bond(7, 8, 1); q.add_bond(8, 9, 2); q.add_bond(9, 10, 1); q.add_bond(10, 11, 2); q.add_bond(11, 7, 1)
+
+    atom_fix = {}
+    bonds_fix = ((1, 2, 8), (1, 3, 8), (1, 4, 8), (1, 5, 8), (1, 6, 8), (1, 7, 8), (1, 8, 8), (1, 9, 8), (1, 10, 8),
+                 (1, 11, 8))
+    rules.append((q, atom_fix, bonds_fix))
     return rules
 
 
