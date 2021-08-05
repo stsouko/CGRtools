@@ -388,22 +388,27 @@ class Standardize:
                     n = mapping[n]
                     hs.add(n)
                     charges[n] += ch
+                    if charges[n] > 4:
+                        charges[n] -= ch
+                        log.append((tuple(match), r, f'bad charge formed. changes omitted: {pattern}'))
+                        break  # skip changes
                     if ir is not None:
                         radicals[n] = ir
-                for n, m, b in bonds_fix:
-                    n = mapping[n]
-                    m = mapping[m]
-                    hs.add(n)
-                    hs.add(m)
-                    if m in bonds[n]:
-                        bonds[n][m]._Bond__order = b
-                        if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
-                            flush = True
-                    else:
-                        bonds[n][m] = bonds[m][n] = Bond(b)
-                        if b != 8:
-                            flush = True
-                log.append((tuple(match), r, str(pattern)))
+                else:
+                    for n, m, b in bonds_fix:
+                        n = mapping[n]
+                        m = mapping[m]
+                        hs.add(n)
+                        hs.add(m)
+                        if m in bonds[n]:
+                            bonds[n][m]._Bond__order = b
+                            if b == 8:  # expected original molecule don't contain `any` bonds or these bonds not changed
+                                flush = True
+                        else:
+                            bonds[n][m] = bonds[m][n] = Bond(b)
+                            if b != 8:
+                                flush = True
+                    log.append((tuple(match), r, str(pattern)))
             # flush cache only for changed atoms.
             if flush:  # neighbors count changed
                 if '__cached_args_method_neighbors' in self.__dict__:
