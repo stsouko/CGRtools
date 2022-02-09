@@ -1,8 +1,7 @@
 CGRTools
 ========
 
-Project `forked <https://github.com/chython/chython>`_. Feature development has been discontinued. Only critical bug fixes can be added.
-
+Feature development in this repository has been discontinued. Further support and development of initial CGRTools is done by cimm-kzn group https://github.com/cimm-kzn/CGRtools.
 
 .. image:: https://zenodo.org/badge/14690494.svg
    :target: https://zenodo.org/badge/latestdoi/14690494
